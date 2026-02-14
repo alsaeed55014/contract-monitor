@@ -303,13 +303,18 @@ def sidebar_content():
             img_found = False
             for p in ["alsaeed.jpg", "image/alsaeed.jpg"]:
                 if os.path.exists(p):
-                    st.image(p, width=200)
+                    st.image(p, width=130)
                     img_found = True
                     break
             if not img_found:
                 st.info("📷")
         
-        st.markdown(f"<h3 style='color:white; text-align: center;'>{T['prog_by']}<br>{'السعيد الوزان' if st.session_state.lang == 'ar' else 'Al-Saeed Al-Wazzan'}</h3>", unsafe_allow_html=True)
+        st.markdown("""
+            <div style='text-align:center; margin-top:5px;'>
+                <span style='color:#c0a060; font-size:11px; letter-spacing:2px; text-transform:uppercase;'>✦ Programmed by ✦</span><br>
+                <span style='background: linear-gradient(90deg, #d4af37, #f5d991, #d4af37); -webkit-background-clip: text; -webkit-text-fill-color: transparent; font-size:18px; font-weight:700; letter-spacing:1px;'>Al-Saeed Al-Wazzan</span>
+            </div>
+        """, unsafe_allow_html=True)
         
         st.divider()
         
@@ -411,18 +416,23 @@ def page_login():
     spacer1, center_col, spacer2 = st.columns([1, 1.5, 1])
     
     with center_col:
-        # الصورة الشخصية بحجم صغير ودائرية
+        # الصورة الشخصية بحجم صغير
         img_found = False
         for p in ["alsaeed.jpg", "image/alsaeed.jpg"]:
             if os.path.exists(p):
-                st.image(p, width=120)
+                st.image(p, width=90)
                 img_found = True
                 break
         if not img_found:
-            st.markdown("<div style='text-align:center; font-size:60px;'>📷</div>", unsafe_allow_html=True)
+            st.markdown("<div style='text-align:center; font-size:40px;'>📷</div>", unsafe_allow_html=True)
         
-        # النص تحت الصورة
-        st.markdown("<p style='text-align:center; color: #94a3b8; font-size:13px; margin-top:5px;'>Programmed by<br><b style=\"color:white;\">Al-Saeed Al-Wazzan</b></p>", unsafe_allow_html=True)
+        # النص تحت الصورة بشكل فخم
+        st.markdown("""
+            <div style='text-align:center; margin-top:5px;'>
+                <span style='color:#8a7a5a; font-size:10px; letter-spacing:2px; text-transform:uppercase;'>✦ Programmed by ✦</span><br>
+                <span style='background: linear-gradient(90deg, #d4af37, #f5d991, #d4af37); -webkit-background-clip: text; -webkit-text-fill-color: transparent; font-size:16px; font-weight:700; letter-spacing:1px;'>Al-Saeed Al-Wazzan</span>
+            </div>
+        """, unsafe_allow_html=True)
         
         st.markdown("---")
         
