@@ -62,11 +62,15 @@ def load_users():
             "can_manage_users": True
         },
         "samar": {
-            "password": "688147d32c965682b130a11a84f47dd8789547d96735515c1365851e39a584e1", # 123452
+            "password": "2d75c1a2d01521e3026aa1719256a06604e7bc99aab149cb8cc7de8552fa820d", # 123452
             "role": "user",
             "can_manage_users": False
         }
     }
+
+def save_users(users_dict):
+    with open(USERS_FILE, 'w', encoding='utf-8') as f:
+        json.dump({"users": users_dict}, f, ensure_ascii=False, indent=2)
 
 USERS = load_users()
 
@@ -646,27 +650,71 @@ def page_search():
 def page_permissions():
     sidebar_content()
     st.title(T['perms_page_title'])
-    st.markdown(f"### {st.session_state.current_user} ، {('Welcome back' if st.session_state.lang == 'en' else 'مرحباً بك')}")
+    st.markdown(f"### {'Welcome back' if st.session_state.lang == 'en' else 'مرحباً بك'} ، {st.session_state.current_user}")
     
     if st.button(T['back_nav']):
         st.session_state.page = "home"
         st.rerun()
+    
+    st.markdown("---")
         
     col1, col2 = st.columns(2)
+    
+    # === تغيير كلمة المرور ===
     with col1:
-        st.header(T['add_user_title'])
+        st.markdown(f"### 🔒 {T['change_pass_title']}")
+        old_p = st.text_input(T['pass_lbl'], type="password", key="old_p")
+        n_p = st.text_input("كلمة المرور الجديدة" if st.session_state.lang == 'ar' else "New Password", type="password", key="new_pass")
+        n_p2 = st.text_input("تأكيد كلمة المرور" if st.session_state.lang == 'ar' else "Confirm Password", type="password", key="confirm_pass")
+        
+        if st.button(T['save_btn'], key="save_pass_btn"):
+            if not old_p or not n_p:
+                st.error("يرجى ملئ جميع الحقول" if st.session_state.lang == 'ar' else "Please fill all fields")
+            elif n_p != n_p2:
+                st.error("كلمة المرور غير متطابقة" if st.session_state.lang == 'ar' else "Passwords do not match")
+            else:
+                current_user = st.session_state.current_user
+                old_hash = hashlib.sha256(old_p.encode()).hexdigest()
+                if USERS.get(current_user, {}).get("password") != old_hash:
+                    st.error("كلمة المرور الحالية خاطئة" if st.session_state.lang == 'ar' else "Current password is wrong")
+                else:
+                    USERS[current_user]["password"] = hashlib.sha256(n_p.encode()).hexdigest()
+                    save_users(USERS)
+                    st.success("✅ تم تغيير كلمة المرور بنجاح" if st.session_state.lang == 'ar' else "✅ Password changed successfully")
+    
+    # === إضافة مستخدم جديد ===
+    with col2:
+        st.markdown(f"### ➕ {T['add_user_title']}")
         new_u = st.text_input(T['user_lbl'], key="new_u")
         new_p = st.text_input(T['pass_lbl'], type="password", key="new_p")
-        can_p = st.checkbox(T['can_access_perms'])
-        if st.button(T['add_btn']):
-            st.success("User added (locally to memory)" if st.session_state.lang == 'en' else "تم إضافة المستخدم (محلياً في الذاكرة)")
-            
-    with col2:
-        st.header(T['change_pass_title'])
-        old_p = st.text_input(T['pass_lbl'], type="password", key="old_p")
-        n_p = st.text_input("New Password" if st.session_state.lang == 'en' else "كلمة المرور الجديدة", type="password")
-        if st.button(T['save_btn']):
-            st.success("Password changed" if st.session_state.lang == 'en' else "تم تغيير كلمة المرور")
+        new_p2 = st.text_input("تأكيد كلمة المرور" if st.session_state.lang == 'ar' else "Confirm Password", type="password", key="confirm_new_p")
+        can_p = st.checkbox(T['can_access_perms'], key="can_perms_cb")
+        
+        if st.button(T['add_btn'], key="add_user_btn"):
+            if not new_u or not new_p:
+                st.error("يرجى إدخال اسم المستخدم وكلمة المرور" if st.session_state.lang == 'ar' else "Please enter username and password")
+            elif new_p != new_p2:
+                st.error("كلمة المرور غير متطابقة" if st.session_state.lang == 'ar' else "Passwords do not match")
+            elif new_u in USERS:
+                st.error("اسم المستخدم موجود مسبقاً" if st.session_state.lang == 'ar' else "Username already exists")
+            else:
+                USERS[new_u] = {
+                    "password": hashlib.sha256(new_p.encode()).hexdigest(),
+                    "role": "admin" if can_p else "user",
+                    "can_manage_users": can_p
+                }
+                save_users(USERS)
+                st.success(f"✅ تم إضافة المستخدم {new_u} بنجاح" if st.session_state.lang == 'ar' else f"✅ User {new_u} added successfully")
+    
+    # === عرض المستخدمين الحاليين ===
+    st.markdown("---")
+    st.markdown(f"### 👥 {'المستخدمون الحاليون' if st.session_state.lang == 'ar' else 'Current Users'}")
+    
+    for uname, udata in USERS.items():
+        role_label = "👑 مدير" if udata.get("can_manage_users") else "👤 مستخدم"
+        if st.session_state.lang == 'en':
+            role_label = "👑 Admin" if udata.get("can_manage_users") else "👤 User"
+        st.markdown(f"- **{uname}** — {role_label}")
 
 # --- Routing ---
 if not st.session_state.authenticated:
