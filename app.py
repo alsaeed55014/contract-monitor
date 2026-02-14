@@ -196,48 +196,51 @@ st.markdown("""
         background-color: #f4f7f6;
     }
     
-    /* تنسيق عام للأزرار */
-    div.stButton > button {
-        width: 100%;
-        border-radius: 12px;
-        height: 55px !important; /* ارتفاع ثابت وموحد */
-        font-weight: 600;
-        margin-bottom: 15px !important; /* مسافة موحدة */
-        font-size: 16px !important;
-        color: white;
-        border: none;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-        transition: all 0.3s ease;
+    /* تنسيق فاخر للأزرار */
+    [data-testid="stSidebar"] div.stButton > button {
+        width: 100% !important;
+        border-radius: 14px !important;
+        height: 52px !important;
+        font-weight: 600 !important;
+        margin-bottom: 10px !important;
+        font-size: 15px !important;
+        color: white !important;
+        border: 1px solid rgba(255,255,255,0.15) !important;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.1) !important;
+        transition: all 0.3s ease !important;
+        letter-spacing: 0.5px !important;
+        backdrop-filter: blur(10px) !important;
     }
-    div.stButton > button:hover {
-        transform: translateY(-3px);
-        box-shadow: 0 8px 25px rgba(0,0,0,0.2);
+    [data-testid="stSidebar"] div.stButton > button:hover {
+        transform: translateY(-2px) scale(1.02) !important;
+        box-shadow: 0 8px 30px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.2) !important;
+        border: 1px solid rgba(255,255,255,0.3) !important;
+    }
+    [data-testid="stSidebar"] div.stButton > button:active {
+        transform: translateY(0px) scale(0.98) !important;
     }
 
-    /* تخصيص ألوان الأزرار في القائمة الجانبية بالترتيب */
-    /* 1. مراقب العقود (أزرق) */
+    /* 1. مراقب العقود - أزرق ملكي */
     [data-testid="stSidebar"] div.stButton:nth-of-type(1) > button {
-        background: linear-gradient(90deg, #2193b0 0%, #6dd5ed 100%);
+        background: linear-gradient(135deg, #0c3483 0%, #2196f3 50%, #0c3483 100%) !important;
     }
-    /* 2. البحث والطباعة (بنفسجي) */
+    /* 2. البحث والطباعة - بنفسجي فاخر */
     [data-testid="stSidebar"] div.stButton:nth-of-type(2) > button {
-        background: linear-gradient(90deg, #8E2DE2 0%, #4A00E0 100%);
+        background: linear-gradient(135deg, #4a0072 0%, #9c27b0 50%, #4a0072 100%) !important;
     }
-    /* 3. شاشة الصلاحيات (ذهبي) */
+    /* 3. شاشة الصلاحيات - ذهبي فخم */
     [data-testid="stSidebar"] div.stButton:nth-of-type(3) > button {
-        background: linear-gradient(90deg, #F2994A 0%, #F2C94C 100%);
-        color: #1a252f !important; /* نص داكن للذهبي */
+        background: linear-gradient(135deg, #8b6914 0%, #d4af37 50%, #8b6914 100%) !important;
+        color: #fff !important;
     }
-    /* 4. حذف الصف المختار (أحمر) */
+    /* 4. حذف الصف المختار - أحمر داكن */
     [data-testid="stSidebar"] div.stButton:nth-of-type(4) > button {
-        background: linear-gradient(90deg, #cb2d3e 0%, #ef473a 100%);
+        background: linear-gradient(135deg, #7f0000 0%, #c62828 50%, #7f0000 100%) !important;
     }
-    /* 5. تحديث البيانات (أخضر) */
+    /* 5. تحديث البيانات - أخضر زمردي */
     [data-testid="stSidebar"] div.stButton:nth-of-type(5) > button {
-        background: linear-gradient(90deg, #11998e 0%, #38ef7d 100%);
+        background: linear-gradient(135deg, #004d40 0%, #00897b 50%, #004d40 100%) !important;
     }
-    /* 6. تغيير اللغة (رمادي) - يأتي عادة قبل الأزرار الرئيسية في الكود الحالي، لذا سنحتاج لضبط الترتيب في الكود ليطابق الـ CSS أو العكس */
-    /* سنقوم بتعديل ترتيب العناصر في الكود ليتطابق مع الـ CSS */
 
     
     /* كروت التنبيهات */
