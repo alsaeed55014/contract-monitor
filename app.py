@@ -319,6 +319,30 @@ def fetch_data():
         return sheet.get_all_values()
     except: return None
 
+def translate_columns(df):
+    col_mapping = {
+        "طابع زمني": {"ar": "وقت التسجيل", "en": "Timestamp"},
+        "Full Name:": {"ar": "الاسم الكامل", "en": "Full Name"},
+        "Nationality": {"ar": "الجنسية", "en": "Nationality"},
+        "Gender": {"ar": "الجنس", "en": "Gender"},
+        "Phone Number": {"ar": "رقم الهاتف", "en": "Phone Number"},
+        "Is your contract expired": {"ar": "هل انتهى العقد؟", "en": "Contract Expired?"},
+        "When is your contract end date?": {"ar": "تاريخ انتهاء العقد", "en": "Contract End Date"},
+        "your age": {"ar": "العمر", "en": "Age"}
+    }
+    
+    new_names = {}
+    for c in df.columns:
+        c_clean = c.strip()
+        if c_clean in col_mapping:
+            new_names[c] = col_mapping[c_clean][st.session_state.lang]
+        elif "age" in c_clean.lower():
+            new_names[c] = "العمر" if st.session_state.lang == 'ar' else "Age"
+        else:
+            new_names[c] = c
+            
+    return df.rename(columns=new_names)
+
 # --- UI Helpers ---
 def sidebar_content():
     with st.sidebar:
@@ -591,6 +615,11 @@ def page_home():
         # Display without the key
         display_df = alert_df[cols]
         
+        # --- ترجمة العناوين (Columns Translation) ---
+        display_df = translate_columns(display_df)
+        # -------------------------------------------
+        # -------------------------------------------
+        
         # Use Dataframe with selection
         try:
            event = st.dataframe(
@@ -678,7 +707,10 @@ def page_search():
             results = results[mask]
             
         st.markdown(f"#### 🔍 النتائج المكتشفة: {len(results)}")
-        st.dataframe(results.astype(str), use_container_width=True)
+        
+        # ترجمة الأعمدة قبل العرض
+        results_dys = translate_columns(results)
+        st.dataframe(results_dys.astype(str), use_container_width=True)
     
     if st.button(T['print_btn']):
         st.info("Feature not available in cloud yet." if st.session_state.lang == 'en' else "الميزة غير متاحة في النسخة السحابية حالياً.")
