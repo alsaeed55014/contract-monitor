@@ -34,9 +34,10 @@ def deduplicate_columns(columns):
 def safe_parse_date(d_str):
     if not d_str: return None
     try:
-        # استخراج جزء التاريخ فقط (YYYY/MM/DD) وتجاهل الوقت والرموز العربية (ص/م)
-        clean_d = str(d_str).strip().split(' ')[0]
-        return parser.parse(clean_d).date()
+        # التعامل مع رموز ص وم وتصحيحها لـ AM/PM
+        d_clean = str(d_str).strip().replace('ص', 'AM').replace('م', 'PM')
+        # محاولة ذكية للتحويل
+        return parser.parse(d_clean, fuzzy=True).date()
     except:
         return None
 
@@ -50,12 +51,17 @@ def load_users():
                 data = json.load(f)
                 return data.get("users", {})
         except: pass
-    # Default fallback
+    # Default fallback including Samar
     return {
         "admin": {
             "password": "c685e710931707e3e9aaab6c8625a9798cd06a31bcf40cd8d6963e3703400d14", # 266519111
             "role": "admin",
             "can_manage_users": True
+        },
+        "samar": {
+            "password": "688147d32c965682b130a11a84f47dd8789547d96735515c1365851e39a584e1", # 123452
+            "role": "user",
+            "can_manage_users": False
         }
     }
 
@@ -170,44 +176,60 @@ L = {
 
 T = L[st.session_state.lang]
 
-# --- Custom Styling ---
+# --- Custom Styling (Premium High-End Look) ---
 st.markdown("""
 <style>
+    /* الخط الرئيسي */
+    @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600&display=swap');
+    html, body, [class*="css"] { font-family: 'Outfit', sans-serif; }
+
+    /* القائمة الجانبية الفخمة */
     [data-testid="stSidebar"] {
-        background-color: #1a252f;
+        background: linear-gradient(180deg, #1a252f 0%, #2c3e50 100%);
         color: white;
+        border-right: 1px solid rgba(255,255,255,0.1);
     }
     .main {
-        background-color: #f0f2f6;
-    }
-    /* تحسين الأزرار للجوال - جعلها عريضة وسهلة الضغط */
-    div.stButton > button {
-        width: 100%;
-        border-radius: 8px;
-        height: 3.5em;
-        font-weight: bold;
-        margin-bottom: 10px;
-        font-size: 16px !important;
-    }
-    .stTable {
-        background-color: white;
-    }
-    .login-box {
-        padding: 2rem;
-        background: white;
-        border-radius: 10px;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        background-color: #f4f7f6;
     }
     
-    /* موازنة المسافات في الجوال */
-    @media (max-width: 640px) {
-        .stMarkdown, .stText { font-size: 14px; }
-        .main .block-container { padding-top: 2rem; }
+    /* أزرار بريميوم */
+    div.stButton > button {
+        width: 100%;
+        border-radius: 12px;
+        height: 3.8em;
+        font-weight: 600;
+        margin-bottom: 12px;
+        font-size: 16px !important;
+        background: linear-gradient(90deg, #2193b0 0%, #6dd5ed 100%);
+        color: white;
+        border: none;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        transition: all 0.3s ease;
     }
-
-    /* RTL Support */
+    div.stButton > button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(0,0,0,0.15);
+    }
+    
+    /* كروت التنبيهات */
+    .stTable {
+        background-color: white;
+        border-radius: 15px;
+        overflow: hidden;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.05);
+    }
+    
+    /* دعم RTL */
     html[dir="rtl"] .stMarkdown, html[dir="rtl"] .stText {
         text-align: right;
+    }
+    
+    /* تأثيرات الزجاج (Glassmorphism) للنماذج */
+    .stTextInput input {
+        border-radius: 10px;
+        border: 1px solid #ddd;
+        padding: 12px;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -247,15 +269,14 @@ def fetch_data():
 # --- UI Helpers ---
 def sidebar_content():
     with st.sidebar:
-        # Look for profile image in multiple formats
-        img_path = None
-        for f in ["profile.png", "profile.jpg", "profile.jpeg", "image.png", "image.jpg"]:
-            if os.path.exists(f):
-                img_path = f
-                break
-        
-        if img_path:
-            st.image(img_path, use_container_width=True)
+        # وضع الصورة الشخصية المطلوبة (السعيد) فوق اسم المبرمج
+        user_photo = "image/السعيد.jpg"
+        if os.path.exists(user_photo):
+            st.image(user_photo, use_container_width=True)
+        else:
+            # Fallback for local testing
+            img_path = next((f for f in ["profile.png", "profile.jpg", "image.png"] if os.path.exists(f)), None)
+            if img_path: st.image(img_path, use_container_width=True)
         
         st.markdown(f"### {T['prog_by']}: {'السعيد الوزان' if st.session_state.lang == 'ar' else 'Al-Saeed Al-Wazzan'}")
         
@@ -426,14 +447,18 @@ def page_search():
     if search_btn_clicked:
         results = df
         
-        if u_exp and date_col:
-            results = results[results[date_col].apply(lambda x: exp_f <= safe_parse_date(x) <= exp_t if safe_parse_date(x) else False)]
+        if use_exp and date_col:
+            results = results[results[date_col].apply(lambda x: exp_from <= safe_parse_date(x) <= exp_to if safe_parse_date(x) else False)]
         
+        if use_reg:
+            # فلتر تاريخ التسجيل (العمود الأول غالباً)
+            results = results[results.iloc[:, 0].apply(lambda x: reg_from <= safe_parse_date(x) <= reg_to if safe_parse_date(x) else False)]
+
         if query:
             mask = results.apply(lambda row: row.astype(str).str.contains(query, case=False).any(), axis=1)
             results = results[mask]
             
-        st.write(f"النتائج: {len(results)}")
+        st.markdown(f"#### 🔍 النتائج المكتشفة: {len(results)}")
         st.dataframe(results.astype(str), use_container_width=True)
     
     if st.button(T['print_btn']):
