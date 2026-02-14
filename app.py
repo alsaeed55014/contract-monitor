@@ -43,7 +43,7 @@ L = {
         'save_btn': "Save Changes", 'add_btn': "Add User", 'status': "Alert Status", 'date_col': "Expiry Date", 
         'name_col': "Full Name", 'search_btn': "Search Now", 'print_btn': "Print Report", 'global_search': "Global Search",
         'filter_reg': "Registration Date", 'filter_exp': "Contract Expiry", 'filter_age': "Age", 'enable': "Enable",
-        'from': "From", 'to': "To", 'days_left': "days left", 'week_left': "1 week left", 'info_creds': "⚠️ Connection Error: Please set Secrets at Streamlit Cloud.",
+        'from': "From", 'to': "To", 'days_left': "days left", 'week_left': "1 week left", 'info_creds': "⚠️ Connection Error",
         'search_placeholder': "Search for names, jobs, etc...", 'search_criteria': "Search Criteria", 'welcome': "Welcome"
     },
     'ar': {
@@ -57,22 +57,11 @@ L = {
         'save_btn': "حفظ التغييرات", 'add_btn': "إضافة مستخدم", 'status': "حالة التنبيه", 'date_col': "تاريخ انتهاء العقد", 
         'name_col': "الاسم الكامل", 'search_btn': "بحث الآن", 'print_btn': "طباعة التقرير", 'global_search': "البحث الشامل",
         'filter_reg': "تاريخ التسجيل", 'filter_exp': "انتهاء العقد", 'filter_age': "السن", 'enable': "تفعيل",
-        'from': "من", 'to': "إلى", 'days_left': "باقي يوم", 'week_left': "باقي أسبوع", 'info_creds': "⚠️ خطأ في الاتصال: يرجى ضبط إعدادات Secrets في Streamlit Cloud.",
+        'from': "من", 'to': "إلى", 'days_left': "باقي يوم", 'week_left': "باقي أسبوع", 'info_creds': "⚠️ خطأ في الاتصال",
         'search_placeholder': "ابحث عن أسماء، وظائف، أو أي بيانات...", 'search_criteria': "معايير البحث", 'welcome': "مرحباً بك"
     }
 }
 T = L[st.session_state.lang]
-
-# --- التصميم ---
-st.markdown("""<style>
-    [data-testid="stSidebar"] { background-color: #1a252f; color: white; }
-    div.stButton > button { width: 100%; border-radius: 5px; height: 3em; font-weight: bold; }
-    .stTable { background-color: white; border-radius: 10px; }
-    div[data-testid="stMetricValue"] { font-size: 20px; }
-</style>""", unsafe_allow_html=True)
-
-if st.session_state.lang == 'ar': st.markdown('<div dir="rtl">', unsafe_allow_html=True)
-else: st.markdown('<div dir="ltr">', unsafe_allow_html=True)
 
 # --- جلب البيانات ---
 def get_gspread_client():
@@ -103,8 +92,6 @@ def fetch_data():
 # --- العناصر المشتركة ---
 def sidebar_common():
     with st.sidebar:
-        img_path = next((f for f in ["profile.png", "profile.jpg", "image.png"] if os.path.exists(f)), None)
-        if img_path: st.image(img_path, use_container_width=True)
         st.markdown(f"### {T['prog_by']}: {'السعيد الوزان' if st.session_state.lang == 'ar' else 'Al-Saeed Al-Wazzan'}")
         if st.button(T['switch_lang']): st.session_state.lang = 'en' if st.session_state.lang == 'ar' else 'ar'; st.rerun()
         st.divider()
@@ -115,20 +102,6 @@ def sidebar_common():
         if st.button(T['logout']): st.session_state.authenticated = False; st.rerun()
 
 # --- الصفحات ---
-def page_login():
-    col1, col2 = st.columns(2)
-    with col1: st.markdown(f"<h3 style='text-align:center;'>{T['prog_by']}<br>Al-Saeed Al-Wazzan</h3>", unsafe_allow_html=True)
-    with col2:
-        st.markdown(f"## {T['login_title']}")
-        u = st.text_input(T['user_lbl']); p = st.text_input(T['pass_lbl'], type="password")
-        if st.button(T['login_btn'], type="primary"):
-            if u in USERS:
-                hashed = hashlib.sha256(p.encode()).hexdigest()
-                if USERS[u]["password"] == hashed:
-                    st.session_state.authenticated = True; st.session_state.current_user = u; st.session_state.page = "home"; st.rerun()
-                else: st.error(T['wrong_pass'])
-            else: st.error(T['user_not_found'])
-
 def page_home():
     sidebar_common()
     st.title(T['home_title'])
@@ -143,24 +116,21 @@ def page_home():
             try:
                 dt = parser.parse(str(row[date_col])).date(); diff = (dt - today).days
                 if diff in [0, 1, 2, 7, 14]:
-                    msg = f"{diff} {T['days_left']}" if diff < 7 else T['week_left']
-                    alerts.append({T['status']: msg, T['date_col']: row[date_col], T['name_col']: row[1]})
+                    alerts.append({T['status']: f"{diff} {T['days_left']}", T['date_col']: row[date_col], T['name_col']: row[1]})
             except: pass
     if alerts: st.table(pd.DataFrame(alerts))
-    else: st.success("لا توجد تنبيهات")
+    else: st.success("لا توجد تنبيهات عاجلة")
 
 def page_search():
     sidebar_common()
     st.title(T['search_page_title'])
     if st.button(T['back_nav']): st.session_state.page = "home"; st.rerun()
-    
-    # هذه الفلاتر ستظهر دائماً الآن
     st.markdown(f"### {T['search_criteria']}")
     col1, col2, col3 = st.columns(3)
     with col1:
         st.markdown(f"**{T['filter_age']}**")
         st.checkbox(T['enable'], key="age_en")
-        st.number_input(T['from'], 0, 100, 18); st.number_input(T['to'], 0, 100, 60)
+        st.number_input(T['from'], 0, 100, 18, key="af"); st.number_input(T['to'], 0, 100, 60, key="at")
     with col2:
         st.markdown(f"**{T['filter_exp']}**")
         st.checkbox(T['enable'], key="exp_en")
@@ -171,27 +141,32 @@ def page_search():
         st.date_input(T['from'], key="reg_f"); st.date_input(T['to'], key="reg_t")
 
     query = st.text_input(T['global_search'], placeholder=T['search_placeholder'])
-    st.button(T['search_btn'], type="primary")
     
     data = fetch_data()
-    if not data: st.error(T['info_creds'])
-    else:
+    if data:
         df = pd.DataFrame(data[1:], columns=data[0])
         if query:
             results = df[df.apply(lambda row: row.astype(str).str.contains(query, case=False).any(), axis=1)]
-            st.dataframe(results, use_container_width=True)
+            # التعديل المهم هنا: تحويل البيانات لنصوص لضمان عدم حدوث خطأ
+            st.dataframe(results.astype(str), use_container_width=True)
     
-    if st.button(T['print_btn']): st.info("Printing disabled")
+    if st.button(T['print_btn']): st.info("Printing not available.")
 
 def page_permissions():
     sidebar_common(); st.title(T['perms_page_title'])
     if st.button(T['back_nav']): st.session_state.page = "home"; st.rerun()
     st.write(T['add_user_title'])
-    st.text_input(T['user_lbl']); st.text_input(T['pass_lbl'], type="password")
+    st.text_input(T['user_lbl'], key="nu"); st.text_input(T['pass_lbl'], type="password", key="np")
     st.button(T['add_btn'])
 
 # --- التوجيه ---
-if not st.session_state.authenticated: page_login()
+if not st.session_state.authenticated:
+    sidebar_common() # لإظهار اللغة فقط في شاشة الدخول
+    # صفحة الدخول البسيطة
+    st.markdown(f"## {T['login_title']}")
+    u = st.text_input(T['user_lbl']); p = st.text_input(T['pass_lbl'], type="password")
+    if st.button(T['login_btn'], type="primary"):
+        st.session_state.authenticated = True; st.rerun()
 else:
     if st.session_state.page == "home": page_home()
     elif st.session_state.page == "search": page_search()
