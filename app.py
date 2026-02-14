@@ -448,7 +448,21 @@ def translate_columns(df):
         if not found:
             new_names[c] = c
             
-    return df.rename(columns=new_names)
+    # Deduplicate column names to avoid Pyarrow errors
+    final_names = {}
+    seen_counts = {}
+    
+    for c in df.columns:
+        trans = new_names.get(c, c)
+        if trans in seen_counts:
+            seen_counts[trans] += 1
+            unique_trans = f"{trans} ({seen_counts[trans]})"
+        else:
+            seen_counts[trans] = 1
+            unique_trans = trans
+        final_names[c] = unique_trans
+            
+    return df.rename(columns=final_names)
 
 
 # --- UI Helpers ---
