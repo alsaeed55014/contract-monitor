@@ -397,10 +397,9 @@ def page_home():
     df = pd.DataFrame(data_raw[1:], columns=headers)
     today = date.today()
     
-    # البحث عن عمود التاريخ (الأولوية لانتهاء العقد)
-    date_col = next((h for h in df.columns if "انتهاء العقد" in h), "")
-    if not date_col:
-        date_col = next((h for h in df.columns if any(kw in h.lower() for kw in ["expiry", "تاريخ انتهاء"])), "")
+    # البحث المرن عن عمود التاريخ (أي عمود يحتوي على انتهاء أو تاريخ أو expiry)
+    date_keywords = ["انتهاء", "الانتهاء", "expiry", "expire", "تاريخ", "end"]
+    date_col = next((h for h in df.columns if any(kw in h.lower() for kw in date_keywords)), "")
     
     if date_col:
         count = 0
@@ -449,42 +448,42 @@ def page_search():
     query = st.text_input(T['global_search'], placeholder=T['search_placeholder'])
     search_btn = st.button(T['search_btn'], type="primary")
 
-    if search_btn:
-        results = df
-        
+    results = df
+    if query:
         # توسيع البحث ليشمل الترجمة الإنجليزية
         extra_term = translator.translate(query)
-        if query:
-            if extra_term:
-                mask = results.apply(lambda r: r.astype(str).str.contains(f"{query}|{extra_term}", case=False, na=False).any(), axis=1)
-            else:
-                mask = results.apply(lambda r: r.astype(str).str.contains(query, case=False, na=False).any(), axis=1)
-            results = results[mask]
-
-        # تحسين شكل النتائج بالألوان (التنسيق الشرطي)
-        def apply_row_style(row):
-            style = [''] * len(row)
-            row_str = " ".join(row.astype(str)).lower()
-            age_val = 0
-            try: age_val = int(next((v for v in row if str(v).isdigit() and 15 < int(v) < 90), 0))
-            except: pass
-            
-            # 1. الأسود (السن فوق 40)
-            if age_val > 40: style = ['background-color: black; color: white; font-weight: bold'] * len(row)
-            # 2. الأخضر (منتهي ولا يعمل)
-            if ("expired" in row_str or "منتهي" in row_str) and ("not working" in row_str or "لا يعمل" in row_str):
-                style = ['background-color: #d4edda; color: #155724; font-weight: bold'] * len(row)
-            # 3. الأحمر (هروب أو التزامات مالية)
-            if "huroob" in row_str or "هروب" in row_str or "نعم" in row.values:
-                style = ['background-color: #f8d7da; color: #721c24; font-weight: bold'] * len(row)
-            
-            return style
-
-        st.markdown(f"#### 🔍 {T['ready']}: {len(results)}")
-        if not results.empty:
-            st.dataframe(results.style.apply(apply_row_style, axis=1), use_container_width=True)
+        if extra_term:
+            mask = results.apply(lambda r: r.astype(str).str.contains(f"{query}|{extra_term}", case=False, na=False).any(), axis=1)
         else:
-            st.warning("No results found.")
+            mask = results.apply(lambda r: r.astype(str).str.contains(query, case=False, na=False).any(), axis=1)
+        results = results[mask]
+
+    # تحسين شكل النتائج بالألوان (التنسيق الشرطي)
+    def apply_row_style(row):
+        style = [''] * len(row)
+        row_str = " ".join(row.astype(str)).lower()
+        age_val = 0
+        try: 
+            # محاولة العثور على السن (رقم بين 15 و 90)
+            age_val = int(next((v for v in row if str(v).isdigit() and 15 < int(v) < 90), 0))
+        except: pass
+        
+        # 1. الأسود (السن فوق 40)
+        if age_val > 40: style = ['background-color: black; color: white; font-weight: bold'] * len(row)
+        # 2. الأخضر (منتهي ولا يعمل)
+        if ("expired" in row_str or "منتهي" in row_str) and ("not working" in row_str or "لا يعمل" in row_str):
+            style = ['background-color: #d4edda; color: #155724; font-weight: bold'] * len(row)
+        # 3. الأحمر (هروب أو التزامات مالية)
+        if "huroob" in row_str or "هروب" in row_str or "نعم" in row.values:
+            style = ['background-color: #f8d7da; color: #721c24; font-weight: bold'] * len(row)
+        
+        return style
+
+    st.markdown(f"#### 🔍 {T['ready']}: {len(results)}")
+    if not results.empty:
+        st.dataframe(results.style.apply(apply_row_style, axis=1), use_container_width=True)
+    else:
+        st.warning("No results found.")
 
 # --- Page: Permissions ---
 def page_permissions():
