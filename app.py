@@ -466,50 +466,6 @@ def translate_columns(df):
         final_names[c] = unique_trans
             
     return df.rename(columns=final_names)
- 
-def style_row(row):
-    """Applies conditional formatting to a dataframe row."""
-    # Priority: Red > Green > Black
-    is_red = False
-    is_green = False
-    is_black = False
-    
-    # Identify columns by name (translation-aware)
-    h_col = next((c for c in row.index if "بلاغ هروب" in c or "huroob" in c.lower()), None)
-    f_col = next((c for c in row.index if "التزامات مالية" in c or "financial" in c.lower()), None)
-    s_col = next((c for c in row.index if "يقبل الكفيل التنازل" in c or "accept to transfer" in c.lower()), None)
-    a_col = next((c for c in row.index if "العمر" in c or "age" in c.lower()), None)
-    m_col = next((c for c in row.index if "متزوج والأبناء" in c or "married and" in c.lower()), None)
-    w_col = next((c for c in row.index if "هل تعمل حالياً" in c or "working now" in c.lower()), None)
-    e_col = next((c for c in row.index if "انتهى العقد" in c or "contract expired" in c.lower()), None)
-
-    # 1. Red Rules (Priority 1)
-    if h_col and "نعم" in str(row[h_col]): is_red = True
-    if f_col and "نعم" in str(row[f_col]): is_red = True
-    if s_col:
-        val = str(row[s_col]).strip()
-        if val and "نعم" not in val: is_red = True
-        
-    if is_red: return ['background-color: #e74c3c; color: white;'] * len(row)
-
-    # 2. Green Rules (Priority 2)
-    if w_col and e_col:
-        if "نعم" in str(row[w_col]) and "نعم" in str(row[e_col]):
-            return ['background-color: #27ae60; color: white;'] * len(row)
-            
-    # 3. Black Rules (Priority 3)
-    if a_col:
-        try:
-            age_val = "".join(filter(str.isdigit, str(row[a_col])))
-            if age_val and int(age_val) > 40: is_black = True
-        except: pass
-    if m_col:
-        val = str(row[m_col]).strip()
-        if val and "لا" not in val: is_black = True
-
-    if is_black: return ['background-color: black; color: white;'] * len(row)
-        
-    return [''] * len(row)
 
 
 
@@ -889,17 +845,16 @@ def page_home():
         
         # Use Dataframe with selection
         try:
-           st.dataframe(
-                display_df.style.apply(style_row, axis=1), 
+           event = st.dataframe(
+                display_df, 
                 use_container_width=True,
                 selection_mode="single-row",
                 on_select="rerun",
                 key="alert_selection"
             )
-           event = st.session_state.get("alert_selection")
         except:
              # Fallback for older streamlit versions
-             st.dataframe(display_df.style.apply(style_row, axis=1), use_container_width=True)
+             st.dataframe(display_df, use_container_width=True)
              event = None
 
         # Handle Delete Action (Check sidebar button state implicitly or use session state)
@@ -991,7 +946,7 @@ def page_search():
         
         # ترجمة الأعمدة قبل العرض
         results_dys = translate_columns(results)
-        st.dataframe(results_dys.style.apply(style_row, axis=1), use_container_width=True)
+        st.dataframe(results_dys.astype(str), use_container_width=True)
     
     if st.button(T['print_btn']):
         st.info("Feature not available in cloud yet." if st.session_state.lang == 'en' else "الميزة غير متاحة في النسخة السحابية حالياً.")
