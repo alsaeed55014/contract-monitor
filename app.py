@@ -7,6 +7,7 @@ from dateutil import parser
 import os
 import json
 import hashlib
+import base64
 
 # Page Config
 st.set_page_config(
@@ -296,18 +297,17 @@ def fetch_data():
 # --- UI Helpers ---
 def sidebar_content():
     with st.sidebar:
-        # وضع الصورة الشخصية المطلوبة وتنسيق مقاسها
-        user_photo = "image/alsaeed.jpg"
-        
-        col_img_side, _ = st.columns([1, 0.1]) # لتوسيط بسيط
+        # وضع الصورة الشخصية
+        col_img_side, _ = st.columns([1, 0.1])
         with col_img_side:
-            if os.path.exists(user_photo):
-                st.image(user_photo, width=200)
-            else:
-                # Fallback trial
-                img_path = next((f for f in ["profile.png", "profile.jpg", "image.png"] if os.path.exists(f)), None)
-                if img_path: st.image(img_path, width=200)
-                else: st.warning(f"Image not found: {user_photo}")
+            img_found = False
+            for p in ["alsaeed.jpg", "image/alsaeed.jpg"]:
+                if os.path.exists(p):
+                    st.image(p, width=200)
+                    img_found = True
+                    break
+            if not img_found:
+                st.info("📷")
         
         st.markdown(f"<h3 style='color:white; text-align: center;'>{T['prog_by']}<br>{'السعيد الوزان' if st.session_state.lang == 'ar' else 'Al-Saeed Al-Wazzan'}</h3>", unsafe_allow_html=True)
         
@@ -409,15 +409,14 @@ def page_login():
     
     with col_img:
         # عرض الصورة على اليسار
-        user_photo = "image/alsaeed.jpg"
-
-        if os.path.exists(user_photo):
-            st.image(user_photo, use_container_width=True)
-        else:
-            # Fallback
-            img_path = next((f for f in ["profile.png", "profile.jpg", "image.png"] if os.path.exists(f)), None)
-            if img_path: st.image(img_path, use_container_width=True)
-            else: st.warning(f"Image not found: {user_photo}")
+        img_found = False
+        for p in ["alsaeed.jpg", "image/alsaeed.jpg"]:
+            if os.path.exists(p):
+                st.image(p, use_container_width=True)
+                img_found = True
+                break
+        if not img_found:
+            st.info("📷")
         
         # النص بالإنجليزي تحت الصورة
         st.markdown("<p style='text-align:center; font-weight:600; color:#2c3e50; margin-top:10px;'>Programmed by<br>Al-Saeed Al-Wazzan</p>", unsafe_allow_html=True)
