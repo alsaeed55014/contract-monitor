@@ -577,25 +577,9 @@ def sidebar_content():
         
         st.markdown("<div style='margin-bottom:20px;'></div>", unsafe_allow_html=True)
         
-        # === الصورة الشخصية ===
-        img_found = False
-        for p in ["alsaeed.jpg", "image/alsaeed.jpg"]:
-            if os.path.exists(p):
-                st.image(p, width=130)
-                img_found = True
-                break
-        if not img_found:
-            st.info("📷")
-        
         st.markdown("<div style='margin-bottom:20px;'></div>", unsafe_allow_html=True)
         
-        # === اسم المبرمج ===
-        st.markdown("""
-            <div style='text-align:center;'>
-                <span style='color:#c0a060; font-size:11px; letter-spacing:2px; text-transform:uppercase;'>✦ Programmed by ✦</span><br>
-                <span style='background: linear-gradient(90deg, #d4af37, #f5d991, #d4af37); -webkit-background-clip: text; -webkit-text-fill-color: transparent; font-size:18px; font-weight:700; letter-spacing:1px;'>Al-Saeed Al-Wazzan</span>
-            </div>
-        """, unsafe_allow_html=True)
+        st.divider()
         
         st.markdown("<div style='margin-bottom:20px;'></div>", unsafe_allow_html=True)
         
@@ -662,6 +646,30 @@ def sidebar_content():
             st.session_state.current_user = ""
             st.rerun()
 
+        st.divider()
+
+        # === الصورة الشخصية نقلت للأسفل ===
+        img_found = False
+        for p in ["alsaeed.jpg", "image/alsaeed.jpg"]:
+            if os.path.exists(p):
+                _, img_col, _ = st.columns([1, 2, 1])
+                with img_col:
+                    st.image(p, width=130)
+                img_found = True
+                break
+        if not img_found:
+            st.info("📷")
+        
+        st.markdown("<div style='margin-bottom:10px;'></div>", unsafe_allow_html=True)
+        
+        # === اسم المبرمج ===
+        st.markdown("""
+            <div style='text-align:center;'>
+                <span style='color:#c0a060; font-size:11px; letter-spacing:2px; text-transform:uppercase;'>✦ Programmed by ✦</span><br>
+                <span style='background: linear-gradient(90deg, #d4af37, #f5d991, #d4af37); -webkit-background-clip: text; -webkit-text-fill-color: transparent; font-size:18px; font-weight:700; letter-spacing:1px;'>Al-Saeed Al-Wazzan</span>
+            </div>
+        """, unsafe_allow_html=True)
+
 # --- Page: Login ---
 def page_login():
     # تنسيق خاص لشاشة الدخول
@@ -692,29 +700,11 @@ def page_login():
         </style>
     """, unsafe_allow_html=True)
 
-    # توسيط المحتوى
-    spacer1, center_col, spacer2 = st.columns([1, 1.5, 1])
+    # توسيط المحتوى وجعل الشاشة أصغر
+    spacer1, center_col, spacer2 = st.columns([2, 1, 2])
     
     with center_col:
-        # الصورة الشخصية بحجم صغير
-        img_found = False
-        for p in ["alsaeed.jpg", "image/alsaeed.jpg"]:
-            if os.path.exists(p):
-                st.image(p, width=90)
-                img_found = True
-                break
-        if not img_found:
-            st.markdown("<div style='text-align:center; font-size:40px;'>📷</div>", unsafe_allow_html=True)
-        
-        # النص تحت الصورة بشكل فخم
-        st.markdown("""
-            <div style='text-align:center; margin-top:5px;'>
-                <span style='color:#8a7a5a; font-size:10px; letter-spacing:2px; text-transform:uppercase;'>✦ Programmed by ✦</span><br>
-                <span style='background: linear-gradient(90deg, #d4af37, #f5d991, #d4af37); -webkit-background-clip: text; -webkit-text-fill-color: transparent; font-size:16px; font-weight:700; letter-spacing:1px;'>Al-Saeed Al-Wazzan</span>
-            </div>
-        """, unsafe_allow_html=True)
-        
-        st.markdown("---")
+        st.markdown('<div class="login-card">', unsafe_allow_html=True)
         
         # عنوان تسجيل الدخول
         st.markdown(f"<h2 style='text-align:center; color:white;'>🔐 {T['login_title']}</h2>", unsafe_allow_html=True)
@@ -739,6 +729,31 @@ def page_login():
         if st.button(T['switch_lang'], key="login_lang", use_container_width=True):
             st.session_state.lang = 'en' if st.session_state.lang == 'ar' else 'ar'
             st.rerun()
+
+        st.markdown("---")
+
+        # الصورة الشخصية بحجم صغير (نقلت للأسفل)
+        img_found = False
+        for p in ["alsaeed.jpg", "image/alsaeed.jpg"]:
+            if os.path.exists(p):
+                # توسيط الصورة داخل العمود الصغير أصلاً
+                _, sub_col, _ = st.columns([1, 2, 1])
+                with sub_col:
+                    st.image(p, width=90)
+                img_found = True
+                break
+        if not img_found:
+            st.markdown("<div style='text-align:center; font-size:40px;'>📷</div>", unsafe_allow_html=True)
+        
+        # النص تحت الصورة بشكل فخم
+        st.markdown("""
+            <div style='text-align:center; margin-top:5px;'>
+                <span style='color:#8a7a5a; font-size:10px; letter-spacing:2px; text-transform:uppercase;'>✦ Programmed by ✦</span><br>
+                <span style='background: linear-gradient(90deg, #d4af37, #f5d991, #d4af37); -webkit-background-clip: text; -webkit-text-fill-color: transparent; font-size:16px; font-weight:700; letter-spacing:1px;'>Al-Saeed Al-Wazzan</span>
+            </div>
+        """, unsafe_allow_html=True)
+        
+        st.markdown('</div>', unsafe_allow_html=True)
 
 # --- Page: Home (Dashboard) ---
 def page_home():
