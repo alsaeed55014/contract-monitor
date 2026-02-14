@@ -297,7 +297,7 @@ def fetch_data():
 def sidebar_content():
     with st.sidebar:
         # وضع الصورة الشخصية المطلوبة وتنسيق مقاسها
-        user_photo = "image/saeed.jpg"
+        user_photo = "image/alsaeed.jpg"
         
         col_img_side, _ = st.columns([1, 0.1]) # لتوسيط بسيط
         with col_img_side:
@@ -409,7 +409,7 @@ def page_login():
     
     with col_img:
         # عرض الصورة على اليسار
-        user_photo = "image/saeed.jpg"
+        user_photo = "image/alsaeed.jpg"
 
         if os.path.exists(user_photo):
             st.image(user_photo, use_container_width=True)
