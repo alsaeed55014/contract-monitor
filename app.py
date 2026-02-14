@@ -195,13 +195,16 @@ st.markdown("""
         background-color: #f4f7f6;
     }
     
-    /* تنسيق عام للأزرار */
+    /* تنسيق عام للأزرار - موحد وفي المنتصف */
     div.stButton > button {
-        width: 100%;
+        width: 90% !important; /* عرض موحد أقل من 100% ليظهر التوسط */
+        display: block;
+        margin-left: auto !important;
+        margin-right: auto !important;
         border-radius: 12px;
-        height: 55px !important; /* ارتفاع ثابت وموحد */
+        height: 60px !important; /* ارتفاع ثابت وموحد */
         font-weight: 600;
-        margin-bottom: 15px !important; /* مسافة موحدة */
+        margin-bottom: 20px !important; /* مسافة موحدة بين الأزرار */
         font-size: 16px !important;
         color: white;
         border: none;
@@ -514,23 +517,21 @@ def page_home():
                             msg = "ينتهي اليوم"
                         else:
                             msg = f"منتهي منذ {abs(diff)} يوم"
-                            
-                        alerts.append({
-                            T['status']: msg,
-                            T['date_col']: row[date_col],
-                            T['phone_col']: row[4] if len(row) > 4 else "",
-                            "Gender": row[2] if len(row) > 2 else "",
-                            "Nationality": row[3] if len(row) > 3 else "",
-                            T['name_col']: row[1] if len(row) > 1 else "",
-                            "Timestamp": row[0] if len(row) > 0 else "",
-                            "_key": row_key # Hidden key for logic
-                        })
+                        
+                        # Show full row data
+                        alert_row = {T['status']: msg}
+                        alert_row.update(row.to_dict())
+                        alert_row['_key'] = row_key
+                        alerts.append(alert_row)
             except: pass
             
     if alerts:
         alert_df = pd.DataFrame(alerts)
+        # Ensure Status is the first column
+        cols = [T['status']] + [c for c in alert_df.columns if c != T['status'] and c != "_key"]
+        
         # Display without the key
-        display_df = alert_df.drop(columns=["_key"])
+        display_df = alert_df[cols]
         
         # Use Dataframe with selection
         try:
