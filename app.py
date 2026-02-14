@@ -465,6 +465,102 @@ def translate_columns(df):
     return df.rename(columns=final_names)
 
 
+
+def translate_search_term(term):
+    """
+    Translates Arabic search terms to English for filtering the dataframe.
+    """
+    term = term.strip().lower()
+    
+    # Mapping dictionary (Arabic -> English)
+    mapping = {
+        # Genders
+        "ذكر": "Male",
+        "انثى": "Female",
+        "أنثى": "Female",
+        
+        # Marital Status
+        "اعزب": "Single",
+        "أعزب": "Single",
+        "متزوج": "Married",
+        "متزوجة": "Married",
+        
+        # Cities (Saudi)
+        "الرياض": "Riyadh",
+        "جدة": "Jeddah",
+        "مكة": "Makkah",
+        "المدينة": "Madinah",
+        "المدينة المنورة": "Madinah",
+        "الدمام": "Dammam",
+        "الخبر": "Khobar",
+        "أبها": "Abha",
+        "تبوك": "Tabuk",
+        "حائل": "Hail",
+        "جازان": "Jazan",
+        "نجران": "Najran",
+        "الطائف": "Taif",
+        "القصيم": "Qassim",
+        "بريدة": "Buraydah",
+        
+        # Nationalities
+        "سعودي": "Saudi",
+        "سعودية": "Saudi",
+        "مصر": "Egypt",
+        "مصري": "Egyptian",
+        "مصرية": "Egyptian",
+        "هندي": "Indian",
+        "هندية": "Indian",
+        "باكستاني": "Pakistani",
+        "باكستانية": "Pakistani",
+        "فلبيني": "Filipino",
+        "فلبينية": "Filipino",
+        "بنغلاديشي": "Bangladeshi",
+        "سوداني": "Sudanese",
+        "يمني": "Yemeni",
+        "سوري": "Syrian",
+        "أردني": "Jordanian",
+        "لبناني": "Lebanese",
+        
+        # Jobs
+        "باريستا": "Barista",
+        "نادل": "Waiter",
+        "طباخ": "Chef",
+        "شيف": "Chef",
+        "طاهي": "Chef",
+        "سائق": "Driver",
+        "عامل نظافة": "Cleaner",
+        "منظف": "Cleaner",
+        "محاسب": "Accountant",
+        "مدير": "Manager",
+        "مبيعات": "Sales",
+        "استقبال": "Reception",
+        "موظف استقبال": "Receptionist",
+        "حارس": "Security",
+        "امن": "Security",
+        "فني": "Technician",
+        "مهندس": "Engineer",
+        "طبيب": "Doctor",
+        "ممرض": "Nurse",
+        "ممرضة": "Nurse",
+        "عامل": "Worker",
+        "حداد": "Blacksmith",
+        "نجار": "Carpenter",
+        "سباك": "Plumber",
+        "كهربائي": "Electrician",
+        "مشرف": "Supervisor"
+    }
+    
+    # Check for exact match first
+    if term in mapping:
+        return mapping[term]
+        
+    # Check if any key is PART of the search term (simple partial match)
+    for k, v in mapping.items():
+        if k in term:
+            return v
+            
+    return term
+
 # --- UI Helpers ---
 def sidebar_content():
     with st.sidebar:
@@ -825,7 +921,20 @@ def page_search():
             results = results[results.iloc[:, 0].apply(lambda x: reg_from <= safe_parse_date(x) <= reg_to if safe_parse_date(x) else False)]
 
         if query:
-            mask = results.apply(lambda row: row.astype(str).str.contains(query, case=False).any(), axis=1)
+            # Smart translation for search
+            translated_query = translate_search_term(query)
+            
+            # If translation happened, show toast or info (Optional, helps user know what happened)
+            if translated_query.lower() != query.lower():
+                st.toast(f"Searching for: {translated_query} ({query})")
+            
+            # Search with both original and translated query to be safe, OR just translated
+            # User asked: "write x -> search y". So we search for translated version.
+            # But safety net: search for EITHER to avoid missing mixed content?
+            # User specifically said: "write barista -> search barista" (English).
+            # So we use the translated term.
+            
+            mask = results.apply(lambda row: row.astype(str).str.contains(translated_query, case=False).any(), axis=1)
             results = results[mask]
             
         st.markdown(f"#### 🔍 النتائج المكتشفة: {len(results)}")
