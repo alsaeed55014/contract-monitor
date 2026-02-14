@@ -195,16 +195,13 @@ st.markdown("""
         background-color: #f4f7f6;
     }
     
-    /* تنسيق عام للأزرار - موحد وفي المنتصف */
+    /* تنسيق عام للأزرار */
     div.stButton > button {
-        width: 90% !important; /* عرض موحد أقل من 100% ليظهر التوسط */
-        display: block;
-        margin-left: auto !important;
-        margin-right: auto !important;
+        width: 100%;
         border-radius: 12px;
-        height: 60px !important; /* ارتفاع ثابت وموحد */
+        height: 55px !important; /* ارتفاع ثابت وموحد */
         font-weight: 600;
-        margin-bottom: 20px !important; /* مسافة موحدة بين الأزرار */
+        margin-bottom: 15px !important; /* مسافة موحدة */
         font-size: 16px !important;
         color: white;
         border: none;
