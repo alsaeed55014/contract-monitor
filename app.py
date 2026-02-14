@@ -30,6 +30,8 @@ def deduplicate_columns(columns):
             new_columns.append(col)
     return new_columns
 
+import time
+
 # --- وظيفة معالجة التواريخ لتقابل صيغة الإكسل العربي ---
 def safe_parse_date(d_str):
     if not d_str: return None
@@ -193,24 +195,49 @@ st.markdown("""
         background-color: #f4f7f6;
     }
     
-    /* أزرار بريميوم */
+    /* تنسيق عام للأزرار */
     div.stButton > button {
         width: 100%;
         border-radius: 12px;
-        height: 3.8em;
+        height: 55px !important; /* ارتفاع ثابت وموحد */
         font-weight: 600;
-        margin-bottom: 12px;
+        margin-bottom: 15px !important; /* مسافة موحدة */
         font-size: 16px !important;
-        background: linear-gradient(90deg, #2193b0 0%, #6dd5ed 100%);
         color: white;
         border: none;
         box-shadow: 0 4px 15px rgba(0,0,0,0.1);
         transition: all 0.3s ease;
     }
     div.stButton > button:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 6px 20px rgba(0,0,0,0.15);
+        transform: translateY(-3px);
+        box-shadow: 0 8px 25px rgba(0,0,0,0.2);
     }
+
+    /* تخصيص ألوان الأزرار في القائمة الجانبية بالترتيب */
+    /* 1. مراقب العقود (أزرق) */
+    [data-testid="stSidebar"] div.stButton:nth-of-type(1) > button {
+        background: linear-gradient(90deg, #2193b0 0%, #6dd5ed 100%);
+    }
+    /* 2. البحث والطباعة (بنفسجي) */
+    [data-testid="stSidebar"] div.stButton:nth-of-type(2) > button {
+        background: linear-gradient(90deg, #8E2DE2 0%, #4A00E0 100%);
+    }
+    /* 3. شاشة الصلاحيات (ذهبي) */
+    [data-testid="stSidebar"] div.stButton:nth-of-type(3) > button {
+        background: linear-gradient(90deg, #F2994A 0%, #F2C94C 100%);
+        color: #1a252f !important; /* نص داكن للذهبي */
+    }
+    /* 4. حذف الصف المختار (أحمر) */
+    [data-testid="stSidebar"] div.stButton:nth-of-type(4) > button {
+        background: linear-gradient(90deg, #cb2d3e 0%, #ef473a 100%);
+    }
+    /* 5. تحديث البيانات (أخضر) */
+    [data-testid="stSidebar"] div.stButton:nth-of-type(5) > button {
+        background: linear-gradient(90deg, #11998e 0%, #38ef7d 100%);
+    }
+    /* 6. تغيير اللغة (رمادي) - يأتي عادة قبل الأزرار الرئيسية في الكود الحالي، لذا سنحتاج لضبط الترتيب في الكود ليطابق الـ CSS أو العكس */
+    /* سنقوم بتعديل ترتيب العناصر في الكود ليتطابق مع الـ CSS */
+
     
     /* كروت التنبيهات */
     .stTable {
@@ -281,39 +308,72 @@ def sidebar_content():
         
         st.markdown(f"<h3 style='color:white;'>{T['prog_by']}: {'السعيد الوزان' if st.session_state.lang == 'ar' else 'Al-Saeed Al-Wazzan'}</h3>", unsafe_allow_html=True)
         
-        if st.button(T['switch_lang']):
-            st.session_state.lang = 'en' if st.session_state.lang == 'ar' else 'ar'
-            st.rerun()
+        st.markdown(f"<h3 style='color:white;'>{T['prog_by']}: {'السعيد الوزان' if st.session_state.lang == 'ar' else 'Al-Saeed Al-Wazzan'}</h3>", unsafe_allow_html=True)
         
         st.divider()
         
-        # الزر الجديد لمراقبة العقود (الرئيسية)
+        # 1. زر مراقب العقود (الرئيسية)
         if st.button(T['home_title'], type="secondary" if st.session_state.page != "home" else "primary"):
             st.session_state.page = "home"
             st.rerun()
 
+        # 2. زر البحث والطباعة
         if st.button(T['search_nav'], type="secondary" if st.session_state.page != "search" else "primary"):
             st.session_state.page = "search"
             st.rerun()
-            
-        if st.button(T['del_nav']):
-            st.warning("Feature not implemented for web yet." if st.session_state.lang == 'en' else "هذه الميزة غير مفعلة للويب حالياً.")
-            
-        if st.button(T['refresh_nav']):
-            st.cache_data.clear()
-            st.rerun()
-            
+
+        # 3. زر شاشة الصلاحيات
         if st.button(T['perms_nav'], type="secondary" if st.session_state.page != "permissions" else "primary"):
             if USERS.get(st.session_state.current_user, {}).get("can_manage_users"):
                 st.session_state.page = "permissions"
                 st.rerun()
             else:
                 st.error("No Permission" if st.session_state.lang == 'en' else "ليس لديك صلاحية")
+
+        # 4. زر حذف الصف المختار
+        if st.button(T['del_nav']):
+            if st.session_state.get("selected_alert_key"):
+                key_to_block = st.session_state.selected_alert_key
                 
+                # Load existing
+                ignored_file = 'ignored_rows.json'
+                current_ignored = []
+                if os.path.exists(ignored_file):
+                    try:
+                        with open(ignored_file, 'r', encoding='utf-8') as f:
+                            current_ignored = json.load(f)
+                    except: pass
+                
+                if key_to_block not in current_ignored:
+                    current_ignored.append(key_to_block)
+                    try:
+                        with open(ignored_file, 'w', encoding='utf-8') as f:
+                            json.dump(current_ignored, f)
+                        st.success("تم حذف التنبيه" if st.session_state.lang == 'ar' else "Alert deleted")
+                        time.sleep(1) # Show success briefly
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Error saving: {e}")
+                else:
+                    st.warning("Allready deleted")
+            else:
+                st.warning("يرجى اختيار صف من الجدول أولاً" if st.session_state.lang == 'ar' else "Please select a row first")
+
+        # 5. زر تحديث البيانات
+        if st.button(T['refresh_nav']):
+            st.cache_data.clear()
+            st.rerun()
+            
         st.divider()
+        
         if st.button(T['logout'], type="secondary"):
             st.session_state.authenticated = False
             st.session_state.current_user = ""
+            st.rerun()
+
+        # نقل زر اللغة للأسفل
+        if st.button(T['switch_lang']):
+            st.session_state.lang = 'en' if st.session_state.lang == 'ar' else 'ar'
             st.rerun()
 
 # --- Page: Login ---
@@ -399,6 +459,15 @@ def page_home():
     today = date.today()
     alerts = []
     
+    # Load ignored rows
+    ignored_file = 'ignored_rows.json'
+    ignored_set = set()
+    if os.path.exists(ignored_file):
+        try:
+            with open(ignored_file, 'r', encoding='utf-8') as f:
+                ignored_set = set(json.load(f))
+        except: pass
+    
     # Try to find expiry column
     date_col = ""
     for h in df.columns:
@@ -409,12 +478,43 @@ def page_home():
     if date_col:
         for _, row in df.iterrows():
             try:
+                # Key Generation (Same as desktop)
+                # Assuming columns: Timestamp, Name, Gender, Nationality, Phone...
+                # Key: Name|Gender|Nationality|Phone...
+                # Indices in df might differ, relying on position 1 to 6 as in desktop app logic
+                # Desktop: key = "|".join([str(v) for v in vals[1:7]])
+                # Here row is a Series. Let's try to match the slicing.
+                # data_raw headers are deduplicated.
+                # We need raw values for the key to match exactly if we want cross-app compatibility.
+                # But for now, let's just use the values we have.
+                # Construct key from specific columns if possible or slice.
+                # Desktop uses index 1 to 7 from the treeview values.
+                # Treeview values in desktop: [msg, col1, col2...]
+                # Actually desktop logic: `vals = self.tree.item(sel[0])['values']`; `key = "|".join([str(v) for v in vals[1:7]])`
+                # In desktop `_process_data`: `processed.append(([msg] + row, ...))`
+                # So vals[0] is msg. vals[1] is row[0] (Timestamp)...
+                # So Key is row[0] to row[5] (first 6 columns of the sheet).
+                
+                row_values = row.values.tolist()
+                key_parts = [str(v) for v in row_values[0:6]]
+                row_key = "|".join(key_parts)
+                
+                if row_key in ignored_set:
+                    continue
+
                 dt = safe_parse_date(row[date_col])
                 if dt:
                     diff = (dt - today).days
-                    # إظهار العقود التي ستنتهي في غضون أسبوعين (من 0 إلى 14 يوم)
-                    if 0 <= diff <= 14:
-                        msg = f"{diff} {T['days_left']}" if diff < 7 else T['week_left']
+                    # المنطق الجديد: التنبيه يظهر إذا بقي 7 أيام أو أقل (ويستمر حتى الحذف)
+                    if diff <= 7:
+                        # تصحيح العداد
+                        if diff > 0:
+                            msg = f"باقي {diff} يوم"
+                        elif diff == 0:
+                            msg = "ينتهي اليوم"
+                        else:
+                            msg = f"منتهي منذ {abs(diff)} يوم"
+                            
                         alerts.append({
                             T['status']: msg,
                             T['date_col']: row[date_col],
@@ -423,12 +523,37 @@ def page_home():
                             "Nationality": row[3] if len(row) > 3 else "",
                             T['name_col']: row[1] if len(row) > 1 else "",
                             "Timestamp": row[0] if len(row) > 0 else "",
+                            "_key": row_key # Hidden key for logic
                         })
             except: pass
             
     if alerts:
         alert_df = pd.DataFrame(alerts)
-        st.table(alert_df)
+        # Display without the key
+        display_df = alert_df.drop(columns=["_key"])
+        
+        # Use Dataframe with selection
+        try:
+           event = st.dataframe(
+                display_df, 
+                use_container_width=True,
+                selection_mode="single-row",
+                on_select="rerun",
+                key="alert_selection"
+            )
+        except:
+             # Fallback for older streamlit versions
+             st.dataframe(display_df, use_container_width=True)
+             event = None
+
+        # Handle Delete Action (Check sidebar button state implicitly or use session state)
+        # The delete button is in sidebar. It needs to know the selection.
+        if event and len(event.selection['rows']) > 0:
+            selected_index = event.selection['rows'][0]
+            st.session_state.selected_alert_key = alert_df.iloc[selected_index]["_key"]
+        else:
+            st.session_state.selected_alert_key = None
+
     else:
         st.success(T['success_msg'])
 
@@ -459,14 +584,14 @@ def page_search():
     with col2:
         st.markdown(f"### {T['filter_exp']}")
         use_exp = st.checkbox(T['enable'], key="exp_en")
-        exp_from = st.date_input(T['from'], value=date.today(), key="exp_f")
-        exp_to = st.date_input(T['to'], value=date.today(), key="exp_t")
+        exp_from = st.date_input(T['from'], value=date.today(), key="exp_f", format="DD/MM/YYYY")
+        exp_to = st.date_input(T['to'], value=date.today(), key="exp_t", format="DD/MM/YYYY")
         
     with col3:
         st.markdown(f"### {T['filter_reg']}")
         use_reg = st.checkbox(T['enable'], key="reg_en")
-        reg_from = st.date_input(T['from'], value=date.today(), key="reg_f")
-        reg_to = st.date_input(T['to'], value=date.today(), key="reg_t")
+        reg_from = st.date_input(T['from'], value=date.today(), key="reg_f", format="DD/MM/YYYY")
+        reg_to = st.date_input(T['to'], value=date.today(), key="reg_t", format="DD/MM/YYYY")
 
     query = st.text_input(T['global_search'], placeholder="(Name, Nationality, Job...)")
     search_btn_clicked = st.button(T['search_btn'], type="primary")
