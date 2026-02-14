@@ -11,15 +11,27 @@ import hashlib
 # إعداد الصفحة
 st.set_page_config(page_title="Contract Monitor | مراقب العقود", layout="wide", page_icon="📝")
 
+# --- وظيفة لمنع تكرار أسماء الأعمدة ---
+def deduplicate_columns(columns):
+    new_columns = []
+    counts = {}
+    for col in columns:
+        if not col or col.strip() == "": col = "Column" # تسمية الأعمدة الفارغة
+        if col in counts:
+            counts[col] += 1
+            new_columns.append(f"{col}_{counts[col]}")
+        else:
+            counts[col] = 0
+            new_columns.append(col)
+    return new_columns
+
 # --- نظام تسجيل الدخول ---
 USERS_FILE = 'users.json'
-
 def load_users():
     if os.path.exists(USERS_FILE):
         try:
             with open(USERS_FILE, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-                return data.get("users", {})
+                data = json.load(f); return data.get("users", {})
         except: pass
     return {"admin": {"password": "c685e710931707e3e9aaab6c8625a9798cd06a31bcf40cd8d6963e3703400d14", "role": "admin", "can_manage_users": True}}
 
@@ -72,11 +84,6 @@ def get_gspread_client():
             creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
             return gspread.authorize(creds)
     except: pass
-    if os.path.exists('credentials.json'):
-        try:
-            creds = ServiceAccountCredentials.from_json_keyfile_name('credentials.json', scope)
-            return gspread.authorize(creds)
-        except: return None
     return None
 
 @st.cache_data(ttl=600)
@@ -103,12 +110,11 @@ def sidebar_common():
 
 # --- الصفحات ---
 def page_home():
-    sidebar_common()
-    st.title(T['home_title'])
-    st.header(T['alerts_title'])
+    sidebar_common(); st.title(T['home_title']); st.header(T['alerts_title'])
     data = fetch_data()
     if not data: st.error(T['info_creds']); return
-    df = pd.DataFrame(data[1:], columns=data[0])
+    headers = deduplicate_columns(data[0])
+    df = pd.DataFrame(data[1:], columns=headers)
     today = date.today(); alerts = []
     date_col = next((h for h in df.columns if any(kw in h.lower() for kw in ["تاريخ انتاء", "expiry", "end date", "تاريخ انتهاء"])), "")
     if date_col:
@@ -122,8 +128,7 @@ def page_home():
     else: st.success("لا توجد تنبيهات عاجلة")
 
 def page_search():
-    sidebar_common()
-    st.title(T['search_page_title'])
+    sidebar_common(); st.title(T['search_page_title'])
     if st.button(T['back_nav']): st.session_state.page = "home"; st.rerun()
     st.markdown(f"### {T['search_criteria']}")
     col1, col2, col3 = st.columns(3)
@@ -141,32 +146,27 @@ def page_search():
         st.date_input(T['from'], key="reg_f"); st.date_input(T['to'], key="reg_t")
 
     query = st.text_input(T['global_search'], placeholder=T['search_placeholder'])
-    
     data = fetch_data()
     if data:
-        df = pd.DataFrame(data[1:], columns=data[0])
+        headers = deduplicate_columns(data[0])
+        df = pd.DataFrame(data[1:], columns=headers)
         if query:
             results = df[df.apply(lambda row: row.astype(str).str.contains(query, case=False).any(), axis=1)]
-            # التعديل المهم هنا: تحويل البيانات لنصوص لضمان عدم حدوث خطأ
             st.dataframe(results.astype(str), use_container_width=True)
-    
     if st.button(T['print_btn']): st.info("Printing not available.")
 
 def page_permissions():
     sidebar_common(); st.title(T['perms_page_title'])
     if st.button(T['back_nav']): st.session_state.page = "home"; st.rerun()
-    st.write(T['add_user_title'])
-    st.text_input(T['user_lbl'], key="nu"); st.text_input(T['pass_lbl'], type="password", key="np")
+    st.write(T['add_user_title']); st.text_input(T['user_lbl'], key="nu"); st.text_input(T['pass_lbl'], type="password", key="np")
     st.button(T['add_btn'])
 
 # --- التوجيه ---
 if not st.session_state.authenticated:
-    sidebar_common() # لإظهار اللغة فقط في شاشة الدخول
-    # صفحة الدخول البسيطة
+    sidebar_common()
     st.markdown(f"## {T['login_title']}")
     u = st.text_input(T['user_lbl']); p = st.text_input(T['pass_lbl'], type="password")
-    if st.button(T['login_btn'], type="primary"):
-        st.session_state.authenticated = True; st.rerun()
+    if st.button(T['login_btn'], type="primary"): st.session_state.authenticated = True; st.rerun()
 else:
     if st.session_state.page == "home": page_home()
     elif st.session_state.page == "search": page_search()
