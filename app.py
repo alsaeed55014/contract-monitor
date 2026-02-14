@@ -320,28 +320,136 @@ def fetch_data():
     except: return None
 
 def translate_columns(df):
-    col_mapping = {
-        "طابع زمني": {"ar": "وقت التسجيل", "en": "Timestamp"},
-        "Full Name:": {"ar": "الاسم الكامل", "en": "Full Name"},
+    col_mapping_exact = {
+        "Timestamp": {"ar": "وقت التسجيل", "en": "Timestamp"},
+        "Full Name": {"ar": "الاسم الكامل", "en": "Full Name"},
         "Nationality": {"ar": "الجنسية", "en": "Nationality"},
         "Gender": {"ar": "الجنس", "en": "Gender"},
         "Phone Number": {"ar": "رقم الهاتف", "en": "Phone Number"},
         "Is your contract expired": {"ar": "هل انتهى العقد؟", "en": "Contract Expired?"},
         "When is your contract end date?": {"ar": "تاريخ انتهاء العقد", "en": "Contract End Date"},
-        "your age": {"ar": "العمر", "en": "Age"}
+        "your age": {"ar": "العمر", "en": "Age"},
+        "Are you working now?": {"ar": "هل تعمل حالياً؟", "en": "Currently Working?"},
+        "Do you have a valid residency?": {"ar": "هل لديك إقامة سارية؟", "en": "Valid Residency?"},
+        "Do you have a valid driving license?": {"ar": "هل لديك رخصة قيادة؟", "en": "Driving License?"},
+        "If you are Huroob, how many days or months h...": {"ar": "كم عدد الهروب", "en": "Huroob Count"},
+        "Will your employer transfer your sponsorship?": {"ar": "هل الكفيل يتنازل؟", "en": "Employer Transferable?"},
+        "Are you in Saudi Arabia?": {"ar": "هل أنت في السعودية؟", "en": "In Saudi?"},
+        "Which city do you live in?": {"ar": "المدينة / المنطقة", "en": "City"},
+        "How did you hear about us?": {"ar": "كيف سمعت عنا؟", "en": "How Hear About Us"},
+        "What is the name of your sponsor/establishment?": {"ar": "اسم الكفيل / المنشأة", "en": "Employer Name"},
+        "Do you speak Arabic?": {"ar": "هل تتحدث العربية؟", "en": "Speak Arabic?"},
+        "Which job are you applying for?": {"ar": "الوظيفة المطلوبة", "en": "Required Job"},
+        "What other jobs can you do?": {"ar": "وظائف أخرى تتقنها", "en": "Other Skills"},
+        "How much experience do you have?": {"ar": "الخبرة", "en": "Experience"},
+        "Do you have a health card?": {"ar": "هل لديك كرت صحي؟", "en": "Health Card?"},
+        "Is the card baladiya valid?": {"ar": "صلاحية كرت البلدية", "en": "Municipality Card Expiry"},
+        "How many months?": {"ar": "عدد الأشهر", "en": "Months Count"},
+        "Can you work overtime?": {"ar": "هل تعمل وقت إضافي؟", "en": "Overtime?"},
+        "Are you ready to work immediately?": {"ar": "هل أنت جاهز للعمل؟", "en": "Ready to Work?"},
+        "Are you married?": {"ar": "الحالة الاجتماعية", "en": "Marital Status"},
+        "Iqama ID Number": {"ar": "رقم الإقامة", "en": "Iqama ID"},
+        "What is the profession in Iqama?": {"ar": "المهنة في الإقامة", "en": "Iqama Profession"},
+        "Your Iqama Expiry Date": {"ar": "صلاحية الإقامة", "en": "Iqama Expiry"},
+        "How many times have you been transferred?": {"ar": "عدد مرات التنازل", "en": "Transfer Times"},
+        "Download CV": {"ar": "تحميل السيرة الذاتية", "en": "Download CV"},
+        "Do you have any financial obligations towards your previous sponsor": {"ar": "هل لديك التزامات مالية؟", "en": "Financial Obligations?"},
+        "Do you have to report Huroob": {"ar": "هل لديك بلاغ هروب؟", "en": "Report Huroob?"}
+    }
+
+    # Partial match mapping (ORDER IS IMPORTANT: specific matches first)
+    col_mapping_partial = {
+        # High specificity
+        
+        # New additions for user's screenshot
+        "days or months have you been huroob": {"ar": "مدة الهروب (أيام/أشهر)", "en": "Huroob Duration"},
+        "accept to transfer your sponsorship": {"ar": "هل يقبل الكفيل التنازل؟", "en": "Sponsor Accepts Transfer?"},
+        "are you in saudi arabia now": {"ar": "هل أنت في السعودية الآن؟", "en": "In Saudi Now?"},
+        "which city in saudi": {"ar": "المدينة في السعودية؟", "en": "City in Saudi?"},
+        "which city in saudi arabia are you in": {"ar": "المدينة في السعودية؟", "en": "City in Saudi?"},
+        "what is the name of the area where you live": {"ar": "اسم الحي / المنطقة", "en": "Area Name"},
+        "which job are you looking for": {"ar": "الوظيفة المطلوبة", "en": "Desired Job"},
+        "how much experience do you have in this field": {"ar": "الخبرة في هذا المجال", "en": "Field Experience"},
+        "what other jobs can you do": {"ar": "وظائف أخرى تتقنها", "en": "Other Jobs"},
+        "do you have card baladiya": {"ar": "هل لديك كرت بلدية؟", "en": "Baladiya Card?"},
+        "is the card baladiya valid": {"ar": "هل كرت البلدية ساري؟", "en": "Is Baladiya Valid?"},
+        "how many months card baladiya valid": {"ar": "مدة صلاحية البلدية (أشهر)", "en": "Baladiya Validity (Months)"},
+        "how many months card baladiya expires": {"ar": "كم شهر وينتهي كرت البلدية", "en": "Baladiya Expiry (Months)"},
+        "can you work outside your city": {"ar": "العمل خارج المدينة؟", "en": "Work Outside City?"},
+        "married and do your children reside": {"ar": "متزوج والأبناء في السعودية؟", "en": "Married & Family in KSA?"},
+        "iqama is valid, how many months are left": {"ar": "مدة صلاحية الإقامة (أشهر)", "en": "Iqama Validity Remaining"},
+        "if the iqama expired how many months ago": {"ar": "منذ متى انتهت الإقامة؟", "en": "Months Since Iqama Expired"},
+        "how many times did you transfer your sponsorship": {"ar": "عدد مرات نقل الكفالة", "en": "Transfer Count"},
+        "how did you know": {"ar": "كيف عرفت عنا؟", "en": "How check us"},
+
+        "how much experience do you": {"ar": "سنوات الخبرة", "en": "Years of Experience"},
+        
+        "report huroob": {"ar": "بلاغ هروب", "en": "Huroob Report"},
+        "huroob": {"ar": "عدد الهروب", "en": "Huroob Count"}, # Fallback for other huroob strings
+        
+        "iqama expiry": {"ar": "صلاحية الإقامة", "en": "Iqama Expiry"},
+        "profession": {"ar": "المهنة في الإقامة", "en": "Iqama Profession"},
+        "id number": {"ar": "رقم الإقامة", "en": "Iqama ID"},
+        "iqama": {"ar": "الإقامة", "en": "Iqama"},
+        
+        "contract end": {"ar": "تاريخ انتهاء العقد", "en": "Contract End Date"},
+        "contract expired": {"ar": "هل انتهى العقد؟", "en": "Contract Expired?"},
+        "financial": {"ar": "التزامات مالية", "en": "Financial Obligations"},
+        
+        "sponsor": {"ar": "اسم الكفيل", "en": "Sponsor Name"},
+        "sponsorship": {"ar": "نقل كفالة", "en": "Sponsorship"},
+        
+        "driving": {"ar": "رخصة قيادة", "en": "Driving License"},
+        "residency": {"ar": "إقامة", "en": "Residency"},
+        
+        "saudi": {"ar": "هل أنت في السعودية؟", "en": "In Saudi?"},
+        "city": {"ar": "المدينة", "en": "City"},
+        "hear": {"ar": "كيف سمعت عنا؟", "en": "Source"},
+        "speak": {"ar": "هل تتحدث العربية؟", "en": "Speak Arabic?"},
+        "health": {"ar": "كرت صحي", "en": "Health Card"},
+        "baladiya": {"ar": "بلدية", "en": "Baladiya"},
+        "months": {"ar": "عدد الأشهر", "en": "Months Count"},
+        "overtime": {"ar": "وقت إضافي", "en": "Overtime?"},
+        "ready": {"ar": "هل أنت جاهز للعمل؟", "en": "Ready to Work?"},
+        "married": {"ar": "الحالة الاجتماعية", "en": "Marital Status"},
+        "transfer": {"ar": "عدد مرات التنازل", "en": "Transfer Times"},
+        "cv": {"ar": "السيرة الذاتية", "en": "CV"},
+        
+        # General / Short words last
+        "timestamp": {"ar": "وقت التسجيل", "en": "Timestamp"},
+        "full name": {"ar": "الاسم الكامل", "en": "Full Name"},
+        "nationality": {"ar": "الجنسية", "en": "Nationality"},
+        "phone": {"ar": "رقم الهاتف", "en": "Phone Number"},
+        "name": {"ar": "الاسم", "en": "Name"},
+        "age": {"ar": "العمر", "en": "Age"},
+        "gender": {"ar": "الجنس", "en": "Gender"},
+        "job": {"ar": "الوظيفة", "en": "Job"},
+        "experience": {"ar": "الخبرة", "en": "Experience"},
     }
     
     new_names = {}
     for c in df.columns:
         c_clean = c.strip()
-        if c_clean in col_mapping:
-            new_names[c] = col_mapping[c_clean][st.session_state.lang]
-        elif "age" in c_clean.lower():
-            new_names[c] = "العمر" if st.session_state.lang == 'ar' else "Age"
-        else:
+        c_lower = c_clean.lower()
+        
+        # 1. Exact match
+        if c_clean in col_mapping_exact:
+            new_names[c] = col_mapping_exact[c_clean][st.session_state.lang]
+            continue
+            
+        # 2. Key contains part match (First match wins)
+        found = False
+        for k, v in col_mapping_partial.items():
+            if k in c_lower:
+                new_names[c] = v[st.session_state.lang]
+                found = True
+                break
+        
+        if not found:
             new_names[c] = c
             
     return df.rename(columns=new_names)
+
 
 # --- UI Helpers ---
 def sidebar_content():
@@ -835,4 +943,3 @@ else:
         page_permissions()
 
 st.markdown('</div>', unsafe_allow_html=True)
-
