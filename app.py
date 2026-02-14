@@ -59,11 +59,13 @@ def load_users():
         "admin": {
             "password": "c685e710931707e3e9aaab6c8625a9798cd06a31bcf40cd8d6963e3703400d14", # 266519111
             "role": "admin",
+            "full_name": "المدير العام",
             "can_manage_users": True
         },
         "samar": {
             "password": "2d75c1a2d01521e3026aa1719256a06604e7bc99aab149cb8cc7de8552fa820d", # 123452
             "role": "user",
+            "full_name": "سمر",
             "can_manage_users": False
         }
     }
@@ -200,9 +202,9 @@ st.markdown("""
         background-color: #f4f7f6;
     }
     
-    /* إزالة الفراغات العلوية */
+    /* إزالة الفراغات العلوية مع ترك مسافة للعنوان */
     .block-container {
-        padding-top: 1rem !important;
+        padding-top: 2.5rem !important;
         padding-bottom: 1rem !important;
     }
     [data-testid="stSidebar"] > div:first-child {
@@ -275,12 +277,13 @@ st.markdown("""
         border-radius: 10px;
         border: 1px solid #ddd;
         padding: 12px;
-        margin-top: -15px !important; /* تقليل الفراغ فوق الحقول */
+        margin-top: -10px !important;
     }
     
-    /* تقليل الفراغات بين العناصر */
+    /* تقليل الفراغات بين العناصر - بدون التأثير على العنوان الرئيسي */
     div.stMarkdown { margin-bottom: -10px; }
-    h1, h2, h3 { margin-top: -10px !important; padding-top: 0px !important; }
+    h2, h3 { margin-top: -10px !important; padding-top: 0px !important; }
+    h1 { margin-top: 0px !important; padding-top: 10px !important; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -483,6 +486,8 @@ def page_login():
                 if USERS[username]["password"] == hashed:
                     st.session_state.authenticated = True
                     st.session_state.current_user = username
+                    # حفظ الاسم الكامل في الجلسة لاستخدامه في الترحيب
+                    st.session_state.current_user_name = USERS[username].get("full_name", username)
                     st.session_state.page = "home"
                     st.rerun()
                 else: st.error(T['wrong_pass'])
@@ -496,7 +501,11 @@ def page_login():
 # --- Page: Home (Dashboard) ---
 def page_home():
     sidebar_content()
-    st.title(T['home_title'])
+    
+    # رسالة الترحيب في الرئيسية
+    welcome_name = st.session_state.get("current_user_name", st.session_state.current_user)
+    st.title(f"{T['home_title']} - {welcome_name}")
+    
     st.header(T['alerts_title'])
     
     data_raw = fetch_data()
@@ -679,7 +688,10 @@ def page_permissions():
     global USERS
     sidebar_content()
     st.title(T['perms_page_title'])
-    st.markdown(f"### {'Welcome back' if st.session_state.lang == 'en' else 'مرحباً بك'} ، {st.session_state.current_user}")
+    
+    # رسالة الترحيب بالاسم الكامل
+    welcome_name = st.session_state.get("current_user_name", st.session_state.current_user)
+    st.markdown(f"### {'Welcome back' if st.session_state.lang == 'en' else 'مرحباً بك'} ، {welcome_name}")
     
     if st.button(T['back_nav']):
         st.session_state.page = "home"
@@ -721,6 +733,7 @@ def page_permissions():
     # === إضافة مستخدم جديد ===
     with col2:
         st.markdown(f"### ➕ {T['add_user_title']}")
+        new_name = st.text_input("الاسم الكامل" if st.session_state.lang == 'ar' else "Full Name", key="new_full_name")
         new_u = st.text_input(T['user_lbl'], key="new_u")
         new_p = st.text_input(T['pass_lbl'], type="password", key="new_p")
         new_p2 = st.text_input("تأكيد كلمة المرور" if st.session_state.lang == 'ar' else "Confirm Password", type="password", key="confirm_new_p")
@@ -737,10 +750,11 @@ def page_permissions():
                 USERS[new_u] = {
                     "password": hashlib.sha256(new_p.encode()).hexdigest(),
                     "role": "admin" if can_p else "user",
+                    "full_name": new_name if new_name else new_u,
                     "can_manage_users": can_p
                 }
                 save_users(USERS)
-                st.success(f"✅ تم إضافة {new_u} بنجاح" if st.session_state.lang == 'ar' else f"✅ User {new_u} added")
+                st.success(f"✅ تم إضافة {new_u} ({new_name}) بنجاح" if st.session_state.lang == 'ar' else f"✅ User {new_u} added")
                 st.rerun()
     
     # === حذف مستخدم ===
