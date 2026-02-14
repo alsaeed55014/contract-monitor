@@ -200,6 +200,15 @@ st.markdown("""
         background-color: #f4f7f6;
     }
     
+    /* إزالة الفراغات العلوية */
+    .block-container {
+        padding-top: 1rem !important;
+        padding-bottom: 1rem !important;
+    }
+    [data-testid="stSidebar"] > div:first-child {
+        padding-top: 0rem !important;
+    }
+    
     /* تنسيق فاخر للأزرار */
     [data-testid="stSidebar"] div.stButton > button {
         width: 100% !important;
@@ -222,6 +231,7 @@ st.markdown("""
     }
     [data-testid="stSidebar"] div.stButton > button:active {
         transform: translateY(0px) scale(0.98) !important;
+        background-color: rgba(0,0,0,0.2) !important;
     }
 
     /* 1. مراقب العقود - أزرق ملكي */
@@ -265,7 +275,12 @@ st.markdown("""
         border-radius: 10px;
         border: 1px solid #ddd;
         padding: 12px;
+        margin-top: -15px !important; /* تقليل الفراغ فوق الحقول */
     }
+    
+    /* تقليل الفراغات بين العناصر */
+    div.stMarkdown { margin-bottom: -10px; }
+    h1, h2, h3 { margin-top: -10px !important; padding-top: 0px !important; }
 </style>
 """, unsafe_allow_html=True)
 
