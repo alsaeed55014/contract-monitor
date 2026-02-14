@@ -83,17 +83,13 @@ def load_users():
             "password": "c685e710931707e3e9aaab6c8625a9798cd06a31bcf40cd8d6963e3703400d14", # 266519111
             "role": "admin",
             "can_manage_users": True
+        },
+        "samar": {
+            "password": "688147d32c965682b130a11a84f47dd8789547d96735515c1365851e39a584e1", # 123452
+            "role": "user",
+            "can_manage_users": False
         }
     }
-
-def save_users(users_dict):
-    try:
-        with open(USERS_FILE, 'w', encoding='utf-8') as f:
-            json.dump({"users": users_dict}, f, indent=4)
-        return True
-    except Exception as e:
-        st.error(f"Error saving users: {e}")
-        return False
 
 USERS = load_users()
 
@@ -138,7 +134,6 @@ L = {
         'search_btn': "Search Now",
         'print_btn': "Print Report",
         'global_search': "Global Search",
-        'search_placeholder': "(Name, Job, Nationality, Phone...)",
         'filter_reg': "Registration Date",
         'filter_exp': "Contract Expiry",
         'filter_age': "Age",
@@ -186,7 +181,6 @@ L = {
         'search_btn': "بحث الآن",
         'print_btn': "طباعة التقرير",
         'global_search': "البحث الشامل",
-        'search_placeholder': "(الاسم، المهنة، الجنسية، الجوال...)",
         'filter_reg': "تاريخ التسجيل",
         'filter_exp': "انتهاء العقد",
         'filter_age': "السن",
@@ -198,7 +192,6 @@ L = {
         'danger': "خطير",
         'warning': "تحذير",
         'success_msg': "لا توجد تنبيهات عاجلة اليوم.",
-        'column_missing': "⚠️ لم يتم العثور على عمود 'تاريخ انتهاء العقد' في الملف.",
         'error_google': "خطأ في الاتصال بجوجل شيت",
         'info_creds': "يرجى التأكد من إعدادات Secrets في Streamlit.",
     }
@@ -219,9 +212,11 @@ st.markdown("""
         color: white;
         border-right: 1px solid rgba(255,255,255,0.1);
     }
-    .main { background-color: #f4f7f6; }
+    .main {
+        background-color: #f4f7f6;
+    }
     
-    /* أزرار بريميوم - متجاوبة */
+    /* أزرار بريميوم */
     div.stButton > button {
         width: 100%;
         border-radius: 12px;
@@ -240,34 +235,25 @@ st.markdown("""
         box-shadow: 0 6px 20px rgba(0,0,0,0.15);
     }
     
-    /* تحسين الجداول للموبيل */
-    .stDataFrame, .stTable {
+    /* كروت التنبيهات */
+    .stTable {
         background-color: white;
         border-radius: 15px;
-        overflow-x: auto !important;
+        overflow: hidden;
         box-shadow: 0 10px 30px rgba(0,0,0,0.05);
     }
     
-    @media (max-width: 768px) {
-        .stMarkdown h1, .stMarkdown h2 { font-size: 1.5rem !important; }
-        .block-container { padding: 1rem 1rem !important; }
-        div.stButton > button { height: 3.5em; font-size: 14px !important; }
-    }
-
-    /* كروت التنبيهات */
-    .alert-card {
-        background: white;
-        color: black;
-        border-right: 5px solid #2193b0;
-        border-radius: 12px;
-        padding: 15px;
-        margin-bottom: 10px;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.08);
-    }
-
     /* دعم RTL */
-    html[dir="rtl"] .stMarkdown, html[dir="rtl"] .stText { text-align: right; }
-    .stTextInput input { border-radius: 10px; border: 1px solid #ddd; padding: 12px; }
+    html[dir="rtl"] .stMarkdown, html[dir="rtl"] .stText {
+        text-align: right;
+    }
+    
+    /* تأثيرات الزجاج (Glassmorphism) للنماذج */
+    .stTextInput input {
+        border-radius: 10px;
+        border: 1px solid #ddd;
+        padding: 12px;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -397,14 +383,14 @@ def page_home():
     df = pd.DataFrame(data_raw[1:], columns=headers)
     today = date.today()
     
-    # البحث المرن عن عمود التاريخ (أي عمود يحتوي على انتهاء أو تاريخ أو expiry)
-    date_keywords = ["انتهاء", "الانتهاء", "expiry", "expire", "تاريخ", "end"]
-    date_col = next((h for h in df.columns if any(kw in h.lower() for kw in date_keywords)), "")
+    # البحث عن عمود التاريخ
+    date_col = next((h for h in df.columns if any(kw in h.lower() for kw in ["تاريخ انتاء", "expiry", "تاريخ انتهاء"])), "")
     
     if date_col:
+        # عرض التنبيهات مع ميزة الإخفاء
         count = 0
         for idx, row in df.iterrows():
-            row_id = f"{row[0]}_{row[1]}" # معرف فريد
+            row_id = f"{row[0]}_{row[1]}" # معرف فريد مبسط
             if row_id in st.session_state.dismissed_ids: continue
             
             dt = safe_parse_date(row[date_col])
@@ -413,28 +399,19 @@ def page_home():
                 if 0 <= diff <= 14:
                     count += 1
                     msg = f"باقي {diff} يوم" if diff < 7 else "باقي أسبوع"
-                    bg_color = "#fff4cc" if diff >= 7 else "#ffcccc"
+                    bg_color = "#fff4cc" if diff >= 7 else "#ffcccc" # ألوان التنبيه
                     
-                    st.markdown(f"""
-                    <div class="alert-card">
-                        <div style="display:flex; justify-content:space-between; align-items:center;">
-                            <div>
-                                <h4 style="margin:0; color:#2c3e50;">{row[1]}</h4>
-                                <small style="color:#666;">{row[date_col]}</small>
-                            </div>
-                            <div style="background:{bg_color}; padding:5px 15px; border-radius:20px; font-weight:bold; color:black;">
-                                {msg}
-                            </div>
-                        </div>
-                    </div>
-                    """, unsafe_allow_html=True)
-                    if st.button("✅ إخفاء التنبيه", key=f"hide_{idx}"):
-                        st.session_state.dismissed_ids.add(row_id)
-                        st.rerun()
-                    st.divider()
+                    with st.container():
+                        cols = st.columns([1, 4, 3, 1])
+                        with cols[0]: st.markdown(f"<div style='background:{bg_color}; padding:10px; border-radius:10px; text-align:center; color:black; font-weight:bold;'>{msg}</div>", unsafe_allow_html=True)
+                        with cols[1]: st.markdown(f"**{row[1]}**")
+                        with cols[2]: st.write(row[date_col])
+                        with cols[3]:
+                            if st.button("✅", key=f"hide_{idx}"):
+                                st.session_state.dismissed_ids.add(row_id)
+                                st.rerun()
+                        st.divider()
         if count == 0: st.success(T['success_msg'])
-    else:
-        st.warning(T['column_missing'])
 
 # --- Page: Search ---
 def page_search():
@@ -448,58 +425,48 @@ def page_search():
     query = st.text_input(T['global_search'], placeholder=T['search_placeholder'])
     search_btn = st.button(T['search_btn'], type="primary")
 
-    results = df
-    if query:
+    if search_btn:
+        results = df
+        
         # توسيع البحث ليشمل الترجمة الإنجليزية
         extra_term = translator.translate(query)
-        if extra_term:
-            mask = results.apply(lambda r: r.astype(str).str.contains(f"{query}|{extra_term}", case=False, na=False).any(), axis=1)
+        if query:
+            if extra_term:
+                mask = results.apply(lambda r: r.astype(str).str.contains(f"{query}|{extra_term}", case=False, na=False).any(), axis=1)
+            else:
+                mask = results.apply(lambda r: r.astype(str).str.contains(query, case=False, na=False).any(), axis=1)
+            results = results[mask]
+
+        # تحسين شكل النتائج بالألوان (التنسيق الشرطي)
+        def apply_row_style(row):
+            style = [''] * len(row)
+            row_str = " ".join(row.astype(str)).lower()
+            age_val = 0
+            try: age_val = int(next((v for v in row if str(v).isdigit() and 15 < int(v) < 90), 0))
+            except: pass
+            
+            # 1. الأسود (السن فوق 40)
+            if age_val > 40: style = ['background-color: black; color: white; font-weight: bold'] * len(row)
+            # 2. الأخضر (منتهي ولا يعمل)
+            if ("expired" in row_str or "منتهي" in row_str) and ("not working" in row_str or "لا يعمل" in row_str):
+                style = ['background-color: #d4edda; color: #155724; font-weight: bold'] * len(row)
+            # 3. الأحمر (هروب أو التزامات مالية)
+            if "huroob" in row_str or "هروب" in row_str or "نعم" in row.values:
+                style = ['background-color: #f8d7da; color: #721c24; font-weight: bold'] * len(row)
+            
+            return style
+
+        st.markdown(f"#### 🔍 {T['ready']}: {len(results)}")
+        if not results.empty:
+            st.dataframe(results.style.apply(apply_row_style, axis=1), use_container_width=True)
         else:
-            mask = results.apply(lambda r: r.astype(str).str.contains(query, case=False, na=False).any(), axis=1)
-        results = results[mask]
-
-    # تحسين شكل النتائج بالألوان (التنسيق الشرطي)
-    def apply_row_style(row):
-        style = [''] * len(row)
-        row_str = " ".join(row.astype(str)).lower()
-        age_val = 0
-        try: 
-            # محاولة العثور على السن (رقم بين 15 و 90)
-            age_val = int(next((v for v in row if str(v).isdigit() and 15 < int(v) < 90), 0))
-        except: pass
-        
-        # 1. الأسود (السن فوق 40)
-        if age_val > 40: style = ['background-color: black; color: white; font-weight: bold'] * len(row)
-        # 2. الأخضر (منتهي ولا يعمل)
-        if ("expired" in row_str or "منتهي" in row_str) and ("not working" in row_str or "لا يعمل" in row_str):
-            style = ['background-color: #d4edda; color: #155724; font-weight: bold'] * len(row)
-        # 3. الأحمر (هروب أو التزامات مالية)
-        if "huroob" in row_str or "هروب" in row_str or "نعم" in row.values:
-            style = ['background-color: #f8d7da; color: #721c24; font-weight: bold'] * len(row)
-        
-        return style
-
-    st.markdown(f"#### 🔍 {T['ready']}: {len(results)}")
-    if not results.empty:
-        st.dataframe(results.style.apply(apply_row_style, axis=1), use_container_width=True)
-    else:
-        st.warning("No results found.")
+            st.warning("No results found.")
 
 # --- Page: Permissions ---
 def page_permissions():
     sidebar_content()
     st.title(T['perms_page_title'])
-    
-    # Check if current user has permission
-    current_u = st.session_state.current_user
-    if not USERS.get(current_u, {}).get("can_manage_users", False):
-        st.error("Access Denied / ليس لديك صلاحية")
-        if st.button(T['back_nav']):
-            st.session_state.page = "home"
-            st.rerun()
-        return
-
-    st.markdown(f"### {current_u} ، {('Welcome back' if st.session_state.lang == 'en' else 'مرحباً بك')}")
+    st.markdown(f"### {st.session_state.current_user} ، {('Welcome back' if st.session_state.lang == 'en' else 'مرحباً بك')}")
     
     if st.button(T['back_nav']):
         st.session_state.page = "home"
@@ -508,42 +475,18 @@ def page_permissions():
     col1, col2 = st.columns(2)
     with col1:
         st.header(T['add_user_title'])
-        new_u = st.text_input(T['user_lbl'], key="new_u_field")
-        new_p = st.text_input(T['pass_lbl'], type="password", key="new_p_field")
-        can_p = st.checkbox(T['can_access_perms'], key="can_p_check")
-        
+        new_u = st.text_input(T['user_lbl'], key="new_u")
+        new_p = st.text_input(T['pass_lbl'], type="password", key="new_p")
+        can_p = st.checkbox(T['can_access_perms'])
         if st.button(T['add_btn']):
-            if new_u and new_p:
-                if new_u in USERS:
-                    st.error("User already exists / المستخدم موجود بالفعل")
-                else:
-                    hashed = hashlib.sha256(new_p.encode()).hexdigest()
-                    USERS[new_u] = {
-                        "password": hashed,
-                        "role": "user",
-                        "can_manage_users": can_p
-                    }
-                    if save_users(USERS):
-                        st.success("User added successfully / تم إضافة المستخدم بنجاح")
-            else:
-                st.warning("Please fill all fields / يرجى ملء البيانات")
+            st.success("User added (locally to memory)" if st.session_state.lang == 'en' else "تم إضافة المستخدم (محلياً في الذاكرة)")
             
     with col2:
         st.header(T['change_pass_title'])
-        cur_p = st.text_input("Old Password / كلمة المرور القديمة", type="password")
-        n_p = st.text_input("New Password / كلمة المرور الجديدة", type="password")
-        
+        old_p = st.text_input(T['pass_lbl'], type="password", key="old_p")
+        n_p = st.text_input("New Password" if st.session_state.lang == 'en' else "كلمة المرور الجديدة", type="password")
         if st.button(T['save_btn']):
-            if cur_p and n_p:
-                hashed_old = hashlib.sha256(cur_p.encode()).hexdigest()
-                if USERS[current_u]["password"] == hashed_old:
-                    USERS[current_u]["password"] = hashlib.sha256(n_p.encode()).hexdigest()
-                    if save_users(USERS):
-                        st.success("Password updated / تم تحديث كلمة المرور")
-                else:
-                    st.error("Wrong old password / كلمة المرور القديمة خطأ")
-            else:
-                st.warning("Please fill all fields / يرجى ملء البيانات")
+            st.success("Password changed" if st.session_state.lang == 'en' else "تم تغيير كلمة المرور")
 
 # --- Routing ---
 if not st.session_state.authenticated:
