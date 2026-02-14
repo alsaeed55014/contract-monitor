@@ -297,10 +297,7 @@ def fetch_data():
 def sidebar_content():
     with st.sidebar:
         # وضع الصورة الشخصية المطلوبة وتنسيق مقاسها
-        # وضع الصورة الشخصية المطلوبة وتنسيق مقاسها
-        # استخدام مسار مطلق لتجنب مشاكل المسار
-        base_dir = os.path.dirname(os.path.abspath(__file__))
-        user_photo = os.path.join(base_dir, "image", "saeed.jpg")
+        user_photo = "image/saeed.jpg"
         
         col_img_side, _ = st.columns([1, 0.1]) # لتوسيط بسيط
         with col_img_side:
@@ -412,13 +409,12 @@ def page_login():
     
     with col_img:
         # عرض الصورة على اليسار
-        # استخدام مسار مطلق لتجنب مشاكل المسار
-        base_dir = os.path.dirname(os.path.abspath(__file__))
-        user_photo = os.path.join(base_dir, "image", "السعيد.jpg")
+        user_photo = "image/saeed.jpg"
 
         if os.path.exists(user_photo):
             st.image(user_photo, use_container_width=True)
         else:
+            # Fallback
             img_path = next((f for f in ["profile.png", "profile.jpg", "image.png"] if os.path.exists(f)), None)
             if img_path: st.image(img_path, use_container_width=True)
             else: st.warning(f"Image not found: {user_photo}")
