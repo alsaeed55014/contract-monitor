@@ -138,6 +138,7 @@ L = {
         'search_btn': "Search Now",
         'print_btn': "Print Report",
         'global_search': "Global Search",
+        'search_placeholder': "(Name, Job, Nationality, Phone...)",
         'filter_reg': "Registration Date",
         'filter_exp': "Contract Expiry",
         'filter_age': "Age",
@@ -185,6 +186,7 @@ L = {
         'search_btn': "بحث الآن",
         'print_btn': "طباعة التقرير",
         'global_search': "البحث الشامل",
+        'search_placeholder': "(الاسم، المهنة، الجنسية، الجوال...)",
         'filter_reg': "تاريخ التسجيل",
         'filter_exp': "انتهاء العقد",
         'filter_age': "السن",
@@ -196,6 +198,7 @@ L = {
         'danger': "خطير",
         'warning': "تحذير",
         'success_msg': "لا توجد تنبيهات عاجلة اليوم.",
+        'column_missing': "⚠️ لم يتم العثور على عمود 'تاريخ انتهاء العقد' في الملف.",
         'error_google': "خطأ في الاتصال بجوجل شيت",
         'info_creds': "يرجى التأكد من إعدادات Secrets في Streamlit.",
     }
@@ -394,14 +397,15 @@ def page_home():
     df = pd.DataFrame(data_raw[1:], columns=headers)
     today = date.today()
     
-    # البحث عن عمود التاريخ
-    date_col = next((h for h in df.columns if any(kw in h.lower() for kw in ["تاريخ انتاء", "expiry", "تاريخ انتهاء"])), "")
+    # البحث عن عمود التاريخ (الأولوية لانتهاء العقد)
+    date_col = next((h for h in df.columns if "انتهاء العقد" in h), "")
+    if not date_col:
+        date_col = next((h for h in df.columns if any(kw in h.lower() for kw in ["expiry", "تاريخ انتهاء"])), "")
     
     if date_col:
-        # عرض التنبيهات مع ميزة الإخفاء
         count = 0
         for idx, row in df.iterrows():
-            row_id = f"{row[0]}_{row[1]}" # معرف فريد مبسط
+            row_id = f"{row[0]}_{row[1]}" # معرف فريد
             if row_id in st.session_state.dismissed_ids: continue
             
             dt = safe_parse_date(row[date_col])
@@ -412,7 +416,6 @@ def page_home():
                     msg = f"باقي {diff} يوم" if diff < 7 else "باقي أسبوع"
                     bg_color = "#fff4cc" if diff >= 7 else "#ffcccc"
                     
-                    # التصميم الجديد للتنبيهات (الكروت المتجاوبة)
                     st.markdown(f"""
                     <div class="alert-card">
                         <div style="display:flex; justify-content:space-between; align-items:center;">
@@ -431,6 +434,8 @@ def page_home():
                         st.rerun()
                     st.divider()
         if count == 0: st.success(T['success_msg'])
+    else:
+        st.warning(T['column_missing'])
 
 # --- Page: Search ---
 def page_search():
