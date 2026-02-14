@@ -6,20 +6,83 @@ from datetime import datetime
 from dateutil import parser
 import os
 import json
+import hashlib
 
 # Page Config
 st.set_page_config(page_title="Contract Monitor | مراقب العقود", layout="wide", page_icon="📝")
+
+# --- Authentication System ---
+USERS = {
+    "admin": {
+        "password": "c685e710931707e3e9aaab6c8625a9798cd06a31bcf40cd8d6963e3703400d14",
+        "role": "admin"
+    },
+    "samar": {
+        "password": "2d75c1a2d01521e3026aa1719256a06604e7bc99aab149cb8cc7de8552fa820d",
+        "role": "user"
+    }
+}
+
+if 'authenticated' not in st.session_state:
+    st.session_state.authenticated = False
+if 'current_user' not in st.session_state:
+    st.session_state.current_user = ""
+
+def login_page():
+    st.markdown("""
+    <style>
+    .login-container {
+        max-width: 400px;
+        margin: 100px auto;
+        padding: 40px;
+        background: linear-gradient(135deg, #1a252f 0%, #2c3e50 100%);
+        border-radius: 20px;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+    }
+    </style>
+    """, unsafe_allow_html=True)
+    
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        st.markdown("## 🔒 تسجيل الدخول | Login")
+        st.divider()
+        username = st.text_input("👤 اسم المستخدم | Username", key="login_user")
+        password = st.text_input("🔑 كلمة المرور | Password", type="password", key="login_pass")
+        
+        col_btn1, col_btn2 = st.columns(2)
+        with col_btn1:
+            if st.button("🚀 دخول | Login", use_container_width=True, type="primary"):
+                if username in USERS:
+                    hashed = hashlib.sha256(password.encode()).hexdigest()
+                    if USERS[username]["password"] == hashed:
+                        st.session_state.authenticated = True
+                        st.session_state.current_user = username
+                        st.rerun()
+                    else:
+                        st.error("❌ كلمة المرور خاطئة | Wrong password")
+                else:
+                    st.error("❌ المستخدم غير موجود | User not found")
+        
+        st.markdown("---")
+        st.caption("🛡️ نظام مراقبة العقود | Contract Monitor")
+
+if not st.session_state.authenticated:
+    login_page()
+    st.stop()
 
 # --- Language Selection ---
 if 'lang' not in st.session_state:
     st.session_state.lang = 'ar'
 
-lang_col1, lang_col2 = st.columns([8, 2])
+lang_col1, lang_col2, lang_col3 = st.columns([6, 2, 2])
 with lang_col2:
     if st.button("English / العربية", use_container_width=True):
         st.session_state.lang = 'en' if st.session_state.lang == 'ar' else 'ar'
-    # Small divider to separate from content
-    st.divider()
+with lang_col3:
+    if st.button("🚪 خروج | Logout", use_container_width=True):
+        st.session_state.authenticated = False
+        st.session_state.current_user = ""
+        st.rerun()
 
 L = {
     'en': {
