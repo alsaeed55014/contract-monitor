@@ -379,55 +379,60 @@ def sidebar_content():
 
 # --- Page: Login ---
 def page_login():
-    # تنسيق خاص لتصغير الشاشة وتوسيطها
+    # تنسيق خاص لشاشة الدخول
     st.markdown("""
         <style>
-            .login-container {
-                max-width: 800px;
-                margin: auto;
-                padding: 30px;
-                background: white;
+            [data-testid="stAppViewContainer"] { background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); }
+            .login-card {
+                max-width: 420px;
+                margin: 40px auto;
+                padding: 40px 30px;
+                background: rgba(30, 41, 59, 0.95);
                 border-radius: 20px;
-                box-shadow: 0 10px 30px rgba(0,0,0,0.1);
-                display: flex;
-                flex-wrap: wrap;
-                align-items: center;
-                gap: 20px;
+                box-shadow: 0 20px 60px rgba(0,0,0,0.4);
+                border: 1px solid rgba(255,255,255,0.1);
+                text-align: center;
             }
-            .login-image-side { flex: 1; text-align: center; border-right: 1px solid #eee; padding-right: 20px; }
-            .login-form-side { flex: 1.5; padding-left: 10px; }
-            @media (max-width: 768px) {
-                .login-container { flex-direction: column; }
-                .login-image-side { border-right: none; border-bottom: 1px solid #eee; padding-right: 0; padding-bottom: 20px; }
+            .login-card h2 { color: white !important; margin-bottom: 25px; }
+            .login-card p, .login-card label { color: #cbd5e1 !important; }
+            .programmer-text { 
+                color: #94a3b8 !important; 
+                font-size: 14px; 
+                margin-top: 8px;
+                font-weight: 500;
             }
+            /* White labels */
+            [data-testid="stAppViewContainer"] label { color: white !important; }
+            [data-testid="stAppViewContainer"] .stTextInput label { color: white !important; }
         </style>
     """, unsafe_allow_html=True)
 
-    st.markdown('<div class="login-container">', unsafe_allow_html=True)
+    # توسيط المحتوى
+    spacer1, center_col, spacer2 = st.columns([1, 1.5, 1])
     
-    col_img, col_form = st.columns([1, 1.5])
-    
-    with col_img:
-        # عرض الصورة على اليسار
+    with center_col:
+        # الصورة الشخصية بحجم صغير ودائرية
         img_found = False
         for p in ["alsaeed.jpg", "image/alsaeed.jpg"]:
             if os.path.exists(p):
-                st.image(p, use_container_width=True)
+                st.image(p, width=120)
                 img_found = True
                 break
         if not img_found:
-            st.info("📷")
+            st.markdown("<div style='text-align:center; font-size:60px;'>📷</div>", unsafe_allow_html=True)
         
-        # النص بالإنجليزي تحت الصورة
-        st.markdown("<p style='text-align:center; font-weight:600; color:#2c3e50; margin-top:10px;'>Programmed by<br>Al-Saeed Al-Wazzan</p>", unsafe_allow_html=True)
-
-    with col_form:
-        st.markdown(f"<h2 style='text-align:center; color:#1a252f;'>{T['login_title']}</h2>", unsafe_allow_html=True)
+        # النص تحت الصورة
+        st.markdown("<p style='text-align:center; color: #94a3b8; font-size:13px; margin-top:5px;'>Programmed by<br><b style=\"color:white;\">Al-Saeed Al-Wazzan</b></p>", unsafe_allow_html=True)
+        
+        st.markdown("---")
+        
+        # عنوان تسجيل الدخول
+        st.markdown(f"<h2 style='text-align:center; color:white;'>🔐 {T['login_title']}</h2>", unsafe_allow_html=True)
         
         username = st.text_input(T['user_lbl'], placeholder="Username")
         password = st.text_input(T['pass_lbl'], type="password", placeholder="Password")
         
-        if st.button(T['login_btn'], type="primary"):
+        if st.button(T['login_btn'], type="primary", use_container_width=True):
             if username in USERS:
                 hashed = hashlib.sha256(password.encode()).hexdigest()
                 if USERS[username]["password"] == hashed:
@@ -438,11 +443,10 @@ def page_login():
                 else: st.error(T['wrong_pass'])
             else: st.error(T['user_not_found'])
         
-        if st.button(T['switch_lang'], key="login_lang"):
+        st.markdown("")
+        if st.button(T['switch_lang'], key="login_lang", use_container_width=True):
             st.session_state.lang = 'en' if st.session_state.lang == 'ar' else 'ar'
             st.rerun()
-
-    st.markdown('</div>', unsafe_allow_html=True)
 
 # --- Page: Home (Dashboard) ---
 def page_home():
