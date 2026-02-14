@@ -214,6 +214,9 @@ st.markdown("""
     /* تنسيق فاخر للأزرار */
     [data-testid="stSidebar"] div.stButton > button {
         width: 100% !important;
+        display: block !important;
+        margin-left: auto !important;
+        margin-right: auto !important;
         border-radius: 14px !important;
         height: 52px !important;
         font-weight: 600 !important;
@@ -606,17 +609,17 @@ def sidebar_content():
         st.markdown("<div style='margin-bottom:20px;'></div>", unsafe_allow_html=True)
         
         # 1. زر مراقب العقود (الرئيسية)
-        if st.button(T['home_title'], type="secondary" if st.session_state.page != "home" else "primary"):
+        if st.button(T['home_title'], type="secondary" if st.session_state.page != "home" else "primary", use_container_width=True):
             st.session_state.page = "home"
             st.rerun()
 
         # 2. زر البحث والطباعة
-        if st.button(T['search_nav'], type="secondary" if st.session_state.page != "search" else "primary"):
+        if st.button(T['search_nav'], type="secondary" if st.session_state.page != "search" else "primary", use_container_width=True):
             st.session_state.page = "search"
             st.rerun()
 
         # 3. زر شاشة الصلاحيات
-        if st.button(T['perms_nav'], type="secondary" if st.session_state.page != "permissions" else "primary"):
+        if st.button(T['perms_nav'], type="secondary" if st.session_state.page != "permissions" else "primary", use_container_width=True):
             if USERS.get(st.session_state.current_user, {}).get("can_manage_users"):
                 st.session_state.page = "permissions"
                 st.rerun()
@@ -624,7 +627,7 @@ def sidebar_content():
                 st.error("No Permission" if st.session_state.lang == 'en' else "ليس لديك صلاحية")
 
         # 4. زر حذف الصف المختار
-        if st.button(T['del_nav']):
+        if st.button(T['del_nav'], use_container_width=True):
             if st.session_state.get("selected_alert_key"):
                 key_to_block = st.session_state.selected_alert_key
                 
@@ -653,13 +656,13 @@ def sidebar_content():
                 st.warning("يرجى اختيار صف من الجدول أولاً" if st.session_state.lang == 'ar' else "Please select a row first")
 
         # 5. زر تحديث البيانات
-        if st.button(T['refresh_nav']):
+        if st.button(T['refresh_nav'], use_container_width=True):
             st.cache_data.clear()
             st.rerun()
             
         st.divider()
         
-        if st.button(T['logout'], type="secondary"):
+        if st.button(T['logout'], type="secondary", use_container_width=True):
             st.session_state.authenticated = False
             st.session_state.current_user = ""
             st.rerun()
