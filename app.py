@@ -297,14 +297,22 @@ def fetch_data():
 def sidebar_content():
     with st.sidebar:
         # وضع الصورة الشخصية المطلوبة وتنسيق مقاسها
-        user_photo = "image/السعيد.jpg"
+        # وضع الصورة الشخصية المطلوبة وتنسيق مقاسها
+        # استخدام مسار مطلق لتجنب مشاكل المسار
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        user_photo = os.path.join(base_dir, "image", "السعيد.jpg")
+        
         col_img_side, _ = st.columns([1, 0.1]) # لتوسيط بسيط
         with col_img_side:
             if os.path.exists(user_photo):
                 st.image(user_photo, width=200)
             else:
+                # Fallback trial
                 img_path = next((f for f in ["profile.png", "profile.jpg", "image.png"] if os.path.exists(f)), None)
                 if img_path: st.image(img_path, width=200)
+                else: st.warning(f"Image not found: {user_photo}")
+        
+        st.markdown(f"<h3 style='color:white; text-align: center;'>{T['prog_by']}<br>{'السعيد الوزان' if st.session_state.lang == 'ar' else 'Al-Saeed Al-Wazzan'}</h3>", unsafe_allow_html=True)
         
         st.divider()
         
