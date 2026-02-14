@@ -304,26 +304,44 @@ def fetch_data():
 # --- UI Helpers ---
 def sidebar_content():
     with st.sidebar:
-        # وضع الصورة الشخصية
-        col_img_side, _ = st.columns([1, 0.1])
-        with col_img_side:
-            img_found = False
-            for p in ["alsaeed.jpg", "image/alsaeed.jpg"]:
-                if os.path.exists(p):
-                    st.image(p, width=130)
-                    img_found = True
-                    break
-            if not img_found:
-                st.info("📷")
+        # === زر تبديل اللغة أعلى شيء ===
+        lang_col1, lang_col2 = st.columns(2)
+        with lang_col1:
+            if st.button("ع", key="lang_ar", type="primary" if st.session_state.lang == 'ar' else "secondary", use_container_width=True):
+                st.session_state.lang = 'ar'
+                st.rerun()
+        with lang_col2:
+            if st.button("EN", key="lang_en", type="primary" if st.session_state.lang == 'en' else "secondary", use_container_width=True):
+                st.session_state.lang = 'en'
+                st.rerun()
         
+        st.markdown("<div style='margin-bottom:20px;'></div>", unsafe_allow_html=True)
+        
+        # === الصورة الشخصية ===
+        img_found = False
+        for p in ["alsaeed.jpg", "image/alsaeed.jpg"]:
+            if os.path.exists(p):
+                st.image(p, width=130)
+                img_found = True
+                break
+        if not img_found:
+            st.info("📷")
+        
+        st.markdown("<div style='margin-bottom:20px;'></div>", unsafe_allow_html=True)
+        
+        # === اسم المبرمج ===
         st.markdown("""
-            <div style='text-align:center; margin-top:5px;'>
+            <div style='text-align:center;'>
                 <span style='color:#c0a060; font-size:11px; letter-spacing:2px; text-transform:uppercase;'>✦ Programmed by ✦</span><br>
                 <span style='background: linear-gradient(90deg, #d4af37, #f5d991, #d4af37); -webkit-background-clip: text; -webkit-text-fill-color: transparent; font-size:18px; font-weight:700; letter-spacing:1px;'>Al-Saeed Al-Wazzan</span>
             </div>
         """, unsafe_allow_html=True)
         
+        st.markdown("<div style='margin-bottom:20px;'></div>", unsafe_allow_html=True)
+        
         st.divider()
+        
+        st.markdown("<div style='margin-bottom:20px;'></div>", unsafe_allow_html=True)
         
         # 1. زر مراقب العقود (الرئيسية)
         if st.button(T['home_title'], type="secondary" if st.session_state.page != "home" else "primary"):
@@ -382,11 +400,6 @@ def sidebar_content():
         if st.button(T['logout'], type="secondary"):
             st.session_state.authenticated = False
             st.session_state.current_user = ""
-            st.rerun()
-
-        # نقل زر اللغة للأسفل
-        if st.button(T['switch_lang']):
-            st.session_state.lang = 'en' if st.session_state.lang == 'ar' else 'ar'
             st.rerun()
 
 # --- Page: Login ---
@@ -648,6 +661,7 @@ def page_search():
 
 # --- Page: Permissions ---
 def page_permissions():
+    global USERS
     sidebar_content()
     st.title(T['perms_page_title'])
     st.markdown(f"### {'Welcome back' if st.session_state.lang == 'en' else 'مرحباً بك'} ، {st.session_state.current_user}")
@@ -657,30 +671,37 @@ def page_permissions():
         st.rerun()
     
     st.markdown("---")
+    
+    # إعادة تحميل المستخدمين لضمان أحدث البيانات
+    USERS = load_users()
+    user_list = list(USERS.keys())
         
-    col1, col2 = st.columns(2)
+    col1, col2, col3 = st.columns(3)
     
     # === تغيير كلمة المرور ===
     with col1:
-        st.markdown(f"### 🔒 {T['change_pass_title']}")
-        old_p = st.text_input(T['pass_lbl'], type="password", key="old_p")
+        st.markdown(f"### 🔒 {'تغيير كلمة المرور' if st.session_state.lang == 'ar' else 'Change Password'}")
+        
+        # اختيار المستخدم
+        target_user = st.selectbox(
+            "اختر المستخدم" if st.session_state.lang == 'ar' else "Select User",
+            user_list, key="change_pass_user"
+        )
+        
         n_p = st.text_input("كلمة المرور الجديدة" if st.session_state.lang == 'ar' else "New Password", type="password", key="new_pass")
         n_p2 = st.text_input("تأكيد كلمة المرور" if st.session_state.lang == 'ar' else "Confirm Password", type="password", key="confirm_pass")
         
         if st.button(T['save_btn'], key="save_pass_btn"):
-            if not old_p or not n_p:
-                st.error("يرجى ملئ جميع الحقول" if st.session_state.lang == 'ar' else "Please fill all fields")
+            if not n_p:
+                st.error("يرجى إدخال كلمة المرور الجديدة" if st.session_state.lang == 'ar' else "Please enter new password")
             elif n_p != n_p2:
                 st.error("كلمة المرور غير متطابقة" if st.session_state.lang == 'ar' else "Passwords do not match")
+            elif target_user not in USERS:
+                st.error("المستخدم غير موجود" if st.session_state.lang == 'ar' else "User not found")
             else:
-                current_user = st.session_state.current_user
-                old_hash = hashlib.sha256(old_p.encode()).hexdigest()
-                if USERS.get(current_user, {}).get("password") != old_hash:
-                    st.error("كلمة المرور الحالية خاطئة" if st.session_state.lang == 'ar' else "Current password is wrong")
-                else:
-                    USERS[current_user]["password"] = hashlib.sha256(n_p.encode()).hexdigest()
-                    save_users(USERS)
-                    st.success("✅ تم تغيير كلمة المرور بنجاح" if st.session_state.lang == 'ar' else "✅ Password changed successfully")
+                USERS[target_user]["password"] = hashlib.sha256(n_p.encode()).hexdigest()
+                save_users(USERS)
+                st.success(f"✅ تم تغيير كلمة مرور {target_user} بنجاح" if st.session_state.lang == 'ar' else f"✅ Password changed for {target_user}")
     
     # === إضافة مستخدم جديد ===
     with col2:
@@ -704,7 +725,32 @@ def page_permissions():
                     "can_manage_users": can_p
                 }
                 save_users(USERS)
-                st.success(f"✅ تم إضافة المستخدم {new_u} بنجاح" if st.session_state.lang == 'ar' else f"✅ User {new_u} added successfully")
+                st.success(f"✅ تم إضافة {new_u} بنجاح" if st.session_state.lang == 'ar' else f"✅ User {new_u} added")
+                st.rerun()
+    
+    # === حذف مستخدم ===
+    with col3:
+        st.markdown(f"### 🗑️ {'حذف مستخدم' if st.session_state.lang == 'ar' else 'Delete User'}")
+        
+        # لا تسمح بحذف المستخدم الحالي أو admin
+        deletable_users = [u for u in user_list if u != st.session_state.current_user and u != "admin"]
+        
+        if deletable_users:
+            del_user = st.selectbox(
+                "اختر المستخدم للحذف" if st.session_state.lang == 'ar' else "Select User to Delete",
+                deletable_users, key="del_user_select"
+            )
+            
+            st.warning(f"⚠️ {'سيتم حذف المستخدم نهائياً' if st.session_state.lang == 'ar' else 'User will be permanently deleted'}")
+            
+            if st.button("🗑️ حذف" if st.session_state.lang == 'ar' else "🗑️ Delete", key="del_user_btn"):
+                if del_user in USERS:
+                    del USERS[del_user]
+                    save_users(USERS)
+                    st.success(f"✅ تم حذف {del_user} بنجاح" if st.session_state.lang == 'ar' else f"✅ {del_user} deleted")
+                    st.rerun()
+        else:
+            st.info("لا يوجد مستخدمين يمكن حذفهم" if st.session_state.lang == 'ar' else "No users to delete")
     
     # === عرض المستخدمين الحاليين ===
     st.markdown("---")
