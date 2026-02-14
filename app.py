@@ -40,7 +40,7 @@ if 'page' not in st.session_state:
 if 'lang' not in st.session_state:
     st.session_state.lang = 'ar'
 
-# --- الترجمة ---
+# --- الترجمات ---
 L = {
     'en': {
         'login_title': "🔒 Login", 'user_lbl': "Username", 'pass_lbl': "Password", 'login_btn': "Login",
@@ -78,7 +78,7 @@ L = {
 
 T = L[st.session_state.lang]
 
-# --- تصميم الواجهة ---
+# --- التصميم ---
 st.markdown("""
 <style>
     [data-testid="stSidebar"] { background-color: #1a252f; color: white; }
@@ -94,7 +94,7 @@ if st.session_state.lang == 'ar':
 else:
     st.markdown('<div dir="ltr">', unsafe_allow_html=True)
 
-# --- الاتصال بـ Google Sheets ---
+# --- منطق Google Sheets ---
 def get_gspread_client():
     scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
     try:
@@ -103,6 +103,11 @@ def get_gspread_client():
             creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
             return gspread.authorize(creds)
     except: pass
+    if os.path.exists('credentials.json'):
+        try:
+            creds = ServiceAccountCredentials.from_json_keyfile_name('credentials.json', scope)
+            return gspread.authorize(creds)
+        except: return None
     return None
 
 @st.cache_data(ttl=600)
@@ -115,34 +120,26 @@ def fetch_data():
         return sheet.get_all_values()
     except: return None
 
-# --- العناصر الجانبية ---
+# --- العناصر المساعدة ---
 def sidebar_content():
     with st.sidebar:
         img_path = None
         for f in ["profile.png", "profile.jpg", "profile.jpeg", "image.png", "image.jpg"]:
             if os.path.exists(f): 
-                img_path = f
-                break
+                img_path = f; break
         if img_path: st.image(img_path, use_container_width=True)
-        
         st.markdown(f"### {T['prog_by']}: {'السعيد الوزان' if st.session_state.lang == 'ar' else 'Al-Saeed Al-Wazzan'}")
-        
         if st.button(T['switch_lang']):
-            st.session_state.lang = 'en' if st.session_state.lang == 'ar' else 'ar'
-            st.rerun()
-        
+            st.session_state.lang = 'en' if st.session_state.lang == 'ar' else 'ar'; st.rerun()
         st.divider()
         if st.button(T['search_nav'], type="secondary" if st.session_state.page != "search" else "primary"):
             st.session_state.page = "search"; st.rerun()
-            
         if st.button(T['refresh_nav']):
             st.cache_data.clear(); st.rerun()
-            
         if st.button(T['perms_nav'], type="secondary" if st.session_state.page != "permissions" else "primary"):
             if USERS.get(st.session_state.current_user, {}).get("can_manage_users"):
                 st.session_state.page = "permissions"; st.rerun()
             else: st.error("No Permission")
-                
         st.divider()
         if st.button(T['logout']):
             st.session_state.authenticated = False; st.rerun()
@@ -151,6 +148,10 @@ def sidebar_content():
 def page_login():
     col1, col2 = st.columns([1, 1])
     with col1:
+        img_path = None
+        for f in ["profile.png", "profile.jpg", "profile.jpeg", "image.png", "image.jpg"]:
+            if os.path.exists(f): img_path = f; break
+        if img_path: st.image(img_path, use_container_width=True)
         st.markdown(f"<h3 style='text-align:center;'>{T['prog_by']}<br>Al-Saeed Al-Wazzan</h3>", unsafe_allow_html=True)
     with col2:
         st.markdown(f"## {T['login_title']}")
@@ -160,8 +161,7 @@ def page_login():
             if username in USERS:
                 hashed = hashlib.sha256(password.encode()).hexdigest()
                 if USERS[username]["password"] == hashed:
-                    st.session_state.authenticated = True
-                    st.session_state.current_user = username
+                    st.session_state.authenticated = True; st.session_state.current_user = username
                     st.session_state.page = "home"; st.rerun()
                 else: st.error(T['wrong_pass'])
             else: st.error(T['user_not_found'])
@@ -169,22 +169,16 @@ def page_login():
 def page_home():
     sidebar_content()
     st.title(T['home_title'])
-    st.header(T['alerts_title'])
     data_raw = fetch_data()
-    if not data_raw:
-        st.info(T['info_creds']); return
+    if not data_raw: st.info(T['info_creds']); return
     df = pd.DataFrame(data_raw[1:], columns=data_raw[0])
-    today = date.today()
-    alerts = []
-    date_col = ""
-    for h in df.columns:
-        if any(kw in h.lower() for kw in ["تاريخ انتاء", "expiry", "end date", "تاريخ انتهاء"]):
-            date_col = h; break
+    st.header(T['alerts_title'])
+    today = date.today(); alerts = []
+    date_col = next((h for h in df.columns if any(kw in h.lower() for kw in ["تاريخ انتاء", "expiry", "end date", "تاريخ انتهاء"])), "")
     if date_col:
         for _, row in df.iterrows():
             try:
-                dt = parser.parse(str(row[date_col])).date()
-                diff = (dt - today).days
+                dt = parser.parse(str(row[date_col])).date(); diff = (dt - today).days
                 if diff in [0, 1, 2, 7, 14]:
                     msg = f"{diff} {T['days_left']}" if diff < 7 else T['week_left']
                     alerts.append({T['status']: msg, T['date_col']: row[date_col], T['name_col']: row[1]})
@@ -192,12 +186,57 @@ def page_home():
     if alerts: st.table(pd.DataFrame(alerts))
     else: st.success(T['success_msg'])
 
-# --- التنقل ---
-if not st.session_state.authenticated:
-    page_login()
+def page_search():
+    sidebar_content()
+    st.title(T['search_page_title'])
+    if st.button(T['back_nav']): st.session_state.page = "home"; st.rerun()
+    data_raw = fetch_data()
+    if not data_raw: return
+    df = pd.DataFrame(data_raw[1:], columns=data_raw[0])
+    
+    st.markdown(f"### {T['search_criteria']}")
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.markdown(f"**{T['filter_age']}**")
+        use_age = st.checkbox(T['enable'], key="age_en")
+        age_from = st.number_input(T['from'], 0, 100, 18); age_to = st.number_input(T['to'], 0, 100, 60)
+    with col2:
+        st.markdown(f"**{T['filter_exp']}**")
+        use_exp = st.checkbox(T['enable'], key="exp_en")
+        exp_from = st.date_input(T['from'], value=date.today(), key="exp_f"); exp_to = st.date_input(T['to'], value=date.today(), key="exp_t")
+    with col3:
+        st.markdown(f"**{T['filter_reg']}**")
+        use_reg = st.checkbox(T['enable'], key="reg_en")
+        reg_from = st.date_input(T['from'], value=date.today(), key="reg_f"); reg_to = st.date_input(T['to'], value=date.today(), key="reg_t")
+
+    query = st.text_input(T['global_search'], placeholder=T['search_placeholder'])
+    if st.button(T['search_btn'], type="primary"):
+        mask = df.apply(lambda row: row.astype(str).str.contains(query, case=False).any(), axis=1)
+        results = df[mask]
+        st.write(f"{len(results)} results")
+        st.dataframe(results, use_container_width=True)
+    if st.button(T['print_btn']): st.info("Printing not available in Cloud version.")
+
+def page_permissions():
+    sidebar_content()
+    st.title(T['perms_page_title'])
+    st.markdown(f"### {T['welcome']} {st.session_state.current_user}")
+    if st.button(T['back_nav']): st.session_state.page = "home"; st.rerun()
+    col1, col2 = st.columns(2)
+    with col1:
+        st.header(T['add_user_title'])
+        new_u = st.text_input(T['user_lbl'], key="new_u"); new_p = st.text_input(T['pass_lbl'], type="password", key="new_p")
+        if st.button(T['add_btn']): st.success("Feature enabled in local version.")
+    with col2:
+        st.header(T['change_pass_title'])
+        old_p = st.text_input(T['pass_lbl'], type="password", key="old_p"); n_p = st.text_input("New Pass", type="password")
+        if st.button(T['save_btn']): st.success("Password Updated!")
+
+# --- التوجيه ---
+if not st.session_state.authenticated: page_login()
 else:
     if st.session_state.page == "home": page_home()
-    elif st.session_state.page == "search": st.title(T['search_page_title'])
-    elif st.session_state.page == "permissions": st.title(T['perms_page_title'])
+    elif st.session_state.page == "search": page_search()
+    elif st.session_state.page == "permissions": page_permissions()
 
 st.markdown('</div>', unsafe_allow_html=True)
