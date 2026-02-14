@@ -306,10 +306,6 @@ def sidebar_content():
                 img_path = next((f for f in ["profile.png", "profile.jpg", "image.png"] if os.path.exists(f)), None)
                 if img_path: st.image(img_path, width=200)
         
-        st.markdown(f"<h3 style='color:white;'>{T['prog_by']}: {'السعيد الوزان' if st.session_state.lang == 'ar' else 'Al-Saeed Al-Wazzan'}</h3>", unsafe_allow_html=True)
-        
-        st.markdown(f"<h3 style='color:white;'>{T['prog_by']}: {'السعيد الوزان' if st.session_state.lang == 'ar' else 'Al-Saeed Al-Wazzan'}</h3>", unsafe_allow_html=True)
-        
         st.divider()
         
         # 1. زر مراقب العقود (الرئيسية)
