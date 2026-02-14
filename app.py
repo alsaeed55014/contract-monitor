@@ -25,6 +25,16 @@ def deduplicate_columns(columns):
             new_columns.append(col)
     return new_columns
 
+# --- وظيفة معالجة التواريخ لتقابل صيغة الإكسل العربي ---
+def safe_parse_date(d_str):
+    if not d_str: return None
+    try:
+        # استخراج جزء التاريخ فقط (YYYY/MM/DD) وتجاهل الوقت والرموز العربية (ص/م)
+        clean_d = str(d_str).strip().split(' ')[0]
+        return parser.parse(clean_d).date()
+    except:
+        return None
+
 # --- Authentication System ---
 USERS_FILE = 'users.json'
 
@@ -351,23 +361,21 @@ def page_home():
     if date_col:
         for _, row in df.iterrows():
             try:
-                dt_raw = str(row[date_col]).strip()
-                dt = parser.parse(dt_raw).date()
-                diff = (dt - today).days
-                
-                if diff in [0, 1, 2, 7, 14]:
-                    status = T['danger'] if diff <= 2 else T['warning']
-                    msg = f"{diff} {T['days_left']}" if diff < 7 else T['week_left']
-                    
-                    alerts.append({
-                        T['status']: msg,
-                        T['date_col']: dt_raw,
-                        T['phone_col']: row[4] if len(row) > 4 else "",
-                        "Gender": row[2] if len(row) > 2 else "",
-                        "Nationality": row[3] if len(row) > 3 else "",
-                        T['name_col']: row[1] if len(row) > 1 else "",
-                        "Timestamp": row[0] if len(row) > 0 else "",
-                    })
+                dt = safe_parse_date(row[date_col])
+                if dt:
+                    diff = (dt - today).days
+                    # إظهار العقود التي ستنتهي في غضون أسبوعين (من 0 إلى 14 يوم)
+                    if 0 <= diff <= 14:
+                        msg = f"{diff} {T['days_left']}" if diff < 7 else T['week_left']
+                        alerts.append({
+                            T['status']: msg,
+                            T['date_col']: row[date_col],
+                            T['phone_col']: row[4] if len(row) > 4 else "",
+                            "Gender": row[2] if len(row) > 2 else "",
+                            "Nationality": row[3] if len(row) > 3 else "",
+                            T['name_col']: row[1] if len(row) > 1 else "",
+                            "Timestamp": row[0] if len(row) > 0 else "",
+                        })
             except: pass
             
     if alerts:
@@ -414,13 +422,29 @@ def page_search():
 
     query = st.text_input(T['global_search'], placeholder="(Name, Nationality, Job...)")
     
+    # Try to find expiry column
+    date_col = ""
+    for h in df.columns:
+        if any(kw in h.lower() for kw in ["تاريخ انتاء", "expiry", "end date", "تاريخ انتهاء"]):
+            date_col = h
+            break
+
     # Apply filters logic
     results = df
+    
+    if use_exp and date_col:
+        results = results[results[date_col].apply(lambda x: exp_from <= safe_parse_date(x) <= exp_to if safe_parse_date(x) else False)]
+    
+    if use_reg:
+        # Assuming first column is registration timestamp
+        results = results[results.iloc[:, 0].apply(lambda x: reg_from <= safe_parse_date(x) <= reg_to if safe_parse_date(x) else False)]
+
     if query:
-        mask = df.apply(lambda row: row.astype(str).str.contains(query, case=False).any(), axis=1)
-        results = df[mask]
-        st.write(f"{len(results)} results")
-        st.dataframe(results.astype(str), use_container_width=True)
+        mask = results.apply(lambda row: row.astype(str).str.contains(query, case=False).any(), axis=1)
+        results = results[mask]
+        
+    st.write(f"{len(results)} results")
+    st.dataframe(results.astype(str), use_container_width=True)
     
     if st.button(T['print_btn']):
         st.info("Feature not available in cloud yet." if st.session_state.lang == 'en' else "الميزة غير متاحة في النسخة السحابية حالياً.")
