@@ -269,16 +269,17 @@ def fetch_data():
 # --- UI Helpers ---
 def sidebar_content():
     with st.sidebar:
-        # وضع الصورة الشخصية المطلوبة (السعيد) فوق اسم المبرمج
+        # وضع الصورة الشخصية المطلوبة وتنسيق مقاسها
         user_photo = "image/السعيد.jpg"
-        if os.path.exists(user_photo):
-            st.image(user_photo, use_container_width=True)
-        else:
-            # Fallback for local testing
-            img_path = next((f for f in ["profile.png", "profile.jpg", "image.png"] if os.path.exists(f)), None)
-            if img_path: st.image(img_path, use_container_width=True)
+        col_img_side, _ = st.columns([1, 0.1]) # لتوسيط بسيط
+        with col_img_side:
+            if os.path.exists(user_photo):
+                st.image(user_photo, width=200)
+            else:
+                img_path = next((f for f in ["profile.png", "profile.jpg", "image.png"] if os.path.exists(f)), None)
+                if img_path: st.image(img_path, width=200)
         
-        st.markdown(f"### {T['prog_by']}: {'السعيد الوزان' if st.session_state.lang == 'ar' else 'Al-Saeed Al-Wazzan'}")
+        st.markdown(f"<h3 style='color:white;'>{T['prog_by']}: {'السعيد الوزان' if st.session_state.lang == 'ar' else 'Al-Saeed Al-Wazzan'}</h3>", unsafe_allow_html=True)
         
         if st.button(T['switch_lang']):
             st.session_state.lang = 'en' if st.session_state.lang == 'ar' else 'ar'
@@ -317,19 +318,51 @@ def sidebar_content():
 
 # --- Page: Login ---
 def page_login():
-    # في الجوال، يفضل أن تكون العناصر تحت بعضها
-    st.markdown("<h1 style='text-align:center;'>🛡️</h1>", unsafe_allow_html=True)
+    # تنسيق خاص لتصغير الشاشة وتوسيطها
+    st.markdown("""
+        <style>
+            .login-container {
+                max-width: 800px;
+                margin: auto;
+                padding: 30px;
+                background: white;
+                border-radius: 20px;
+                box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+                display: flex;
+                flex-wrap: wrap;
+                align-items: center;
+                gap: 20px;
+            }
+            .login-image-side { flex: 1; text-align: center; border-right: 1px solid #eee; padding-right: 20px; }
+            .login-form-side { flex: 1.5; padding-left: 10px; }
+            @media (max-width: 768px) {
+                .login-container { flex-direction: column; }
+                .login-image-side { border-right: none; border-bottom: 1px solid #eee; padding-right: 0; padding-bottom: 20px; }
+            }
+        </style>
+    """, unsafe_allow_html=True)
+
+    st.markdown('<div class="login-container">', unsafe_allow_html=True)
     
-    # استخدام حاوية واحدة للوسط بدلاً من أعمدة في الشاشات الصغيرة
-    with st.container():
-        img_path = next((f for f in ["profile.png", "profile.jpg", "image.png"] if os.path.exists(f)), None)
-        if img_path: 
-            st.image(img_path, width=150)
+    col_img, col_form = st.columns([1, 1.5])
+    
+    with col_img:
+        # عرض الصورة على اليسار
+        user_photo = "image/السعيد.jpg"
+        if os.path.exists(user_photo):
+            st.image(user_photo, use_container_width=True)
+        else:
+            img_path = next((f for f in ["profile.png", "profile.jpg", "image.png"] if os.path.exists(f)), None)
+            if img_path: st.image(img_path, use_container_width=True)
         
-        st.title(T['login_title'])
+        # النص بالإنجليزي تحت الصورة
+        st.markdown("<p style='text-align:center; font-weight:600; color:#2c3e50; margin-top:10px;'>Programmed by<br>Al-Saeed Al-Wazzan</p>", unsafe_allow_html=True)
+
+    with col_form:
+        st.markdown(f"<h2 style='text-align:center; color:#1a252f;'>{T['login_title']}</h2>", unsafe_allow_html=True)
         
-        username = st.text_input(T['user_lbl'])
-        password = st.text_input(T['pass_lbl'], type="password")
+        username = st.text_input(T['user_lbl'], placeholder="Username")
+        password = st.text_input(T['pass_lbl'], type="password", placeholder="Password")
         
         if st.button(T['login_btn'], type="primary"):
             if username in USERS:
@@ -345,6 +378,8 @@ def page_login():
         if st.button(T['switch_lang'], key="login_lang"):
             st.session_state.lang = 'en' if st.session_state.lang == 'ar' else 'ar'
             st.rerun()
+
+    st.markdown('</div>', unsafe_allow_html=True)
 
 # --- Page: Home (Dashboard) ---
 def page_home():
