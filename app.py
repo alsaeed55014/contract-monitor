@@ -1115,11 +1115,54 @@ def page_search():
         if use_reg:
             results = results[results.iloc[:, 0].apply(lambda x: reg_from <= safe_parse_date(x) <= reg_to if safe_parse_date(x) else False)]
 
+# Helper for smart search
+def smart_search_filter(row_series, query_str):
+    if not query_str: return True
+    query_str_clean = query_str.strip().lower()
+    
+    # 1. Literal match (case-insensitive) - Safe from regex errors
+    row_text = " ".join(row_series.astype(str)).lower()
+    if query_str_clean in row_text:
+        return True
+        
+    # 2. Smart Phone Match
+    # Check if query consists mostly of digits (allow +, -)
+    # Remove all non-digits for comparison
+    query_digits = re.sub(r'\D', '', query_str_clean)
+    
+    # Only try smart phone match if query looks like a phone number (e.g. > 4 digits)
+    if len(query_digits) > 4: 
+        row_digits = re.sub(r'\D', '', row_text)
+        
+        # A. Exact sequence match (e.g. 54633... in 96654633...)
+        if query_digits in row_digits:
+            return True
+            
+        # B. Handle common prefixes variations
+        # If query starts with '05', try matching '5...' (e.g. User types 054..., data has 96654...)
+        if query_digits.startswith('0') and len(query_digits) > 1:
+            if query_digits[1:] in row_digits:
+                return True
+                
+        # If query starts with '966', try matching without it (e.g. User types 96654..., data has 054...)
+        if query_digits.startswith('966') and len(query_digits) > 3:
+            if query_digits[3:] in row_digits:
+                return True
+
+        # C. Reverse check: Data has '05...' but User types '966...'?
+        # This is covered by "query_digits[3:] in row_digits" if row has 05...
+        # Example: Q=96654, D=054 -> Q[3:]=54. 54 in 054 -> True.
+        
+    return False
+
+# ... inside page_search ...
         if query:
             translated_query = translate_search_term(query)
             if translated_query.lower() != query.lower():
-                st.toast(f"Searching for: {translated_query} ({query})")
-            mask = results.apply(lambda row: row.astype(str).str.contains(translated_query, case=False).any(), axis=1)
+                st.toast(f"Searching for: {translated_query} ({translated_query})")
+            
+            # Use smart_search_filter instead of simple regex
+            mask = results.apply(lambda row: smart_search_filter(row, translated_query), axis=1)
             results = results[mask]
             
         st.session_state.search_results_df = results
