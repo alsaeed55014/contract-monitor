@@ -1015,22 +1015,22 @@ def page_home():
 
         # Determine dropdown key for current version
         dd_key = f"fallback_home_sel_{st.session_state.home_key_ver}"
-
-        # Check if there's ALREADY a selection (from table OR from previous dropdown pick)
+        
+        # Get current state directly
         current_dd_value = st.session_state.get(dd_key, None)
 
-        # If table row was clicked, sync it to the dropdown
-        if selected_index_home is not None:
-             selected_name = str(display_df.iloc[selected_index_home][name_col])
-             if current_dd_value != selected_name:
-                 st.session_state[dd_key] = selected_name
-                 current_dd_value = selected_name
+        # Logic to determine options and sync
+        dropdown_opts = all_opts # Default
 
-        # LOCK: If any selection exists (table OR dropdown), show only that name
-        if current_dd_value and current_dd_value in all_opts:
+        if selected_index_home is not None:
+             # Case 1: Table row selected -> Force Lock
+             selected_name = str(display_df.iloc[selected_index_home][name_col])
+             st.session_state[dd_key] = selected_name # Sync value
+             dropdown_opts = [selected_name] # Lock options
+             
+        elif current_dd_value and current_dd_value in all_opts:
+             # Case 2: Dropdown already has valid selection -> Keep Lock
              dropdown_opts = [current_dd_value]
-        else:
-             dropdown_opts = all_opts
 
         # Fallback Selectbox - ALWAYS SHOW
         fb_col1, fb_col2, _ = st.columns([1, 0.3, 2]) 
@@ -1231,22 +1231,22 @@ def page_search():
 
         # Determine dropdown key for current version
         dd_key = f"fallback_search_sel_{st.session_state.search_key_ver}"
-
-        # Check if there's ALREADY a selection (from table OR from previous dropdown pick)
+        
+        # Get current state directly
         current_dd_value = st.session_state.get(dd_key, None)
 
-        # If table row was clicked, sync it to the dropdown
+        # Logic to determine options and sync
+        dropdown_opts = all_opts # Default
+        
         if selected_index is not None:
+             # Case 1: Table row selected -> Force Lock
              selected_name = str(results_dys.iloc[selected_index][name_col])
-             if current_dd_value != selected_name:
-                 st.session_state[dd_key] = selected_name
-                 current_dd_value = selected_name
-
-        # LOCK: If any selection exists (table OR dropdown), show only that name
-        if current_dd_value and current_dd_value in all_opts:
+             st.session_state[dd_key] = selected_name # Sync value
+             dropdown_opts = [selected_name] # Lock options
+             
+        elif current_dd_value and current_dd_value in all_opts:
+             # Case 2: Dropdown already has valid selection -> Keep Lock
              dropdown_opts = [current_dd_value]
-        else:
-             dropdown_opts = all_opts
 
         # Fallback Selectbox - ALWAYS SHOW
         fb_col1, fb_col2, _ = st.columns([1, 0.3, 2]) 
@@ -1254,7 +1254,7 @@ def page_search():
              placeholder_text = "اختر موظفاً لعرض التفاصيل..." if st.session_state.lang == 'ar' else "Choose Employee to view details..."
              sel = st.selectbox("أو اختر الموظف من القائمة:" if st.session_state.lang == 'ar' else "Or Select from list:", 
                               dropdown_opts, 
-                              index=None,
+                              index=None, 
                               placeholder=placeholder_text,
                               key=dd_key)
         with fb_col2:
