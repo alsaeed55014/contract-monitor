@@ -955,7 +955,17 @@ def page_home():
              cols = [c for c in display_df.columns if "اسم" in c or "Name" in c]
              name_col = cols[0] if cols else display_df.columns[0]
              opts = ["Choose..." if st.session_state.lang == 'en' else "اختر موظفاً لعرض التفاصيل..."] + display_df[name_col].astype(str).tolist()
-             sel = st.selectbox("أو اختر الموظف من القائمة:" if st.session_state.lang == 'ar' else "Or Select from list:", opts, key="fallback_home_sel")
+             
+             # تنسيق العرض: تقليل العرض وإضافة زر المسح
+             fb_col1, fb_col2, _ = st.columns([1, 0.3, 2]) 
+             with fb_col1:
+                 sel = st.selectbox("أو اختر الموظف من القائمة:" if st.session_state.lang == 'ar' else "Or Select from list:", opts, key="fallback_home_sel")
+             with fb_col2:
+                 st.markdown("<div style='margin-top: 29px;'></div>", unsafe_allow_html=True)
+                 if st.button("❌ مسح" if st.session_state.lang == 'ar' else "Clear", key="clr_home"):
+                      st.session_state.fallback_home_sel = opts[0]
+                      st.rerun()
+
              if sel and sel != opts[0]:
                  selected_index_home = opts.index(sel) - 1
 
@@ -1131,13 +1141,22 @@ def page_search():
         except:
              st.dataframe(results_dys, use_container_width=True)
         
-        # Add fallback selectbox if no row selected
+        # Fallback Selectbox
         if selected_index is None:
              cols = [c for c in results_dys.columns if "اسم" in c or "Name" in c]
              name_col = cols[0] if cols else results_dys.columns[0]
-             # Ensure unique names for selectbox keys logic if needed, but list index is safer
              opts = ["Choose..." if st.session_state.lang == 'en' else "اختر موظفاً لعرض التفاصيل..."] + results_dys[name_col].astype(str).tolist()
-             sel = st.selectbox("أو اختر الموظف من القائمة:" if st.session_state.lang == 'ar' else "Or Select from list:", opts, key="fallback_search_sel")
+             
+             # تنسيق العرض: تقليل العرض وإضافة زر المسح
+             fb_col1, fb_col2, _ = st.columns([1, 0.3, 2]) 
+             with fb_col1:
+                 sel = st.selectbox("أو اختر الموظف من القائمة:" if st.session_state.lang == 'ar' else "Or Select from list:", opts, key="fallback_search_sel")
+             with fb_col2:
+                 st.markdown("<div style='margin-top: 29px;'></div>", unsafe_allow_html=True)
+                 if st.button("❌ مسح" if st.session_state.lang == 'ar' else "Clear", key="clr_search"):
+                      st.session_state.fallback_search_sel = opts[0]
+                      st.rerun()
+
              if sel and sel != opts[0]:
                  selected_index = opts.index(sel) - 1
 
