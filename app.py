@@ -635,6 +635,9 @@ def translate_search_term(term):
             
     return term
 
+def clear_selection_callback(key, value):
+    st.session_state[key] = value
+
 # --- UI Helpers ---
 def sidebar_content():
     with st.sidebar:
@@ -962,9 +965,7 @@ def page_home():
                  sel = st.selectbox("أو اختر الموظف من القائمة:" if st.session_state.lang == 'ar' else "Or Select from list:", opts, key="fallback_home_sel")
              with fb_col2:
                  st.markdown("<div style='margin-top: 29px;'></div>", unsafe_allow_html=True)
-                 if st.button("❌ مسح" if st.session_state.lang == 'ar' else "Clear", key="clr_home"):
-                      st.session_state.fallback_home_sel = opts[0]
-                      st.rerun()
+                 st.button("❌ مسح" if st.session_state.lang == 'ar' else "Clear", key="clr_home", on_click=clear_selection_callback, args=("fallback_home_sel", opts[0]))
 
              if sel and sel != opts[0]:
                  selected_index_home = opts.index(sel) - 1
@@ -1153,9 +1154,7 @@ def page_search():
                  sel = st.selectbox("أو اختر الموظف من القائمة:" if st.session_state.lang == 'ar' else "Or Select from list:", opts, key="fallback_search_sel")
              with fb_col2:
                  st.markdown("<div style='margin-top: 29px;'></div>", unsafe_allow_html=True)
-                 if st.button("❌ مسح" if st.session_state.lang == 'ar' else "Clear", key="clr_search"):
-                      st.session_state.fallback_search_sel = opts[0]
-                      st.rerun()
+                 st.button("❌ مسح" if st.session_state.lang == 'ar' else "Clear", key="clr_search", on_click=clear_selection_callback, args=("fallback_search_sel", opts[0]))
 
              if sel and sel != opts[0]:
                  selected_index = opts.index(sel) - 1
