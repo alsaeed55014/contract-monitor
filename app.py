@@ -1171,6 +1171,8 @@ def page_search():
         # توليد النسخة المترجمة طازجة في كل مرة لضمان وجود الأعمدة الأصلية
         # This prevents session state corruption where CV column was dropped
         results_dys = translate_columns(results)
+        # Reset index to ensure st.dataframe selection returns 0-based index matching iloc
+        results_dys = results_dys.reset_index(drop=True)
         
         st.markdown(f"### 🔍 {T['search_results_title']}: {len(results_dys)}")
         
