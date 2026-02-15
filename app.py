@@ -969,47 +969,46 @@ def page_home():
              # Fallback for older streamlit versions
              st.dataframe(display_df, use_container_width=True)
 
-        # Sync table selection to dropdown if available
-        # If user picked from table, update dropdown key
+        # Build name options for dropdown
         cols = [c for c in display_df.columns if "اسم" in c or "Name" in c]
         name_col = cols[0] if cols else display_df.columns[0]
         all_opts = display_df[name_col].astype(str).tolist()
-        dropdown_opts = all_opts
 
+        # Determine dropdown key for current version
+        dd_key = f"fallback_home_sel_{st.session_state.home_key_ver}"
+
+        # Check if there's ALREADY a selection (from table OR from previous dropdown pick)
+        current_dd_value = st.session_state.get(dd_key, None)
+
+        # If table row was clicked, sync it to the dropdown
         if selected_index_home is not None:
              selected_name = str(display_df.iloc[selected_index_home][name_col])
-             # Check if we need to sync to dropdown
-             # Note: Dropdown key changes with version. Using current version key.
-             dd_key = f"fallback_home_sel_{st.session_state.home_key_ver}"
-             # We can't easily check widget value without causing rerun loop if not careful.
-             # But if table selected, we can set session_state for dropdown if it's currently None/Empty
-             if dd_key not in st.session_state or st.session_state[dd_key] != selected_name:
+             if current_dd_value != selected_name:
                  st.session_state[dd_key] = selected_name
-             
-             # User Request: "I want the one I choose only to descend in the dropdown list"
-             dropdown_opts = [selected_name]
+                 current_dd_value = selected_name
 
-        # Fallback Selectbox
-        # ... logic ...
-             
-             # تنسيق العرض: تقليل العرض وإضافة زر المسح
-             fb_col1, fb_col2, _ = st.columns([1, 0.3, 2]) 
-             with fb_col1:
-                 # Use dynamic key to force reset, index=None for placeholder behavior
-                 placeholder_text = "اختر موظفاً لعرض التفاصيل..." if st.session_state.lang == 'ar' else "Choose Employee to view details..."
-                 sel = st.selectbox("أو اختر الموظف من القائمة:" if st.session_state.lang == 'ar' else "Or Select from list:", 
-                                  dropdown_opts, 
-                                  index=None, 
-                                  placeholder=placeholder_text,
-                                  key=f"fallback_home_sel_{st.session_state.home_key_ver}")
-             with fb_col2:
-                 st.markdown("<div style='margin-top: 29px;'></div>", unsafe_allow_html=True)
-                 # Reset BOTH table and dropdown keys
-                 st.button("❌ مسح" if st.session_state.lang == 'ar' else "Clear", key="clr_home", on_click=increment_key_version, args=(["home_key_ver", "home_table_ver"],))
+        # LOCK: If any selection exists (table OR dropdown), show only that name
+        if current_dd_value and current_dd_value in all_opts:
+             dropdown_opts = [current_dd_value]
+        else:
+             dropdown_opts = all_opts
 
-             if sel:
-                 if sel in all_opts:
-                     selected_index_home = all_opts.index(sel)
+        # Fallback Selectbox - ALWAYS SHOW
+        fb_col1, fb_col2, _ = st.columns([1, 0.3, 2]) 
+        with fb_col1:
+             placeholder_text = "اختر موظفاً لعرض التفاصيل..." if st.session_state.lang == 'ar' else "Choose Employee to view details..."
+             sel = st.selectbox("أو اختر الموظف من القائمة:" if st.session_state.lang == 'ar' else "Or Select from list:", 
+                              dropdown_opts, 
+                              index=None, 
+                              placeholder=placeholder_text,
+                              key=dd_key)
+        with fb_col2:
+             st.markdown("<div style='margin-top: 29px;'></div>", unsafe_allow_html=True)
+             st.button("❌ مسح" if st.session_state.lang == 'ar' else "Clear", key="clr_home", on_click=increment_key_version, args=(["home_key_ver", "home_table_ver"],))
+
+        if sel:
+             if sel in all_opts:
+                 selected_index_home = all_opts.index(sel)
 
         if selected_index_home is not None:
             selected_index = selected_index_home
@@ -1184,41 +1183,45 @@ def page_search():
         except:
              st.dataframe(results_dys, use_container_width=True)
 
-        # Sync table selection to dropdown if available
-        # If user picked from table, update dropdown key
+        # Build name options for dropdown
         cols = [c for c in results_dys.columns if "اسم" in c or "Name" in c]
         name_col = cols[0] if cols else results_dys.columns[0]
         all_opts = results_dys[name_col].astype(str).tolist()
-        dropdown_opts = all_opts
 
+        # Determine dropdown key for current version
+        dd_key = f"fallback_search_sel_{st.session_state.search_key_ver}"
+
+        # Check if there's ALREADY a selection (from table OR from previous dropdown pick)
+        current_dd_value = st.session_state.get(dd_key, None)
+
+        # If table row was clicked, sync it to the dropdown
         if selected_index is not None:
              selected_name = str(results_dys.iloc[selected_index][name_col])
-             dd_key = f"fallback_search_sel_{st.session_state.search_key_ver}"
-             # Check if we need to sync to dropdown
-             if dd_key not in st.session_state or st.session_state[dd_key] != selected_name:
+             if current_dd_value != selected_name:
                  st.session_state[dd_key] = selected_name
-             
-             # User Request: "I want the one I choose only to descend in the dropdown list"
-             # Filter dropdown to show ONLY the selected item when selected
-             dropdown_opts = [selected_name]
+                 current_dd_value = selected_name
+
+        # LOCK: If any selection exists (table OR dropdown), show only that name
+        if current_dd_value and current_dd_value in all_opts:
+             dropdown_opts = [current_dd_value]
+        else:
+             dropdown_opts = all_opts
 
         # Fallback Selectbox - ALWAYS SHOW
-        # تنسيق العرض: تقليل العرض وإضافة زر المسح
         fb_col1, fb_col2, _ = st.columns([1, 0.3, 2]) 
         with fb_col1:
-             # Use dynamic key
              placeholder_text = "اختر موظفاً لعرض التفاصيل..." if st.session_state.lang == 'ar' else "Choose Employee to view details..."
              sel = st.selectbox("أو اختر الموظف من القائمة:" if st.session_state.lang == 'ar' else "Or Select from list:", 
                               dropdown_opts, 
                               index=None,
                               placeholder=placeholder_text,
-                              key=f"fallback_search_sel_{st.session_state.search_key_ver}")
+                              key=dd_key)
         with fb_col2:
              st.markdown("<div style='margin-top: 29px;'></div>", unsafe_allow_html=True)
              st.button("❌ مسح" if st.session_state.lang == 'ar' else "Clear", key="clr_search", on_click=increment_key_version, args=(["search_key_ver", "search_table_ver"],))
 
         if sel:
-             # Map back to original index
+             # Map back to original index in the full results
              if sel in all_opts:
                  selected_index = all_opts.index(sel)
 
