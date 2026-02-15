@@ -158,6 +158,11 @@ if 'search_key_ver' not in st.session_state:
 if 'home_key_ver' not in st.session_state:
     st.session_state.home_key_ver = 0
 
+if 'search_table_ver' not in st.session_state:
+    st.session_state.search_table_ver = 0
+if 'home_table_ver' not in st.session_state:
+    st.session_state.home_table_ver = 0
+
 # --- Translations ---
 L = {
     'en': {
@@ -639,9 +644,13 @@ def translate_search_term(term):
             
     return term
 
-def increment_key_version(key_ver):
-    if key_ver in st.session_state:
-        st.session_state[key_ver] += 1
+def increment_key_version(keys):
+    # If single key string provided, wrap in list
+    if isinstance(keys, str):
+        keys = [keys]
+    for k in keys:
+        if k in st.session_state:
+            st.session_state[k] += 1
 
 # --- UI Helpers ---
 def sidebar_content():
@@ -941,15 +950,17 @@ def page_home():
         
         st.warning("👈 **هام جداً:** لرؤية **السيرة الذاتية مترجمة بالعربي**، يجب الضغط على سطر الموظف في الجدول." if st.session_state.lang == 'ar' else "👈 **Important:** Click employee row to see the **Translated CV**.")
 
-        # Use Dataframe with selection
+        # Use Dataframe with selection (Versioned Key)
         selected_index_home = None
+        current_table_key = f"alert_table_{st.session_state.home_table_ver}"
+        
         try:
            event = st.dataframe(
                 display_df, 
                 use_container_width=True,
                 selection_mode="single-row",
                 on_select="rerun",
-                key="alert_selection",
+                key=current_table_key,
                 column_config=col_cfg
             )
            if event and len(event.selection['rows']) > 0:
@@ -958,11 +969,26 @@ def page_home():
              # Fallback for older streamlit versions
              st.dataframe(display_df, use_container_width=True)
 
+        # Sync table selection to dropdown if available
+        # If user picked from table, update dropdown key
+        cols = [c for c in display_df.columns if "اسم" in c or "Name" in c]
+        name_col = cols[0] if cols else display_df.columns[0]
+        opts = display_df[name_col].astype(str).tolist()
+
+        if selected_index_home is not None:
+             selected_name = str(display_df.iloc[selected_index_home][name_col])
+             # Check if we need to sync to dropdown
+             # Note: Dropdown key changes with version. Using current version key.
+             dd_key = f"fallback_home_sel_{st.session_state.home_key_ver}"
+             # We can't easily check widget value without causing rerun loop if not careful.
+             # But if table selected, we can set session_state for dropdown if it's currently None/Empty
+             if dd_key not in st.session_state or st.session_state[dd_key] != selected_name:
+                 st.session_state[dd_key] = selected_name
+                 # st.rerun() # Might loop. Let's rely on next render or let user see both?
+                 # Actually if we set state here, the widget below will pick it up!
+
         # Fallback Selectbox
-        if selected_index_home is None:
-             cols = [c for c in display_df.columns if "اسم" in c or "Name" in c]
-             name_col = cols[0] if cols else display_df.columns[0]
-             opts = display_df[name_col].astype(str).tolist()
+        # ... logic ...
              
              # تنسيق العرض: تقليل العرض وإضافة زر المسح
              fb_col1, fb_col2, _ = st.columns([1, 0.3, 2]) 
@@ -976,7 +1002,8 @@ def page_home():
                                   key=f"fallback_home_sel_{st.session_state.home_key_ver}")
              with fb_col2:
                  st.markdown("<div style='margin-top: 29px;'></div>", unsafe_allow_html=True)
-                 st.button("❌ مسح" if st.session_state.lang == 'ar' else "Clear", key="clr_home", on_click=increment_key_version, args=("home_key_ver",))
+                 # Reset BOTH table and dropdown keys
+                 st.button("❌ مسح" if st.session_state.lang == 'ar' else "Clear", key="clr_home", on_click=increment_key_version, args=(["home_key_ver", "home_table_ver"],))
 
              if sel:
                  selected_index_home = opts.index(sel)
@@ -1138,6 +1165,7 @@ def page_search():
             
         # Fallback handling
         selected_index = None
+        current_table_key = f"search_table_{st.session_state.search_table_ver}"
         
         try:
             event_s = st.dataframe(
@@ -1145,36 +1173,44 @@ def page_search():
                 use_container_width=True,
                 selection_mode="single-row",
                 on_select="rerun",
-                key="search_selection",
+                key=current_table_key,
                 column_config=cfg_s
             )
             if event_s and len(event_s.selection['rows']) > 0:
                 selected_index = event_s.selection['rows'][0]
         except:
              st.dataframe(results_dys, use_container_width=True)
-        
-        # Fallback Selectbox
-        if selected_index is None:
-             cols = [c for c in results_dys.columns if "اسم" in c or "Name" in c]
-             name_col = cols[0] if cols else results_dys.columns[0]
-             opts = results_dys[name_col].astype(str).tolist()
-             
-             # تنسيق العرض: تقليل العرض وإضافة زر المسح
-             fb_col1, fb_col2, _ = st.columns([1, 0.3, 2]) 
-             with fb_col1:
-                 # Use dynamic key
-                 placeholder_text = "اختر موظفاً لعرض التفاصيل..." if st.session_state.lang == 'ar' else "Choose Employee to view details..."
-                 sel = st.selectbox("أو اختر الموظف من القائمة:" if st.session_state.lang == 'ar' else "Or Select from list:", 
-                                  opts, 
-                                  index=None,
-                                  placeholder=placeholder_text,
-                                  key=f"fallback_search_sel_{st.session_state.search_key_ver}")
-             with fb_col2:
-                 st.markdown("<div style='margin-top: 29px;'></div>", unsafe_allow_html=True)
-                 st.button("❌ مسح" if st.session_state.lang == 'ar' else "Clear", key="clr_search", on_click=increment_key_version, args=("search_key_ver",))
 
-             if sel:
-                 selected_index = opts.index(sel)
+        # Sync table selection to dropdown if available
+        # If user picked from table, update dropdown key
+        cols = [c for c in results_dys.columns if "اسم" in c or "Name" in c]
+        name_col = cols[0] if cols else results_dys.columns[0]
+        opts = results_dys[name_col].astype(str).tolist()
+
+        if selected_index is not None:
+             selected_name = str(results_dys.iloc[selected_index][name_col])
+             dd_key = f"fallback_search_sel_{st.session_state.search_key_ver}"
+             # Check if we need to sync to dropdown
+             if dd_key not in st.session_state or st.session_state[dd_key] != selected_name:
+                 st.session_state[dd_key] = selected_name
+
+        # Fallback Selectbox - ALWAYS SHOW
+        # تنسيق العرض: تقليل العرض وإضافة زر المسح
+        fb_col1, fb_col2, _ = st.columns([1, 0.3, 2]) 
+        with fb_col1:
+             # Use dynamic key
+             placeholder_text = "اختر موظفاً لعرض التفاصيل..." if st.session_state.lang == 'ar' else "Choose Employee to view details..."
+             sel = st.selectbox("أو اختر الموظف من القائمة:" if st.session_state.lang == 'ar' else "Or Select from list:", 
+                              opts, 
+                              index=None,
+                              placeholder=placeholder_text,
+                              key=f"fallback_search_sel_{st.session_state.search_key_ver}")
+        with fb_col2:
+             st.markdown("<div style='margin-top: 29px;'></div>", unsafe_allow_html=True)
+             st.button("❌ مسح" if st.session_state.lang == 'ar' else "Clear", key="clr_search", on_click=increment_key_version, args=(["search_key_ver", "search_table_ver"],))
+
+        if sel:
+             selected_index = opts.index(sel)
 
         if selected_index is not None:
             idx = selected_index
