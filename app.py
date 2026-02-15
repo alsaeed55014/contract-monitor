@@ -913,6 +913,7 @@ def page_home():
         st.warning("👈 **هام جداً:** لرؤية **السيرة الذاتية مترجمة بالعربي**، يجب الضغط على سطر الموظف في الجدول." if st.session_state.lang == 'ar' else "👈 **Important:** Click employee row to see the **Translated CV**.")
 
         # Use Dataframe with selection
+        selected_index_home = None
         try:
            event = st.dataframe(
                 display_df, 
@@ -922,13 +923,23 @@ def page_home():
                 key="alert_selection",
                 column_config=col_cfg
             )
+           if event and len(event.selection['rows']) > 0:
+                selected_index_home = event.selection['rows'][0]
         except:
              # Fallback for older streamlit versions
              st.dataframe(display_df, use_container_width=True)
-             event = None
 
-        if event and len(event.selection['rows']) > 0:
-            selected_index = event.selection['rows'][0]
+        # Fallback Selectbox
+        if selected_index_home is None:
+             cols = [c for c in display_df.columns if "اسم" in c or "Name" in c]
+             name_col = cols[0] if cols else display_df.columns[0]
+             opts = ["Choose..." if st.session_state.lang == 'en' else "اختر موظفاً لعرض التفاصيل..."] + display_df[name_col].astype(str).tolist()
+             sel = st.selectbox("أو اختر الموظف من القائمة:" if st.session_state.lang == 'ar' else "Or Select from list:", opts, key="fallback_home_sel")
+             if sel and sel != opts[0]:
+                 selected_index_home = opts.index(sel) - 1
+
+        if selected_index_home is not None:
+            selected_index = selected_index_home
             row_data = alert_df.iloc[selected_index]
             st.session_state.selected_alert_key = row_data["_key"]
             
@@ -1082,8 +1093,9 @@ def page_search():
             cfg_s[dl_col_s] = st.column_config.LinkColumn(dl_col_s, display_text="📥 تحميل")
             cfg_s[pv_col_s] = st.column_config.LinkColumn(pv_col_s, display_text="👁️ معاينة")
             
-        st.warning("👈 **هام جداً:** اضغط على سطر الموظف في الجدول لرؤية **المعاينة المترجمة**." if st.session_state.lang == 'ar' else "👈 **Important:** Click the row to see the **Translated Preview**.")
-
+        # Fallback handling
+        selected_index = None
+        
         try:
             event_s = st.dataframe(
                 results_dys, 
@@ -1093,14 +1105,24 @@ def page_search():
                 key="search_selection",
                 column_config=cfg_s
             )
+            if event_s and len(event_s.selection['rows']) > 0:
+                selected_index = event_s.selection['rows'][0]
         except:
-            st.dataframe(results_dys, use_container_width=True)
-            event_s = None
+             st.dataframe(results_dys, use_container_width=True)
         
-        if event_s and len(event_s.selection['rows']) > 0:
-            idx = event_s.selection['rows'][0]
-            
-            # التأكد من صحة المؤشر
+        # Add fallback selectbox if no row selected
+        if selected_index is None:
+             cols = [c for c in results_dys.columns if "اسم" in c or "Name" in c]
+             name_col = cols[0] if cols else results_dys.columns[0]
+             # Ensure unique names for selectbox keys logic if needed, but list index is safer
+             opts = ["Choose..." if st.session_state.lang == 'en' else "اختر موظفاً لعرض التفاصيل..."] + results_dys[name_col].astype(str).tolist()
+             sel = st.selectbox("أو اختر الموظف من القائمة:" if st.session_state.lang == 'ar' else "Or Select from list:", opts, key="fallback_search_sel")
+             if sel and sel != opts[0]:
+                 selected_index = opts.index(sel) - 1
+
+        if selected_index is not None:
+            idx = selected_index
+            # استخدام البيانات الأصلية للحصول على رابط CV
             if idx < len(results):
                 st.markdown("---")
                 
