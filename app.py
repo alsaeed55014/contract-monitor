@@ -1011,7 +1011,8 @@ def page_home():
         # Build name options for dropdown
         cols = [c for c in display_df.columns if "اسم" in c or "Name" in c]
         name_col = cols[0] if cols else display_df.columns[0]
-        all_opts = display_df[name_col].astype(str).tolist()
+        # Ensure options are clean
+        all_opts = [str(x).strip() for x in display_df[name_col].tolist()]
 
         # Determine dropdown key for current version
         dd_key = f"fallback_home_sel_{st.session_state.home_key_ver}"
@@ -1021,9 +1022,15 @@ def page_home():
         
         if selected_index_home is not None:
              # Sync Table -> Dropdown
-             selected_name = str(display_df.iloc[selected_index_home][name_col])
-             # Force update session state to this name
-             st.session_state[dd_key] = selected_name
+             raw_name = str(display_df.iloc[selected_index_home][name_col]).strip()
+             
+             # Find exact match in options to avoid mismatch 
+             if raw_name in all_opts:
+                 st.session_state[dd_key] = raw_name
+                 # Optional: Toast to confirm selection
+                 st.toast(f"✅ تم اختيار: {raw_name}")
+             else:
+                 st.toast(f"⚠️ الاسم غير موجود في القائمة: {raw_name}")
 
         # Fallback Selectbox - ALWAYS SHOW ALL OPTS
         fb_col1, fb_col2, _ = st.columns([1, 0.3, 2]) 
@@ -1220,7 +1227,8 @@ def page_search():
         # Build name options for dropdown
         cols = [c for c in results_dys.columns if "اسم" in c or "Name" in c]
         name_col = cols[0] if cols else results_dys.columns[0]
-        all_opts = results_dys[name_col].astype(str).tolist()
+        # Ensure options are clean
+        all_opts = [str(x).strip() for x in results_dys[name_col].tolist()]
 
         # Determine dropdown key for current version
         dd_key = f"fallback_search_sel_{st.session_state.search_key_ver}"
@@ -1230,10 +1238,16 @@ def page_search():
         
         if selected_index is not None:
              # Sync Table -> Dropdown
-             selected_name = str(results_dys.iloc[selected_index][name_col])
-             # Force update session state to this name
-             st.session_state[dd_key] = selected_name
+             raw_name = str(results_dys.iloc[selected_index][name_col]).strip()
              
+             # Find exact match in options to avoid mismatch
+             if raw_name in all_opts:
+                 st.session_state[dd_key] = raw_name
+                 # Optional: Toast to confirm selection
+                 st.toast(f"✅ تم اختيار: {raw_name}")
+             else:
+                 st.toast(f"⚠️ الاسم غير موجود في القائمة: {raw_name}")
+
         # Fallback Selectbox - ALWAYS SHOW ALL OPTS
         fb_col1, fb_col2, _ = st.columns([1, 0.3, 2]) 
         with fb_col1:
