@@ -889,7 +889,7 @@ def page_home():
         # CV Column Configuration
         cv_col_name = ""
         for cn in display_df.columns:
-            if any(kw in cn.lower() for kw in ["cv", "سيرة", "تحميل"]):
+            if any(kw in cn.lower() for kw in ["cv", "سيرة", "تحميل", "curriculum"]):
                 cv_col_name = cn
                 break
         
@@ -900,7 +900,7 @@ def page_home():
             display_df = display_df.rename(columns={cv_col_name: new_name})
             col_cfg[new_name] = st.column_config.LinkColumn(new_name, display_text="📥")
         
-        st.warning("  **هام جداً:** لرؤية **السيرة الذاتية مترجمة بالعربي**، يجب الضغط على سطر الموظف في الجدول أدناه أولاً." if st.session_state.lang == 'ar' else "  **Important:** To see the **Translated CV**, click the employee's row in the table first.")
+        st.warning("👈 **هام جداً:** لرؤية **السيرة الذاتية مترجمة بالعربي**، يجب الضغط على سطر الموظف في الجدول." if st.session_state.lang == 'ar' else "👈 **Important:** Click employee row to see the **Translated CV**.")
 
         # Use Dataframe with selection
         try:
@@ -1038,14 +1038,16 @@ def page_search():
             results = results[mask]
             
         st.session_state.search_results_df = results
+        # تخزين النسخة المترجمة أيضاً لثبات العرض
+        st.session_state.search_results_dys = translate_columns(results)
         st.session_state.has_searched = True
 
     # عرض النتائج إذا كانت موجودة في الذاكرة
     if st.session_state.get("has_searched") and "search_results_df" in st.session_state:
         results = st.session_state.search_results_df
-        st.markdown(f"#### 🔍 النتائج المكتشفة: {len(results)}")
+        results_dys = st.session_state.get("search_results_dys", results)
         
-        results_dys = translate_columns(results)
+        st.markdown(f"#### 🔍 النتائج المكتشفة: {len(results)}")
         st.markdown(f"### 🔍 {T['search_results_title']}: {len(results_dys)}")
         # تحسين شكل عمود السيرة الذاتية في البحث
         cv_col_s = ""
@@ -1073,6 +1075,7 @@ def page_search():
         
         if event_s and len(event_s.selection['rows']) > 0:
             idx = event_s.selection['rows'][0]
+            # Use results_dys if you have selection on translated df
             row_s = results_dys.iloc[idx]
             
             st.markdown("---")
@@ -1081,7 +1084,7 @@ def page_search():
             
             cv_link_s = ""
             for cn in results_dys.columns:
-                if any(kw in cn.lower() for kw in ["cv", "سيرة", "تحميل"]):
+                if any(kw in cn.lower() for kw in ["cv", "سيرة", "تحميل", "curriculum"]):
                     cv_link_s = row_s[cn]
                     break
             
@@ -1101,7 +1104,7 @@ def page_search():
                 cs_btn1, cs_btn2, cs_btn3 = st.columns([1.2, 1, 1])
                 with cs_btn1:
                     if st.button("🌐 معاينة وترجمة فورية (عربي)" if st.session_state.lang == 'ar' else "🌐 Instant Arabic Preview", use_container_width=True, key="search_trans_btn", type="primary"):
-                        with st.spinner("جاري استخراج وترجمة النص..." if st.session_state.lang == 'ar' else "Translating..."):
+                        with st.spinner("جاري استخراج وترجمة النص..."):
                             res = process_cv_translation(str(cv_link_s))
                             st.session_state.search_cv_view = res
                 with cs_btn2:
@@ -1116,7 +1119,7 @@ def page_search():
                         del st.session_state.search_cv_view
                         st.rerun()
             else:
-                st.info("لا توجد سيرة ذاتية لهذا الموظف")
+                st.info("لا توجد سيرة ذاتية لهذا الموظف" if st.session_state.lang == 'ar' else "No CV link found for this employee.")
     
     if st.button(T['print_btn']):
         st.info("Feature not available in cloud yet." if st.session_state.lang == 'en' else "الميزة غير متاحة في النسخة السحابية حالياً.")
