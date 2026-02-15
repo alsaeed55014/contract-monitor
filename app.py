@@ -9,6 +9,8 @@ import json
 import hashlib
 import base64
 import requests
+import re
+import time
 try:
     import pdfplumber
     from deep_translator import GoogleTranslator
@@ -80,28 +82,22 @@ def smart_search_filter(row_series, query_str):
             return True
             
         # 2. Smart Phone Match
-        # Check if query consists mostly of digits (allow +, -)
         # Remove all non-digits for comparison
         query_digits = re.sub(r'\D', '', query_str_clean)
         
-        # Only try smart phone match if query looks like a phone number (e.g. > 4 digits)
-        if len(query_digits) > 4: 
+        # Only try smart phone match if query looks like a phone number
+        if len(query_digits) >= 9: 
             row_digits = re.sub(r'\D', '', row_text)
             
-            # A. Exact sequence match (e.g. 54633... in 96654633...)
+            # Match the last 9 digits (handles +966, 05, and 5 prefixes)
+            last_9 = query_digits[-9:]
+            if last_9 in row_digits:
+                return True
+        elif len(query_digits) > 4:
+            # For shorter numbers (like 5 digits), try direct containment
+            row_digits = re.sub(r'\D', '', row_text)
             if query_digits in row_digits:
                 return True
-                
-            # B. Handle common prefixes variations
-            # If query starts with '05', try matching '5...' (e.g. User types 054..., data has 96654...)
-            if query_digits.startswith('0') and len(query_digits) > 1:
-                if query_digits[1:] in row_digits:
-                    return True
-                    
-            # If query starts with '966', try matching without it (e.g. User types 96654..., data has 054...)
-            if query_digits.startswith('966') and len(query_digits) > 3:
-                if query_digits[3:] in row_digits:
-                    return True
 
         return False
     except Exception as e:
