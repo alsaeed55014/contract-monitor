@@ -73,24 +73,45 @@ def process_cv_translation(url):
         return "⚠️ ميزة الترجمة قيد التثبيت حالياً على السيرفر، يرجى المحاولة بعد قليل أو إعادة تشغيل التطبيق (Reboot) من لوحة تحكم Streamlit."
     try:
         direct_url = get_direct_download_link(url)
-        response = requests.get(direct_url, timeout=15)
+        if not direct_url:
+            return "❌ الرابط غير صالح."
+            
+        try:
+            response = requests.get(direct_url, timeout=15)
+        except Exception as e:
+            return f"❌ فشل الاتصال بالرابط: {str(e)}"
+            
         if response.status_code == 200:
-            with pdfplumber.open(io.BytesIO(response.content)) as pdf:
-                text = ""
-                # نكتفي بأول 3 صفحات للمعاينة السريعة
-                for page in pdf.pages[:3]:
-                    text += page.extract_text() or ""
+            # Check content type if possible
+            content_type = response.headers.get('Content-Type', '').lower()
+            if 'text/html' in content_type:
+                 return "⚠️ الرابط يؤدي إلى صفحة ويب وليس ملف PDF مباشر (تأكد من إعدادات المشاركة)."
+                 
+            try:
+                with pdfplumber.open(io.BytesIO(response.content)) as pdf:
+                    text = ""
+                    # نكتفي بأول 3 صفحات للمعاينة السريعة
+                    # Handle encrypted PDFs or extraction errors per page
+                    for page in pdf.pages[:3]:
+                        extracted = page.extract_text()
+                        if extracted:
+                            text += extracted
+            except Exception as pdf_err:
+                 return "⚠️ الملف ليس بصيغة PDF صالحة أو أنه تالف/محمي بكلمة مرور."
             
             if not text.strip():
                 return "❌ تعذر استخراج النص من الملف. قد يكون الملف عبارة عن صورة أو محمي."
             
             # الترجمة (نكتفي بأول 4000 حرف وهي سعة المترجم المجاني غالباً)
-            translated = GoogleTranslator(source='auto', target='ar').translate(text[:4000])
-            return translated
+            try:
+                translated = GoogleTranslator(source='auto', target='ar').translate(text[:4000])
+                return translated
+            except Exception as tr_err:
+                return f"❌ خطأ أثناء الترجمة: {str(tr_err)}"
         else:
-            return "❌ تعذر تحميل الملف من الرابط. تأكد من إعدادات المشاركة في جوجل درايف."
+            return f"❌ تعذر تحميل الملف (رمز الخطأ: {response.status_code})."
     except Exception as e:
-        return f"❌ حدث خطأ أثناء المعالجة: {str(e)}"
+        return f"❌ حدث خطأ غير متوقع: {str(e)}"
 
 # --- Authentication System ---
 USERS_FILE = 'users.json'
