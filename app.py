@@ -1120,8 +1120,7 @@ def page_search():
             else:
                 st.info("لا توجد سيرة ذاتية لهذا الموظف" if st.session_state.lang == 'ar' else "No CV link found for this employee.")
     
-    if st.button(T['print_btn']):
-        st.info("Feature not available in cloud yet." if st.session_state.lang == 'en' else "الميزة غير متاحة في النسخة السحابية حالياً.")
+
 
 # --- Page: Permissions ---
 def page_permissions():
