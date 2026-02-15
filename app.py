@@ -932,11 +932,11 @@ def page_home():
             row_data = alert_df.iloc[selected_index]
             st.session_state.selected_alert_key = row_data["_key"]
             
-            # عرض تفاصيل الصف المختار بشكل فخم مع أزرار المعاينة والتحميل
+            # عرض تفاصيل الصف المختار مع ترجمة تلقائية
             st.markdown("---")
             with st.container():
-                cols_v = st.columns([2, 1, 1])
                 name = row_data.get(T['name_col'], "Unknown")
+                st.markdown(f"### 📋 {name}")
                 
                 # البحث عن رابط السيرة الذاتية
                 cv_link = ""
@@ -945,37 +945,26 @@ def page_home():
                         cv_link = row_data[c_name]
                         break
                 
-                with cols_v[0]:
-                    st.markdown(f"### 📋 {name}")
-                
                 if cv_link and str(cv_link).startswith("http"):
                     direct_link = get_direct_download_link(str(cv_link))
                     
-                    # استايل الصندوق - نجعله أكثر بروزاً
-                    st.markdown("""
-                        <div style='background-color:rgba(30, 144, 255, 0.1); padding:25px; border-radius:15px; border:2px solid #1E90FF; margin-top:10px; margin-bottom:10px;'>
-                            <h3 style='margin-bottom:15px; color:#1E90FF;'>  مركز التحكم في السيرة الذاتية (مترجم)</h3>
-                            <p style='color:gray; font-size:0.9em;'>استخدم الأزرار أدناه للمعاينة المترجمة أو التحميل الأصلي</p>
-                        </div>
-                    """, unsafe_allow_html=True)
-                    
-                    c_btn1, c_btn2, c_btn3 = st.columns([1.2, 1, 1])
+                    # أزرار التحميل وفتح Drive
+                    c_btn1, c_btn2 = st.columns(2)
                     with c_btn1:
-                        if st.button("🌐 معاينة وترجمة فورية (عربي)" if st.session_state.lang == 'ar' else "🌐 Instant Arabic Preview", use_container_width=True, type="primary"):
-                            with st.spinner("جاري استخراج وترجمة النص..." if st.session_state.lang == 'ar' else "Translating..."):
-                                res = process_cv_translation(str(cv_link))
-                                st.session_state.cv_trans_view = res
-                    with c_btn2:
                         st.link_button("📥 تحميل PDF (الأصلي)" if st.session_state.lang == 'ar' else "📥 Download Original PDF", direct_link, use_container_width=True)
-                    with c_btn3:
+                    with c_btn2:
                         st.link_button("🔗 فتح في Drive" if st.session_state.lang == 'ar' else "🔗 Open in Drive", str(cv_link), use_container_width=True)
                     
-                    if "cv_trans_view" in st.session_state:
-                        st.info("النص المترجم للعربية:")
-                        st.write(st.session_state.cv_trans_view)
-                        if st.button("إغلاق"):
-                            del st.session_state.cv_trans_view
-                            st.rerun()
+                    # ترجمة تلقائية عند اختيار الصف
+                    with st.spinner("جاري استخراج وترجمة السيرة الذاتية للعربية..." if st.session_state.lang == 'ar' else "Translating CV to Arabic..."):
+                        translated_text = process_cv_translation(str(cv_link))
+                    
+                    st.markdown("""
+                        <div style='background-color:rgba(30, 144, 255, 0.1); padding:20px; border-radius:15px; border:2px solid #1E90FF; margin-top:10px;'>
+                            <h3 style='margin-bottom:10px; color:#1E90FF;'>🌐 المعاينة المترجمة للعربية</h3>
+                        </div>
+                    """, unsafe_allow_html=True)
+                    st.write(translated_text)
                 else:
                     st.info("لا توجد سيرة ذاتية لهذا الموظف")
         else:
@@ -1093,49 +1082,41 @@ def page_search():
         
         if event_s and len(event_s.selection['rows']) > 0:
             idx = event_s.selection['rows'][0]
-            # Use results_dys if you have selection on translated df
+            # استخدام البيانات الأصلية للحصول على رابط CV
+            row_orig = results.iloc[idx]
             row_s = results_dys.iloc[idx]
             
             st.markdown("---")
-            c_v1, c_v2, c_v3 = st.columns([2, 1, 1])
             disp_name = row_s.get("الاسم الكامل", row_s.get("Full Name", "Unknown"))
+            st.markdown(f"### 📋 {disp_name}")
             
+            # البحث عن رابط CV في البيانات الأصلية
             cv_link_s = ""
-            for cn in results_dys.columns:
+            for cn in results.columns:
                 if any(kw in cn.lower() for kw in ["cv", "سيرة", "تحميل", "curriculum"]):
-                    cv_link_s = row_s[cn]
+                    cv_link_s = row_orig[cn]
                     break
-            
-            with c_v1:
-                st.markdown(f"### 📋 {disp_name}")
             
             if cv_link_s and str(cv_link_s).startswith("http"):
                 dir_link = get_direct_download_link(str(cv_link_s))
                 
-                st.markdown("""
-                    <div style='background-color:rgba(30, 144, 255, 0.1); padding:25px; border-radius:15px; border:2px solid #1E90FF; margin-top:10px; margin-bottom:10px;'>
-                        <h3 style='margin-bottom:15px; color:#1E90FF;'>🚀 مركز التحكم في السيرة الذاتية (مترجم)</h3>
-                        <p style='color:gray; font-size:0.9em;'>استخدم الأزرار أدناه للمعاينة المترجمة أو التحميل الأصلي</p>
-                    </div>
-                """, unsafe_allow_html=True)
-                
-                cs_btn1, cs_btn2, cs_btn3 = st.columns([1.2, 1, 1])
+                # أزرار التحميل وفتح Drive
+                cs_btn1, cs_btn2 = st.columns(2)
                 with cs_btn1:
-                    if st.button("🌐 معاينة وترجمة فورية (عربي)" if st.session_state.lang == 'ar' else "🌐 Instant Arabic Preview", use_container_width=True, key="search_trans_btn", type="primary"):
-                        with st.spinner("جاري استخراج وترجمة النص..."):
-                            res = process_cv_translation(str(cv_link_s))
-                            st.session_state.search_cv_view = res
-                with cs_btn2:
                     st.link_button("📥 تحميل PDF (الأصلي)" if st.session_state.lang == 'ar' else "📥 Download Original PDF", dir_link, use_container_width=True)
-                with cs_btn3:
+                with cs_btn2:
                     st.link_button("🔗 فتح في Drive" if st.session_state.lang == 'ar' else "🔗 Open in Drive", str(cv_link_s), use_container_width=True)
                 
-                if "search_cv_view" in st.session_state:
-                    st.info("النص المترجم للعربية:")
-                    st.write(st.session_state.search_cv_view)
-                    if st.button("إغلاق", key="close_search_view"):
-                        del st.session_state.search_cv_view
-                        st.rerun()
+                # ترجمة تلقائية عند اختيار الصف
+                with st.spinner("جاري استخراج وترجمة السيرة الذاتية للعربية..." if st.session_state.lang == 'ar' else "Translating CV to Arabic..."):
+                    translated_text = process_cv_translation(str(cv_link_s))
+                
+                st.markdown("""
+                    <div style='background-color:rgba(30, 144, 255, 0.1); padding:20px; border-radius:15px; border:2px solid #1E90FF; margin-top:10px;'>
+                        <h3 style='margin-bottom:10px; color:#1E90FF;'>🌐 المعاينة المترجمة للعربية</h3>
+                    </div>
+                """, unsafe_allow_html=True)
+                st.write(translated_text)
             else:
                 st.info("لا توجد سيرة ذاتية لهذا الموظف" if st.session_state.lang == 'ar' else "No CV link found for this employee.")
     
