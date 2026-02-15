@@ -181,6 +181,7 @@ L = {
         'success_msg': "No urgent alerts today.",
         'error_google': "Error connecting to Google Sheets",
         'info_creds': "Please ensure credentials are set in Streamlit Secrets.",
+        'search_results_title': "Search Results",
     },
     'ar': {
         'login_title': "🔒 تسجيل الدخول",
@@ -228,6 +229,7 @@ L = {
         'success_msg': "لا توجد تنبيهات عاجلة اليوم.",
         'error_google': "خطأ في الاتصال بجوجل شيت",
         'info_creds': "يرجى التأكد من إعدادات Secrets في Streamlit.",
+        'search_results_title': "النتائج المكتشفة",
     }
 }
 
@@ -947,12 +949,12 @@ def page_home():
                     
                     c_btn1, c_btn2, c_btn3 = st.columns([1, 1, 1])
                     with c_btn1:
-                        if st.button("👁️ معاينة (مترجم)" if st.session_state.lang == 'ar' else "👁️ Preview (Translated)", use_container_width=True, type="primary"):
+                        if st.button("👁️ معاينة وترجمة" if st.session_state.lang == 'ar' else "👁️ Preview & Translate", use_container_width=True, type="primary"):
                             with st.spinner("جاري استخراج وترجمة النص..."):
                                 res = process_cv_translation(str(cv_link))
                                 st.session_state.cv_trans_view = res
                     with c_btn2:
-                        st.link_button("📥 تحميل الملف" if st.session_state.lang == 'ar' else "📥 Download File", direct_link, use_container_width=True)
+                        st.link_button("📥 تحميل الأصل" if st.session_state.lang == 'ar' else "📥 Download Original", direct_link, use_container_width=True)
                     with c_btn3:
                         st.link_button("🔗 الملف الأصلي" if st.session_state.lang == 'ar' else "🔗 Original File", str(cv_link), use_container_width=True)
                     
@@ -1094,13 +1096,13 @@ def page_search():
                 cs_btn1, cs_btn2, cs_btn3 = st.columns(3)
                 with cs_btn1:
                     if st.button("👁️ معاينة وترجمة" if st.session_state.lang == 'ar' else "👁️ Preview & Translate", use_container_width=True, key="search_trans_btn", type="primary"):
-                        with st.spinner("جاري الترجمة..."):
+                        with st.spinner("جاري استخراج وترجمة النص..."):
                             res = process_cv_translation(str(cv_link_s))
                             st.session_state.search_cv_view = res
                 with cs_btn2:
                     st.link_button("📥 تحميل الأصل" if st.session_state.lang == 'ar' else "📥 Download Original", dir_link, use_container_width=True)
                 with cs_btn3:
-                    st.link_button("🔗 رابط الملف" if st.session_state.lang == 'ar' else "🔗 File Link", str(cv_link_s), use_container_width=True)
+                    st.link_button("🔗 الملف الأصلي" if st.session_state.lang == 'ar' else "🔗 Original File", str(cv_link_s), use_container_width=True)
                 
                 if "search_cv_view" in st.session_state:
                     st.info("النص المترجم للعربية:")
