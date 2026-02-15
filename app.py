@@ -884,6 +884,7 @@ def page_home():
         alert_df = pd.DataFrame(alerts)
         # Ensure Status is the first column
         cols = [T['status']] + [c for c in alert_df.columns if c != T['status'] and c != "_key"]
+        display_df = alert_df[cols]
         
         # CV Column Configuration
         cv_col_name = ""
