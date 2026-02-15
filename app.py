@@ -76,8 +76,11 @@ def process_cv_translation(url):
         if not direct_url:
             return "❌ الرابط غير صالح."
             
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        }
         try:
-            response = requests.get(direct_url, timeout=15)
+            response = requests.get(direct_url, timeout=15, headers=headers)
         except Exception as e:
             return f"❌ فشل الاتصال بالرابط: {str(e)}"
             
@@ -85,7 +88,7 @@ def process_cv_translation(url):
             # Check content type if possible
             content_type = response.headers.get('Content-Type', '').lower()
             if 'text/html' in content_type:
-                 return "⚠️ الرابط يؤدي إلى صفحة ويب وليس ملف PDF مباشر (تأكد من إعدادات المشاركة)."
+                 return "⚠️ الرابط يؤدي إلى صفحة ويب وليس ملف PDF مباشر (تأكد من إعدادات المشاركة أو أن الرابط عام)."
                  
             try:
                 with pdfplumber.open(io.BytesIO(response.content)) as pdf:
@@ -97,10 +100,10 @@ def process_cv_translation(url):
                         if extracted:
                             text += extracted
             except Exception as pdf_err:
-                 return "⚠️ الملف ليس بصيغة PDF صالحة أو أنه تالف/محمي بكلمة مرور."
+                 return f"⚠️ الملف ليس بصيغة PDF صالحة أو أنه تالف/محمي. (خطأ: {str(pdf_err)})"
             
             if not text.strip():
-                return "❌ تعذر استخراج النص من الملف. قد يكون الملف عبارة عن صورة أو محمي."
+                return "❌ تعذر استخراج النص من الملف. قد يكون الملف عبارة عن صورة (Scan) أو محمي."
             
             # الترجمة (نكتفي بأول 4000 حرف وهي سعة المترجم المجاني غالباً)
             try:
