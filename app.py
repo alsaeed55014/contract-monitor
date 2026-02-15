@@ -9,8 +9,12 @@ import json
 import hashlib
 import base64
 import requests
-import pdfplumber
-from deep_translator import GoogleTranslator
+try:
+    import pdfplumber
+    from deep_translator import GoogleTranslator
+    HAS_TRANSLATOR = True
+except ImportError:
+    HAS_TRANSLATOR = False
 import io
 
 # Page Config
@@ -64,6 +68,8 @@ def get_direct_download_link(url):
 
 # --- استخراج وترجمة النص من السيرة الذاتية ---
 def process_cv_translation(url):
+    if not HAS_TRANSLATOR:
+        return "⚠️ ميزة الترجمة قيد التثبيت حالياً على السيرفر، يرجى المحاولة بعد قليل أو إعادة تشغيل التطبيق (Reboot) من لوحة تحكم Streamlit."
     try:
         direct_url = get_direct_download_link(url)
         response = requests.get(direct_url, timeout=15)
