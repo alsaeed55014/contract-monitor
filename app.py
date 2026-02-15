@@ -8,6 +8,10 @@ import os
 import json
 import hashlib
 import base64
+import requests
+import pdfplumber
+from deep_translator import GoogleTranslator
+import io
 
 # Page Config
 st.set_page_config(
@@ -43,6 +47,43 @@ def safe_parse_date(d_str):
         return parser.parse(d_clean, fuzzy=True).date()
     except:
         return None
+
+# --- تحويل روابط جوجل درايف للتحميل المباشر ---
+def get_direct_download_link(url):
+    if not url or "drive.google.com" not in url:
+        return url
+    try:
+        if "id=" in url:
+            file_id = url.split("id=")[1].split("&")[0]
+            return f"https://drive.google.com/uc?export=download&id={file_id}"
+        elif "/d/" in url:
+            file_id = url.split("/d/")[1].split("/")[0]
+            return f"https://drive.google.com/uc?export=download&id={file_id}"
+    except: pass
+    return url
+
+# --- استخراج وترجمة النص من السيرة الذاتية ---
+def process_cv_translation(url):
+    try:
+        direct_url = get_direct_download_link(url)
+        response = requests.get(direct_url, timeout=15)
+        if response.status_code == 200:
+            with pdfplumber.open(io.BytesIO(response.content)) as pdf:
+                text = ""
+                # نكتفي بأول 3 صفحات للمعاينة السريعة
+                for page in pdf.pages[:3]:
+                    text += page.extract_text() or ""
+            
+            if not text.strip():
+                return "❌ تعذر استخراج النص من الملف. قد يكون الملف عبارة عن صورة أو محمي."
+            
+            # الترجمة (نكتفي بأول 4000 حرف وهي سعة المترجم المجاني غالباً)
+            translated = GoogleTranslator(source='auto', target='ar').translate(text[:4000])
+            return translated
+        else:
+            return "❌ تعذر تحميل الملف من الرابط."
+    except Exception as e:
+        return f"❌ حدث خطأ أثناء المعالجة: {str(e)}"
 
 # --- Authentication System ---
 USERS_FILE = 'users.json'
@@ -864,11 +905,51 @@ def page_home():
              st.dataframe(display_df, use_container_width=True)
              event = None
 
-        # Handle Delete Action (Check sidebar button state implicitly or use session state)
-        # The delete button is in sidebar. It needs to know the selection.
         if event and len(event.selection['rows']) > 0:
             selected_index = event.selection['rows'][0]
-            st.session_state.selected_alert_key = alert_df.iloc[selected_index]["_key"]
+            row_data = alert_df.iloc[selected_index]
+            st.session_state.selected_alert_key = row_data["_key"]
+            
+            # عرض تفاصيل الصف المختار بشكل فخم مع أزرار المعاينة والتحميل
+            st.markdown("---")
+            with st.container():
+                cols_v = st.columns([2, 1, 1])
+                name = row_data.get(T['name_col'], "Unknown")
+                
+                # البحث عن رابط السيرة الذاتية
+                cv_link = ""
+                for c_name in alert_df.columns:
+                    if any(kw in c_name.lower() for kw in ["cv", "سيرة", "تحميل"]):
+                        cv_link = row_data[c_name]
+                        break
+                
+                with cols_v[0]:
+                    st.markdown(f"### 📋 {name}")
+                
+                if cv_link and str(cv_link).startswith("http"):
+                    direct_link = get_direct_download_link(str(cv_link))
+                    
+                    # أزرار المعاينة والتحميل
+                    c_btn1, c_btn2, c_btn3 = st.columns(3)
+                    with c_btn1:
+                        st.link_button("👁️ الأصل" if st.session_state.lang == 'ar' else "👁️ Original", str(cv_link), use_container_width=True)
+                    with c_btn2:
+                        st.link_button("📥 تحميل" if st.session_state.lang == 'ar' else "📥 Download", direct_link, use_container_width=True, type="primary")
+                    with c_btn3:
+                        if st.button("🌐 ترجمة" if st.session_state.lang == 'ar' else "🌐 Translate", use_container_width=True):
+                            with st.spinner("جاري استخراج وترجمة النص..." if st.session_state.lang == 'ar' else "Extracting and translating..."):
+                                result = process_cv_translation(str(cv_link))
+                                st.session_state.cv_translation_result = result
+                    
+                    # عرض نتيجة الترجمة إذا وجدت
+                    if "cv_translation_result" in st.session_state:
+                        with st.expander("📄 النص المترجم للعربية" if st.session_state.lang == 'ar' else "📄 Translated Text (Arabic)", expanded=True):
+                            st.write(st.session_state.cv_translation_result)
+                            if st.button("إغلاق الترجمة" if st.session_state.lang == 'ar' else "Close Translation"):
+                                del st.session_state.cv_translation_result
+                                st.rerun()
+                else:
+                    st.info("لا توجد سيرة ذاتية مرفوعة" if st.session_state.lang == 'ar' else "No CV uploaded")
         else:
             st.session_state.selected_alert_key = None
 
@@ -954,13 +1035,57 @@ def page_search():
         # ترجمة الأعمدة قبل العرض
         results_dys = translate_columns(results)
 
-        # CV Column Configuration for search results
-        cv_col_name = "تحميل السيرة الذاتية" if st.session_state.lang == 'ar' else "Download CV"
-        column_config = {}
-        if cv_col_name in results_dys.columns:
-            column_config[cv_col_name] = st.column_config.LinkColumn(cv_col_name, display_text="📥")
-
-        st.dataframe(results_dys, use_container_width=True, column_config=column_config)
+        event_s = st.dataframe(
+            results_dys, 
+            use_container_width=True, 
+            selection_mode="single-row",
+            on_select="rerun",
+            key="search_selection"
+        )
+        
+        # عرض تفاصيل الصف المختار في البحث
+        if event_s and len(event_s.selection['rows']) > 0:
+            idx = event_s.selection['rows'][0]
+            row_s = results_dys.iloc[idx]
+            
+            st.markdown("---")
+            c_v1, c_v2, c_v3 = st.columns([2, 1, 1])
+            disp_name = row_s.get("الاسم الكامل", row_s.get("Full Name", "Unknown"))
+            
+            # البحث عن رابط السيرة الذاتية
+            cv_link_s = ""
+            for cn in results_dys.columns:
+                if any(kw in cn.lower() for kw in ["cv", "سيرة", "تحميل"]):
+                    cv_link_s = row_s[cn]
+                    break
+            
+            with c_v1:
+                st.markdown(f"### 📋 {disp_name}")
+            
+            if cv_link_s and str(cv_link_s).startswith("http"):
+                dir_link = get_direct_download_link(str(cv_link_s))
+                
+                # أزرار المعاينة والتحميل في البحث
+                cs_btn1, cs_btn2, cs_btn3 = st.columns(3)
+                with cs_btn1:
+                    st.link_button("👁️ الأصل" if st.session_state.lang == 'ar' else "👁️ Original", str(cv_link_s), use_container_width=True)
+                with cs_btn2:
+                    st.link_button("📥 تحميل" if st.session_state.lang == 'ar' else "📥 Download", dir_link, use_container_width=True, type="primary")
+                with cs_btn3:
+                    if st.button("🌐 ترجمة" if st.session_state.lang == 'ar' else "🌐 Translate", use_container_width=True, key="search_trans"):
+                        with st.spinner("جاري استخراج وترجمة النص..." if st.session_state.lang == 'ar' else "Extracting and translating..."):
+                            res = process_cv_translation(str(cv_link_s))
+                            st.session_state.search_cv_result = res
+                
+                # عرض نتيجة الترجمة
+                if "search_cv_result" in st.session_state:
+                    with st.expander("📄 النص المترجم للعربية" if st.session_state.lang == 'ar' else "📄 Translated Text (Arabic)", expanded=True):
+                        st.write(st.session_state.search_cv_result)
+                        if st.button("إغلاق الترجمة" if st.session_state.lang == 'ar' else "Close Translation", key="close_search_trans"):
+                            del st.session_state.search_cv_result
+                            st.rerun()
+            else:
+                st.info("لا توجد سيرة ذاتية مرفوعة" if st.session_state.lang == 'ar' else "No CV uploaded")
     
     if st.button(T['print_btn']):
         st.info("Feature not available in cloud yet." if st.session_state.lang == 'en' else "الميزة غير متاحة في النسخة السحابية حالياً.")
