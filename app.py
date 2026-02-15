@@ -1016,23 +1016,16 @@ def page_home():
         # Determine dropdown key for current version
         dd_key = f"fallback_home_sel_{st.session_state.home_key_ver}"
         
-        # Get current state directly
-        current_dd_value = st.session_state.get(dd_key, None)
-
         # Logic to determine options and sync
-        dropdown_opts = all_opts # Default
-
+        dropdown_opts = all_opts 
+        
         if selected_index_home is not None:
-             # Case 1: Table row selected -> Force Lock
+             # Sync Table -> Dropdown
              selected_name = str(display_df.iloc[selected_index_home][name_col])
-             st.session_state[dd_key] = selected_name # Sync value
-             dropdown_opts = [selected_name] # Lock options
-             
-        elif current_dd_value and current_dd_value in all_opts:
-             # Case 2: Dropdown already has valid selection -> Keep Lock
-             dropdown_opts = [current_dd_value]
+             # Force update session state to this name
+             st.session_state[dd_key] = selected_name
 
-        # Fallback Selectbox - ALWAYS SHOW
+        # Fallback Selectbox - ALWAYS SHOW ALL OPTS
         fb_col1, fb_col2, _ = st.columns([1, 0.3, 2]) 
         with fb_col1:
              placeholder_text = "اختر موظفاً لعرض التفاصيل..." if st.session_state.lang == 'ar' else "Choose Employee to view details..."
@@ -1232,23 +1225,16 @@ def page_search():
         # Determine dropdown key for current version
         dd_key = f"fallback_search_sel_{st.session_state.search_key_ver}"
         
-        # Get current state directly
-        current_dd_value = st.session_state.get(dd_key, None)
-
         # Logic to determine options and sync
-        dropdown_opts = all_opts # Default
+        dropdown_opts = all_opts 
         
         if selected_index is not None:
-             # Case 1: Table row selected -> Force Lock
+             # Sync Table -> Dropdown
              selected_name = str(results_dys.iloc[selected_index][name_col])
-             st.session_state[dd_key] = selected_name # Sync value
-             dropdown_opts = [selected_name] # Lock options
+             # Force update session state to this name
+             st.session_state[dd_key] = selected_name
              
-        elif current_dd_value and current_dd_value in all_opts:
-             # Case 2: Dropdown already has valid selection -> Keep Lock
-             dropdown_opts = [current_dd_value]
-
-        # Fallback Selectbox - ALWAYS SHOW
+        # Fallback Selectbox - ALWAYS SHOW ALL OPTS
         fb_col1, fb_col2, _ = st.columns([1, 0.3, 2]) 
         with fb_col1:
              placeholder_text = "اختر موظفاً لعرض التفاصيل..." if st.session_state.lang == 'ar' else "Choose Employee to view details..."
