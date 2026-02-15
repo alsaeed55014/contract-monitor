@@ -153,6 +153,10 @@ if 'page' not in st.session_state:
     st.session_state.page = "home"
 if 'lang' not in st.session_state:
     st.session_state.lang = 'ar'
+if 'search_key_ver' not in st.session_state:
+    st.session_state.search_key_ver = 0
+if 'home_key_ver' not in st.session_state:
+    st.session_state.home_key_ver = 0
 
 # --- Translations ---
 L = {
@@ -635,9 +639,9 @@ def translate_search_term(term):
             
     return term
 
-def clear_selection_callback(key):
-    if key in st.session_state:
-        del st.session_state[key]
+def increment_key_version(key_ver):
+    if key_ver in st.session_state:
+        st.session_state[key_ver] += 1
 
 # --- UI Helpers ---
 def sidebar_content():
@@ -963,10 +967,11 @@ def page_home():
              # تنسيق العرض: تقليل العرض وإضافة زر المسح
              fb_col1, fb_col2, _ = st.columns([1, 0.3, 2]) 
              with fb_col1:
-                 sel = st.selectbox("أو اختر الموظف من القائمة:" if st.session_state.lang == 'ar' else "Or Select from list:", opts, key="fallback_home_sel")
+                 # Use dynamic key to force reset
+                 sel = st.selectbox("أو اختر الموظف من القائمة:" if st.session_state.lang == 'ar' else "Or Select from list:", opts, key=f"fallback_home_sel_{st.session_state.home_key_ver}")
              with fb_col2:
                  st.markdown("<div style='margin-top: 29px;'></div>", unsafe_allow_html=True)
-                 st.button("❌ مسح" if st.session_state.lang == 'ar' else "Clear", key="clr_home", on_click=clear_selection_callback, args=("fallback_home_sel",))
+                 st.button("❌ مسح" if st.session_state.lang == 'ar' else "Clear", key="clr_home", on_click=increment_key_version, args=("home_key_ver",))
 
              if sel and sel != opts[0]:
                  selected_index_home = opts.index(sel) - 1
@@ -1152,10 +1157,11 @@ def page_search():
              # تنسيق العرض: تقليل العرض وإضافة زر المسح
              fb_col1, fb_col2, _ = st.columns([1, 0.3, 2]) 
              with fb_col1:
-                 sel = st.selectbox("أو اختر الموظف من القائمة:" if st.session_state.lang == 'ar' else "Or Select from list:", opts, key="fallback_search_sel")
+                 # Use dynamic key
+                 sel = st.selectbox("أو اختر الموظف من القائمة:" if st.session_state.lang == 'ar' else "Or Select from list:", opts, key=f"fallback_search_sel_{st.session_state.search_key_ver}")
              with fb_col2:
                  st.markdown("<div style='margin-top: 29px;'></div>", unsafe_allow_html=True)
-                 st.button("❌ مسح" if st.session_state.lang == 'ar' else "Clear", key="clr_search", on_click=clear_selection_callback, args=("fallback_search_sel",))
+                 st.button("❌ مسح" if st.session_state.lang == 'ar' else "Clear", key="clr_search", on_click=increment_key_version, args=("search_key_ver",))
 
              if sel and sel != opts[0]:
                  selected_index = opts.index(sel) - 1
