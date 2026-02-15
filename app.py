@@ -886,7 +886,7 @@ def page_home():
         cols = [T['status']] + [c for c in alert_df.columns if c != T['status'] and c != "_key"]
         display_df = alert_df[cols]
         
-        # CV Column Configuration
+        # CV Column Configuration - إضافة عمودين: تحميل ومعاينة
         cv_col_name = ""
         for cn in display_df.columns:
             if any(kw in cn.lower() for kw in ["cv", "سيرة", "تحميل", "curriculum"]):
@@ -895,10 +895,20 @@ def page_home():
         
         col_cfg = {}
         if cv_col_name:
-            # نغير اسم العامود ليكون واضحاً أنه للملف الأصلي فقط
-            new_name = "📎 الملف الأصلي" if st.session_state.lang == 'ar' else "📎 Original File"
-            display_df = display_df.rename(columns={cv_col_name: new_name})
-            col_cfg[new_name] = st.column_config.LinkColumn(new_name, display_text="📥")
+            # إنشاء عمود التحميل (رابط مباشر)
+            dl_col = "📥 تحميل" if st.session_state.lang == 'ar' else "📥 Download"
+            display_df[dl_col] = display_df[cv_col_name].apply(
+                lambda x: get_direct_download_link(str(x)) if x and str(x).startswith("http") else ""
+            )
+            # إنشاء عمود المعاينة (رابط Google Drive)
+            pv_col = " ️ معاينة" if st.session_state.lang == 'ar' else " ️ Preview"
+            display_df[pv_col] = display_df[cv_col_name].apply(
+                lambda x: str(x) if x and str(x).startswith("http") else ""
+            )
+            # حذف العمود الأصلي
+            display_df = display_df.drop(columns=[cv_col_name])
+            col_cfg[dl_col] = st.column_config.LinkColumn(dl_col, display_text="📥 تحميل")
+            col_cfg[pv_col] = st.column_config.LinkColumn(pv_col, display_text=" ️ معاينة")
         
         st.warning("👈 **هام جداً:** لرؤية **السيرة الذاتية مترجمة بالعربي**، يجب الضغط على سطر الموظف في الجدول." if st.session_state.lang == 'ar' else "👈 **Important:** Click employee row to see the **Translated CV**.")
 
@@ -1049,7 +1059,7 @@ def page_search():
         
         st.markdown(f"#### 🔍 النتائج المكتشفة: {len(results)}")
         st.markdown(f"### 🔍 {T['search_results_title']}: {len(results_dys)}")
-        # تحسين شكل عمود السيرة الذاتية في البحث
+        # تحسين شكل عمود السيرة الذاتية في البحث - عمودين: تحميل ومعاينة
         cv_col_s = ""
         for cn in results_dys.columns:
             if any(kw in cn.lower() for kw in ["cv", "سيرة", "تحميل"]):
@@ -1058,11 +1068,19 @@ def page_search():
         
         cfg_s = {}
         if cv_col_s:
-            s_name = "📎 الملف الأصلي" if st.session_state.lang == 'ar' else "📎 Original File"
-            results_dys = results_dys.rename(columns={cv_col_s: s_name})
-            cfg_s[s_name] = st.column_config.LinkColumn(s_name, display_text="📥")
+            dl_col_s = "📥 تحميل" if st.session_state.lang == 'ar' else "📥 Download"
+            results_dys[dl_col_s] = results_dys[cv_col_s].apply(
+                lambda x: get_direct_download_link(str(x)) if x and str(x).startswith("http") else ""
+            )
+            pv_col_s = " ️ معاينة" if st.session_state.lang == 'ar' else " ️ Preview"
+            results_dys[pv_col_s] = results_dys[cv_col_s].apply(
+                lambda x: str(x) if x and str(x).startswith("http") else ""
+            )
+            results_dys = results_dys.drop(columns=[cv_col_s])
+            cfg_s[dl_col_s] = st.column_config.LinkColumn(dl_col_s, display_text="📥 تحميل")
+            cfg_s[pv_col_s] = st.column_config.LinkColumn(pv_col_s, display_text=" ️ معاينة")
             
-        st.warning("  **هام جداً:** اضغط على سطر الموظف في الجدول لرؤية **المعاينة المترجمة**." if st.session_state.lang == 'ar' else "  **Important:** Click the row to see the **Translated Preview**.")
+        st.warning("👈 **هام جداً:** اضغط على سطر الموظف في الجدول لرؤية **المعاينة المترجمة**." if st.session_state.lang == 'ar' else "👈 **Important:** Click the row to see the **Translated Preview**.")
 
         event_s = st.dataframe(
             results_dys, 
