@@ -886,17 +886,6 @@ def page_home():
         # Display without the key
         display_df = alert_df[cols]
         
-        # --- ترجمة العناوين (Columns Translation) ---
-        display_df = translate_columns(display_df)
-        # -------------------------------------------
-        # -------------------------------------------
-        
-        # CV Column Configuration
-        cv_col_name = "تحميل السيرة الذاتية" if st.session_state.lang == 'ar' else "Download CV"
-        column_config = {}
-        if cv_col_name in display_df.columns:
-            column_config[cv_col_name] = st.column_config.LinkColumn(cv_col_name, display_text="📥")
-
         # Use Dataframe with selection
         try:
            event = st.dataframe(
@@ -904,8 +893,7 @@ def page_home():
                 use_container_width=True,
                 selection_mode="single-row",
                 on_select="rerun",
-                key="alert_selection",
-                column_config=column_config
+                key="alert_selection"
             )
         except:
              # Fallback for older streamlit versions
@@ -936,27 +924,32 @@ def page_home():
                 if cv_link and str(cv_link).startswith("http"):
                     direct_link = get_direct_download_link(str(cv_link))
                     
-                    # أزرار المعاينة والتحميل حسب طلب المستخدم
+                    # استايل الصندوق
+                    st.markdown("""
+                        <div style='background-color:rgba(255,255,255,0.05); padding:20px; border-radius:15px; border:1px solid rgba(255,255,255,0.1); margin-top:20px;'>
+                            <h4 style='margin-bottom:15px;'>📄 تحكم السيرة الذاتية</h4>
+                        </div>
+                    """, unsafe_allow_html=True)
+                    
                     c_btn1, c_btn2, c_btn3 = st.columns([1, 1, 1])
                     with c_btn1:
-                        if st.button("👁️ معاينة وترجمة" if st.session_state.lang == 'ar' else "👁️ Preview & Translate", use_container_width=True, type="primary"):
-                            with st.spinner("جاري الترجمة..." if st.session_state.lang == 'ar' else "Translating..."):
-                                result = process_cv_translation(str(cv_link))
-                                st.session_state.cv_translation_result = result
+                        if st.button("👁️ معاينة (مترجم)" if st.session_state.lang == 'ar' else "👁️ Preview (Translated)", use_container_width=True, type="primary"):
+                            with st.spinner("جاري استخراج وترجمة النص..."):
+                                res = process_cv_translation(str(cv_link))
+                                st.session_state.cv_trans_view = res
                     with c_btn2:
-                        st.link_button("📥 تحميل الأصل" if st.session_state.lang == 'ar' else "📥 Download Original", direct_link, use_container_width=True)
+                        st.link_button("📥 تحميل الملف" if st.session_state.lang == 'ar' else "📥 Download File", direct_link, use_container_width=True)
                     with c_btn3:
-                        st.link_button("🔗 رابط الملف" if st.session_state.lang == 'ar' else "🔗 File Link", str(cv_link), use_container_width=True)
+                        st.link_button("🔗 الملف الأصلي" if st.session_state.lang == 'ar' else "🔗 Original File", str(cv_link), use_container_width=True)
                     
-                    # عرض نتيجة الترجمة إذا وجدت
-                    if "cv_translation_result" in st.session_state:
-                        st.info("📄 النص المستخرج والمترجم للعربية:" if st.session_state.lang == 'ar' else "📄 Extracted & Translated Text:")
-                        st.write(st.session_state.cv_translation_result)
-                        if st.button("إغلاق المعاينة" if st.session_state.lang == 'ar' else "Close Preview"):
-                            del st.session_state.cv_translation_result
+                    if "cv_trans_view" in st.session_state:
+                        st.info("النص المترجم للعربية:")
+                        st.write(st.session_state.cv_trans_view)
+                        if st.button("إغلاق"):
+                            del st.session_state.cv_trans_view
                             st.rerun()
                 else:
-                    st.info("لا توجد سيرة ذاتية مرفوعة" if st.session_state.lang == 'ar' else "No CV uploaded")
+                    st.info("لا توجد سيرة ذاتية لهذا الموظف")
         else:
             st.session_state.selected_alert_key = None
 
@@ -1072,27 +1065,31 @@ def page_search():
             if cv_link_s and str(cv_link_s).startswith("http"):
                 dir_link = get_direct_download_link(str(cv_link_s))
                 
-                # أزرار المعاينة والتحميل في البحث
+                st.markdown("""
+                    <div style='background-color:rgba(255,255,255,0.05); padding:20px; border-radius:15px; border:1px solid rgba(255,255,255,0.1); margin-top:20px;'>
+                        <h4 style='margin-bottom:15px;'>📄 تحكم السيرة الذاتية</h4>
+                    </div>
+                """, unsafe_allow_html=True)
+                
                 cs_btn1, cs_btn2, cs_btn3 = st.columns(3)
                 with cs_btn1:
-                    if st.button("👁️ معاينة وترجمة" if st.session_state.lang == 'ar' else "👁️ Preview & Translate", use_container_width=True, key="search_trans"):
-                        with st.spinner("جاري الترجمة..." if st.session_state.lang == 'ar' else "Translating..."):
+                    if st.button("👁️ معاينة (مترجم)" if st.session_state.lang == 'ar' else "👁️ Preview (Translated)", use_container_width=True, key="search_trans", type="primary"):
+                        with st.spinner("جاري استخراج وترجمة النص..."):
                             res = process_cv_translation(str(cv_link_s))
-                            st.session_state.search_cv_result = res
+                            st.session_state.search_cv_view = res
                 with cs_btn2:
-                    st.link_button("📥 تحميل الأصل" if st.session_state.lang == 'ar' else "📥 Download Original", dir_link, use_container_width=True)
+                    st.link_button("📥 تحميل الملف" if st.session_state.lang == 'ar' else "📥 Download File", dir_link, use_container_width=True)
                 with cs_btn3:
-                    st.link_button("🔗 رابط الملف" if st.session_state.lang == 'ar' else "🔗 File Link", str(cv_link_s), use_container_width=True)
+                    st.link_button("🔗 الملف الأصلي" if st.session_state.lang == 'ar' else "🔗 Original File", str(cv_link_s), use_container_width=True)
                 
-                # عرض نتيجة الترجمة
-                if "search_cv_result" in st.session_state:
-                    st.info("📄 النص المستخرج والمترجم للعربية:" if st.session_state.lang == 'ar' else "📄 Extracted & Translated Text:")
-                    st.write(st.session_state.search_cv_result)
-                    if st.button("إغلاق المعاينة" if st.session_state.lang == 'ar' else "Close Preview", key="close_search_trans"):
-                        del st.session_state.search_cv_result
+                if "search_cv_view" in st.session_state:
+                    st.info("النص المترجم للعربية:")
+                    st.write(st.session_state.search_cv_view)
+                    if st.button("إغلاق", key="close_search_view"):
+                        del st.session_state.search_cv_view
                         st.rerun()
             else:
-                st.info("لا توجد سيرة ذاتية مرفوعة" if st.session_state.lang == 'ar' else "No CV uploaded")
+                st.info("لا توجد سيرة ذاتية لهذا الموظف")
     
     if st.button(T['print_btn']):
         st.info("Feature not available in cloud yet." if st.session_state.lang == 'en' else "الميزة غير متاحة في النسخة السحابية حالياً.")
