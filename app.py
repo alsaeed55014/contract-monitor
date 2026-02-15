@@ -885,9 +885,6 @@ def page_home():
         # Ensure Status is the first column
         cols = [T['status']] + [c for c in alert_df.columns if c != T['status'] and c != "_key"]
         
-        # Display without the key
-        display_df = alert_df[cols]
-        
         # CV Column Configuration
         cv_col_name = ""
         for cn in display_df.columns:
@@ -897,9 +894,12 @@ def page_home():
         
         col_cfg = {}
         if cv_col_name:
-            col_cfg[cv_col_name] = st.column_config.LinkColumn(cv_col_name, display_text="📥")
+            # نغير اسم العامود ليكون واضحاً أنه للملف الأصلي فقط
+            new_name = "📎 الملف الأصلي" if st.session_state.lang == 'ar' else "📎 Original File"
+            display_df = display_df.rename(columns={cv_col_name: new_name})
+            col_cfg[new_name] = st.column_config.LinkColumn(new_name, display_text="📥")
         
-        st.info("💡 **نصيحة:** اضغط على أي سطر في الجدول أسفله لتظهر لك خيارات **المعاينة المترجمة** والتحميل." if st.session_state.lang == 'ar' else "💡 **Tip:** Click any row below to show **Translated Preview** and download options.")
+        st.warning("  **هام جداً:** لرؤية **السيرة الذاتية مترجمة بالعربي**، يجب الضغط على سطر الموظف في الجدول أدناه أولاً." if st.session_state.lang == 'ar' else "  **Important:** To see the **Translated CV**, click the employee's row in the table first.")
 
         # Use Dataframe with selection
         try:
@@ -940,23 +940,24 @@ def page_home():
                 if cv_link and str(cv_link).startswith("http"):
                     direct_link = get_direct_download_link(str(cv_link))
                     
-                    # استايل الصندوق
+                    # استايل الصندوق - نجعله أكثر بروزاً
                     st.markdown("""
-                        <div style='background-color:rgba(255,255,255,0.05); padding:20px; border-radius:15px; border:1px solid rgba(255,255,255,0.1); margin-top:20px;'>
-                            <h4 style='margin-bottom:15px;'>📄 تحكم السيرة الذاتية</h4>
+                        <div style='background-color:rgba(30, 144, 255, 0.1); padding:25px; border-radius:15px; border:2px solid #1E90FF; margin-top:10px; margin-bottom:10px;'>
+                            <h3 style='margin-bottom:15px; color:#1E90FF;'>  مركز التحكم في السيرة الذاتية (مترجم)</h3>
+                            <p style='color:gray; font-size:0.9em;'>استخدم الأزرار أدناه للمعاينة المترجمة أو التحميل الأصلي</p>
                         </div>
                     """, unsafe_allow_html=True)
                     
-                    c_btn1, c_btn2, c_btn3 = st.columns([1, 1, 1])
+                    c_btn1, c_btn2, c_btn3 = st.columns([1.2, 1, 1])
                     with c_btn1:
-                        if st.button("👁️ معاينة وترجمة" if st.session_state.lang == 'ar' else "👁️ Preview & Translate", use_container_width=True, type="primary"):
-                            with st.spinner("جاري استخراج وترجمة النص..."):
+                        if st.button("🌐 معاينة وترجمة فورية (عربي)" if st.session_state.lang == 'ar' else "🌐 Instant Arabic Preview", use_container_width=True, type="primary"):
+                            with st.spinner("جاري استخراج وترجمة النص..." if st.session_state.lang == 'ar' else "Translating..."):
                                 res = process_cv_translation(str(cv_link))
                                 st.session_state.cv_trans_view = res
                     with c_btn2:
-                        st.link_button("📥 تحميل الأصل" if st.session_state.lang == 'ar' else "📥 Download Original", direct_link, use_container_width=True)
+                        st.link_button("📥 تحميل PDF (الأصلي)" if st.session_state.lang == 'ar' else "📥 Download Original PDF", direct_link, use_container_width=True)
                     with c_btn3:
-                        st.link_button("🔗 الملف الأصلي" if st.session_state.lang == 'ar' else "🔗 Original File", str(cv_link), use_container_width=True)
+                        st.link_button("🔗 فتح في Drive" if st.session_state.lang == 'ar' else "🔗 Open in Drive", str(cv_link), use_container_width=True)
                     
                     if "cv_trans_view" in st.session_state:
                         st.info("النص المترجم للعربية:")
@@ -1045,7 +1046,7 @@ def page_search():
         
         results_dys = translate_columns(results)
         st.markdown(f"### 🔍 {T['search_results_title']}: {len(results_dys)}")
-        
+        # تحسين شكل عمود السيرة الذاتية في البحث
         cv_col_s = ""
         for cn in results_dys.columns:
             if any(kw in cn.lower() for kw in ["cv", "سيرة", "تحميل"]):
@@ -1054,9 +1055,11 @@ def page_search():
         
         cfg_s = {}
         if cv_col_s:
-            cfg_s[cv_col_s] = st.column_config.LinkColumn(cv_col_s, display_text="📥")
+            s_name = "📎 الملف الأصلي" if st.session_state.lang == 'ar' else "📎 Original File"
+            results_dys = results_dys.rename(columns={cv_col_s: s_name})
+            cfg_s[s_name] = st.column_config.LinkColumn(s_name, display_text="📥")
             
-        st.info("💡 **نصيحة:** اضغط على أي سطر في الجدول لتظهر لك خيارات **المعاينة المترجمة**." if st.session_state.lang == 'ar' else "💡 **Tip:** Click any row below for **Translated Preview**.")
+        st.warning("  **هام جداً:** اضغط على سطر الموظف في الجدول لرؤية **المعاينة المترجمة**." if st.session_state.lang == 'ar' else "  **Important:** Click the row to see the **Translated Preview**.")
 
         event_s = st.dataframe(
             results_dys, 
@@ -1088,21 +1091,22 @@ def page_search():
                 dir_link = get_direct_download_link(str(cv_link_s))
                 
                 st.markdown("""
-                    <div style='background-color:rgba(255,255,255,0.05); padding:20px; border-radius:15px; border:1px solid rgba(255,255,255,0.1); margin-top:20px;'>
-                        <h4 style='margin-bottom:15px;'>📄 تحكم السيرة الذاتية (مترجم)</h4>
+                    <div style='background-color:rgba(30, 144, 255, 0.1); padding:25px; border-radius:15px; border:2px solid #1E90FF; margin-top:10px; margin-bottom:10px;'>
+                        <h3 style='margin-bottom:15px; color:#1E90FF;'>🚀 مركز التحكم في السيرة الذاتية (مترجم)</h3>
+                        <p style='color:gray; font-size:0.9em;'>استخدم الأزرار أدناه للمعاينة المترجمة أو التحميل الأصلي</p>
                     </div>
                 """, unsafe_allow_html=True)
                 
-                cs_btn1, cs_btn2, cs_btn3 = st.columns(3)
+                cs_btn1, cs_btn2, cs_btn3 = st.columns([1.2, 1, 1])
                 with cs_btn1:
-                    if st.button("👁️ معاينة وترجمة" if st.session_state.lang == 'ar' else "👁️ Preview & Translate", use_container_width=True, key="search_trans_btn", type="primary"):
-                        with st.spinner("جاري استخراج وترجمة النص..."):
+                    if st.button("🌐 معاينة وترجمة فورية (عربي)" if st.session_state.lang == 'ar' else "🌐 Instant Arabic Preview", use_container_width=True, key="search_trans_btn", type="primary"):
+                        with st.spinner("جاري استخراج وترجمة النص..." if st.session_state.lang == 'ar' else "Translating..."):
                             res = process_cv_translation(str(cv_link_s))
                             st.session_state.search_cv_view = res
                 with cs_btn2:
-                    st.link_button("📥 تحميل الأصل" if st.session_state.lang == 'ar' else "📥 Download Original", dir_link, use_container_width=True)
+                    st.link_button("📥 تحميل PDF (الأصلي)" if st.session_state.lang == 'ar' else "📥 Download Original PDF", dir_link, use_container_width=True)
                 with cs_btn3:
-                    st.link_button("🔗 الملف الأصلي" if st.session_state.lang == 'ar' else "🔗 Original File", str(cv_link_s), use_container_width=True)
+                    st.link_button("🔗 فتح في Drive" if st.session_state.lang == 'ar' else "🔗 Open in Drive", str(cv_link_s), use_container_width=True)
                 
                 if "search_cv_view" in st.session_state:
                     st.info("النص المترجم للعربية:")
