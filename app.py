@@ -1044,29 +1044,41 @@ def page_search():
     # عرض النتائج إذا كانت موجودة في الذاكرة
     if st.session_state.get("has_searched") and "search_results_df" in st.session_state:
         results = st.session_state.search_results_df
-        results_dys_orig = st.session_state.get("search_results_dys", results)
-        # نسخة لمنع تعديل البيانات في session_state
-        results_dys = results_dys_orig.copy()
+        # توليد النسخة المترجمة طازجة في كل مرة لضمان وجود الأعمدة الأصلية
+        # This prevents session state corruption where CV column was dropped
+        results_dys = translate_columns(results)
         
         st.markdown(f"### 🔍 {T['search_results_title']}: {len(results_dys)}")
+        
         # تحسين شكل عمود السيرة الذاتية في البحث - عمودين: تحميل ومعاينة
         cv_col_s = ""
         for cn in results_dys.columns:
-            if any(kw in cn.lower() for kw in ["cv", "سيرة", "تحميل"]):
+            if any(kw in cn.lower() for kw in ["cv", "سيرة", "تحميل", "curriculum"]):
                 cv_col_s = cn
                 break
         
         cfg_s = {}
         if cv_col_s:
             dl_col_s = "📥 تحميل" if st.session_state.lang == 'ar' else "📥 Download"
+            # Ensure unique column names if they somehow conflict
+            if dl_col_s in results_dys.columns: dl_col_s += " "
+            
             results_dys[dl_col_s] = results_dys[cv_col_s].apply(
                 lambda x: get_direct_download_link(str(x)) if x and str(x).startswith("http") else ""
             )
+            
             pv_col_s = "👁️ معاينة" if st.session_state.lang == 'ar' else "👁️ Preview"
+            if pv_col_s in results_dys.columns: pv_col_s += " "
+            
             results_dys[pv_col_s] = results_dys[cv_col_s].apply(
                 lambda x: str(x) if x and str(x).startswith("http") else ""
             )
+            
+            # We keep the original CV column for logic but hide it from display dropping it
+            # But wait, we need it for the row selection logic if we use results_dys in future?
+            # Actually we use `results` (original) for the logic below, so dropping from display is fine.
             results_dys = results_dys.drop(columns=[cv_col_s])
+            
             cfg_s[dl_col_s] = st.column_config.LinkColumn(dl_col_s, display_text="📥 تحميل")
             cfg_s[pv_col_s] = st.column_config.LinkColumn(pv_col_s, display_text="👁️ معاينة")
             
@@ -1088,47 +1100,53 @@ def page_search():
         if event_s and len(event_s.selection['rows']) > 0:
             idx = event_s.selection['rows'][0]
             
-            st.markdown("---")
-            
-            # البحث عن الاسم من البيانات المترجمة
-            row_display = results_dys.iloc[idx]
-            disp_name = "Unknown"
-            for col_try in ["الاسم الكامل", "Full Name", "الاسم"]:
-                if col_try in results_dys.columns:
-                    disp_name = row_display[col_try]
-                    break
-            
-            st.markdown(f"### 📋 {disp_name}")
-            
-            # البحث عن رابط CV في البيانات الأصلية (غير المعدلة)
-            cv_link_s = ""
-            for cn in results.columns:
-                if any(kw in cn.lower() for kw in ["cv", "سيرة", "تحميل", "curriculum", "download"]):
-                    cv_link_s = results.iloc[idx][cn]
-                    break
-            
-            if cv_link_s and str(cv_link_s).startswith("http"):
-                dir_link = get_direct_download_link(str(cv_link_s))
+            # التأكد من صحة المؤشر
+            if idx < len(results):
+                st.markdown("---")
                 
-                # أزرار التحميل وفتح Drive
-                cs_btn1, cs_btn2 = st.columns(2)
-                with cs_btn1:
-                    st.link_button("📥 تحميل PDF (الأصلي)" if st.session_state.lang == 'ar' else "📥 Download Original PDF", dir_link, use_container_width=True)
-                with cs_btn2:
-                    st.link_button("🔗 فتح في Drive" if st.session_state.lang == 'ar' else "🔗 Open in Drive", str(cv_link_s), use_container_width=True)
+                # البحث عن الاسم
+                row_display = results_dys.iloc[idx]
+                disp_name = "Unknown"
+                for col_try in ["الاسم الكامل", "Full Name", "الاسم", "Name"]:
+                    if col_try in results_dys.columns:
+                        disp_name = row_display[col_try]
+                        break
                 
-                # ترجمة تلقائية عند اختيار الصف
-                with st.spinner("جاري استخراج وترجمة السيرة الذاتية للعربية..." if st.session_state.lang == 'ar' else "Translating CV to Arabic..."):
-                    translated_text = process_cv_translation(str(cv_link_s))
+                st.markdown(f"### 📋 {disp_name}")
                 
-                st.markdown("""
-                    <div style='background-color:rgba(30, 144, 255, 0.1); padding:20px; border-radius:15px; border:2px solid #1E90FF; margin-top:10px;'>
-                        <h3 style='margin-bottom:10px; color:#1E90FF;'>🌐 المعاينة المترجمة للعربية</h3>
-                    </div>
-                """, unsafe_allow_html=True)
-                st.write(translated_text)
-            else:
-                st.info("لا توجد سيرة ذاتية لهذا الموظف" if st.session_state.lang == 'ar' else "No CV link found for this employee.")
+                # البحث عن رابط CV في البيانات الأصلية (results) لضمان عدم تأثر الترجمة
+                cv_link_s = ""
+                # نستخدم قائمة واسعة من الاحتمالات
+                possible_cv_cols = [c for c in results.columns if any(k in c.lower() for k in ["cv", "سيرة", "تحميل", "curriculum", "download", "ملف"])]
+                
+                for cn in possible_cv_cols:
+                    val = results.iloc[idx][cn]
+                    if val and isinstance(val, str) and val.strip().startswith("http"):
+                        cv_link_s = val
+                        break
+                
+                if cv_link_s:
+                    dir_link = get_direct_download_link(str(cv_link_s))
+                    
+                    # أزرار التحميل وفتح Drive
+                    cs_btn1, cs_btn2 = st.columns(2)
+                    with cs_btn1:
+                        st.link_button("📥 تحميل PDF (الأصلي)" if st.session_state.lang == 'ar' else "📥 Download Original PDF", dir_link, use_container_width=True)
+                    with cs_btn2:
+                        st.link_button("🔗 فتح في Drive" if st.session_state.lang == 'ar' else "🔗 Open in Drive", str(cv_link_s), use_container_width=True)
+                    
+                    # ترجمة تلقائية
+                    st.markdown("""
+                        <div style='background-color:rgba(30, 144, 255, 0.1); padding:20px; border-radius:15px; border:2px solid #1E90FF; margin-top:10px;'>
+                            <h3 style='margin-bottom:10px; color:#1E90FF;'>🌐 المعاينة المترجمة للعربية</h3>
+                        </div>
+                    """, unsafe_allow_html=True)
+                    
+                    with st.spinner("جاري استخراج وترجمة السيرة الذاتية للعربية..." if st.session_state.lang == 'ar' else "Translating CV to Arabic..."):
+                        translated_text = process_cv_translation(str(cv_link_s))
+                    st.write(translated_text)
+                else:
+                    st.info("⚠️ لا يوجد ملف سيرة ذاتية (CV) مرتبط بهذا الموظف." if st.session_state.lang == 'ar' else "⚠️ No CV file linked to this employee.")
     
 
 
