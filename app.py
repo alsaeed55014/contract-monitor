@@ -843,6 +843,12 @@ def page_home():
         # -------------------------------------------
         # -------------------------------------------
         
+        # CV Column Configuration
+        cv_col_name = "تحميل السيرة الذاتية" if st.session_state.lang == 'ar' else "Download CV"
+        column_config = {}
+        if cv_col_name in display_df.columns:
+            column_config[cv_col_name] = st.column_config.LinkColumn(cv_col_name, display_text="📥")
+
         # Use Dataframe with selection
         try:
            event = st.dataframe(
@@ -850,7 +856,8 @@ def page_home():
                 use_container_width=True,
                 selection_mode="single-row",
                 on_select="rerun",
-                key="alert_selection"
+                key="alert_selection",
+                column_config=column_config
             )
         except:
              # Fallback for older streamlit versions
@@ -946,7 +953,14 @@ def page_search():
         
         # ترجمة الأعمدة قبل العرض
         results_dys = translate_columns(results)
-        st.dataframe(results_dys.astype(str), use_container_width=True)
+
+        # CV Column Configuration for search results
+        cv_col_name = "تحميل السيرة الذاتية" if st.session_state.lang == 'ar' else "Download CV"
+        column_config = {}
+        if cv_col_name in results_dys.columns:
+            column_config[cv_col_name] = st.column_config.LinkColumn(cv_col_name, display_text="📥")
+
+        st.dataframe(results_dys, use_container_width=True, column_config=column_config)
     
     if st.button(T['print_btn']):
         st.info("Feature not available in cloud yet." if st.session_state.lang == 'en' else "الميزة غير متاحة في النسخة السحابية حالياً.")
