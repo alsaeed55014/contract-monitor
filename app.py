@@ -884,7 +884,7 @@ def page_home():
         alert_df = pd.DataFrame(alerts)
         # Ensure Status is the first column
         cols = [T['status']] + [c for c in alert_df.columns if c != T['status'] and c != "_key"]
-        display_df = alert_df[cols]
+        display_df = alert_df[cols].copy()
         
         # CV Column Configuration - إضافة عمودين: تحميل ومعاينة
         cv_col_name = ""
@@ -901,14 +901,14 @@ def page_home():
                 lambda x: get_direct_download_link(str(x)) if x and str(x).startswith("http") else ""
             )
             # إنشاء عمود المعاينة (رابط Google Drive)
-            pv_col = " ️ معاينة" if st.session_state.lang == 'ar' else " ️ Preview"
+            pv_col = "👁️ معاينة" if st.session_state.lang == 'ar' else "👁️ Preview"
             display_df[pv_col] = display_df[cv_col_name].apply(
                 lambda x: str(x) if x and str(x).startswith("http") else ""
             )
             # حذف العمود الأصلي
             display_df = display_df.drop(columns=[cv_col_name])
             col_cfg[dl_col] = st.column_config.LinkColumn(dl_col, display_text="📥 تحميل")
-            col_cfg[pv_col] = st.column_config.LinkColumn(pv_col, display_text=" ️ معاينة")
+            col_cfg[pv_col] = st.column_config.LinkColumn(pv_col, display_text="👁️ معاينة")
         
         st.warning("👈 **هام جداً:** لرؤية **السيرة الذاتية مترجمة بالعربي**، يجب الضغط على سطر الموظف في الجدول." if st.session_state.lang == 'ar' else "👈 **Important:** Click employee row to see the **Translated CV**.")
 
@@ -1044,9 +1044,10 @@ def page_search():
     # عرض النتائج إذا كانت موجودة في الذاكرة
     if st.session_state.get("has_searched") and "search_results_df" in st.session_state:
         results = st.session_state.search_results_df
-        results_dys = st.session_state.get("search_results_dys", results)
+        results_dys_orig = st.session_state.get("search_results_dys", results)
+        # نسخة لمنع تعديل البيانات في session_state
+        results_dys = results_dys_orig.copy()
         
-        st.markdown(f"#### 🔍 النتائج المكتشفة: {len(results)}")
         st.markdown(f"### 🔍 {T['search_results_title']}: {len(results_dys)}")
         # تحسين شكل عمود السيرة الذاتية في البحث - عمودين: تحميل ومعاينة
         cv_col_s = ""
@@ -1061,40 +1062,49 @@ def page_search():
             results_dys[dl_col_s] = results_dys[cv_col_s].apply(
                 lambda x: get_direct_download_link(str(x)) if x and str(x).startswith("http") else ""
             )
-            pv_col_s = " ️ معاينة" if st.session_state.lang == 'ar' else " ️ Preview"
+            pv_col_s = "👁️ معاينة" if st.session_state.lang == 'ar' else "👁️ Preview"
             results_dys[pv_col_s] = results_dys[cv_col_s].apply(
                 lambda x: str(x) if x and str(x).startswith("http") else ""
             )
             results_dys = results_dys.drop(columns=[cv_col_s])
             cfg_s[dl_col_s] = st.column_config.LinkColumn(dl_col_s, display_text="📥 تحميل")
-            cfg_s[pv_col_s] = st.column_config.LinkColumn(pv_col_s, display_text=" ️ معاينة")
+            cfg_s[pv_col_s] = st.column_config.LinkColumn(pv_col_s, display_text="👁️ معاينة")
             
         st.warning("👈 **هام جداً:** اضغط على سطر الموظف في الجدول لرؤية **المعاينة المترجمة**." if st.session_state.lang == 'ar' else "👈 **Important:** Click the row to see the **Translated Preview**.")
 
-        event_s = st.dataframe(
-            results_dys, 
-            use_container_width=True,
-            selection_mode="single-row",
-            on_select="rerun",
-            key="search_selection",
-            column_config=cfg_s
-        )
+        try:
+            event_s = st.dataframe(
+                results_dys, 
+                use_container_width=True,
+                selection_mode="single-row",
+                on_select="rerun",
+                key="search_selection",
+                column_config=cfg_s
+            )
+        except:
+            st.dataframe(results_dys, use_container_width=True)
+            event_s = None
         
         if event_s and len(event_s.selection['rows']) > 0:
             idx = event_s.selection['rows'][0]
-            # استخدام البيانات الأصلية للحصول على رابط CV
-            row_orig = results.iloc[idx]
-            row_s = results_dys.iloc[idx]
             
             st.markdown("---")
-            disp_name = row_s.get("الاسم الكامل", row_s.get("Full Name", "Unknown"))
+            
+            # البحث عن الاسم من البيانات المترجمة
+            row_display = results_dys.iloc[idx]
+            disp_name = "Unknown"
+            for col_try in ["الاسم الكامل", "Full Name", "الاسم"]:
+                if col_try in results_dys.columns:
+                    disp_name = row_display[col_try]
+                    break
+            
             st.markdown(f"### 📋 {disp_name}")
             
-            # البحث عن رابط CV في البيانات الأصلية
+            # البحث عن رابط CV في البيانات الأصلية (غير المعدلة)
             cv_link_s = ""
             for cn in results.columns:
-                if any(kw in cn.lower() for kw in ["cv", "سيرة", "تحميل", "curriculum"]):
-                    cv_link_s = row_orig[cn]
+                if any(kw in cn.lower() for kw in ["cv", "سيرة", "تحميل", "curriculum", "download"]):
+                    cv_link_s = results.iloc[idx][cn]
                     break
             
             if cv_link_s and str(cv_link_s).startswith("http"):
