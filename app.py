@@ -886,6 +886,19 @@ def page_home():
         # Display without the key
         display_df = alert_df[cols]
         
+        # CV Column Configuration
+        cv_col_name = ""
+        for cn in display_df.columns:
+            if any(kw in cn.lower() for kw in ["cv", "سيرة", "تحميل"]):
+                cv_col_name = cn
+                break
+        
+        col_cfg = {}
+        if cv_col_name:
+            col_cfg[cv_col_name] = st.column_config.LinkColumn(cv_col_name, display_text="📥")
+        
+        st.info("💡 **نصيحة:** اضغط على أي سطر في الجدول أسفله لتظهر لك خيارات **المعاينة المترجمة** والتحميل." if st.session_state.lang == 'ar' else "💡 **Tip:** Click any row below to show **Translated Preview** and download options.")
+
         # Use Dataframe with selection
         try:
            event = st.dataframe(
@@ -893,7 +906,8 @@ def page_home():
                 use_container_width=True,
                 selection_mode="single-row",
                 on_select="rerun",
-                key="alert_selection"
+                key="alert_selection",
+                column_config=col_cfg
             )
         except:
              # Fallback for older streamlit versions
@@ -1010,40 +1024,47 @@ def page_search():
             results = results[results[date_col].apply(lambda x: exp_from <= safe_parse_date(x) <= exp_to if safe_parse_date(x) else False)]
         
         if use_reg:
-            # فلتر تاريخ التسجيل (العمود الأول غالباً)
             results = results[results.iloc[:, 0].apply(lambda x: reg_from <= safe_parse_date(x) <= reg_to if safe_parse_date(x) else False)]
 
         if query:
-            # Smart translation for search
             translated_query = translate_search_term(query)
-            
-            # If translation happened, show toast or info (Optional, helps user know what happened)
             if translated_query.lower() != query.lower():
                 st.toast(f"Searching for: {translated_query} ({query})")
-            
-            # Search with both original and translated query to be safe, OR just translated
-            # User asked: "write x -> search y". So we search for translated version.
-            # But safety net: search for EITHER to avoid missing mixed content?
-            # User specifically said: "write barista -> search barista" (English).
-            # So we use the translated term.
-            
             mask = results.apply(lambda row: row.astype(str).str.contains(translated_query, case=False).any(), axis=1)
             results = results[mask]
             
+        st.session_state.search_results_df = results
+        st.session_state.has_searched = True
+
+    # عرض النتائج إذا كانت موجودة في الذاكرة
+    if st.session_state.get("has_searched") and "search_results_df" in st.session_state:
+        results = st.session_state.search_results_df
         st.markdown(f"#### 🔍 النتائج المكتشفة: {len(results)}")
         
-        # ترجمة الأعمدة قبل العرض
         results_dys = translate_columns(results)
+        st.markdown(f"### 🔍 {T['search_results_title']}: {len(results_dys)}")
+        
+        cv_col_s = ""
+        for cn in results_dys.columns:
+            if any(kw in cn.lower() for kw in ["cv", "سيرة", "تحميل"]):
+                cv_col_s = cn
+                break
+        
+        cfg_s = {}
+        if cv_col_s:
+            cfg_s[cv_col_s] = st.column_config.LinkColumn(cv_col_s, display_text="📥")
+            
+        st.info("💡 **نصيحة:** اضغط على أي سطر في الجدول لتظهر لك خيارات **المعاينة المترجمة**." if st.session_state.lang == 'ar' else "💡 **Tip:** Click any row below for **Translated Preview**.")
 
         event_s = st.dataframe(
             results_dys, 
-            use_container_width=True, 
+            use_container_width=True,
             selection_mode="single-row",
             on_select="rerun",
-            key="search_selection"
+            key="search_selection",
+            column_config=cfg_s
         )
         
-        # عرض تفاصيل الصف المختار في البحث
         if event_s and len(event_s.selection['rows']) > 0:
             idx = event_s.selection['rows'][0]
             row_s = results_dys.iloc[idx]
@@ -1052,7 +1073,6 @@ def page_search():
             c_v1, c_v2, c_v3 = st.columns([2, 1, 1])
             disp_name = row_s.get("الاسم الكامل", row_s.get("Full Name", "Unknown"))
             
-            # البحث عن رابط السيرة الذاتية
             cv_link_s = ""
             for cn in results_dys.columns:
                 if any(kw in cn.lower() for kw in ["cv", "سيرة", "تحميل"]):
@@ -1067,20 +1087,20 @@ def page_search():
                 
                 st.markdown("""
                     <div style='background-color:rgba(255,255,255,0.05); padding:20px; border-radius:15px; border:1px solid rgba(255,255,255,0.1); margin-top:20px;'>
-                        <h4 style='margin-bottom:15px;'>📄 تحكم السيرة الذاتية</h4>
+                        <h4 style='margin-bottom:15px;'>📄 تحكم السيرة الذاتية (مترجم)</h4>
                     </div>
                 """, unsafe_allow_html=True)
                 
                 cs_btn1, cs_btn2, cs_btn3 = st.columns(3)
                 with cs_btn1:
-                    if st.button("👁️ معاينة (مترجم)" if st.session_state.lang == 'ar' else "👁️ Preview (Translated)", use_container_width=True, key="search_trans", type="primary"):
-                        with st.spinner("جاري استخراج وترجمة النص..."):
+                    if st.button("👁️ معاينة وترجمة" if st.session_state.lang == 'ar' else "👁️ Preview & Translate", use_container_width=True, key="search_trans_btn", type="primary"):
+                        with st.spinner("جاري الترجمة..."):
                             res = process_cv_translation(str(cv_link_s))
                             st.session_state.search_cv_view = res
                 with cs_btn2:
-                    st.link_button("📥 تحميل الملف" if st.session_state.lang == 'ar' else "📥 Download File", dir_link, use_container_width=True)
+                    st.link_button("📥 تحميل الأصل" if st.session_state.lang == 'ar' else "📥 Download Original", dir_link, use_container_width=True)
                 with cs_btn3:
-                    st.link_button("🔗 الملف الأصلي" if st.session_state.lang == 'ar' else "🔗 Original File", str(cv_link_s), use_container_width=True)
+                    st.link_button("🔗 رابط الملف" if st.session_state.lang == 'ar' else "🔗 File Link", str(cv_link_s), use_container_width=True)
                 
                 if "search_cv_view" in st.session_state:
                     st.info("النص المترجم للعربية:")
