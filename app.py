@@ -1020,17 +1020,25 @@ def page_home():
         # Logic to determine options and sync
         dropdown_opts = all_opts 
         
+        # Calculate index directly for immediate visual feedback
+        dropdown_index = None
+        
         if selected_index_home is not None:
              # Sync Table -> Dropdown
              raw_name = str(display_df.iloc[selected_index_home][name_col]).strip()
              
-             # Find exact match in options to avoid mismatch 
+             # Find exact match in options
              if raw_name in all_opts:
+                 dropdown_index = all_opts.index(raw_name)
                  st.session_state[dd_key] = raw_name
-                 # Optional: Toast to confirm selection
                  st.toast(f"✅ تم اختيار: {raw_name}")
              else:
                  st.toast(f"⚠️ الاسم غير موجود في القائمة: {raw_name}")
+        else:
+             # Check if there's a value in session state from previous dropdown selection
+             current_val = st.session_state.get(dd_key)
+             if current_val and current_val in all_opts:
+                 dropdown_index = all_opts.index(current_val)
 
         # Fallback Selectbox - ALWAYS SHOW ALL OPTS
         fb_col1, fb_col2, _ = st.columns([1, 0.3, 2]) 
@@ -1038,7 +1046,7 @@ def page_home():
              placeholder_text = "اختر موظفاً لعرض التفاصيل..." if st.session_state.lang == 'ar' else "Choose Employee to view details..."
              sel = st.selectbox("أو اختر الموظف من القائمة:" if st.session_state.lang == 'ar' else "Or Select from list:", 
                               dropdown_opts, 
-                              index=None, 
+                              index=dropdown_index, 
                               placeholder=placeholder_text,
                               key=dd_key)
         with fb_col2:
@@ -1238,17 +1246,25 @@ def page_search():
         # Logic to determine options and sync
         dropdown_opts = all_opts 
         
+        # Calculate index directly for immediate visual feedback
+        dropdown_index = None
+        
         if selected_index is not None:
              # Sync Table -> Dropdown
              raw_name = str(results_dys.iloc[selected_index][name_col]).strip()
              
-             # Find exact match in options to avoid mismatch
+             # Find exact match in options
              if raw_name in all_opts:
+                 dropdown_index = all_opts.index(raw_name)
                  st.session_state[dd_key] = raw_name
-                 # Optional: Toast to confirm selection
                  st.toast(f"✅ تم اختيار: {raw_name}")
              else:
                  st.toast(f"⚠️ الاسم غير موجود في القائمة: {raw_name}")
+        else:
+             # Check if there's a value in session state from previous dropdown selection
+             current_val = st.session_state.get(dd_key)
+             if current_val and current_val in all_opts:
+                 dropdown_index = all_opts.index(current_val)
 
         # Fallback Selectbox - ALWAYS SHOW ALL OPTS
         fb_col1, fb_col2, _ = st.columns([1, 0.3, 2]) 
@@ -1256,7 +1272,7 @@ def page_search():
              placeholder_text = "اختر موظفاً لعرض التفاصيل..." if st.session_state.lang == 'ar' else "Choose Employee to view details..."
              sel = st.selectbox("أو اختر الموظف من القائمة:" if st.session_state.lang == 'ar' else "Or Select from list:", 
                               dropdown_opts, 
-                              index=None, 
+                              index=dropdown_index, 
                               placeholder=placeholder_text,
                               key=dd_key)
         with fb_col2:
