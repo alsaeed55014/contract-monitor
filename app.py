@@ -962,19 +962,24 @@ def page_home():
         if selected_index_home is None:
              cols = [c for c in display_df.columns if "اسم" in c or "Name" in c]
              name_col = cols[0] if cols else display_df.columns[0]
-             opts = ["Choose..." if st.session_state.lang == 'en' else "اختر موظفاً لعرض التفاصيل..."] + display_df[name_col].astype(str).tolist()
+             opts = display_df[name_col].astype(str).tolist()
              
              # تنسيق العرض: تقليل العرض وإضافة زر المسح
              fb_col1, fb_col2, _ = st.columns([1, 0.3, 2]) 
              with fb_col1:
-                 # Use dynamic key to force reset
-                 sel = st.selectbox("أو اختر الموظف من القائمة:" if st.session_state.lang == 'ar' else "Or Select from list:", opts, key=f"fallback_home_sel_{st.session_state.home_key_ver}")
+                 # Use dynamic key to force reset, index=None for placeholder behavior
+                 placeholder_text = "اختر موظفاً لعرض التفاصيل..." if st.session_state.lang == 'ar' else "Choose Employee to view details..."
+                 sel = st.selectbox("أو اختر الموظف من القائمة:" if st.session_state.lang == 'ar' else "Or Select from list:", 
+                                  opts, 
+                                  index=None, 
+                                  placeholder=placeholder_text,
+                                  key=f"fallback_home_sel_{st.session_state.home_key_ver}")
              with fb_col2:
                  st.markdown("<div style='margin-top: 29px;'></div>", unsafe_allow_html=True)
                  st.button("❌ مسح" if st.session_state.lang == 'ar' else "Clear", key="clr_home", on_click=increment_key_version, args=("home_key_ver",))
 
-             if sel and sel != opts[0]:
-                 selected_index_home = opts.index(sel) - 1
+             if sel:
+                 selected_index_home = opts.index(sel)
 
         if selected_index_home is not None:
             selected_index = selected_index_home
@@ -1152,19 +1157,24 @@ def page_search():
         if selected_index is None:
              cols = [c for c in results_dys.columns if "اسم" in c or "Name" in c]
              name_col = cols[0] if cols else results_dys.columns[0]
-             opts = ["Choose..." if st.session_state.lang == 'en' else "اختر موظفاً لعرض التفاصيل..."] + results_dys[name_col].astype(str).tolist()
+             opts = results_dys[name_col].astype(str).tolist()
              
              # تنسيق العرض: تقليل العرض وإضافة زر المسح
              fb_col1, fb_col2, _ = st.columns([1, 0.3, 2]) 
              with fb_col1:
                  # Use dynamic key
-                 sel = st.selectbox("أو اختر الموظف من القائمة:" if st.session_state.lang == 'ar' else "Or Select from list:", opts, key=f"fallback_search_sel_{st.session_state.search_key_ver}")
+                 placeholder_text = "اختر موظفاً لعرض التفاصيل..." if st.session_state.lang == 'ar' else "Choose Employee to view details..."
+                 sel = st.selectbox("أو اختر الموظف من القائمة:" if st.session_state.lang == 'ar' else "Or Select from list:", 
+                                  opts, 
+                                  index=None,
+                                  placeholder=placeholder_text,
+                                  key=f"fallback_search_sel_{st.session_state.search_key_ver}")
              with fb_col2:
                  st.markdown("<div style='margin-top: 29px;'></div>", unsafe_allow_html=True)
                  st.button("❌ مسح" if st.session_state.lang == 'ar' else "Clear", key="clr_search", on_click=increment_key_version, args=("search_key_ver",))
 
-             if sel and sel != opts[0]:
-                 selected_index = opts.index(sel) - 1
+             if sel:
+                 selected_index = opts.index(sel)
 
         if selected_index is not None:
             idx = selected_index
