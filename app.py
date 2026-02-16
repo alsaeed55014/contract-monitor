@@ -431,11 +431,57 @@ st.markdown("""
         margin-top: -10px !important;
     }
     
+    /* Premium Loader - واجهة تحميل فاخرة */
+    #custom-loader-container {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        position: fixed;
+        top: 0; left: 0; width: 100%; height: 100%;
+        background: rgba(14, 17, 23, 0.85); /* Dark Blur */
+        backdrop-filter: blur(10px);
+        z-index: 9999;
+        color: white;
+        font-family: 'Inter', 'Outfit', sans-serif;
+    }
+    .premium-spinner {
+        width: 80px;
+        height: 80px;
+        border: 5px solid rgba(255, 255, 255, 0.1);
+        border-top: 5px solid #2196f3;
+        border-radius: 50%;
+        animation: spin-premium 1s cubic-bezier(0.68, -0.55, 0.27, 1.55) infinite;
+        box-shadow: 0 0 20px rgba(33, 150, 243, 0.3);
+    }
+    @keyframes spin-premium {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+    .loading-text {
+        margin-top: 25px;
+        font-size: 1.4rem;
+        font-weight: 500;
+        letter-spacing: 1px;
+        text-shadow: 0 2px 10px rgba(0,0,0,0.5);
+    }
+    /* Hide Default Streamlit "Running" indicators */
+    [data-testid="stStatusWidget"] {
+        display: none !important;
+    }
+    .stSpinner {
+        display: none !important;
+    }
+    
     /* تقليل الفراغات بين العناصر - بدون التأثير على العنوان الرئيسي */
     div.stMarkdown { margin-bottom: -10px; }
     h2, h3 { margin-top: -10px !important; padding-top: 0px !important; }
     h1 { margin-top: 0px !important; padding-top: 10px !important; }
 </style>
+
+<script>
+    // Force hide any persistent elements if needed (though CSS handles most)
+</script>
 """, unsafe_allow_html=True)
 
 # Set direction
@@ -460,7 +506,7 @@ def get_gspread_client():
         except: return None
     return None
 
-@st.cache_data(ttl=600)
+@st.cache_data(ttl=600, show_spinner=False)
 def fetch_data():
     client = get_gspread_client()
     if not client: return "ERROR: No Google Client Authorized"
@@ -470,6 +516,18 @@ def fetch_data():
         return sheet.get_all_values()
     except Exception as e: 
         return f"ERROR: {str(e)}"
+
+def render_premium_loader(text_ar="جاري تحديث البيانات...", text_en="Refreshing Data..."):
+    """Renders a beautiful, centered glassmorphism loader."""
+    lang = st.session_state.get('lang', 'ar')
+    display_text = text_ar if lang == 'ar' else text_en
+    loader_html = f"""
+    <div id="custom-loader-container">
+        <div class="premium-spinner"></div>
+        <div class="loading-text">{display_text}</div>
+    </div>
+    """
+    return st.markdown(loader_html, unsafe_allow_html=True)
 
 def translate_columns(df):
     col_mapping_exact = {
@@ -871,7 +929,10 @@ def page_home():
     
     st.header(T['alerts_title'])
     
+    # Premium Loading for Home Page
+    render_premium_loader()
     data_raw = fetch_data()
+    st.rerun() if data_raw is None else None # Safety check if cached data is null
     
     if isinstance(data_raw, str) and "ERROR" in data_raw:
         st.error(f"❌ {T['error_google']}: {data_raw}")
@@ -1110,8 +1171,8 @@ def page_search():
     
     if st.button(T['back_nav']):
         st.session_state.page = "home"
-        st.rerun()
-    
+    # Premium Loading for Search Page
+    render_premium_loader()
     data_raw = fetch_data()
     
     if isinstance(data_raw, str) and "ERROR" in data_raw:
