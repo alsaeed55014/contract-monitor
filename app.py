@@ -126,18 +126,18 @@ def smart_search_filter(row_series, query_str):
                 is_phone = False
                 query_digits = re.sub(r'\D', '', term)
                 
-                # Check 1: مطابقة جزء من الرقم (إذا كان طويلاً بما يكفي)
+                # Check 1: Individual segment is long enough (old logic)
                 if len(query_digits) >= 5:
                     row_digits = re.sub(r'\D', '', row_text)
                     if query_digits in row_digits or (len(query_digits) >= 9 and query_digits[-9:] in row_digits):
                         is_phone = True
                 
-                # Check 2: مطابقة الرقم الكامل المجمع (للأرقام التي تحتوي مسافات)
+                # Check 2: The entire query digits are in the row digits (New Robust Phone logic)
                 if not is_phone:
                     all_query_digits = re.sub(r'\D', '', query_str_clean)
-                    if len(all_query_digits) >= 7:
+                    if len(all_query_digits) >= 7: # Consider it a phone number search if 7+ digits
                         row_digits_all = re.sub(r'\D', '', row_text)
-                        if all_query_digits in row_digits_all or (len(all_query_digits) >= 9 and all_query_digits[-9:] in row_digits_all):
+                        if all_query_digits in row_digits_all:
                             is_phone = True
                 
                 if not is_phone: return False
@@ -200,32 +200,28 @@ def process_cv_translation(url):
         return f"❌ حدث خطأ غير متوقع: {str(e)}"
 
 # --- Authentication System ---
-USERS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'users.json')
+USERS_FILE = 'users.json'
 
 def load_users():
     if os.path.exists(USERS_FILE):
         try:
             with open(USERS_FILE, 'r', encoding='utf-8') as f:
                 data = json.load(f)
-                users = data.get("users", {})
-                if users: return users
-        except Exception as e:
-            print(f"Error loading users: {e}")
-    # Default fallback - يتم استخدامه فقط في حال فشل قراءة الملف
+                return data.get("users", {})
+        except: pass
+    # Default fallback including Samar
     return {
         "admin": {
             "password": "c685e710931707e3e9aaab6c8625a9798cd06a31bcf40cd8d6963e3703400d14", # 266519111
             "role": "admin",
-            "full_name_ar": "السعيد الوزان",
-            "full_name_en": "General Manager",
+            "full_name": "المدير العام",
             "can_manage_users": True
         },
         "samar": {
             "password": "2d75c1a2d01521e3026aa1719256a06604e7bc99aab149cb8cc7de8552fa820d", # 123452
             "role": "user",
-            "full_name_ar": "سمر",
-            "full_name_en": "Samar",
-            "can_manage_users": True
+            "full_name": "سمر",
+            "can_manage_users": False
         }
     }
 
@@ -309,7 +305,7 @@ L = {
         'pass_lbl': "كلمة المرور",
         'login_btn': "دخول",
         'wrong_pass': "❌ كلمة المرور خاطئة",
-        'user_not_found': "المستخدم غير موجود",
+        'user_not_found': "❌ المستخدم غير موجود",
         'prog_by': "برمجة",
         'switch_lang': "Switch to English",
         'logout': "خروج من البرنامج",
@@ -537,23 +533,25 @@ st.markdown("""
     
     /* Welcome Message - رسالة الترحيب الجمالية */
     .welcome-container {
-        text-align: right !important;
+        display: flex;
+        justify-content: flex-end; /* أقصى اليمين */
+        align-items: center;
         width: 100%;
-        padding: 0;
-        margin: -25px 0 5px 0; /* تقليل الهوامش لزيادة الارتفاع */
+        padding: 10px 0;
+        margin-top: -20px;
+        margin-bottom: 5px;
     }
     .welcome-msg {
-        display: inline-block;
         font-family: 'Tajawal', sans-serif;
-        font-size: 2.1rem;
+        font-size: 2rem;
         font-weight: 800;
         background: linear-gradient(135deg, #ffd700 0%, #ffae00 50%, #ffd700 100%);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
-        text-shadow: 2px 4px 10px rgba(0,0,0,0.5);
-        padding: 0;
-        margin: 0;
-        line-height: 1.1;
+        text-shadow: 2px 4px 8px rgba(0,0,0,0.4);
+        padding-right: 20px;
+        line-height: 1.2;
+        letter-spacing: 0.5px;
     }
     
     /* تقليل الفراغات بين العناصر - بدون التأثير على العنوان الرئيسي */
@@ -1025,17 +1023,13 @@ def page_login():
         password = st.text_input(T['pass_lbl'], type="password", placeholder="Password")
         
         if st.button(T['login_btn'], type="primary", use_container_width=True):
-            # تنظيف اسم المستخدم من المسافات وتحويله للصغير لضمان المطابقة
-            u_clean = username.strip().lower()
-            # إعادة تحميل المستخدمين لضمان وجود أحدث التعديلات
-            fresh_users = load_users()
-            if u_clean in fresh_users:
+            if username in USERS:
                 hashed = hashlib.sha256(password.encode()).hexdigest()
-                if fresh_users[u_clean]["password"] == hashed:
+                if USERS[username]["password"] == hashed:
                     st.session_state.authenticated = True
-                    st.session_state.current_user = u_clean
+                    st.session_state.current_user = username
                     # حفظ الأسماء الثنائية في الجلسة لاستخدامها في الترحيب حسب اللغة
-                    user_info = fresh_users[u_clean]
+                    user_info = USERS[username]
                     st.session_state.current_user_name_ar = user_info.get("full_name_ar", user_info.get("full_name", username))
                     st.session_state.current_user_name_en = user_info.get("full_name_en", user_info.get("full_name", username))
                     st.session_state.page = "home"
@@ -1608,12 +1602,8 @@ def page_permissions():
             
             c1, c2 = st.columns(2)
             with c1:
-                # منع تغيير اسم المستخدم لـ admin لحماية النظام من فقدان الوصول
-                is_admin_user = (selected_user == "admin")
-                edit_u = st.text_input("اسم الدخول (Username)", value=selected_user, key="edit_u_val", disabled=is_admin_user)
-                if is_admin_user:
-                    st.caption("⚠️ لا يمكن تغيير اسم دخول المدير الأساسي لضمان استقرار النظام")
-                edit_ar = st.text_input("الاسم بالعربية", value=u_data.get("full_name_ar", u_data.get("full_name", "")), key="edit_ar_val")
+                edit_u = st.text_input("اسم الدخول", value=selected_user, key="edit_u_val")
+                edit_ar = st.text_input("الاسم بالعربية", value=u_data.get("full_name_ar", ""), key="edit_ar_val")
             with c2:
                 edit_p = st.text_input("كلمة مرور جديدة (اتركه فارغاً للحفظ)", type="password", key="edit_p_val")
                 edit_en = st.text_input("English Name", value=u_data.get("full_name_en", ""), key="edit_en_val")
