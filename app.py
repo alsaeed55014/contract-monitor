@@ -1094,11 +1094,16 @@ def page_home():
                         translated_text = process_cv_translation(str(cv_link))
                     
                     st.markdown("""
-                        <div style='background-color:rgba(30, 144, 255, 0.1); padding:20px; border-radius:15px; border:2px solid #1E90FF; margin-top:10px;'>
-                            <h3 style='margin-bottom:10px; color:#1E90FF;'>🌐 المعاينة المترجمة للعربية</h3>
+                        <div style='background-color:rgba(30, 144, 255, 0.1); padding:20px; border-radius:15px; border:2px solid #1E90FF; margin-top:20px; margin-bottom:20px;'>
+                            <h3 style='margin:0; color:#1E90FF;'>🌐 المعاينة المترجمة للعربية</h3>
                         </div>
                     """, unsafe_allow_html=True)
-                    st.write(translated_text)
+                    
+                    st.markdown(f"""
+                        <div style='background-color: #ffffff; padding: 20px; border-radius: 10px; border: 1px solid #e0e0e0; color: #333; line-height: 1.6; text-align: right; direction: rtl;'>
+                            {translated_text}
+                        </div>
+                    """, unsafe_allow_html=True)
                 else:
                     st.info("لا توجد سيرة ذاتية لهذا الموظف")
         else:
@@ -1327,14 +1332,19 @@ def page_search():
                     
                     # ترجمة تلقائية
                     st.markdown("""
-                        <div style='background-color:rgba(30, 144, 255, 0.1); padding:20px; border-radius:15px; border:2px solid #1E90FF; margin-top:10px;'>
-                            <h3 style='margin-bottom:10px; color:#1E90FF;'>🌐 المعاينة المترجمة للعربية</h3>
+                        <div style='background-color:rgba(30, 144, 255, 0.1); padding:20px; border-radius:15px; border:2px solid #1E90FF; margin-top:20px; margin-bottom:20px;'>
+                            <h3 style='margin:0; color:#1E90FF;'>🌐 المعاينة المترجمة للعربية</h3>
                         </div>
                     """, unsafe_allow_html=True)
                     
                     with st.spinner("جاري استخراج وترجمة السيرة الذاتية للعربية..." if st.session_state.lang == 'ar' else "Translating CV to Arabic..."):
                         translated_text = process_cv_translation(str(cv_link_s))
-                    st.write(translated_text)
+                    
+                    st.markdown(f"""
+                        <div style='background-color: #ffffff; padding: 20px; border-radius: 10px; border: 1px solid #e0e0e0; color: #333; line-height: 1.6; text-align: right; direction: rtl;'>
+                            {translated_text}
+                        </div>
+                    """, unsafe_allow_html=True)
                 else:
                     st.info("⚠️ لا يوجد ملف سيرة ذاتية (CV) مرتبط بهذا الموظف." if st.session_state.lang == 'ar' else "⚠️ No CV file linked to this employee.")
     
