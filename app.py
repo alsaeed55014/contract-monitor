@@ -125,21 +125,10 @@ def smart_search_filter(row_series, query_str):
             if term not in row_text:
                 is_phone = False
                 query_digits = re.sub(r'\D', '', term)
-                
-                # Check 1: Individual segment is long enough (old logic)
                 if len(query_digits) >= 5:
                     row_digits = re.sub(r'\D', '', row_text)
                     if query_digits in row_digits or (len(query_digits) >= 9 and query_digits[-9:] in row_digits):
                         is_phone = True
-                
-                # Check 2: The entire query digits are in the row digits (New Robust Phone logic)
-                if not is_phone:
-                    all_query_digits = re.sub(r'\D', '', query_str_clean)
-                    if len(all_query_digits) >= 7: # Consider it a phone number search if 7+ digits
-                        row_digits_all = re.sub(r'\D', '', row_text)
-                        if all_query_digits in row_digits_all:
-                            is_phone = True
-                
                 if not is_phone: return False
         
         return True
@@ -209,19 +198,28 @@ def load_users():
                 data = json.load(f)
                 return data.get("users", {})
         except: pass
-    # Default fallback including Samar
+    # Default fallback including Samar and Maya
     return {
         "admin": {
             "password": "c685e710931707e3e9aaab6c8625a9798cd06a31bcf40cd8d6963e3703400d14", # 266519111
             "role": "admin",
-            "full_name": "المدير العام",
+            "full_name_ar": "المدير العام",
+            "full_name_en": "General Manager",
             "can_manage_users": True
         },
         "samar": {
             "password": "2d75c1a2d01521e3026aa1719256a06604e7bc99aab149cb8cc7de8552fa820d", # 123452
-            "role": "user",
-            "full_name": "سمر",
-            "can_manage_users": False
+            "role": "admin",
+            "full_name_ar": "سمر",
+            "full_name_en": "Samar",
+            "can_manage_users": True
+        },
+        "maya": {
+            "password": "2d75c1a2d01521e3026aa1719256a06604e7bc99aab149cb8cc7de8552fa820d", # 123452
+            "role": "admin",
+            "full_name_ar": "مايا الوزان",
+            "full_name_en": "Maya Al-Wazzan",
+            "can_manage_users": True
         }
     }
 
