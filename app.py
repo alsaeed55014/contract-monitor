@@ -626,11 +626,8 @@ def render_welcome_message():
     
     if lang == 'ar':
         prefix = "مرحباً بك يا"
-        # ضمان استخدام "سمر" بالعربي لمستخدم samar
-        if st.session_state.get("current_user", "").lower() == "samar":
-            display_name = "سمر"
-        else:
-            display_name = name_ar if name_ar else st.session_state.get("current_user", "")
+        # عرض الاسم العربي فقط للمحافظة على هوية الواجهة العربية
+        display_name = name_ar if name_ar else st.session_state.get("current_user", "")
         
         # فرض الـ RTL و flex-start لضمان أقصى اليمين في العربية
         st.markdown(f"""
@@ -640,6 +637,7 @@ def render_welcome_message():
         """, unsafe_allow_html=True)
     else:
         prefix = "Welcome back,"
+        # عرض الاسم الإنجليزي فقط للمحافظة على هوية الواجهة الإنجليزية
         display_name = name_en if name_en else st.session_state.get("current_user", "")
         # في الإنجليزية نستخدم flex-end للوصول لأقصى اليمين
         st.markdown(f"""
