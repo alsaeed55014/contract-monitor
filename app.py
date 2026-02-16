@@ -1547,120 +1547,110 @@ def page_search():
 def page_permissions():
     global USERS
     sidebar_content()
-    st.title("🔐 " + T['perms_page_title'])
+    st.title(T['perms_page_title'])
+    
+    # رسالة الترحيب الجمالية في اليمين
     render_welcome_message()
+    
+    # إضافة التوقيع النيوني ممركزاً
     
     if st.button(T['back_nav']):
         st.session_state.page = "home"
         st.rerun()
     
     st.markdown("---")
+    
+    # إعادة تحميل المستخدمين لضمان أحدث البيانات
     USERS = load_users()
     user_list = list(USERS.keys())
-    
-    col_add, col_edit = st.columns([1, 2])
-    
-    # === 1. إضافة مستخدم جديد ===
-    with col_add:
-        st.markdown(f"### ➕ {T['add_user_title']}")
-        new_u = st.text_input("اسم الدخول (Username)", key="new_u_reg")
-        new_p = st.text_input("كلمة المرور", type="password", key="new_p_reg")
-        new_ar = st.text_input("الاسم بالعربية (للترحيب)", key="new_ar_reg")
-        new_en = st.text_input("Full Name (English)", key="new_en_reg")
-        is_admin_new = st.checkbox("صلاحية مدير (Admin)", key="is_admin_new")
         
-        if st.button(T['add_btn'], use_container_width=True):
+    col1, col2, col3 = st.columns(3)
+    
+    # === تغيير كلمة المرور ===
+    with col1:
+        st.markdown(f"### 🔒 {'تغيير كلمة المرور' if st.session_state.lang == 'ar' else 'Change Password'}")
+        
+        # اختيار المستخدم
+        target_user = st.selectbox(
+            "اختر المستخدم" if st.session_state.lang == 'ar' else "Select User",
+            user_list, key="change_pass_user"
+        )
+        
+        n_p = st.text_input("كلمة المرور الجديدة" if st.session_state.lang == 'ar' else "New Password", type="password", key="new_pass")
+        n_p2 = st.text_input("تأكيد كلمة المرور" if st.session_state.lang == 'ar' else "Confirm Password", type="password", key="confirm_pass")
+        
+        if st.button(T['save_btn'], key="save_pass_btn"):
+            if not n_p:
+                st.error("يرجى إدخال كلمة المرور الجديدة" if st.session_state.lang == 'ar' else "Please enter new password")
+            elif n_p != n_p2:
+                st.error("كلمة المرور غير متطابقة" if st.session_state.lang == 'ar' else "Passwords do not match")
+            elif target_user not in USERS:
+                st.error("المستخدم غير موجود" if st.session_state.lang == 'ar' else "User not found")
+            else:
+                USERS[target_user]["password"] = hashlib.sha256(n_p.encode()).hexdigest()
+                save_users(USERS)
+                st.success(f"✅ تم تغيير كلمة مرور {target_user} بنجاح" if st.session_state.lang == 'ar' else f"✅ Password changed for {target_user}")
+    
+    # === إضافة مستخدم جديد ===
+    with col2:
+        st.markdown(f"### ➕ {T['add_user_title']}")
+        new_name = st.text_input("الاسم الكامل" if st.session_state.lang == 'ar' else "Full Name", key="new_full_name")
+        new_u = st.text_input(T['user_lbl'], key="new_u")
+        new_p = st.text_input(T['pass_lbl'], type="password", key="new_p")
+        new_p2 = st.text_input("تأكيد كلمة المرور" if st.session_state.lang == 'ar' else "Confirm Password", type="password", key="confirm_new_p")
+        can_p = st.checkbox(T['can_access_perms'], key="can_perms_cb")
+        
+        if st.button(T['add_btn'], key="add_user_btn"):
             if not new_u or not new_p:
-                st.error("البيانات ناقصة!")
+                st.error("يرجى إدخال اسم المستخدم وكلمة المرور" if st.session_state.lang == 'ar' else "Please enter username and password")
+            elif new_p != new_p2:
+                st.error("كلمة المرور غير متطابقة" if st.session_state.lang == 'ar' else "Passwords do not match")
             elif new_u in USERS:
-                st.error("المستخدم موجود بالفعل!")
+                st.error("اسم المستخدم موجود مسبقاً" if st.session_state.lang == 'ar' else "Username already exists")
             else:
                 USERS[new_u] = {
                     "password": hashlib.sha256(new_p.encode()).hexdigest(),
-                    "role": "admin" if is_admin_new else "user",
-                    "full_name_ar": new_ar if new_ar else new_u,
-                    "full_name_en": new_en if new_en else new_u,
-                    "can_manage_users": is_admin_new
+                    "role": "admin" if can_p else "user",
+                    "full_name": new_name if new_name else new_u,
+                    "can_manage_users": can_p
                 }
                 save_users(USERS)
-                st.success(f"✅ تم إضافة {new_u}")
+                st.success(f"✅ تم إضافة {new_u} ({new_name}) بنجاح" if st.session_state.lang == 'ar' else f"✅ User {new_u} added")
                 st.rerun()
-
-    # === 2. تعديل / إخفاء / إدارة المستخدمين ===
-    with col_edit:
-        st.markdown(f"### 🛠️ {'إدارة وتعديل المستخدمين' if st.session_state.lang == 'ar' else 'Manage Users'}")
+    
+    # === حذف مستخدم ===
+    with col3:
+        st.markdown(f"### 🗑️ {'حذف مستخدم' if st.session_state.lang == 'ar' else 'Delete User'}")
         
-        selected_user = st.selectbox(
-            "اختر المستخدم لتعديله" if st.session_state.lang == 'ar' else "Select User",
-            user_list, key="edit_user_sel"
-        )
+        # لا تسمح بحذف المستخدم الحالي أو admin
+        deletable_users = [u for u in user_list if u != st.session_state.current_user and u != "admin"]
         
-        if selected_user:
-            u_data = USERS[selected_user]
+        if deletable_users:
+            del_user = st.selectbox(
+                "اختر المستخدم للحذف" if st.session_state.lang == 'ar' else "Select User to Delete",
+                deletable_users, key="del_user_select"
+            )
             
-            c1, c2 = st.columns(2)
-            with c1:
-                edit_u = st.text_input("اسم الدخول", value=selected_user, key="edit_u_val")
-                edit_ar = st.text_input("الاسم بالعربية", value=u_data.get("full_name_ar", ""), key="edit_ar_val")
-            with c2:
-                edit_p = st.text_input("كلمة مرور جديدة (اتركه فارغاً للحفظ)", type="password", key="edit_p_val")
-                edit_en = st.text_input("English Name", value=u_data.get("full_name_en", ""), key="edit_en_val")
+            st.warning(f"⚠️ {'سيتم حذف المستخدم نهائياً' if st.session_state.lang == 'ar' else 'User will be permanently deleted'}")
             
-            is_admin_edit = st.checkbox("صلاحية مدير (Admin Role)", value=u_data.get("can_manage_users", False), key="edit_admin_cb")
-            
-            btn_save, btn_del = st.columns([1, 1])
-            
-            with btn_save:
-                if st.button("💾 " + T['save_btn'], use_container_width=True):
-                    # تحديث البيانات
-                    updated_data = u_data.copy()
-                    if edit_p:
-                        updated_data["password"] = hashlib.sha256(edit_p.encode()).hexdigest()
-                    
-                    updated_data["full_name_ar"] = edit_ar
-                    updated_data["full_name_en"] = edit_en
-                    updated_data["role"] = "admin" if is_admin_edit else "user"
-                    updated_data["can_manage_users"] = is_admin_edit
-                    
-                    # إذا تغير اليوزرنيم (Rename key)
-                    if edit_u != selected_user:
-                        if edit_u in USERS:
-                            st.error("اسم المستخدم الجديد موجود مسبقاً!")
-                        else:
-                            del USERS[selected_user]
-                            USERS[edit_u] = updated_data
-                            # تحديث الجلسة إذا كان هذا هو المستخدم الحالي
-                            if st.session_state.current_user == selected_user:
-                                st.session_state.current_user = edit_u
-                    else:
-                        USERS[selected_user] = updated_data
-                    
-                    # تحديث بيانات الجلسة للأسماء إذا كان المستخدم الحالي هو المعدل عليه
-                    if st.session_state.current_user == (edit_u if edit_u != selected_user else selected_user):
-                        st.session_state.current_user_name_ar = edit_ar
-                        st.session_state.current_user_name_en = edit_en
-
+            if st.button("🗑️ حذف" if st.session_state.lang == 'ar' else "🗑️ Delete", key="del_user_btn"):
+                if del_user in USERS:
+                    del USERS[del_user]
                     save_users(USERS)
-                    st.success("✅ تم حفظ التعديلات بنجاح")
+                    st.success(f"✅ تم حذف {del_user} بنجاح" if st.session_state.lang == 'ar' else f"✅ {del_user} deleted")
                     st.rerun()
-            
-            with btn_del:
-                if selected_user != "admin" and selected_user != st.session_state.current_user:
-                    if st.button("🗑️ " + ("حذف المستخدم" if st.session_state.lang == 'ar' else "Delete User"), use_container_width=True):
-                        del USERS[selected_user]
-                        save_users(USERS)
-                        st.warning(f"❌ تم حذف {selected_user}")
-                        st.rerun()
-                else:
-                    st.info("⚠️ لا يمكن حذف حسابك الحالي أو المدير الأساسي" if st.session_state.lang == 'ar' else "Cannot delete current user/root admin")
-
+        else:
+            st.info("لا يوجد مستخدمين يمكن حذفهم" if st.session_state.lang == 'ar' else "No users to delete")
+    
+    # === عرض المستخدمين الحاليين ===
     st.markdown("---")
-    st.markdown(f"### 👥 {'قائمة الأعضاء' if st.session_state.lang == 'ar' else 'Member List'}")
-    grid_cols = st.columns(3)
-    for i, (uname, udata) in enumerate(USERS.items()):
-        with grid_cols[i % 3]:
-            role_icon = "👑" if udata.get("can_manage_users") else "👤"
-            st.info(f"**{role_icon} {uname}**\n\n{udata.get('full_name_ar', '')} / {udata.get('full_name_en', '')}")
+    st.markdown(f"### 👥 {'المستخدمون الحاليون' if st.session_state.lang == 'ar' else 'Current Users'}")
+    
+    for uname, udata in USERS.items():
+        role_label = "👑 مدير" if udata.get("can_manage_users") else "👤 مستخدم"
+        if st.session_state.lang == 'en':
+            role_label = "👑 Admin" if udata.get("can_manage_users") else "👤 User"
+        st.markdown(f"- **{uname}** — {role_label}")
 
 # --- Routing ---
 if not st.session_state.authenticated:
