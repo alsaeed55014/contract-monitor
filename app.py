@@ -99,6 +99,19 @@ def smart_search_filter(row_series, query_str):
             if query_digits in row_digits:
                 return True
 
+        # 3. Special Category: African Research (بحث ذكي للجنسيات الأفريقية)
+        african_keywords = ["افريقي", "أفريقي", "افريقيه", "أفريقية", "african"]
+        if any(kw in query_str_clean for kw in african_keywords):
+            african_countries = [
+                "egypt", "sudan", "kenya", "uganda", "ethiopia", "eritrea", "ghana", "nigeria", 
+                "gambia", "togo", "senegal", "morocco", "tunisia", "algeria", "other", "أخرى",
+                "مصري", "سوداني", "كيني", "أوغندي", "إثيوبي", "اثيوبي", "غاني", "نيجيري",
+                "مصر", "السودان", "كينيا", "أوغندا", "إثيوبيا", "نيجيريا", "المغرب", "تونس", "الجزائر"
+            ]
+            row_text_lower = " ".join(row_series.astype(str)).lower()
+            if any(country in row_text_lower for country in african_countries):
+                return True
+
         return False
     except Exception as e:
         # If any error occurs, fall back to simple string containment
@@ -600,10 +613,15 @@ def translate_search_term(term):
     
     # Mapping dictionary (Arabic -> English)
     mapping = {
-        # Genders
+        # Genders & Synonyms
         "ذكر": "Male",
+        "رجل": "Male",
+        "ولد": "Male",
         "انثى": "Female",
         "أنثى": "Female",
+        "بنت": "Female",
+        "سيدة": "Female",
+        "امرأة": "Female",
         
         # Marital Status
         "اعزب": "Single",
