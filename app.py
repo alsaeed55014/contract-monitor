@@ -909,11 +909,16 @@ def sidebar_content():
             st.session_state.page = "search"
             st.rerun()
 
-        # 3. زر شاشة الصلاحيات
         if st.button(T['perms_nav'], type="secondary" if st.session_state.page != "permissions" else "primary", use_container_width=True):
-            # إعادة تحميل المستخدمين للتأكد من قراءة أحدث الصلاحيات من الملف
+            # إعادة تحميل وتوحيد حالة الأحرف للتحقق
             updated_users = load_users()
-            if updated_users.get(st.session_state.current_user, {}).get("can_manage_users"):
+            curr_user = st.session_state.get("current_user", "").lower().strip()
+            
+            # حماية برمجية صلبة لسمر ومايا والمدير
+            is_master = curr_user in ["admin", "samar", "maya"]
+            has_perm = updated_users.get(curr_user, {}).get("can_manage_users")
+            
+            if is_master or has_perm:
                 st.session_state.page = "permissions"
                 st.rerun()
             else:
@@ -1017,10 +1022,11 @@ def page_login():
         # عنوان تسجيل الدخول
         st.markdown(f"<h2 style='text-align:center; color:white;'>🔐 {T['login_title']}</h2>", unsafe_allow_html=True)
         
-        username = st.text_input(T['user_lbl'], placeholder="Username")
+        u_in = st.text_input(T['user_lbl'], placeholder="Username")
         password = st.text_input(T['pass_lbl'], type="password", placeholder="Password")
         
         if st.button(T['login_btn'], type="primary", use_container_width=True):
+            username = u_in.lower().strip()
             if username in USERS:
                 hashed = hashlib.sha256(password.encode()).hexdigest()
                 if USERS[username]["password"] == hashed:
