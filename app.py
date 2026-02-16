@@ -1028,14 +1028,15 @@ def page_home():
         dropdown_index = None
         
         if selected_index_home is not None:
-             # Sync Table -> Dropdown
-             raw_name = str(display_df.iloc[selected_index_home][name_col]).strip()
-             
-             # Find exact match in options
-             if raw_name in all_opts:
-                 dropdown_index = all_opts.index(raw_name)
-                 st.session_state[dd_key] = raw_name
-                 st.toast(f"✅ تم اختيار: {raw_name}")
+             # Sync Table -> Dropdown - Saftey check added
+             if selected_index_home < len(display_df):
+                 raw_name = str(display_df.iloc[selected_index_home][name_col]).strip()
+                 
+                 # Find exact match in options
+                 if raw_name in all_opts:
+                     dropdown_index = all_opts.index(raw_name)
+                     st.session_state[dd_key] = raw_name
+                     st.toast(f"✅ تم اختيار: {raw_name}")
              else:
                  st.toast(f"⚠️ الاسم غير موجود في القائمة: {raw_name}")
         else:
@@ -1177,6 +1178,8 @@ def page_search():
             mask = results.apply(lambda row: smart_search_filter(row, translated_query), axis=1)
             results = results[mask]
             
+        # Reset table selection and scroll on new search
+        increment_key_version(["search_table_ver"])
         st.session_state.search_results_df = results
         # تخزين النسخة المترجمة أيضاً لثبات العرض
         st.session_state.search_results_dys = translate_columns(results)
@@ -1258,7 +1261,7 @@ def page_search():
         # Calculate index directly for immediate visual feedback
         dropdown_index = None
         
-        if selected_index is not None:
+        if selected_index is not None and selected_index < len(results_dys):
              # Sync Table -> Dropdown
              raw_name = str(results_dys.iloc[selected_index][name_col]).strip()
              
