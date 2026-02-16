@@ -200,7 +200,7 @@ def process_cv_translation(url):
         return f"❌ حدث خطأ غير متوقع: {str(e)}"
 
 # --- Authentication System ---
-USERS_FILE = 'users.json'
+USERS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'users.json')
 
 def load_users():
     if os.path.exists(USERS_FILE):
@@ -309,7 +309,7 @@ L = {
         'pass_lbl': "كلمة المرور",
         'login_btn': "دخول",
         'wrong_pass': "❌ كلمة المرور خاطئة",
-        'user_not_found': "❌ المستخدم غير موجود",
+        'user_not_found': "المستخدم غير موجود",
         'prog_by': "برمجة",
         'switch_lang': "Switch to English",
         'logout': "خروج من البرنامج",
