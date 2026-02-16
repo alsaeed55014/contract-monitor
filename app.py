@@ -532,7 +532,7 @@ st.markdown("""
     /* Welcome Message - رسالة الترحيب الجمالية */
     .welcome-container {
         display: flex;
-        justify-content: flex-end; /* أقصى اليمين */
+        justify-content: flex-start; /* اليمين في نظام RTL */
         align-items: center;
         width: 100%;
         padding: 10px 0;
@@ -632,17 +632,18 @@ def render_welcome_message():
         else:
             display_name = name_ar if name_ar else st.session_state.get("current_user", "")
         
-        # فرض الـ RTL لضمان ترتيب "مرحباً بك يا سمر" وليس العكس
+        # فرض الـ RTL و flex-start لضمان أقصى اليمين في العربية
         st.markdown(f"""
-        <div class="welcome-container" dir="rtl">
+        <div class="welcome-container" dir="rtl" style="justify-content: flex-start;">
             <div class="welcome-msg">{prefix} {display_name}</div>
         </div>
         """, unsafe_allow_html=True)
     else:
         prefix = "Welcome back,"
         display_name = name_en if name_en else st.session_state.get("current_user", "")
+        # في الإنجليزية نستخدم flex-end للوصول لأقصى اليمين
         st.markdown(f"""
-        <div class="welcome-container" dir="ltr">
+        <div class="welcome-container" dir="ltr" style="justify-content: flex-end;">
             <div class="welcome-msg">{prefix} {display_name}</div>
         </div>
         """, unsafe_allow_html=True)
