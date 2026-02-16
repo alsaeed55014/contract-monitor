@@ -615,19 +615,19 @@ def render_neon_signature():
         <div class="neon-text">Al-Saeed Al-Wazzan Programming</div>
     </div>
     """, unsafe_allow_html=True)
-
 def render_welcome_message():
     """Renders a beautiful, right-aligned welcome message for the user."""
     lang = st.session_state.get('lang', 'ar')
     
-    # جلب الأسماء الثنائية من الجلسة
-    name_ar = st.session_state.get("current_user_name_ar", "")
-    name_en = st.session_state.get("current_user_name_en", "")
+    # إعادة تحميل المستخدمين لضمان قراءة أحدث البيانات
+    updated_users = load_users()
+    curr_u = st.session_state.get("current_user", "").lower().strip()
+    user_data = updated_users.get(curr_u, {})
     
     if lang == 'ar':
         prefix = "مرحباً بك يا"
-        # عرض الاسم العربي فقط للمحافظة على هوية الواجهة العربية
-        display_name = name_ar if name_ar else st.session_state.get("current_user", "")
+        # الأولوية للاسم العربي، ثم اسم المستخدم
+        display_name = user_data.get("full_name_ar", curr_u)
         
         # فرض الـ RTL و flex-start لضمان أقصى اليمين في العربية
         st.markdown(f"""
@@ -637,14 +637,15 @@ def render_welcome_message():
         """, unsafe_allow_html=True)
     else:
         prefix = "Welcome back,"
-        # عرض الاسم الإنجليزي فقط للمحافظة على هوية الواجهة الإنجليزية
-        display_name = name_en if name_en else st.session_state.get("current_user", "")
+        # الأولوية للاسم الإنجليزي، ثم اسم المستخدم مكبراً
+        display_name = user_data.get("full_name_en", curr_u.title())
         # في الإنجليزية نستخدم flex-end للوصول لأقصى اليمين
         st.markdown(f"""
         <div class="welcome-container" dir="ltr" style="justify-content: flex-end;">
             <div class="welcome-msg">{prefix} {display_name}</div>
         </div>
         """, unsafe_allow_html=True)
+
 
 def translate_columns(df):
     col_mapping_exact = {
@@ -1011,12 +1012,14 @@ def page_login():
             st.markdown("<div style='text-align:center; font-size:40px;'>📷</div>", unsafe_allow_html=True)
         
         # النص تحت الصورة بشكل فخم
-        st.markdown("""
+        prog_name = "السعيد الوزان" if st.session_state.lang == 'ar' else "Al-Saeed Al-Wazzan"
+        st.markdown(f"""
             <div style='text-align:center; margin-top:5px;'>
-                <span style='color:#8a7a5a; font-size:10px; letter-spacing:2px; text-transform:uppercase;'>✦ Programmed by ✦</span><br>
-                <span style='background: linear-gradient(90deg, #d4af37, #f5d991, #d4af37); -webkit-background-clip: text; -webkit-text-fill-color: transparent; font-size:16px; font-weight:700; letter-spacing:1px;'>Al-Saeed Al-Wazzan</span>
+                <span style='color:#8a7a5a; font-size:10px; letter-spacing:2px; text-transform:uppercase;'>✦ {T['prog_by']} ✦</span><br>
+                <span style='background: linear-gradient(90deg, #d4af37, #f5d991, #d4af37); -webkit-background-clip: text; -webkit-text-fill-color: transparent; font-size:16px; font-weight:700; letter-spacing:1px;'>{prog_name}</span>
             </div>
         """, unsafe_allow_html=True)
+
         
         st.markdown("---")
         
@@ -1035,8 +1038,8 @@ def page_login():
                     st.session_state.current_user = username
                     # حفظ الأسماء الثنائية في الجلسة لاستخدامها في الترحيب حسب اللغة
                     user_info = USERS[username]
-                    st.session_state.current_user_name_ar = user_info.get("full_name_ar", user_info.get("full_name", username))
-                    st.session_state.current_user_name_en = user_info.get("full_name_en", user_info.get("full_name", username))
+                    st.session_state.current_user_name_ar = user_info.get("full_name_ar", username)
+                    st.session_state.current_user_name_en = user_info.get("full_name_en", username.title())
                     st.session_state.page = "home"
                     st.rerun()
                 else: st.error(T['wrong_pass'])
@@ -1599,9 +1602,10 @@ def page_permissions():
                 st.success(f"✅ تم تغيير كلمة مرور {target_user} بنجاح" if st.session_state.lang == 'ar' else f"✅ Password changed for {target_user}")
     
     # === إضافة مستخدم جديد ===
-    with col2:
+    with col1: # Changed to col1 to give more space
         st.markdown(f"### ➕ {T['add_user_title']}")
-        new_name = st.text_input("الاسم الكامل" if st.session_state.lang == 'ar' else "Full Name", key="new_full_name")
+        new_name_ar = st.text_input("الاسم الكامل (عربي)" if st.session_state.lang == 'ar' else "Full Name (Arabic)", key="new_full_name_ar")
+        new_name_en = st.text_input("الاسم الكامل (إنجليزي)" if st.session_state.lang == 'ar' else "Full Name (English)", key="new_full_name_en")
         new_u = st.text_input(T['user_lbl'], key="new_u")
         new_p = st.text_input(T['pass_lbl'], type="password", key="new_p")
         new_p2 = st.text_input("تأكيد كلمة المرور" if st.session_state.lang == 'ar' else "Confirm Password", type="password", key="confirm_new_p")
@@ -1615,14 +1619,15 @@ def page_permissions():
             elif new_u in USERS:
                 st.error("اسم المستخدم موجود مسبقاً" if st.session_state.lang == 'ar' else "Username already exists")
             else:
-                USERS[new_u] = {
+                USERS[new_u.lower().strip()] = {
                     "password": hashlib.sha256(new_p.encode()).hexdigest(),
                     "role": "admin" if can_p else "user",
-                    "full_name": new_name if new_name else new_u,
+                    "full_name_ar": new_name_ar if new_name_ar else new_u,
+                    "full_name_en": new_name_en if new_name_en else new_u,
                     "can_manage_users": can_p
                 }
                 save_users(USERS)
-                st.success(f"✅ تم إضافة {new_u} ({new_name}) بنجاح" if st.session_state.lang == 'ar' else f"✅ User {new_u} added")
+                st.success(f"✅ تم إضافة {new_u} بنجاح" if st.session_state.lang == 'ar' else f"✅ User {new_u} added")
                 st.rerun()
     
     # === حذف مستخدم ===
