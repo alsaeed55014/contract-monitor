@@ -30,7 +30,7 @@ st.set_page_config(
 # --- استيراد الخطوط العالمية ---
 st.markdown("""
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=Dancing+Script:wght@700&family=Orbitron:wght@400;700&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Dancing+Script:wght@700&family=Orbitron:wght@400;700&family=Cairo:wght@400;700&display=swap');
 </style>
 """, unsafe_allow_html=True)
 
@@ -520,6 +520,27 @@ st.markdown("""
         }
     }
     
+    /* Welcome Message - رسالة الترحيب الجمالية */
+    .welcome-container {
+        display: flex;
+        justify-content: flex-end; /* أقصى اليمين */
+        align-items: center;
+        width: 100%;
+        padding: 10px 0;
+        margin-top: -20px;
+        margin-bottom: 5px;
+    }
+    .welcome-msg {
+        font-family: 'Cairo', sans-serif;
+        font-size: 1.8rem;
+        font-weight: 700;
+        color: #e0e0e0;
+        text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        border-right: 5px solid #2196f3;
+        padding-right: 15px;
+        line-height: 1.2;
+    }
+    
     /* تقليل الفراغات بين العناصر - بدون التأثير على العنوان الرئيسي */
     div.stMarkdown { margin-bottom: -10px; }
     h2, h3 { margin-top: -10px !important; padding-top: 0px !important; }
@@ -581,6 +602,19 @@ def render_neon_signature():
     st.markdown("""
     <div class="neon-signature-container">
         <div class="neon-text">Al-Saeed Al-Wazzan Programming</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+def render_welcome_message():
+    """Renders a beautiful, right-aligned welcome message for the user."""
+    welcome_name = st.session_state.get("current_user_name", st.session_state.current_user)
+    lang = st.session_state.get('lang', 'ar')
+    
+    prefix = "مرحباً بك يا" if lang == 'ar' else "Welcome back,"
+    
+    st.markdown(f"""
+    <div class="welcome-container">
+        <div class="welcome-msg">{prefix} {welcome_name}</div>
     </div>
     """, unsafe_allow_html=True)
 
@@ -978,9 +1012,8 @@ def page_login():
 def page_home():
     sidebar_content()
     
-    # رسالة الترحيب في الرئيسية
-    welcome_name = st.session_state.get("current_user_name", st.session_state.current_user)
-    st.title(f"{T['home_title']} - {welcome_name}")
+    # رسالة الترحيب الجمالية في اليمين
+    render_welcome_message()
     
     # إضافة التوقيع النيوني ممركزاً
     render_neon_signature()
@@ -1227,6 +1260,9 @@ def page_home():
 # --- Page: Search ---
 def page_search():
     sidebar_content()
+    # رسالة الترحيب الجمالية في اليمين
+    render_welcome_message()
+    
     st.title(T['search_page_title'])
     
     # إضافة التوقيع النيوني ممركزاً موازي للعنوان
@@ -1481,9 +1517,10 @@ def page_permissions():
     sidebar_content()
     st.title(T['perms_page_title'])
     
-    # رسالة الترحيب بالاسم الكامل
-    welcome_name = st.session_state.get("current_user_name", st.session_state.current_user)
-    st.markdown(f"### {'Welcome back' if st.session_state.lang == 'en' else 'مرحباً بك'} ، {welcome_name}")
+    # رسالة الترحيب الجمالية في اليمين
+    render_welcome_message()
+    
+    # إضافة التوقيع النيوني ممركزاً
     
     if st.button(T['back_nav']):
         st.session_state.page = "home"
