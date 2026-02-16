@@ -796,110 +796,211 @@ def translate_columns(df):
 
 def translate_search_term(term):
     """
-    Translates Arabic search terms to English word-by-word for advanced filtering.
-    Supports complex queries like 'باريستا فلبينية ولد'
+    Translates Arabic search terms to English with smart phrase matching.
+    Supports complex queries and tries longest phrases first.
     """
     if not term: return ""
-    term = term.strip().lower()
+    term_original = term.strip()
+    term = term_original.lower()
     
-    # Mapping dictionary (Arabic -> English) - الموسع الشامل
+    # Mapping dictionary (Arabic -> English) - الموسع الشامل مع جميع الاختلافات
     mapping = {
-        # Genders & Synonyms
+        # === PHRASES (2+ words) - يجب أن تكون أولاً للبحث عن العبارات الطويلة ===
+        "عاملة منزلية": "Housemaid", "عامله منزليه": "Housemaid", "عاملة منزل": "Domestic Worker",
+        "جليسة اطفال": "Babysitter", "جليسه اطفال": "Babysitter",
+        "مصففة شعر": "Hairdresser", "مصففه شعر": "Hairdresser",
+        "كوافير رجالي": "Men Barber",
+        "بديكير منيكير": "Manicure Pedicure", "بدكير منكير": "Manicure Pedicure", 
+        "بديكير منكير": "Manicure Pedicure", "بدكير منيكير": "Manicure Pedicure",
+        "منيكير بديكير": "Manicure Pedicure", "منكير بديكير": "Manicure Pedicure",
+        "منيكير بدكير": "Manicure Pedicure", "منكير بدكير": "Manicure Pedicure",
+        "فني اظافر": "Nail Technician", "فني أظافر": "Nail Technician",
+        "خبيرة تجميل": "Beauty Expert", "خبير تجميل": "Beautician",
+        "خبيرة مكياج": "Makeup Artist",
+        "شيف مطعم": "Restaurant Chef", "طباخ مطعم": "Restaurant Chef",
+        "شيف حلا": "Pastry Chef", "شيف حلى": "Pastry Chef",
+        "محاسب مطعم": "Restaurant Cashier",
+        "سائق خاص": "Private Driver", "سائق شاحنة": "Truck Driver", 
+        "سائق باص": "Bus Driver", "سائق نقل": "Transport Driver",
+        "عامل نظافة": "Cleaner", "عاملة نظافة": "Cleaner", "عامل تنظيف": "Cleaner",
+        "فني صيانة": "Maintenance Technician",
+        "موظف مبيعات": "Sales Employee", "موظف استقبال": "Receptionist", "موظفة استقبال": "Receptionist",
+        "حارس امن": "Security Guard", "حارس أمن": "Security Guard", "حارس ليلي": "Night Guard", 
+        "رجل امن": "Security Man", "رجل أمن": "Security Man",
+        "مصور فيديو": "Videographer", "مصور كاميرا": "Camera Operator", 
+        "مبرمج كاميرا": "Camera Programmer", "محرر فيديو": "Video Editor",
+        "مصمم جرافيك": "Graphic Designer",
+        "عامل بناء": "Construction Worker",
+        
+        # === Genders & Synonyms ===
         "ذكر": "Male", "رجل": "Male", "ولد": "Male", "انثى": "Female", "أنثى": "Female",
         "بنت": "Female", "سيدة": "Female", "سيده": "Female", "امرأة": "Female", "امره": "Female",
         
-        # Marital Status
-        "اعزب": "Single", "أعزب": "Single", "متزوج": "Married", "متزوجة": "Married", "ارمل": "Widow", "مطلق": "Divorced",
+        # === Marital Status ===
+        "اعزب": "Single", "أعزب": "Single", "متزوج": "Married", "متزوجة": "Married", 
+        "ارمل": "Widow", "أرمل": "Widow", "مطلق": "Divorced", "مطلقة": "Divorced",
         
-        # Cities (Saudi)
-        "الرياض": "Riyadh", "جدة": "Jeddah", "مكة": "Makkah", "المدينة": "Madinah", "الدمام": "Dammam",
-        "الخبر": "Khobar", "أبها": "Abha", "تبوك": "Tabuk", "حائل": "Hail", "جازان": "Jazan",
-        "نجران": "Najran", "الطائف": "Taif", "القصيم": "Qassim", "بريدة": "Buraydah",
+        # === Cities (Saudi) ===
+        "الرياض": "Riyadh", "رياض": "Riyadh", "جدة": "Jeddah", "جده": "Jeddah",
+        "مكة": "Makkah", "مكه": "Makkah", "المدينة": "Madinah", "المدينه": "Madinah",
+        "الدمام": "Dammam", "دمام": "Dammam", "الخبر": "Khobar", "خبر": "Khobar",
+        "أبها": "Abha", "ابها": "Abha", "تبوك": "Tabuk", "حائل": "Hail", "حايل": "Hail",
+        "جازان": "Jazan", "جيزان": "Jazan", "نجران": "Najran", "الطائف": "Taif", "طائف": "Taif",
+        "القصيم": "Qassim", "قصيم": "Qassim", "بريدة": "Buraydah", "بريده": "Buraydah",
         
-        # Nationalities (الموسع)
-        "سعودي": "Saudi", "سعودية": "Saudi", "مصر": "Egypt", "مصري": "Egyptian", "مصرية": "Egyptian",
-        "هندي": "Indian", "هندية": "Indian", "باكستاني": "Pakistani", "باكستانية": "Pakistani",
-        "فلبيني": "Filipino", "فلبينية": "Filipino", "فلبينيه": "Filipino", "فلبيي": "Filipino", "فلبين": "Filipino",
-        "أوغندي": "Ugandan", "اوغندي": "Ugandan", "أوغندية": "Ugandan", "اوغنديه": "Ugandan", "أوغندا": "Ugandan", "اوغندا": "Ugandan",
-        "كيني": "Kenyan", "Kenya": "Kenyan", "كنيا": "Kenyan", "كينيا": "Kenyan", "كينية": "Kenyan", "كينيه": "Kenyan", "كينى": "Kenyan",
-        "بنجلاديش": "Bangladeshi", "بنجلاديشي": "Bangladeshi", "بنغلاديش": "Bangladeshi", "بنغلاديشي": "Bangladeshi",
-        "إثيوبي": "Ethiopian", "إثيوبيا": "Ethiopian", "اثيوبي": "Ethiopian", "اثيوبيا": "Ethiopian",
-        "سوداني": "Sudanese", "سودان": "Sudan", "يمني": "Yemeni", "سوري": "Syrian", "أردني": "Jordanian", "لبناني": "Lebanese",
-        "نيجيري": "Nigerian", "نيجيريا": "Nigeria", "غاني": "Ghanaian", "غانا": "Ghana",
+        # === Nationalities (الموسع) ===
+        "سعودي": "Saudi", "سعودية": "Saudi", "سعوديه": "Saudi",
+        "مصر": "Egypt", "مصري": "Egyptian", "مصرية": "Egyptian", "مصريه": "Egyptian",
+        "هندي": "Indian", "هندية": "Indian", "هنديه": "Indian", "الهند": "Indian",
+        "باكستاني": "Pakistani", "باكستانية": "Pakistani", "باكستانيه": "Pakistani",
+        "فلبيني": "Filipino", "فلبينية": "Filipino", "فلبينيه": "Filipino", "فلبيي": "Filipino", 
+        "فلبين": "Filipino", "الفلبين": "Filipino", "فليبيني": "Filipino", "فليبينية": "Filipino",
+        "أوغندي": "Ugandan", "اوغندي": "Ugandan", "أوغندية": "Ugandan", "اوغنديه": "Ugandan", 
+        "أوغندا": "Ugandan", "اوغندا": "Ugandan", "اوغنده": "Ugandan",
+        "كيني": "Kenyan", "كينية": "Kenyan", "كينيه": "Kenyan", "كنيا": "Kenyan", 
+        "كينيا": "Kenyan", "كينى": "Kenyan",
+        "بنجلاديش": "Bangladeshi", "بنجلاديشي": "Bangladeshi", "بنغلاديش": "Bangladeshi", 
+        "بنغلاديشي": "Bangladeshi", "بنقلاديش": "Bangladeshi",
+        "إثيوبي": "Ethiopian", "إثيوبيا": "Ethiopian", "اثيوبي": "Ethiopian", 
+        "اثيوبيا": "Ethiopian", "إثيوبية": "Ethiopian", "اثيوبيه": "Ethiopian",
+        "سوداني": "Sudanese", "سودانية": "Sudanese", "سودان": "Sudan", "السودان": "Sudan",
+        "يمني": "Yemeni", "يمنية": "Yemeni", "يمنيه": "Yemeni",
+        "سوري": "Syrian", "سورية": "Syrian", "سوريه": "Syrian",
+        "أردني": "Jordanian", "اردني": "Jordanian", "أردنية": "Jordanian",
+        "لبناني": "Lebanese", "لبنانية": "Lebanese", "لبنانيه": "Lebanese",
+        "نيجيري": "Nigerian", "نيجيرية": "Nigerian", "نيجيريا": "Nigeria",
+        "غاني": "Ghanaian", "غانية": "Ghanaian", "غانا": "Ghana",
+        "اريتري": "Eritrean", "اريترية": "Eritrean", "اريتريا": "Eritrea",
         
-        # Jobs (الموسع الكامل)
-        # وظائف المطاعم والمقاهي
-        "باريستا": "Barista", "نادل": "Waiter", "نادلة": "Waitress", "ويتر": "Waiter", 
-        "طباخ": "Chef", "طباخة": "Chef", "شيف": "Chef", "طاهي": "Chef", "طاهية": "Chef",
-        "شيف مطعم": "Restaurant Chef", "طباخ مطعم": "Restaurant Chef",
-        "حلا": "Pastry", "حلويات": "Sweets", "شيف حلا": "Pastry Chef", "حلواني": "Pastry Chef",
-        "كاشير": "Cashier", "كاشيير": "Cashier", "محاسب مطعم": "Restaurant Cashier",
+        # === Jobs - وظائف المطاعم والمقاهي ===
+        # كلمات مفردة تعطي عدة ترجمات
+        "قهوة": "Coffee Barista Cafe", "قهوه": "Coffee Barista",
+        "طبخ": "Cooking Chef Cook", "طبيخ": "Cooking Chef",
+        "باريستا": "Barista Coffee", "باريستا": "Barista",
+        "نادل": "Waiter", "نادلة": "Waitress", "نادله": "Waitress", "ويتر": "Waiter", "ويتريس": "Waitress",
+        "طباخ": "Chef", "طباخة": "Chef", "طباخه": "Chef", 
+        "شيف": "Chef", "شيفة": "Chef", "طاهي": "Chef", "طاهية": "Chef", "طاهيه": "Chef",
+        "حلا": "Pastry", "حلى": "Pastry", "حلويات": "Sweets", "حلواني": "Pastry Chef",
+        "كاشير": "Cashier", "كاشيير": "Cashier", "كاشيره": "Cashier",
         
-        # وظائف المنازل
-        "عاملة منزلية": "Housemaid", "عامله منزليه": "Housemaid", "خادمة": "Maid", "خادمه": "Maid",
-        "شغالة": "Domestic", "شغاله": "Domestic", "عاملة منزل": "Domestic Worker",
-        "مربية": "Nanny", "مربيه": "Nanny", "جليسة اطفال": "Babysitter", "جليسه اطفال": "Babysitter",
+        # === وظائف المنازل ===
+        "خدمة": "Maid Service Housemaid Domestic", "خدمه": "Maid Service",
+        "خادمة": "Maid Housemaid Domestic", "خادمه": "Maid Housemaid", "خدامة": "Maid", "خدامه": "Maid",
+        "شغالة": "Domestic Housemaid Maid", "شغاله": "Domestic Housemaid", "شغاله منزليه": "Housemaid",
+        "مربية": "Nanny Babysitter", "مربيه": "Nanny Babysitter", "مربيه اطفال": "Nanny",
         
-        # وظائف التجميل
-        "مصففة شعر": "Hairdresser", "مصففه شعر": "Hairdresser", "كوافيرة": "Hairdresser", "كوافير": "Hairstylist",
-        "حلاق": "Barber", "حلاقة": "Barber", "كوافير رجالي": "Men Barber",
-        "بديكير": "Pedicure", "منيكير": "Manicure", "بديكير منيكير": "Manicure Pedicure",
-        "بدكير": "Pedicure", "بدكير منكير": "Manicure Pedicure", "فني اظافر": "Nail Technician",
-        "تجميل": "Beauty", "خبيرة تجميل": "Beauty Expert", "خبير تجميل": "Beautician",
-        "مكياج": "Makeup", "ميك اب": "Makeup", "خبيرة مكياج": "Makeup Artist",
+        # === وظائف التجميل (مع جميع الاختلافات الإملائية) ===
+        # كلمات مفردة مهمة
+        "حلاقة": "Barber Hairdresser Hair", "حلاقه": "Barber Hairdresser",
+        "شعر": "Hair Hairdresser Barber Hairstylist", "شعور": "Hair",
+        "كوافيرة": "Hairdresser Hair Stylist", "كوافيره": "Hairdresser Hair", "كوافير": "Hairstylist Hair Barber",
+        "حلاق": "Barber", "حلاقة": "Barber", "حلاقه": "Barber",
+        # المهم: جميع اختلافات مانيكير/بديكير
+        "منيكير": "Manicure Nails", "مانيكير": "Manicure Nails", "منكير": "Manicure Nails", "مانكير": "Manicure",
+        "مناكير": "Manicure Nails", "مانكيور": "Manicure", "منكيور": "Manicure",
+        "بديكير": "Pedicure Nails", "بدكير": "Pedicure Nails", "بيديكير": "Pedicure", "بيدكير": "Pedicure",
+        "باديكير": "Pedicure", "بادكير": "Pedicure",
+        "اظافر": "Nails Manicure Pedicure", "أظافر": "Nails Manicure Pedicure", "اضافر": "Nails",
+        "تجميل": "Beauty Beautician Makeup", "تجميلي": "Beauty Beautician", "تجميليه": "Beauty",
+        "مكياج": "Makeup Beauty", "ميك اب": "Makeup Beauty", "ميكب": "Makeup", "مكيج": "Makeup",
         
-        # وظائف النقل
-        "سائق": "Driver", "سائقة": "Driver", "سائق خاص": "Private Driver", "سواق": "Driver",
-        "سائق شاحنة": "Truck Driver", "سائق باص": "Bus Driver", "سائق نقل": "Transport Driver",
+        # === وظائف النقل ===
+        # كلمات مفردة مهمة
+        "قيادة": "Driving Driver", "قياده": "Driving Driver",
+        "سياقة": "Driving Driver", "سياقه": "Driving Driver",
+        "سائق": "Driver Driving", "سائقة": "Driver Driving", "سائقه": "Driver", "سواق": "Driver Driving",
         
-        # وظائف النظافة والصيانة
-        "عامل نظافة": "Cleaner", "عاملة نظافة": "Cleaner", "منظف": "Cleaner", "منظفة": "Cleaner",
-        "عامل": "Worker", "عاملة": "Worker", "عامله": "Worker",
-        "حداد": "Blacksmith", "نجار": "Carpenter", "سباك": "Plumber", "كهربائي": "Electrician",
-        "فني": "Technician", "فنية": "Technician", "فني صيانة": "Maintenance Technician",
+        # === وظائف النظافة والصيانة ===
+        # كلمات مفردة مهمة - يجب أن تعطي عدة ترجمات
+        "نظافة": "Cleaner Cleaning Clean", "نظافه": "Cleaner Cleaning Clean", 
+        "تنظيف": "Cleaning Cleaner Clean", "تنضيف": "Cleaning Cleaner",
+        "منظف": "Cleaner Clean Cleaning", "منظفة": "Cleaner Clean", "منظفه": "Cleaner Clean", 
+        "عامل نظافه": "Cleaner Worker",
+        "عامل": "Worker Employee", "عاملة": "Worker Employee", "عامله": "Worker",
         
-        # وظائف إدارية ومكتبية
-        "محاسب": "Accountant", "محاسبة": "Accountant", "مدير": "Manager", "مديرة": "Manager",
-        "مبيعات": "Sales", "موظف مبيعات": "Sales Employee", "بائع": "Seller", "بائعة": "Seller",
-        "استقبال": "Reception", "موظف استقبال": "Receptionist", "موظفة استقبال": "Receptionist",
-        "سكرتير": "Secretary", "سكرتيرة": "Secretary", "سكرتارية": "Secretary",
-        "مشرف": "Supervisor", "مشرفة": "Supervisor",
+        # === وظائف إدارية ومكتبية ===
+        "محاسبة": "Accounting Accountant Finance", "محاسب": "Accountant Accounting Finance", "محاسبه": "Accountant Accounting",
+        "إدارة": "Management Manager Administration", "اداره": "Management Manager",
+        "مدير": "Manager Management Administration", "مديرة": "Manager Management", "مديره": "Manager",
+        "مبيعات": "Sales Seller Selling Marketing", "مبيع": "Sales Selling", "بيع": "Sales Selling",
+        "بائع": "Seller Sales", "بائعة": "Seller Sales", "بائعه": "Seller",
+        "استقبال": "Reception Receptionist", "استقبالي": "Receptionist Reception", "استقباليه": "Receptionist",
+        "سكرتير": "Secretary Secretariat", "سكرتيرة": "Secretary", "سكرتيره": "Secretary", "سكرتارية": "Secretary Secretariat", "سكرتاريه": "Secretary",
+        "مشرف": "Supervisor Supervision Manager", "مشرفة": "Supervisor", "مشرفه": "Supervisor",
         
-        # وظائف أمنية
-        "حارس": "Security", "حارس امن": "Security Guard", "امن": "Security", "أمن": "Security",
-        "حارس ليلي": "Night Guard", "رجل امن": "Security Man",
+        # === وظائف أمنية ===
+        "حراسة": "Security Guard Protection", "حراسه": "Security Guard",
+        "حارس": "Security Guard Protection", "حارسة": "Security Guard", 
+        "امن": "Security Guard Protection", "أمن": "Security Guard Protection", "امني": "Security", "أمني": "Security",
         
-        # وظائف صحية
-        "طبيب": "Doctor", "طبيبة": "Doctor", "دكتور": "Doctor", "دكتورة": "Doctor",
-        "ممرض": "Nurse", "ممرضة": "Nurse", "تمريض": "Nursing",
-        "صيدلي": "Pharmacist", "صيدلية": "Pharmacist", "صيدلاني": "Pharmacist",
+        # === وظائف الصيانة ===
+        "صيانة": "Maintenance Repair Technician", "صيانه": "Maintenance Repair",
+        "فني": "Technician Maintenance Technical", "فنية": "Technician Technical", "فنيه": "Technician",
+        "حداد": "Blacksmith Metal", "حداده": "Blacksmith",
+        "نجار": "Carpenter Carpentry Wood", "نجاره": "Carpenter Carpentry", "نجارة": "Carpenter Carpentry",
+        "سباكة": "Plumbing Plumber", "سباكه": "Plumbing", "سباك": "Plumber Plumbing",
+        "كهرباء": "Electrical Electrician Electric", "كهربائي": "Electrician Electrical Electric", "كهربائية": "Electrician Electrical", "كهربائيه": "Electrician", "كهربجي": "Electrician",
         
-        # وظائف تقنية
-        "مهندس": "Engineer", "مهندسة": "Engineer", "هندسة": "Engineering",
-        "مبرمج": "Programmer", "مبرمجة": "Programmer", "برمجة": "Programming",
-        "مصور": "Photographer", "مصورة": "Photographer", "تصوير": "Photography",
-        "مصور فيديو": "Videographer", "مصور كاميرا": "Camera Operator", "مبرمج كاميرا": "Camera Programmer",
-        "مونتاج": "Video Editor", "محرر فيديو": "Video Editor",
-        "مصمم": "Designer", "مصممة": "Designer", "تصميم": "Design",
-        "مصمم جرافيك": "Graphic Designer", "جرافيك": "Graphic",
+        # === وظائف صحية ===
+        "طب": "Medicine Doctor Medical Health", "طبيب": "Doctor Medicine Medical Health", "طبيبة": "Doctor Medicine", "طبيبه": "Doctor", 
+        "دكتور": "Doctor Medicine Medical", "دكتورة": "Doctor Medicine", "دكتوره": "Doctor",
+        "تمريض": "Nursing Nurse Medical Health", "ممرض": "Nurse Nursing Medical Health", "ممرضة": "Nurse Nursing", "ممرضه": "Nurse",
+        "صيدلة": "Pharmacy Pharmacist Medical", "صيدلي": "Pharmacist Pharmacy Medical", "صيدلية": "Pharmacist Pharmacy", "صيدليه": "Pharmacist", "صيدلاني": "Pharmacist",
         
-        # وظائف أخرى
-        "معلم": "Teacher", "معلمة": "Teacher", "مدرس": "Teacher", "مدرسة": "Teacher",
-        "مدرب": "Trainer", "مدربة": "Trainer", "كوتش": "Coach",
-        "عامل بناء": "Construction Worker", "بناء": "Construction", "بناي": "Builder",
-        "لحام": "Welder", "لحامة": "Welder", "خياط": "Tailor", "خياطة": "Tailor"
+        # === وظائف تقنية ===
+        "هندسة": "Engineering Engineer", "هندسه": "Engineering Engineer",
+        "برمجة": "Programming Programmer Developer Coder", "برمجه": "Programming Programmer",
+        "تصوير": "Photography Photographer Camera Videographer", "مصور": "Photographer Photography Camera", "مصورة": "Photographer", "مصوره": "Photographer",
+        "تصميم": "Design Designer Graphic", "مصمم": "Designer Design", "مصممة": "Designer", "مصممه": "Designer",
+        "مهندس": "Engineer Engineering", "مهندسة": "Engineer", "مهندسه": "Engineer",
+        "مبرمج": "Programmer Programming Developer", "مبرمجة": "Programmer", "مبرمجه": "Programmer",
+        "مونتاج": "Video Editor Editing", "مونتير": "Video Editor",
+        "جرافيك": "Graphic Design", "جرافيكس": "Graphics Design", "قرافيك": "Graphic",
+        
+        # === وظائف أخرى ===
+        "تعليم": "Teaching Teacher Education", "تدريس": "Teaching Teacher",
+        "معلم": "Teacher Teaching Education", "معلمة": "Teacher Teaching", "معلمه": "Teacher", 
+        "مدرس": "Teacher Teaching", "مدرسة": "Teacher", "مدرسه": "Teacher",
+        "تدريب": "Training Trainer Coach", "مدرب": "Trainer Training Coach", "مدربة": "Trainer", "مدربه": "Trainer", "كوتش": "Coach Trainer",
+        "بناء": "Construction Builder Building", "بناي": "Builder Construction", "بناية": "Builder",
+        "لحام": "Welding Welder", "لحامة": "Welder Welding", "لحامه": "Welder",
+        "خياطة": "Tailoring Tailor Sewing", "خياطه": "Tailoring", "خياط": "Tailor Sewing",
     }
     
-    # Split the query into words and translate each
-    words = term.split()
-    translated_words = []
-    for w in words:
-        if w in mapping:
-            translated_words.append(mapping[w])
-        else:
-            translated_words.append(w) # Keep original if no mapping
-            
-    return " ".join(translated_words)
+    # STRATEGY: Try longest phrases first (greedy matching)
+    # Sort by length descending to match longest phrases first
+    sorted_keys = sorted(mapping.keys(), key=len, reverse=True)
+    
+    result = term
+    matched_phrases = []
+    
+    # First pass: Replace all matching phrases (longest first)
+    for key in sorted_keys:
+        if key in result:
+            # Mark this position to avoid re-matching
+            placeholder = f"___{mapping[key].upper()}___"
+            result = result.replace(key, placeholder)
+            matched_phrases.append(key)
+    
+    # Second pass: Clean up placeholders
+    result = result.replace("___", " ")
+    
+    # Third pass: Translate any remaining single words
+    final_words = []
+    for word in result.split():
+        word_clean = word.strip()
+        if word_clean:
+            # Check if already translated (will be in English/uppercase)
+            if word_clean.lower() in [v.lower() for v in mapping.values()]:
+                final_words.append(word_clean)
+            # Try to translate
+            elif word_clean in mapping:
+                final_words.append(mapping[word_clean])
+            else:
+                # Keep original if no translation found
+                final_words.append(word_clean)
+    
+    return " ".join(final_words)
 
 def increment_key_version(keys):
     # If single key string provided, wrap in list
