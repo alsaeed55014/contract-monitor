@@ -76,30 +76,34 @@ def smart_search_filter(row_series, query_str):
             return True
         query_str_clean = str(query_str).strip().lower()
         
-        # 1. Literal match (case-insensitive) - Safe from regex errors
+        # 1. Gender Precision (رجل/سيدة - مطابقة تامة ومنع تداخل Male/Female)
+        # نضع هذا الفحص في البداية لأن كلمة male موجودة داخل female
+        if query_str_clean in ["male", "female"]:
+            for col_name, val in row_series.items():
+                if any(kw in str(col_name).lower() for kw in ["جنس", "gender"]):
+                    if str(val).lower().strip() == query_str_clean:
+                        return True
+            return False
+
+        # 2. Literal match (case-insensitive) - Safe from regex errors
         row_text = " ".join(row_series.astype(str)).lower()
         if query_str_clean in row_text:
             return True
             
-        # 2. Smart Phone Match
-        # Remove all non-digits for comparison
+        # 3. Smart Phone Match
+        # ... logic ...
         query_digits = re.sub(r'\D', '', query_str_clean)
-        
-        # Only try smart phone match if query looks like a phone number
         if len(query_digits) >= 9: 
             row_digits = re.sub(r'\D', '', row_text)
-            
-            # Match the last 9 digits (handles +966, 05, and 5 prefixes)
             last_9 = query_digits[-9:]
             if last_9 in row_digits:
                 return True
         elif len(query_digits) > 4:
-            # For shorter numbers (like 5 digits), try direct containment
             row_digits = re.sub(r'\D', '', row_text)
             if query_digits in row_digits:
                 return True
 
-        # 3. Special Category: African Research (بحث ذكي للجنسيات الأفريقية)
+        # 4. African Research (بحث ذكي للجنسيات الأفريقية - يستهدف عمود الجنسية)
         african_keywords = ["افريقي", "أفريقي", "افريقيه", "أفريقية", "african"]
         if any(kw in query_str_clean for kw in african_keywords):
             african_countries = [
@@ -108,9 +112,12 @@ def smart_search_filter(row_series, query_str):
                 "مصري", "سوداني", "كيني", "أوغندي", "إثيوبي", "اثيوبي", "غاني", "نيجيري",
                 "مصر", "السودان", "كينيا", "أوغندا", "إثيوبيا", "نيجيريا", "المغرب", "تونس", "الجزائر"
             ]
-            row_text_lower = " ".join(row_series.astype(str)).lower()
-            if any(country in row_text_lower for country in african_countries):
-                return True
+            for col_name, val in row_series.items():
+                if any(kw in str(col_name).lower() for kw in ["جنسية", "nationality"]):
+                    val_clean = str(val).lower().strip()
+                    if any(country in val_clean for country in african_countries):
+                        return True
+            return False
 
         return False
     except Exception as e:
