@@ -30,7 +30,7 @@ st.set_page_config(
 # --- استيراد الخطوط العالمية ---
 st.markdown("""
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=Dancing+Script:wght@700&family=Orbitron:wght@400;700&family=Cairo:wght@400;700&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Dancing+Script:wght@700&family=Orbitron:wght@400;700&family=Cairo:wght@400;700&family=Tajawal:wght@700;800&display=swap');
 </style>
 """, unsafe_allow_html=True)
 
@@ -542,14 +542,16 @@ st.markdown("""
         margin-bottom: 5px;
     }
     .welcome-msg {
-        font-family: 'Cairo', sans-serif;
-        font-size: 1.8rem;
-        font-weight: 700;
-        color: #e0e0e0;
-        text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
-        border-right: 5px solid #2196f3;
-        padding-right: 15px;
+        font-family: 'Tajawal', sans-serif;
+        font-size: 2rem;
+        font-weight: 800;
+        background: linear-gradient(135deg, #ffd700 0%, #ffae00 50%, #ffd700 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        text-shadow: 2px 4px 8px rgba(0,0,0,0.4);
+        padding-right: 20px;
         line-height: 1.2;
+        letter-spacing: 0.5px;
     }
     
     /* تقليل الفراغات بين العناصر - بدون التأثير على العنوان الرئيسي */
