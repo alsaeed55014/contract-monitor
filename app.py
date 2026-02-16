@@ -27,6 +27,13 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
+# --- استيراد الخطوط العالمية ---
+st.markdown("""
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Dancing+Script:wght@700&family=Orbitron:wght@400;700&display=swap');
+</style>
+""", unsafe_allow_html=True)
+
 # --- وظيفة لمنع تكرار أسماء الأعمدة ---
 def deduplicate_columns(columns):
     new_columns = []
@@ -473,6 +480,46 @@ st.markdown("""
         display: none !important;
     }
     
+    /* Neon Signature - توقيع السعيد الوزان */
+    .neon-signature-container {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        padding: 5px;
+        margin-top: -15px;
+        margin-bottom: 15px;
+        width: 100%;
+    }
+    .neon-text {
+        font-family: 'Dancing Script', cursive;
+        font-size: 2.2rem;
+        color: #fff;
+        text-align: center;
+        text-transform: capitalize;
+        text-shadow: 
+            0 0 5px #fff,
+            0 0 10px #fff,
+            0 0 20px #2196f3,
+            0 0 30px #2196f3,
+            0 0 40px #2196f3;
+        animation: neon-flicker 2s infinite alternate;
+        letter-spacing: 1px;
+    }
+    @keyframes neon-flicker {
+        0%, 18%, 22%, 25%, 53%, 57%, 100% {
+            text-shadow: 
+                0 0 5px #fff,
+                0 0 10px #fff,
+                0 0 20px #2196f3,
+                0 0 30px #2196f3,
+                0 0 40px #2196f3;
+        }
+        20%, 24%, 55% {
+            text-shadow: none;
+            opacity: 0.8;
+        }
+    }
+    
     /* تقليل الفراغات بين العناصر - بدون التأثير على العنوان الرئيسي */
     div.stMarkdown { margin-bottom: -10px; }
     h2, h3 { margin-top: -10px !important; padding-top: 0px !important; }
@@ -528,6 +575,14 @@ def render_premium_loader(text_ar="جاري تحديث البيانات...", tex
     </div>
     """
     return st.markdown(loader_html, unsafe_allow_html=True)
+
+def render_neon_signature():
+    """Renders the elegant neon programming signature."""
+    st.markdown("""
+    <div class="neon-signature-container">
+        <div class="neon-text">Al-Saeed Al-Wazzan Programming</div>
+    </div>
+    """, unsafe_allow_html=True)
 
 def translate_columns(df):
     col_mapping_exact = {
@@ -927,6 +982,9 @@ def page_home():
     welcome_name = st.session_state.get("current_user_name", st.session_state.current_user)
     st.title(f"{T['home_title']} - {welcome_name}")
     
+    # إضافة التوقيع النيوني ممركزاً
+    render_neon_signature()
+    
     st.header(T['alerts_title'])
     
     # Premium Loading for Home Page
@@ -1170,6 +1228,9 @@ def page_home():
 def page_search():
     sidebar_content()
     st.title(T['search_page_title'])
+    
+    # إضافة التوقيع النيوني ممركزاً موازي للعنوان
+    render_neon_signature()
     
     if st.button(T['back_nav']):
         st.session_state.page = "home"
