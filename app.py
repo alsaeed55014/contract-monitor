@@ -911,7 +911,9 @@ def sidebar_content():
 
         # 3. زر شاشة الصلاحيات
         if st.button(T['perms_nav'], type="secondary" if st.session_state.page != "permissions" else "primary", use_container_width=True):
-            if USERS.get(st.session_state.current_user, {}).get("can_manage_users"):
+            # إعادة تحميل المستخدمين للتأكد من قراءة أحدث الصلاحيات من الملف
+            updated_users = load_users()
+            if updated_users.get(st.session_state.current_user, {}).get("can_manage_users"):
                 st.session_state.page = "permissions"
                 st.rerun()
             else:
