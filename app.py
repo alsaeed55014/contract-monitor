@@ -626,11 +626,8 @@ def render_welcome_message():
     
     if lang == 'ar':
         prefix = "مرحباً بك يا"
-        # ضمان استخدام "سمر" بالعربي لمستخدم samar
-        if st.session_state.get("current_user", "").lower() == "samar":
-            display_name = "سمر"
-        else:
-            display_name = name_ar if name_ar else st.session_state.get("current_user", "")
+        # استخدام الاسم العربي في الواجهة العربية
+        display_name = name_ar if name_ar else st.session_state.get("current_user", "")
         
         # فرض الـ RTL و flex-start لضمان أقصى اليمين في العربية
         st.markdown(f"""
@@ -640,6 +637,7 @@ def render_welcome_message():
         """, unsafe_allow_html=True)
     else:
         prefix = "Welcome back,"
+        # استخدام الاسم الإنجليزي في الواجهة الإنجليزية
         display_name = name_en if name_en else st.session_state.get("current_user", "")
         # في الإنجليزية نستخدم flex-end للوصول لأقصى اليمين
         st.markdown(f"""
@@ -829,14 +827,67 @@ def translate_search_term(term):
         "سوداني": "Sudanese", "سودان": "Sudan", "يمني": "Yemeni", "سوري": "Syrian", "أردني": "Jordanian", "لبناني": "Lebanese",
         "نيجيري": "Nigerian", "نيجيريا": "Nigeria", "غاني": "Ghanaian", "غانا": "Ghana",
         
-        # Jobs (الموسع)
-        "باريستا": "Barista", "نادل": "Waiter", "ويتر": "Waiter", "طباخ": "Chef", "شيف": "Chef", "طاهي": "Chef",
-        "حلا": "Pastry", "حلويات": "Sweets", "شيف حلا": "Pastry Chef", "سائق": "Driver", "سائق خاص": "Private Driver",
-        "عامل نظافة": "Cleaner", "منظف": "Cleaner", "محاسب": "Accountant", "مدير": "Manager", "مبيعات": "Sales",
-        "استقبال": "Reception", "موظف استقبال": "Receptionist", "حارس": "Security", "امن": "Security", "أمن": "Security",
-        "فني": "Technician", "مهندس": "Engineer", "طبيب": "Doctor", "ممرض": "Nurse", "ممرضة": "Nurse",
-        "عامل": "Worker", "عاملة": "Worker", "عامله": "Worker", "شغالة": "Domestic", "خادمة": "Maid",
-        "حداد": "Blacksmith", "نجار": "Carpenter", "سباك": "Plumber", "كهربائي": "Electrician", "مشرف": "Supervisor"
+        # Jobs (الموسع الكامل)
+        # وظائف المطاعم والمقاهي
+        "باريستا": "Barista", "نادل": "Waiter", "نادلة": "Waitress", "ويتر": "Waiter", 
+        "طباخ": "Chef", "طباخة": "Chef", "شيف": "Chef", "طاهي": "Chef", "طاهية": "Chef",
+        "شيف مطعم": "Restaurant Chef", "طباخ مطعم": "Restaurant Chef",
+        "حلا": "Pastry", "حلويات": "Sweets", "شيف حلا": "Pastry Chef", "حلواني": "Pastry Chef",
+        "كاشير": "Cashier", "كاشيير": "Cashier", "محاسب مطعم": "Restaurant Cashier",
+        
+        # وظائف المنازل
+        "عاملة منزلية": "Housemaid", "عامله منزليه": "Housemaid", "خادمة": "Maid", "خادمه": "Maid",
+        "شغالة": "Domestic", "شغاله": "Domestic", "عاملة منزل": "Domestic Worker",
+        "مربية": "Nanny", "مربيه": "Nanny", "جليسة اطفال": "Babysitter", "جليسه اطفال": "Babysitter",
+        
+        # وظائف التجميل
+        "مصففة شعر": "Hairdresser", "مصففه شعر": "Hairdresser", "كوافيرة": "Hairdresser", "كوافير": "Hairstylist",
+        "حلاق": "Barber", "حلاقة": "Barber", "كوافير رجالي": "Men Barber",
+        "بديكير": "Pedicure", "منيكير": "Manicure", "بديكير منيكير": "Manicure Pedicure",
+        "بدكير": "Pedicure", "بدكير منكير": "Manicure Pedicure", "فني اظافر": "Nail Technician",
+        "تجميل": "Beauty", "خبيرة تجميل": "Beauty Expert", "خبير تجميل": "Beautician",
+        "مكياج": "Makeup", "ميك اب": "Makeup", "خبيرة مكياج": "Makeup Artist",
+        
+        # وظائف النقل
+        "سائق": "Driver", "سائقة": "Driver", "سائق خاص": "Private Driver", "سواق": "Driver",
+        "سائق شاحنة": "Truck Driver", "سائق باص": "Bus Driver", "سائق نقل": "Transport Driver",
+        
+        # وظائف النظافة والصيانة
+        "عامل نظافة": "Cleaner", "عاملة نظافة": "Cleaner", "منظف": "Cleaner", "منظفة": "Cleaner",
+        "عامل": "Worker", "عاملة": "Worker", "عامله": "Worker",
+        "حداد": "Blacksmith", "نجار": "Carpenter", "سباك": "Plumber", "كهربائي": "Electrician",
+        "فني": "Technician", "فنية": "Technician", "فني صيانة": "Maintenance Technician",
+        
+        # وظائف إدارية ومكتبية
+        "محاسب": "Accountant", "محاسبة": "Accountant", "مدير": "Manager", "مديرة": "Manager",
+        "مبيعات": "Sales", "موظف مبيعات": "Sales Employee", "بائع": "Seller", "بائعة": "Seller",
+        "استقبال": "Reception", "موظف استقبال": "Receptionist", "موظفة استقبال": "Receptionist",
+        "سكرتير": "Secretary", "سكرتيرة": "Secretary", "سكرتارية": "Secretary",
+        "مشرف": "Supervisor", "مشرفة": "Supervisor",
+        
+        # وظائف أمنية
+        "حارس": "Security", "حارس امن": "Security Guard", "امن": "Security", "أمن": "Security",
+        "حارس ليلي": "Night Guard", "رجل امن": "Security Man",
+        
+        # وظائف صحية
+        "طبيب": "Doctor", "طبيبة": "Doctor", "دكتور": "Doctor", "دكتورة": "Doctor",
+        "ممرض": "Nurse", "ممرضة": "Nurse", "تمريض": "Nursing",
+        "صيدلي": "Pharmacist", "صيدلية": "Pharmacist", "صيدلاني": "Pharmacist",
+        
+        # وظائف تقنية
+        "مهندس": "Engineer", "مهندسة": "Engineer", "هندسة": "Engineering",
+        "مبرمج": "Programmer", "مبرمجة": "Programmer", "برمجة": "Programming",
+        "مصور": "Photographer", "مصورة": "Photographer", "تصوير": "Photography",
+        "مصور فيديو": "Videographer", "مصور كاميرا": "Camera Operator", "مبرمج كاميرا": "Camera Programmer",
+        "مونتاج": "Video Editor", "محرر فيديو": "Video Editor",
+        "مصمم": "Designer", "مصممة": "Designer", "تصميم": "Design",
+        "مصمم جرافيك": "Graphic Designer", "جرافيك": "Graphic",
+        
+        # وظائف أخرى
+        "معلم": "Teacher", "معلمة": "Teacher", "مدرس": "Teacher", "مدرسة": "Teacher",
+        "مدرب": "Trainer", "مدربة": "Trainer", "كوتش": "Coach",
+        "عامل بناء": "Construction Worker", "بناء": "Construction", "بناي": "Builder",
+        "لحام": "Welder", "لحامة": "Welder", "خياط": "Tailor", "خياطة": "Tailor"
     }
     
     # Split the query into words and translate each
@@ -1332,8 +1383,8 @@ def page_search():
     with col1:
         st.markdown(f"### {T['filter_age']}")
         use_age = st.checkbox(T['enable'], key="age_en")
-        age_from = st.number_input(T['from'], 0, 100, 18)
-        age_to = st.number_input(T['to'], 0, 100, 60)
+        age_from = st.number_input(T['from'], 0, 100, 18, key="age_from_input")
+        age_to = st.number_input(T['to'], 0, 100, 60, key="age_to_input")
         
     with col2:
         st.markdown(f"### {T['filter_exp']}")
@@ -1356,22 +1407,44 @@ def page_search():
         if any(kw in h.lower() for kw in ["تاريخ انتاء", "expiry", "end date", "تاريخ انتهاء"]):
             date_col = h
             break
+    
+    # Try to find age column
+    age_col = ""
+    for h in df.columns:
+        if any(kw in h.lower() for kw in ["عمر", "age", "سن", "your age"]):
+            age_col = h
+            break
 
     # Apply filters logic
     if search_btn_clicked:
         with st.spinner("جاري استخلاص النتائج..." if st.session_state.lang == 'ar' else "Retrieving results..."):
-            results = df
+            results = df.copy()
             
+            # Age Filter - FIXED
+            if use_age and age_col:
+                def check_age(val):
+                    try:
+                        age_val = int(float(str(val).strip()))
+                        return age_from <= age_val <= age_to
+                    except:
+                        return False
+                
+                results = results[results[age_col].apply(check_age)]
+            
+            # Contract Expiry Filter
             if use_exp and date_col:
                 results = results[results[date_col].apply(lambda x: exp_from <= safe_parse_date(x) <= exp_to if safe_parse_date(x) else False)]
             
+            # Registration Date Filter
             if use_reg:
                 results = results[results.iloc[:, 0].apply(lambda x: reg_from <= safe_parse_date(x) <= reg_to if safe_parse_date(x) else False)]
 
+            # Text Search with Translation
             if query:
                 translated_query = translate_search_term(query)
+                # Show translation toast if different
                 if translated_query.lower() != query.lower():
-                    st.toast(f"Searching for: {translated_query} ({translated_query})")
+                    st.toast(f"🔍 البحث عن: {translated_query}" if st.session_state.lang == 'ar' else f"🔍 Searching for: {translated_query}")
                 
                 # Use smart_search_filter instead of simple regex
                 mask = results.apply(lambda row: smart_search_filter(row, translated_query), axis=1)
@@ -1603,7 +1676,8 @@ def page_permissions():
     # === إضافة مستخدم جديد ===
     with col2:
         st.markdown(f"### ➕ {T['add_user_title']}")
-        new_name = st.text_input("الاسم الكامل" if st.session_state.lang == 'ar' else "Full Name", key="new_full_name")
+        new_name_ar = st.text_input("الاسم الكامل بالعربي" if st.session_state.lang == 'ar' else "Full Name (Arabic)", key="new_full_name_ar")
+        new_name_en = st.text_input("الاسم الكامل بالإنجليزي" if st.session_state.lang == 'ar' else "Full Name (English)", key="new_full_name_en")
         new_u = st.text_input(T['user_lbl'], key="new_u")
         new_p = st.text_input(T['pass_lbl'], type="password", key="new_p")
         new_p2 = st.text_input("تأكيد كلمة المرور" if st.session_state.lang == 'ar' else "Confirm Password", type="password", key="confirm_new_p")
@@ -1620,11 +1694,12 @@ def page_permissions():
                 USERS[new_u] = {
                     "password": hashlib.sha256(new_p.encode()).hexdigest(),
                     "role": "admin" if can_p else "user",
-                    "full_name": new_name if new_name else new_u,
+                    "full_name_ar": new_name_ar if new_name_ar else new_u,
+                    "full_name_en": new_name_en if new_name_en else new_u,
                     "can_manage_users": can_p
                 }
                 save_users(USERS)
-                st.success(f"✅ تم إضافة {new_u} ({new_name}) بنجاح" if st.session_state.lang == 'ar' else f"✅ User {new_u} added")
+                st.success(f"✅ تم إضافة {new_u} ({new_name_ar}/{new_name_en}) بنجاح" if st.session_state.lang == 'ar' else f"✅ User {new_u} added")
                 st.rerun()
     
     # === حذف مستخدم ===
@@ -1659,7 +1734,10 @@ def page_permissions():
         role_label = "👑 مدير" if udata.get("can_manage_users") else "👤 مستخدم"
         if st.session_state.lang == 'en':
             role_label = "👑 Admin" if udata.get("can_manage_users") else "👤 User"
-        st.markdown(f"- **{uname}** — {role_label}")
+        
+        # عرض الاسم حسب اللغة الحالية
+        display_name = udata.get("full_name_ar" if st.session_state.lang == 'ar' else "full_name_en", uname)
+        st.markdown(f"- **{uname}** ({display_name}) — {role_label}")
 
 # --- Routing ---
 if not st.session_state.authenticated:
