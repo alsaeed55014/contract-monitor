@@ -607,14 +607,22 @@ def render_neon_signature():
 
 def render_welcome_message():
     """Renders a beautiful, right-aligned welcome message for the user."""
-    welcome_name = st.session_state.get("current_user_name", st.session_state.current_user)
     lang = st.session_state.get('lang', 'ar')
     
-    prefix = "مرحباً بك يا" if lang == 'ar' else "Welcome back,"
+    # جلب الأسماء الثنائية من الجلسة
+    name_ar = st.session_state.get("current_user_name_ar", "")
+    name_en = st.session_state.get("current_user_name_en", "")
+    
+    if lang == 'ar':
+        prefix = "مرحباً بك يا"
+        display_name = name_ar if name_ar else st.session_state.get("current_user", "")
+    else:
+        prefix = "Welcome back,"
+        display_name = name_en if name_en else st.session_state.get("current_user", "")
     
     st.markdown(f"""
     <div class="welcome-container">
-        <div class="welcome-msg">{prefix} {welcome_name}</div>
+        <div class="welcome-msg">{prefix} {display_name}</div>
     </div>
     """, unsafe_allow_html=True)
 
@@ -996,8 +1004,10 @@ def page_login():
                 if USERS[username]["password"] == hashed:
                     st.session_state.authenticated = True
                     st.session_state.current_user = username
-                    # حفظ الاسم الكامل في الجلسة لاستخدامه في الترحيب
-                    st.session_state.current_user_name = USERS[username].get("full_name", username)
+                    # حفظ الأسماء الثنائية في الجلسة لاستخدامها في الترحيب حسب اللغة
+                    user_info = USERS[username]
+                    st.session_state.current_user_name_ar = user_info.get("full_name_ar", user_info.get("full_name", username))
+                    st.session_state.current_user_name_en = user_info.get("full_name_en", user_info.get("full_name", username))
                     st.session_state.page = "home"
                     st.rerun()
                 else: st.error(T['wrong_pass'])
