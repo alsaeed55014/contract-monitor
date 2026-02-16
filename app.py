@@ -886,7 +886,9 @@ def page_home():
     
     st.header(T['alerts_title'])
     
-    data_raw = fetch_data()
+    with st.spinner("جاري جلب آخر تحديثات البيانات من السيرفر..." if st.session_state.lang == 'ar' else "Fetching latest data from server..."):
+        data_raw = fetch_data()
+    
     if not data_raw:
         st.info(T['info_creds'])
         return
@@ -1122,7 +1124,9 @@ def page_search():
         st.session_state.page = "home"
         st.rerun()
     
-    data_raw = fetch_data()
+    with st.spinner("جاري تهيئة نظام البحث المتقدم..." if st.session_state.lang == 'ar' else "Initializing advanced search system..."):
+        data_raw = fetch_data()
+    
     if not data_raw: return
     
     headers = deduplicate_columns(data_raw[0])
@@ -1161,29 +1165,30 @@ def page_search():
 
     # Apply filters logic
     if search_btn_clicked:
-        results = df
-        
-        if use_exp and date_col:
-            results = results[results[date_col].apply(lambda x: exp_from <= safe_parse_date(x) <= exp_to if safe_parse_date(x) else False)]
-        
-        if use_reg:
-            results = results[results.iloc[:, 0].apply(lambda x: reg_from <= safe_parse_date(x) <= reg_to if safe_parse_date(x) else False)]
+        with st.spinner("جاري استخلاص النتائج..." if st.session_state.lang == 'ar' else "Retrieving results..."):
+            results = df
+            
+            if use_exp and date_col:
+                results = results[results[date_col].apply(lambda x: exp_from <= safe_parse_date(x) <= exp_to if safe_parse_date(x) else False)]
+            
+            if use_reg:
+                results = results[results.iloc[:, 0].apply(lambda x: reg_from <= safe_parse_date(x) <= reg_to if safe_parse_date(x) else False)]
 
-        if query:
-            translated_query = translate_search_term(query)
-            if translated_query.lower() != query.lower():
-                st.toast(f"Searching for: {translated_query} ({translated_query})")
-            
-            # Use smart_search_filter instead of simple regex
-            mask = results.apply(lambda row: smart_search_filter(row, translated_query), axis=1)
-            results = results[mask]
-            
-        # Reset table selection and scroll on new search
-        increment_key_version(["search_table_ver"])
-        st.session_state.search_results_df = results
-        # تخزين النسخة المترجمة أيضاً لثبات العرض
-        st.session_state.search_results_dys = translate_columns(results)
-        st.session_state.has_searched = True
+            if query:
+                translated_query = translate_search_term(query)
+                if translated_query.lower() != query.lower():
+                    st.toast(f"Searching for: {translated_query} ({translated_query})")
+                
+                # Use smart_search_filter instead of simple regex
+                mask = results.apply(lambda row: smart_search_filter(row, translated_query), axis=1)
+                results = results[mask]
+                
+            # Reset table selection and scroll on new search
+            increment_key_version(["search_table_ver"])
+            st.session_state.search_results_df = results
+            # تخزين النسخة المترجمة أيضاً لثبات العرض
+            st.session_state.search_results_dys = translate_columns(results)
+            st.session_state.has_searched = True
 
     # عرض النتائج إذا كانت موجودة في الذاكرة
     if st.session_state.get("has_searched") and "search_results_df" in st.session_state:
