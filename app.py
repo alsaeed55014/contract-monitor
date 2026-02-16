@@ -75,51 +75,56 @@ def smart_search_filter(row_series, query_str):
         if not query_str: 
             return True
         query_str_clean = str(query_str).strip().lower()
+        search_terms = query_str_clean.split()
         
-        # 1. Gender Precision (رجل/سيدة - مطابقة تامة ومنع تداخل Male/Female)
-        # نضع هذا الفحص في البداية لأن كلمة male موجودة داخل female
-        if query_str_clean in ["male", "female"]:
-            for col_name, val in row_series.items():
-                if any(kw in str(col_name).lower() for kw in ["جنس", "gender"]):
-                    if str(val).lower().strip() == query_str_clean:
-                        return True
-            return False
-
-        # 2. Literal match (case-insensitive) - Safe from regex errors
         row_text = " ".join(row_series.astype(str)).lower()
-        if query_str_clean in row_text:
-            return True
-            
-        # 3. Smart Phone Match
-        # ... logic ...
-        query_digits = re.sub(r'\D', '', query_str_clean)
-        if len(query_digits) >= 9: 
-            row_digits = re.sub(r'\D', '', row_text)
-            last_9 = query_digits[-9:]
-            if last_9 in row_digits:
-                return True
-        elif len(query_digits) > 4:
-            row_digits = re.sub(r'\D', '', row_text)
-            if query_digits in row_digits:
-                return True
-
-        # 4. African Research (بحث ذكي للجنسيات الأفريقية - يستهدف عمود الجنسية)
+        
+        # 1. Special Category: African Research (منطق الفئة الكاملة)
         african_keywords = ["افريقي", "أفريقي", "افريقيه", "أفريقية", "african"]
-        if any(kw in query_str_clean for kw in african_keywords):
+        is_african_search = any(kw in query_str_clean for kw in african_keywords)
+        
+        if is_african_search:
             african_countries = [
                 "egypt", "sudan", "kenya", "uganda", "ethiopia", "eritrea", "ghana", "nigeria", 
                 "gambia", "togo", "senegal", "morocco", "tunisia", "algeria", "other", "أخرى",
                 "مصري", "سوداني", "كيني", "أوغندي", "إثيوبي", "اثيوبي", "غاني", "نيجيري",
                 "مصر", "السودان", "كينيا", "أوغندا", "إثيوبيا", "نيجيريا", "المغرب", "تونس", "الجزائر"
             ]
+            # نتحقق إذا كان الصف يحتوي على أي دولة أفريقية في عمود الجنسية
+            has_african_nationality = False
             for col_name, val in row_series.items():
                 if any(kw in str(col_name).lower() for kw in ["جنسية", "nationality"]):
-                    val_clean = str(val).lower().strip()
-                    if any(country in val_clean for country in african_countries):
-                        return True
-            return False
+                    if any(country in str(val).lower() for country in african_countries):
+                        has_african_nationality = True
+                        break
+            if not has_african_nationality: return False
 
-        return False
+        # 2. Gender Precision (رجل/سيدة - مطابقة تامة)
+        for term in search_terms:
+            if term in ["male", "female"]:
+                gender_match = False
+                for col_name, val in row_series.items():
+                    if any(kw in str(col_name).lower() for kw in ["جنس", "gender"]):
+                        if str(val).lower().strip() == term:
+                            gender_match = True
+                            break
+                if not gender_match: return False
+
+        # 3. Cross-Match for remaining terms (AND Logic)
+        # نستثني كلمات النوع والأفريقي من فحص الـ AND المباشر لتسهيل البحث
+        remaining_terms = [t for t in search_terms if t not in ["male", "female"] and t not in african_keywords]
+        
+        for term in remaining_terms:
+            if term not in row_text:
+                is_phone = False
+                query_digits = re.sub(r'\D', '', term)
+                if len(query_digits) >= 5:
+                    row_digits = re.sub(r'\D', '', row_text)
+                    if query_digits in row_digits or (len(query_digits) >= 9 and query_digits[-9:] in row_digits):
+                        is_phone = True
+                if not is_phone: return False
+        
+        return True
     except Exception as e:
         # If any error occurs, fall back to simple string containment
         try:
@@ -615,103 +620,57 @@ def translate_columns(df):
 
 def translate_search_term(term):
     """
-    Translates Arabic search terms to English for filtering the dataframe.
+    Translates Arabic search terms to English word-by-word for advanced filtering.
+    Supports complex queries like 'باريستا فلبينية ولد'
     """
+    if not term: return ""
     term = term.strip().lower()
     
-    # Mapping dictionary (Arabic -> English)
+    # Mapping dictionary (Arabic -> English) - الموسع الشامل
     mapping = {
         # Genders & Synonyms
-        "ذكر": "Male",
-        "رجل": "Male",
-        "ولد": "Male",
-        "انثى": "Female",
-        "أنثى": "Female",
-        "بنت": "Female",
-        "سيدة": "Female",
-        "امرأة": "Female",
+        "ذكر": "Male", "رجل": "Male", "ولد": "Male", "انثى": "Female", "أنثى": "Female",
+        "بنت": "Female", "سيدة": "Female", "سيده": "Female", "امرأة": "Female", "امره": "Female",
         
         # Marital Status
-        "اعزب": "Single",
-        "أعزب": "Single",
-        "متزوج": "Married",
-        "متزوجة": "Married",
+        "اعزب": "Single", "أعزب": "Single", "متزوج": "Married", "متزوجة": "Married", "ارمل": "Widow", "مطلق": "Divorced",
         
         # Cities (Saudi)
-        "الرياض": "Riyadh",
-        "جدة": "Jeddah",
-        "مكة": "Makkah",
-        "المدينة": "Madinah",
-        "المدينة المنورة": "Madinah",
-        "الدمام": "Dammam",
-        "الخبر": "Khobar",
-        "أبها": "Abha",
-        "تبوك": "Tabuk",
-        "حائل": "Hail",
-        "جازان": "Jazan",
-        "نجران": "Najran",
-        "الطائف": "Taif",
-        "القصيم": "Qassim",
-        "بريدة": "Buraydah",
+        "الرياض": "Riyadh", "جدة": "Jeddah", "مكة": "Makkah", "المدينة": "Madinah", "الدمام": "Dammam",
+        "الخبر": "Khobar", "أبها": "Abha", "تبوك": "Tabuk", "حائل": "Hail", "جازان": "Jazan",
+        "نجران": "Najran", "الطائف": "Taif", "القصيم": "Qassim", "بريدة": "Buraydah",
         
-        # Nationalities
-        "سعودي": "Saudi",
-        "سعودية": "Saudi",
-        "مصر": "Egypt",
-        "مصري": "Egyptian",
-        "مصرية": "Egyptian",
-        "هندي": "Indian",
-        "هندية": "Indian",
-        "باكستاني": "Pakistani",
-        "باكستانية": "Pakistani",
-        "فلبيني": "Filipino",
-        "فلبينية": "Filipino",
-        "بنغلاديشي": "Bangladeshi",
-        "سوداني": "Sudanese",
-        "يمني": "Yemeni",
-        "سوري": "Syrian",
-        "أردني": "Jordanian",
-        "لبناني": "Lebanese",
+        # Nationalities (الموسع)
+        "سعودي": "Saudi", "سعودية": "Saudi", "مصر": "Egypt", "مصري": "Egyptian", "مصرية": "Egyptian",
+        "هندي": "Indian", "هندية": "Indian", "باكستاني": "Pakistani", "باكستانية": "Pakistani",
+        "فلبيني": "Filipino", "فلبينية": "Filipino", "فلبينيه": "Filipino", "فلبيي": "Filipino", "فلبين": "Filipino",
+        "أوغندي": "Ugandan", "اوغندي": "Ugandan", "أوغندية": "Ugandan", "اوغنديه": "Ugandan", "أوغندا": "Ugandan", "اوغندا": "Ugandan",
+        "كيني": "Kenyan", "Kenya": "Kenyan", "كنيا": "Kenyan", "كينيا": "Kenyan", "كينية": "Kenyan", "كينيه": "Kenyan", "كينى": "Kenyan",
+        "بنجلاديش": "Bangladeshi", "بنجلاديشي": "Bangladeshi", "بنغلاديش": "Bangladeshi", "بنغلاديشي": "Bangladeshi",
+        "إثيوبي": "Ethiopian", "إثيوبيا": "Ethiopian", "اثيوبي": "Ethiopian", "اثيوبيا": "Ethiopian",
+        "سوداني": "Sudanese", "سودان": "Sudan", "يمني": "Yemeni", "سوري": "Syrian", "أردني": "Jordanian", "لبناني": "Lebanese",
+        "نيجيري": "Nigerian", "نيجيريا": "Nigeria", "غاني": "Ghanaian", "غانا": "Ghana",
         
-        # Jobs
-        "باريستا": "Barista",
-        "نادل": "Waiter",
-        "طباخ": "Chef",
-        "شيف": "Chef",
-        "طاهي": "Chef",
-        "سائق": "Driver",
-        "عامل نظافة": "Cleaner",
-        "منظف": "Cleaner",
-        "محاسب": "Accountant",
-        "مدير": "Manager",
-        "مبيعات": "Sales",
-        "استقبال": "Reception",
-        "موظف استقبال": "Receptionist",
-        "حارس": "Security",
-        "امن": "Security",
-        "فني": "Technician",
-        "مهندس": "Engineer",
-        "طبيب": "Doctor",
-        "ممرض": "Nurse",
-        "ممرضة": "Nurse",
-        "عامل": "Worker",
-        "حداد": "Blacksmith",
-        "نجار": "Carpenter",
-        "سباك": "Plumber",
-        "كهربائي": "Electrician",
-        "مشرف": "Supervisor"
+        # Jobs (الموسع)
+        "باريستا": "Barista", "نادل": "Waiter", "ويتر": "Waiter", "طباخ": "Chef", "شيف": "Chef", "طاهي": "Chef",
+        "حلا": "Pastry", "حلويات": "Sweets", "شيف حلا": "Pastry Chef", "سائق": "Driver", "سائق خاص": "Private Driver",
+        "عامل نظافة": "Cleaner", "منظف": "Cleaner", "محاسب": "Accountant", "مدير": "Manager", "مبيعات": "Sales",
+        "استقبال": "Reception", "موظف استقبال": "Receptionist", "حارس": "Security", "امن": "Security", "أمن": "Security",
+        "فني": "Technician", "مهندس": "Engineer", "طبيب": "Doctor", "ممرض": "Nurse", "ممرضة": "Nurse",
+        "عامل": "Worker", "عاملة": "Worker", "عامله": "Worker", "شغالة": "Domestic", "خادمة": "Maid",
+        "حداد": "Blacksmith", "نجار": "Carpenter", "سباك": "Plumber", "كهربائي": "Electrician", "مشرف": "Supervisor"
     }
     
-    # Check for exact match first
-    if term in mapping:
-        return mapping[term]
-        
-    # Check if any key is PART of the search term (simple partial match)
-    for k, v in mapping.items():
-        if k in term:
-            return v
+    # Split the query into words and translate each
+    words = term.split()
+    translated_words = []
+    for w in words:
+        if w in mapping:
+            translated_words.append(mapping[w])
+        else:
+            translated_words.append(w) # Keep original if no mapping
             
-    return term
+    return " ".join(translated_words)
 
 def increment_key_version(keys):
     # If single key string provided, wrap in list
