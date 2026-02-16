@@ -207,21 +207,25 @@ def load_users():
         try:
             with open(USERS_FILE, 'r', encoding='utf-8') as f:
                 data = json.load(f)
-                return data.get("users", {})
-        except: pass
-    # Default fallback including Samar
+                users = data.get("users", {})
+                if users: return users
+        except Exception as e:
+            print(f"Error loading users: {e}")
+    # Default fallback - يتم استخدامه فقط في حال فشل قراءة الملف
     return {
         "admin": {
             "password": "c685e710931707e3e9aaab6c8625a9798cd06a31bcf40cd8d6963e3703400d14", # 266519111
             "role": "admin",
-            "full_name": "المدير العام",
+            "full_name_ar": "السعيد الوزان",
+            "full_name_en": "General Manager",
             "can_manage_users": True
         },
         "samar": {
             "password": "2d75c1a2d01521e3026aa1719256a06604e7bc99aab149cb8cc7de8552fa820d", # 123452
             "role": "user",
-            "full_name": "سمر",
-            "can_manage_users": False
+            "full_name_ar": "سمر",
+            "full_name_en": "Samar",
+            "can_manage_users": True
         }
     }
 
@@ -1021,13 +1025,17 @@ def page_login():
         password = st.text_input(T['pass_lbl'], type="password", placeholder="Password")
         
         if st.button(T['login_btn'], type="primary", use_container_width=True):
-            if username in USERS:
+            # تنظيف اسم المستخدم من المسافات وتحويله للصغير لضمان المطابقة
+            u_clean = username.strip().lower()
+            # إعادة تحميل المستخدمين لضمان وجود أحدث التعديلات
+            fresh_users = load_users()
+            if u_clean in fresh_users:
                 hashed = hashlib.sha256(password.encode()).hexdigest()
-                if USERS[username]["password"] == hashed:
+                if fresh_users[u_clean]["password"] == hashed:
                     st.session_state.authenticated = True
-                    st.session_state.current_user = username
+                    st.session_state.current_user = u_clean
                     # حفظ الأسماء الثنائية في الجلسة لاستخدامها في الترحيب حسب اللغة
-                    user_info = USERS[username]
+                    user_info = fresh_users[u_clean]
                     st.session_state.current_user_name_ar = user_info.get("full_name_ar", user_info.get("full_name", username))
                     st.session_state.current_user_name_en = user_info.get("full_name_en", user_info.get("full_name", username))
                     st.session_state.page = "home"
@@ -1600,8 +1608,12 @@ def page_permissions():
             
             c1, c2 = st.columns(2)
             with c1:
-                edit_u = st.text_input("اسم الدخول", value=selected_user, key="edit_u_val")
-                edit_ar = st.text_input("الاسم بالعربية", value=u_data.get("full_name_ar", ""), key="edit_ar_val")
+                # منع تغيير اسم المستخدم لـ admin لحماية النظام من فقدان الوصول
+                is_admin_user = (selected_user == "admin")
+                edit_u = st.text_input("اسم الدخول (Username)", value=selected_user, key="edit_u_val", disabled=is_admin_user)
+                if is_admin_user:
+                    st.caption("⚠️ لا يمكن تغيير اسم دخول المدير الأساسي لضمان استقرار النظام")
+                edit_ar = st.text_input("الاسم بالعربية", value=u_data.get("full_name_ar", u_data.get("full_name", "")), key="edit_ar_val")
             with c2:
                 edit_p = st.text_input("كلمة مرور جديدة (اتركه فارغاً للحفظ)", type="password", key="edit_p_val")
                 edit_en = st.text_input("English Name", value=u_data.get("full_name_en", ""), key="edit_en_val")
