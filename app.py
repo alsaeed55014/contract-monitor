@@ -451,12 +451,13 @@ def get_gspread_client():
 @st.cache_data(ttl=600)
 def fetch_data():
     client = get_gspread_client()
-    if not client: return None
+    if not client: return "ERROR: No Google Client Authorized"
     try:
         sheet_url = "https://docs.google.com/spreadsheets/d/1u87sScIve_-xT_jDG56EKFMXegzAxOqwVJCh3Irerrw/edit"
         sheet = client.open_by_url(sheet_url).get_worksheet(0)
         return sheet.get_all_values()
-    except: return None
+    except Exception as e: 
+        return f"ERROR: {str(e)}"
 
 def translate_columns(df):
     col_mapping_exact = {
@@ -904,10 +905,13 @@ def page_home():
     
     st.header(T['alerts_title'])
     
-    with st.spinner("جاري جلب آخر تحديثات البيانات من السيرفر..." if st.session_state.lang == 'ar' else "Fetching latest data from server..."):
-        data_raw = fetch_data()
+    data_raw = fetch_data()
     
-    if not data_raw:
+    if isinstance(data_raw, str) and "ERROR" in data_raw:
+        st.error(f"❌ {T['error_google']}: {data_raw}")
+        st.info(T['info_creds'])
+        return
+    elif not data_raw:
         st.info(T['info_creds'])
         return
 
@@ -1142,10 +1146,12 @@ def page_search():
         st.session_state.page = "home"
         st.rerun()
     
-    with st.spinner("جاري تهيئة نظام البحث المتقدم..." if st.session_state.lang == 'ar' else "Initializing advanced search system..."):
-        data_raw = fetch_data()
+    data_raw = fetch_data()
     
-    if not data_raw: return
+    if isinstance(data_raw, str) and "ERROR" in data_raw:
+        st.error(f"❌ {T['error_google']}: {data_raw}")
+        return
+    elif not data_raw: return
     
     headers = deduplicate_columns(data_raw[0])
     df = pd.DataFrame(data_raw[1:], columns=headers)
