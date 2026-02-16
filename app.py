@@ -930,9 +930,11 @@ def page_home():
     st.header(T['alerts_title'])
     
     # Premium Loading for Home Page
-    render_premium_loader()
+    loader_placeholder = st.empty()
+    with loader_placeholder:
+        render_premium_loader()
     data_raw = fetch_data()
-    st.rerun() if data_raw is None else None # Safety check if cached data is null
+    loader_placeholder.empty()
     
     if isinstance(data_raw, str) and "ERROR" in data_raw:
         st.error(f"❌ {T['error_google']}: {data_raw}")
@@ -1172,8 +1174,11 @@ def page_search():
     if st.button(T['back_nav']):
         st.session_state.page = "home"
     # Premium Loading for Search Page
-    render_premium_loader()
+    loader_placeholder = st.empty()
+    with loader_placeholder:
+        render_premium_loader()
     data_raw = fetch_data()
+    loader_placeholder.empty()
     
     if isinstance(data_raw, str) and "ERROR" in data_raw:
         st.error(f"❌ {T['error_google']}: {data_raw}")
