@@ -126,18 +126,18 @@ def smart_search_filter(row_series, query_str):
                 is_phone = False
                 query_digits = re.sub(r'\D', '', term)
                 
-                # Check 1: Individual segment is long enough (old logic)
+                # Check 1: مطابقة جزء من الرقم (إذا كان طويلاً بما يكفي)
                 if len(query_digits) >= 5:
                     row_digits = re.sub(r'\D', '', row_text)
                     if query_digits in row_digits or (len(query_digits) >= 9 and query_digits[-9:] in row_digits):
                         is_phone = True
                 
-                # Check 2: The entire query digits are in the row digits (New Robust Phone logic)
+                # Check 2: مطابقة الرقم الكامل المجمع (للأرقام التي تحتوي مسافات)
                 if not is_phone:
                     all_query_digits = re.sub(r'\D', '', query_str_clean)
-                    if len(all_query_digits) >= 7: # Consider it a phone number search if 7+ digits
+                    if len(all_query_digits) >= 7:
                         row_digits_all = re.sub(r'\D', '', row_text)
-                        if all_query_digits in row_digits_all:
+                        if all_query_digits in row_digits_all or (len(all_query_digits) >= 9 and all_query_digits[-9:] in row_digits_all):
                             is_phone = True
                 
                 if not is_phone: return False
@@ -533,25 +533,23 @@ st.markdown("""
     
     /* Welcome Message - رسالة الترحيب الجمالية */
     .welcome-container {
-        display: flex;
-        justify-content: flex-end; /* أقصى اليمين */
-        align-items: center;
+        text-align: right !important;
         width: 100%;
-        padding: 10px 0;
-        margin-top: -20px;
-        margin-bottom: 5px;
+        padding: 0;
+        margin: -25px 0 5px 0; /* تقليل الهوامش لزيادة الارتفاع */
     }
     .welcome-msg {
+        display: inline-block;
         font-family: 'Tajawal', sans-serif;
-        font-size: 2rem;
+        font-size: 2.1rem;
         font-weight: 800;
         background: linear-gradient(135deg, #ffd700 0%, #ffae00 50%, #ffd700 100%);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
-        text-shadow: 2px 4px 8px rgba(0,0,0,0.4);
-        padding-right: 20px;
-        line-height: 1.2;
-        letter-spacing: 0.5px;
+        text-shadow: 2px 4px 10px rgba(0,0,0,0.5);
+        padding: 0;
+        margin: 0;
+        line-height: 1.1;
     }
     
     /* تقليل الفراغات بين العناصر - بدون التأثير على العنوان الرئيسي */
