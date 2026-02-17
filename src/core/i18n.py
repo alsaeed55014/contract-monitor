@@ -1,4 +1,3 @@
-
 TRANSLATIONS = {
     # Login
     "welcome_back": {"ar": "أهلاً بك", "en": "WELCOME BACK"},
@@ -67,7 +66,7 @@ TRANSLATIONS = {
     "error": {"ar": "خطأ", "en": "Error"},
     "success": {"ar": "نجاح", "en": "Success"},
 
-    # Column Headers (Updated with User Requests)
+    # Column Headers
     "columns": {
         "Name": {"ar": "الاسم", "en": "Name"},
         "Passport Number": {"ar": "رقم الجواز", "en": "Passport Number"},
@@ -85,7 +84,7 @@ TRANSLATIONS = {
         "User": {"ar": "المستخدم", "en": "User"},
         "Role": {"ar": "الصلاحية", "en": "Role"},
         
-        # New Columns Added Based on Feedback
+        # New Columns
         "Gender": {"ar": "الجنس", "en": "Gender"},
         "Phone Number": {"ar": "رقم الهاتف", "en": "Phone Number"},
         "Is your contract expired": {"ar": "هل العقد منتهي؟", "en": "Is your contract expired?"},
@@ -112,9 +111,7 @@ def t_col(col_name, lang="ar"):
     if res: return res
     
     # 2. Try Case-Insensitive Match
-    # Create a normalized mapping of the columns dict: { "gender": "الجنس", ... }
     cols_map = {k.strip().lower(): v.get("ar") for k, v in TRANSLATIONS.get("columns", {}).items()}
-    
     res_fuzzy = cols_map.get(col_str.lower())
     if res_fuzzy: return res_fuzzy
     
