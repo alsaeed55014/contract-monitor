@@ -65,7 +65,31 @@ TRANSLATIONS = {
     # Common
     "error": {"ar": "خطأ", "en": "Error"},
     "success": {"ar": "نجاح", "en": "Success"},
+
+    # Column Headers (New)
+    "columns": {
+        "Name": {"ar": "الاسم", "en": "Name"},
+        "Passport Number": {"ar": "رقم الجواز", "en": "Passport Number"},
+        "Nationality": {"ar": "الجنسية", "en": "Nationality"},
+        "Job": {"ar": "المهنة", "en": "Job"},
+        "Sponsor Name": {"ar": "اسم الكفيل", "en": "Sponsor Name"},
+        "Mobile": {"ar": "رقم الجوال", "en": "Mobile"},
+        "Contract Duration": {"ar": "مدة العقد", "en": "Contract Duration"},
+        "Contract End Date": {"ar": "تاريخ انتهاء العقد", "en": "Contract End Date"},
+        "Status": {"ar": "الحالة", "en": "Status"},
+        "CV": {"ar": "السيرة الذاتية", "en": "CV"},
+        "Religion": {"ar": "الديانة", "en": "Religion"},
+        "Birth Date": {"ar": "تاريخ الميلاد", "en": "Birth Date"},
+        "Arrival Date": {"ar": "تاريخ الوصول", "en": "Arrival Date"},
+        "User": {"ar": "المستخدم", "en": "User"},
+        "Role": {"ar": "الصلاحية", "en": "Role"},
+    }
 }
 
 def t(key, lang="ar"):
     return TRANSLATIONS.get(key, {}).get(lang, key)
+
+def t_col(col_name, lang="ar"):
+    """Translates a column name if it exists in the dictionary."""
+    if lang == 'en': return col_name
+    return TRANSLATIONS.get("columns", {}).get(col_name, {}).get("ar", col_name)
