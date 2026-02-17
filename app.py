@@ -4,6 +4,7 @@ import os
 import sys
 import json
 import hashlib
+from datetime import datetime, timedelta
 
 # 1. Ensure project root is in path
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -320,10 +321,50 @@ def render_dashboard_content():
 def render_search_content():
     lang = st.session_state.lang
     st.title(f"🔍 {t('smart_search_title', lang)}")
+    
+    # Advanced Filters UI
+    with st.expander(t("advanced_filters", lang) if t("advanced_filters", lang) != "advanced_filters" else "تصفية متقدمة"):
+        c1, c2, c3 = st.columns(3)
+        
+        # Age Filter
+        with c1:
+            age_range = st.slider(t("age", lang) if t("age", lang) != "age" else "العمر", 18, 60, (20, 45))
+        
+        # Contract End Filter
+        with c2:
+            st.caption(t("contract_end", lang) if t("contract_end", lang) != "contract_end" else "تاريخ انتهاء العقد")
+            # Default: Next 30 days
+            today = datetime.now().date()
+            next_month = today + timedelta(days=30)
+            contract_range = st.date_input("Contract Range", (today, next_month), label_visibility="collapsed")
+
+        # Registration Date Filter
+        with c3:
+            st.caption(t("registration_date", lang) if t("registration_date", lang) != "registration_date" else "تاريخ التسجيل")
+            reg_range = st.date_input("Registration Range", [], label_visibility="collapsed")
+
     query = st.text_input(t("smart_search", lang), placeholder=t("search_placeholder", lang))
+    
+    # Gather Filters
+    filters = {}
+    
+    # 1. Age
+    filters['age_min'] = age_range[0]
+    filters['age_max'] = age_range[1]
+    
+    # 2. Contract End
+    if len(contract_range) == 2:
+        filters['contract_end_start'] = contract_range[0]
+        filters['contract_end_end'] = contract_range[1]
+        
+    # 3. Registration
+    if len(reg_range) == 2:
+        filters['date_start'] = reg_range[0]
+        filters['date_end'] = reg_range[1]
+
     if st.button(t("search_btn", lang)) or query:
         eng = SmartSearchEngine(st.session_state.db.fetch_data())
-        res = eng.search(query)
+        res = eng.search(query, filters=filters)
         if res.empty: st.warning(t("no_results", lang))
         else:
             # Rename columns before showing (Safe Rename)
