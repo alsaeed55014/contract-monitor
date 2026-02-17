@@ -2,7 +2,7 @@ import streamlit as st
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 import pandas as pd
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from dateutil import parser
 import os
 import json
@@ -30,7 +30,7 @@ st.set_page_config(
 # --- استيراد الخطوط العالمية ---
 st.markdown("""
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=Dancing+Script:wght@700&family=Orbitron:wght@400  ;700&family=Cairo:wght@400;700&family=Amiri:wght@400;700&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Dancing+Script:wght@700&family=Orbitron:wght@400;700&family=Cairo:wght@400;700&family=Amiri:wght@400;700&display=swap');
 </style>
 """, unsafe_allow_html=True)
 
@@ -48,15 +48,11 @@ def deduplicate_columns(columns):
             new_columns.append(col)
     return new_columns
 
-import time
-
 # --- وظيفة معالجة التواريخ لتقابل صيغة الإكسل العربي ---
 def safe_parse_date(d_str):
     if not d_str: return None
     try:
-        # التعامل مع رموز ص وم وتصحيحها لـ AM/PM
         d_clean = str(d_str).strip().replace('ص', 'AM').replace('م', 'PM')
-        # محاولة ذكية للتحويل
         return parser.parse(d_clean, fuzzy=True).date()
     except:
         return None
@@ -68,27 +64,77 @@ def get_direct_download_link(url):
     try:
         if "id=" in url:
             file_id = url.split("id=")[1].split("&")[0]
-            return f"https://drive.google.com/uc?export=download&id=  {file_id}"
+            return f"https://drive.google.com/uc?export=download&id={file_id}"
         elif "/d/" in url:
             file_id = url.split("/d/")[1].split("/")[0]
-            return f"https://drive.google.com/uc?export=download&id=  {file_id}"
+            return f"https://drive.google.com/uc?export=download&id={file_id}"
     except: pass
     return url
 
+# --- تطبيع رقم الهاتف لإزالة كل شيء ما عدا الأرقام ---
+def normalize_phone_number(phone_str):
+    """
+    تطبيع رقم الهاتف - إزالة كل شيء ما عدا الأرقام
+    مثال: +966 57 044 5299 → 966570445299
+          0570445299 → 570445299
+          +966570445299 → 966570445299
+    """
+    if not phone_str:
+        return ""
+    # إزالة كل شيء ما عدا الأرقام
+    digits_only = re.sub(r'\D', '', str(phone_str))
+    return digits_only
+
 # --- استخراج وترجمة النص من السيرة الذاتية ---
-# Helper for smart search
 def smart_search_filter(row_series, query_str):
+    """
+    فلتر البحث الذكي - يدعم البحث بالنص والأرقام
+    """
     try:
         if not query_str: 
             return True
-        query_str_clean = str(query_str).strip().lower()
-        search_terms = query_str_clean.split()
         
+        query_str_clean = str(query_str).strip()
+        query_lower = query_str_clean.lower()
+        
+        # التحقق إذا كان البحث برقم هاتف
+        query_digits = normalize_phone_number(query_str_clean)
+        is_phone_search = len(query_digits) >= 7  # أرقام الهواتف عادة 7 أرقام أو أكثر
+        
+        # البحث في جميع أعمدة الصف
         row_text = " ".join(row_series.astype(str)).lower()
         
-        # 1. Special Category: African Research (منطق الفئة الكاملة)
+        # إذا كان البحث برقم، نبحث بشكل خاص في أعمدة الهاتف
+        if is_phone_search:
+            # البحث في جميع الأعمدة التي قد تحتوي على أرقام هواتف
+            for col_name, val in row_series.items():
+                col_name_lower = str(col_name).lower()
+                # التحقق إذا كان العمود يخص الهاتف
+                if any(kw in col_name_lower for kw in ["phone", "هاتف", "جوال", "mobile", "tel", "رقم"]):
+                    cell_digits = normalize_phone_number(str(val))
+                    # مقارنة الأرقام - نبحث إذا كان الرقم المدخل موجوداً في الخلية
+                    # أو إذا كان الرقم في الخلية موجوداً في المدخل
+                    if query_digits in cell_digits or cell_digits in query_digits:
+                        return True
+                else:
+                    # أيضاً نبحث في باقي الأعمدة (قد يكون الرقم في عمود آخر)
+                    cell_digits = normalize_phone_number(str(val))
+                    if len(cell_digits) >= 7:  # فقط إذا كانت الخلية تحتوي على رقم
+                        if query_digits in cell_digits or cell_digits in query_digits:
+                            return True
+            
+            # إذا لم نجد تطابقاً بالرقم، نبحث في النص العادي أيضاً
+            if query_lower in row_text:
+                return True
+                
+            return False
+        
+        # البحث النصي العادي
+        search_terms = query_lower.split()
+        
+        # Special Category: African Research
         african_keywords = ["افريقي", "أفريقي", "افريقيه", "أفريقية", "african"]
-        is_african_search = any(kw in query_str_clean for kw in african_keywords)
+        is_african_search = any(kw in query_lower for kw in african_keywords)
         
         if is_african_search:
             african_countries = [
@@ -97,7 +143,6 @@ def smart_search_filter(row_series, query_str):
                 "مصري", "سوداني", "كيني", "أوغندي", "إثيوبي", "اثيوبي", "غاني", "نيجيري",
                 "مصر", "السودان", "كينيا", "أوغندا", "إثيوبيا", "نيجيريا", "المغرب", "تونس", "الجزائر"
             ]
-            # نتحقق إذا كان الصف يحتوي على أي دولة أفريقية في عمود الجنسية
             has_african_nationality = False
             for col_name, val in row_series.items():
                 if any(kw in str(col_name).lower() for kw in ["جنسية", "nationality"]):
@@ -106,7 +151,7 @@ def smart_search_filter(row_series, query_str):
                         break
             if not has_african_nationality: return False
 
-        # 2. Gender Precision (رجل/سيدة - مطابقة تامة)
+        # Gender Precision
         for term in search_terms:
             if term in ["male", "female"]:
                 gender_match = False
@@ -117,27 +162,18 @@ def smart_search_filter(row_series, query_str):
                             break
                 if not gender_match: return False
 
-        # 3. Cross-Match for remaining terms (AND Logic)
-        # نستثني كلمات النوع والأفريقي من فحص الـ AND المباشر لتسهيل البحث
         remaining_terms = [t for t in search_terms if t not in ["male", "female"] and t not in african_keywords]
         
         for term in remaining_terms:
             if term not in row_text:
-                is_phone = False
-                query_digits = re.sub(r'\D', '', term)
-                if len(query_digits) >= 5:
-                    row_digits = re.sub(r'\D', '', row_text)
-                    if query_digits in row_digits or (len(query_digits) >= 9 and query_digits[-9:] in row_digits):
-                        is_phone = True
-                if not is_phone: return False
+                return False
         
         return True
     except Exception as e:
-        # If any error occurs, fall back to simple string containment
         try:
             return str(query_str).lower() in " ".join(row_series.astype(str)).lower()
         except:
-            return True  # If even fallback fails, include the row
+            return True
 
 @st.cache_data(ttl=3600, show_spinner=False)
 def process_cv_translation(url):
@@ -157,7 +193,6 @@ def process_cv_translation(url):
             return f"❌ فشل الاتصال بالرابط: {str(e)}"
             
         if response.status_code == 200:
-            # Check content type if possible
             content_type = response.headers.get('Content-Type', '').lower()
             if 'text/html' in content_type:
                  return "⚠️ الرابط يؤدي إلى صفحة ويب وليس ملف PDF مباشر (تأكد من إعدادات المشاركة أو أن الرابط عام)."
@@ -165,8 +200,6 @@ def process_cv_translation(url):
             try:
                 with pdfplumber.open(io.BytesIO(response.content)) as pdf:
                     text = ""
-                    # نكتفي بأول 3 صفحات للمعاينة السريعة
-                    # Handle encrypted PDFs or extraction errors per page
                     for page in pdf.pages[:3]:
                         extracted = page.extract_text()
                         if extracted:
@@ -177,7 +210,6 @@ def process_cv_translation(url):
             if not text.strip():
                 return "❌ تعذر استخراج النص من الملف. قد يكون الملف عبارة عن صورة (Scan) أو محمي."
             
-            # الترجمة (نكتفي بأول 4000 حرف وهي سعة المترجم المجاني غالباً)
             try:
                 translated = GoogleTranslator(source='auto', target='ar').translate(text[:4000])
                 return translated
@@ -190,6 +222,7 @@ def process_cv_translation(url):
 
 # --- Authentication System ---
 USERS_FILE = 'users.json'
+DELETED_ROWS_FILE = 'deleted_rows.json'
 
 def load_users():
     if os.path.exists(USERS_FILE):
@@ -198,30 +231,48 @@ def load_users():
                 data = json.load(f)
                 return data.get("users", {})
         except: pass
-    # Default fallback including Samar and Maya
     return {
         "admin": {
-            "password": "c685e710931707e3e9aaab6c8625a9798cd06a31bcf40cd8d6963e3703400d14", # 266519111
+            "password": "c685e710931707e3e9aaab6c8625a9798cd06a31bcf40cd8d6963e3703400d14",
             "role": "admin",
             "full_name_ar": "المدير العام",
             "full_name_en": "General Manager",
             "can_manage_users": True
         },
         "samar": {
-            "password": "2d75c1a2d01521e3026aa1719256a06604e7bc99aab149cb8cc7de8552fa820d", # 123452
+            "password": "2d75c1a2d01521e3026aa1719256a06604e7bc99aab149cb8cc7de8552fa820d",
             "role": "admin",
             "full_name_ar": "سمر",
             "full_name_en": "Samar",
             "can_manage_users": True
         },
         "maya": {
-            "password": "2d75c1a2d01521e3026aa1719256a06604e7bc99aab149cb8cc7de8552fa820d", # 123452
+            "password": "2d75c1a2d01521e3026aa1719256a06604e7bc99aab149cb8cc7de8552fa820d",
             "role": "admin",
             "full_name_ar": "مايا الوزان",
             "full_name_en": "Maya Al-Wazzan",
             "can_manage_users": True
+        },
+        "alsaeed": {
+            "password": "2d75c1a2d01521e3026aa1719256a06604e7bc99aab149cb8cc7de8552fa820d",
+            "role": "admin",
+            "full_name_ar": "السعيد الوزان",
+            "full_name_en": "Alsaeed Alwazzan",
+            "can_manage_users": True
         }
     }
+
+def load_deleted_rows():
+    if os.path.exists(DELETED_ROWS_FILE):
+        try:
+            with open(DELETED_ROWS_FILE, 'r', encoding='utf-8') as f:
+                return set(json.load(f))
+        except: pass
+    return set()
+
+def save_deleted_rows(deleted_set):
+    with open(DELETED_ROWS_FILE, 'w', encoding='utf-8') as f:
+        json.dump(list(deleted_set), f, ensure_ascii=False, indent=2)
 
 def save_users(users_dict):
     with open(USERS_FILE, 'w', encoding='utf-8') as f:
@@ -241,11 +292,12 @@ if 'search_key_ver' not in st.session_state:
     st.session_state.search_key_ver = 0
 if 'home_key_ver' not in st.session_state:
     st.session_state.home_key_ver = 0
-
 if 'search_table_ver' not in st.session_state:
     st.session_state.search_table_ver = 0
 if 'home_table_ver' not in st.session_state:
     st.session_state.home_table_ver = 0
+if 'deleted_rows' not in st.session_state:
+    st.session_state.deleted_rows = load_deleted_rows()
 
 # --- Translations ---
 L = {
@@ -260,7 +312,7 @@ L = {
         'switch_lang': "Switch to Arabic",
         'logout': "Logout",
         'home_title': "🛡️ Dashboard",
-        'alerts_title': "⚠️ Upcoming Contract Expiries (Week / 2 Days)",
+        'alerts_title': "⚠️ Contract Alerts System",
         'search_nav': "🔍 Search & Printing",
         'del_nav': "🗑️ Delete Selected Row",
         'refresh_nav': "🔄 Refresh Data",
@@ -281,7 +333,7 @@ L = {
         'phone_col': "Phone",
         'search_btn': "Search Now",
         'print_btn': "Print Report",
-        'global_search': "Global Search",
+        'global_search': "Global Search (Name, Nationality, Job, Phone Number...)",
         'filter_reg': "Registration Date",
         'filter_exp': "Contract Expiry",
         'filter_age': "Age",
@@ -296,6 +348,19 @@ L = {
         'error_google': "Error connecting to Google Sheets",
         'info_creds': "Please ensure credentials are set in Streamlit Secrets.",
         'search_results_title': "Search Results",
+        'welcome_back': "Welcome back,",
+        'days_remaining': "days remaining",
+        'expired_since': "expired since",
+        'expired_today': "Expired today",
+        'expiring_soon': "Expiring soon",
+        'active_contract': "Active contract",
+        'delete_confirm': "Are you sure you want to delete this employee?",
+        'delete_success': "Employee deleted successfully",
+        'delete_btn': "🗑️ Delete",
+        'cancel_btn': "Cancel",
+        'row_actions': "Actions",
+        'contract_status': "Contract Status",
+        'phone_search_hint': "💡 You can search by phone number in any format: +966 57 044 5299, 0570445299, etc.",
     },
     'ar': {
         'login_title': "🔒 تسجيل الدخول",
@@ -308,7 +373,7 @@ L = {
         'switch_lang': "Switch to English",
         'logout': "خروج من البرنامج",
         'home_title': "🛡️ مراقب العقود",
-        'alerts_title': "تنبيهات العقود الوشيكة (أسبوع / يومين)",
+        'alerts_title': "⚠️ نظام تنبيهات العقود",
         'search_nav': "🔍 البحث والطباعة",
         'del_nav': "🗑️ حذف الصف المختار",
         'refresh_nav': "🔄 تحديث البيانات",
@@ -329,7 +394,7 @@ L = {
         'phone_col': "رقم الجوال",
         'search_btn': "بحث الآن",
         'print_btn': "طباعة التقرير",
-        'global_search': "البحث الشامل",
+        'global_search': "البحث الشامل (الاسم، الجنسية، المهنة، رقم الهاتف...)",
         'filter_reg': "تاريخ التسجيل",
         'filter_exp': "انتهاء العقد",
         'filter_age': "السن",
@@ -344,38 +409,43 @@ L = {
         'error_google': "خطأ في الاتصال بجوجل شيت",
         'info_creds': "يرجى التأكد من إعدادات Secrets في Streamlit.",
         'search_results_title': "النتائج المكتشفة",
+        'welcome_back': "أهلاً بعودتك،",
+        'days_remaining': "متبقي",
+        'expired_since': "منتهي منذ",
+        'expired_today': "ينتهي اليوم",
+        'expiring_soon': "وشيك الانتهاء",
+        'active_contract': "عقد ساري",
+        'delete_confirm': "هل أنت متأكد من حذف هذا الموظف؟",
+        'delete_success': "تم حذف الموظف بنجاح",
+        'delete_btn': "🗑️ حذف",
+        'cancel_btn': "إلغاء",
+        'row_actions': "إجراءات",
+        'contract_status': "حالة العقد",
+        'phone_search_hint': "💡 يمكنك البحث برقم الهاتف بأي تنسيق: +966 57 044 5299، 0570445299، إلخ",
     }
 }
 
 T = L[st.session_state.lang]
 
-# --- Custom Styling (Premium High-End Look) ---
+# --- Custom Styling ---
 st.markdown("""
 <style>
-    /* الخط الرئيسي */
-    @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300  ;400;600&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600&display=swap');
     html, body, [class*="css"] { font-family: 'Outfit', sans-serif; }
 
-    /* القائمة الجانبية الفخمة */
     [data-testid="stSidebar"] {
         background: linear-gradient(180deg, #1a252f 0%, #2c3e50 100%);
         color: white;
         border-right: 1px solid rgba(255,255,255,0.1);
     }
-    .main {
-        background-color: #f4f7f6;
-    }
+    .main { background-color: #f4f7f6; }
     
-    /* إزالة الفراغات العلوية مع ترك مسافة للعنوان */
     .block-container {
         padding-top: 2.5rem !important;
         padding-bottom: 1rem !important;
     }
-    [data-testid="stSidebar"] > div:first-child {
-        padding-top: 0rem !important;
-    }
+    [data-testid="stSidebar"] > div:first-child { padding-top: 0rem !important; }
     
-    /* تنسيق فاخر للأزرار */
     [data-testid="stSidebar"] div.stButton > button {
         width: 100% !important;
         display: block !important;
@@ -398,35 +468,23 @@ st.markdown("""
         box-shadow: 0 8px 30px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.2) !important;
         border: 1px solid rgba(255,255,255,0.3) !important;
     }
-    [data-testid="stSidebar"] div.stButton > button:active {
-        transform: translateY(0px) scale(0.98) !important;
-        background-color: rgba(0,0,0,0.2) !important;
-    }
-
-    /* 1. مراقب العقود - أزرق ملكي */
+    
     [data-testid="stSidebar"] div.stButton:nth-of-type(1) > button {
         background: linear-gradient(135deg, #0c3483 0%, #2196f3 50%, #0c3483 100%) !important;
     }
-    /* 2. البحث والطباعة - بنفسجي فاخر */
     [data-testid="stSidebar"] div.stButton:nth-of-type(2) > button {
         background: linear-gradient(135deg, #4a0072 0%, #9c27b0 50%, #4a0072 100%) !important;
     }
-    /* 3. شاشة الصلاحيات - ذهبي فخم */
     [data-testid="stSidebar"] div.stButton:nth-of-type(3) > button {
         background: linear-gradient(135deg, #8b6914 0%, #d4af37 50%, #8b6914 100%) !important;
-        color: #fff !important;
     }
-    /* 4. حذف الصف المختار - أحمر داكن */
     [data-testid="stSidebar"] div.stButton:nth-of-type(4) > button {
         background: linear-gradient(135deg, #7f0000 0%, #c62828 50%, #7f0000 100%) !important;
     }
-    /* 5. تحديث البيانات - أخضر زمردي */
     [data-testid="stSidebar"] div.stButton:nth-of-type(5) > button {
         background: linear-gradient(135deg, #004d40 0%, #00897b 50%, #004d40 100%) !important;
     }
 
-    
-    /* كروت التنبيهات */
     .stTable {
         background-color: white;
         border-radius: 15px;
@@ -434,12 +492,6 @@ st.markdown("""
         box-shadow: 0 10px 30px rgba(0,0,0,0.05);
     }
     
-    /* دعم RTL */
-    html[dir="rtl"] .stMarkdown, html[dir="rtl"] .stText {
-        text-align: right;
-    }
-    
-    /* تأثيرات الزجاج (Glassmorphism) للنماذج */
     .stTextInput input {
         border-radius: 10px;
         border: 1px solid #ddd;
@@ -447,7 +499,6 @@ st.markdown("""
         margin-top: -10px !important;
     }
     
-    /* Premium Loader - واجهة تحميل فاخرة */
     #custom-loader-container {
         display: flex;
         flex-direction: column;
@@ -455,7 +506,7 @@ st.markdown("""
         justify-content: center;
         position: fixed;
         top: 0; left: 0; width: 100%; height: 100%;
-        background: rgba(14, 17, 23, 0.85); /* Dark Blur */
+        background: rgba(14, 17, 23, 0.85);
         backdrop-filter: blur(10px);
         z-index: 9999;
         color: white;
@@ -481,15 +532,9 @@ st.markdown("""
         letter-spacing: 1px;
         text-shadow: 0 2px 10px rgba(0,0,0,0.5);
     }
-    /* Hide Default Streamlit "Running" indicators */
-    [data-testid="stStatusWidget"] {
-        display: none !important;
-    }
-    .stSpinner {
-        display: none !important;
-    }
+    [data-testid="stStatusWidget"] { display: none !important; }
+    .stSpinner { display: none !important; }
     
-    /* Neon Signature - توقيع السعيد الوزان */
     .neon-signature-container {
         display: flex;
         justify-content: center;
@@ -523,16 +568,12 @@ st.markdown("""
                 0 0 30px #2196f3,
                 0 0 40px #2196f3;
         }
-        20%, 24%, 55% {
-            text-shadow: none;
-            opacity: 0.8;
-        }
+        20%, 24%, 55% { text-shadow: none; opacity: 0.8; }
     }
     
-    /* Welcome Message - رسالة الترحيب الجمالية */
     .welcome-container {
         display: flex;
-        justify-content: flex-start; /* اليمين في نظام RTL */
+        justify-content: flex-start;
         align-items: center;
         width: 100%;
         padding: 10px 0;
@@ -541,29 +582,22 @@ st.markdown("""
     }
     .welcome-msg {
         font-family: 'Amiri', serif;
-        font-size: 2.22rem; /* حجم أكبر للفخامة */
+        font-size: 2.22rem;
         font-weight: 700;
         background: linear-gradient(to right, #bf953f, #fcf6ba, #b38728, #fbf5b7, #aa771c);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
         text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
-        padding-right: 0px; /* إزالة الحشو بعد إزالة الخط */
         line-height: 1.2;
         letter-spacing: 0.5px;
     }
     
-    /* تقليل الفراغات بين العناصر - بدون التأثير على العنوان الرئيسي */
     div.stMarkdown { margin-bottom: -10px; }
     h2, h3 { margin-top: -10px !important; padding-top: 0px !important; }
     h1 { margin-top: 0px !important; padding-top: 10px !important; }
 </style>
-
-<script>
-    // Force hide any persistent elements if needed (though CSS handles most)
-</script>
 """, unsafe_allow_html=True)
 
-# Set direction
 if st.session_state.lang == 'ar':
     st.markdown('<div dir="rtl">', unsafe_allow_html=True)
 else:
@@ -571,7 +605,7 @@ else:
 
 # --- Google Sheets Logic ---
 def get_gspread_client():
-    scope = ["https://spreadsheets.google.com/feeds  ", "https://www.googleapis.com/auth/drive  "]
+    scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
     try:
         if "gcp_service_account" in st.secrets:
             creds_dict = dict(st.secrets["gcp_service_account"])
@@ -590,14 +624,13 @@ def fetch_data():
     client = get_gspread_client()
     if not client: return "ERROR: No Google Client Authorized"
     try:
-        sheet_url = "https://docs.google.com/spreadsheets/d/1u87sScIve_-xT_jDG56EKFMXegzAxOqwVJCh3Irerrw/edit  "
+        sheet_url = "https://docs.google.com/spreadsheets/d/1u87sScIve_-xT_jDG56EKFMXegzAxOqwVJCh3Irerrw/edit"
         sheet = client.open_by_url(sheet_url).get_worksheet(0)
         return sheet.get_all_values()
     except Exception as e: 
         return f"ERROR: {str(e)}"
 
 def render_premium_loader(text_ar="جاري تحديث البيانات...", text_en="Refreshing Data..."):
-    """Renders a beautiful, centered glassmorphism loader."""
     lang = st.session_state.get('lang', 'ar')
     display_text = text_ar if lang == 'ar' else text_en
     loader_html = f"""
@@ -609,7 +642,6 @@ def render_premium_loader(text_ar="جاري تحديث البيانات...", tex
     return st.markdown(loader_html, unsafe_allow_html=True)
 
 def render_neon_signature():
-    """Renders the elegant neon programming signature."""
     st.markdown("""
     <div class="neon-signature-container">
         <div class="neon-text">Al-Saeed Al-Wazzan Programming</div>
@@ -617,32 +649,25 @@ def render_neon_signature():
     """, unsafe_allow_html=True)
 
 def render_welcome_message():
-    """Renders a beautiful, right-aligned welcome message for the user."""
     lang = st.session_state.get('lang', 'ar')
-    
-    # جلب الأسماء الثنائية من الجلسة
     name_ar = st.session_state.get("current_user_name_ar", "")
     name_en = st.session_state.get("current_user_name_en", "")
     
     if lang == 'ar':
-        prefix = "مرحباً بك يا"
-        # ضمان استخدام "سمر" بالعربي لمستخدم samar
+        prefix = T['welcome_back']
         if st.session_state.get("current_user", "").lower() == "samar":
             display_name = "سمر"
         else:
             display_name = name_ar if name_ar else st.session_state.get("current_user", "")
         
-        # فرض الـ RTL و flex-start لضمان أقصى اليمين في العربية
         st.markdown(f"""
         <div class="welcome-container" dir="rtl" style="justify-content: flex-start;">
             <div class="welcome-msg">{prefix} {display_name}</div>
         </div>
         """, unsafe_allow_html=True)
     else:
-        prefix = "Welcome back,"
-        # استخدام الاسم الإنجليزي في الواجهة الإنجليزية
+        prefix = T['welcome_back']
         display_name = name_en if name_en else st.session_state.get("current_user", "")
-        # في الإنجليزية نستخدم flex-end للوصول لأقصى اليمين
         st.markdown(f"""
         <div class="welcome-container" dir="ltr" style="justify-content: flex-end;">
             <div class="welcome-msg">{prefix} {display_name}</div>
@@ -688,11 +713,7 @@ def translate_columns(df):
         "Do you have to report Huroob": {"ar": "هل لديك بلاغ هروب؟", "en": "Report Huroob?"}
     }
 
-    # Partial match mapping (ORDER IS IMPORTANT: specific matches first)
     col_mapping_partial = {
-        # High specificity
-        
-        # New additions for user's screenshot
         "days or months have you been huroob": {"ar": "مدة الهروب (أيام/أشهر)", "en": "Huroob Duration"},
         "accept to transfer your sponsorship": {"ar": "هل يقبل الكفيل التنازل؟", "en": "Sponsor Accepts Transfer?"},
         "are you in saudi arabia now": {"ar": "هل أنت في السعودية الآن؟", "en": "In Saudi Now?"},
@@ -712,27 +733,20 @@ def translate_columns(df):
         "if the iqama expired how many months ago": {"ar": "منذ متى انتهت الإقامة؟", "en": "Months Since Iqama Expired"},
         "how many times did you transfer your sponsorship": {"ar": "عدد مرات نقل الكفالة", "en": "Transfer Count"},
         "how did you know": {"ar": "كيف عرفت عنا؟", "en": "How check us"},
-
         "how much experience do you": {"ar": "سنوات الخبرة", "en": "Years of Experience"},
-        
         "report huroob": {"ar": "بلاغ هروب", "en": "Huroob Report"},
-        "huroob": {"ar": "عدد الهروب", "en": "Huroob Count"}, # Fallback for other huroob strings
-        
+        "huroob": {"ar": "عدد الهروب", "en": "Huroob Count"},
         "iqama expiry": {"ar": "صلاحية الإقامة", "en": "Iqama Expiry"},
         "profession": {"ar": "المهنة في الإقامة", "en": "Iqama Profession"},
         "id number": {"ar": "رقم الإقامة", "en": "Iqama ID"},
         "iqama": {"ar": "الإقامة", "en": "Iqama"},
-        
         "contract end": {"ar": "تاريخ انتهاء العقد", "en": "Contract End Date"},
         "contract expired": {"ar": "هل انتهى العقد؟", "en": "Contract Expired?"},
         "financial": {"ar": "التزامات مالية", "en": "Financial Obligations"},
-        
         "sponsor": {"ar": "اسم الكفيل", "en": "Sponsor Name"},
         "sponsorship": {"ar": "نقل كفالة", "en": "Sponsorship"},
-        
         "driving": {"ar": "رخصة قيادة", "en": "Driving License"},
         "residency": {"ar": "إقامة", "en": "Residency"},
-        
         "saudi": {"ar": "هل أنت في السعودية؟", "en": "In Saudi?"},
         "city": {"ar": "المدينة", "en": "City"},
         "hear": {"ar": "كيف سمعت عنا؟", "en": "Source"},
@@ -745,8 +759,6 @@ def translate_columns(df):
         "married": {"ar": "الحالة الاجتماعية", "en": "Marital Status"},
         "transfer": {"ar": "عدد مرات التنازل", "en": "Transfer Times"},
         "cv": {"ar": "السيرة الذاتية", "en": "CV"},
-        
-        # General / Short words last
         "timestamp": {"ar": "وقت التسجيل", "en": "Timestamp"},
         "full name": {"ar": "الاسم الكامل", "en": "Full Name"},
         "nationality": {"ar": "الجنسية", "en": "Nationality"},
@@ -763,12 +775,10 @@ def translate_columns(df):
         c_clean = c.strip()
         c_lower = c_clean.lower()
         
-        # 1. Exact match
         if c_clean in col_mapping_exact:
             new_names[c] = col_mapping_exact[c_clean][st.session_state.lang]
             continue
             
-        # 2. Key contains part match (First match wins)
         found = False
         for k, v in col_mapping_partial.items():
             if k in c_lower:
@@ -779,7 +789,6 @@ def translate_columns(df):
         if not found:
             new_names[c] = c
             
-    # Deduplicate column names to avoid Pyarrow errors
     final_names = {}
     seen_counts = {}
     
@@ -795,31 +804,25 @@ def translate_columns(df):
             
     return df.rename(columns=final_names)
 
-
-
 def translate_search_term(term):
     """
-    Translates Arabic search terms to English word-by-word for advanced filtering.
-    Supports complex queries like 'باريستا فلبينية ولد'
+    ترجمة مصطلحات البحث العربية إلى الإنجليزية
     """
     if not term: return ""
     term = term.strip().lower()
     
-    # Mapping dictionary (Arabic -> English) - الموسع الشامل
+    # إذا كان البحث برقم، نعيده كما هو (سيتم معالجته في smart_search_filter)
+    query_digits = normalize_phone_number(term)
+    if len(query_digits) >= 7:
+        return term  # إرجاع الرقم كما هو للبحث المباشر
+    
     mapping = {
-        # Genders & Synonyms
         "ذكر": "Male", "رجل": "Male", "ولد": "Male", "انثى": "Female", "أنثى": "Female",
         "بنت": "Female", "سيدة": "Female", "سيده": "Female", "امرأة": "Female", "امره": "Female",
-        
-        # Marital Status
         "اعزب": "Single", "أعزب": "Single", "متزوج": "Married", "متزوجة": "Married", "ارمل": "Widow", "مطلق": "Divorced",
-        
-        # Cities (Saudi)
         "الرياض": "Riyadh", "جدة": "Jeddah", "مكة": "Makkah", "المدينة": "Madinah", "الدمام": "Dammam",
         "الخبر": "Khobar", "أبها": "Abha", "تبوك": "Tabuk", "حائل": "Hail", "جازان": "Jazan",
         "نجران": "Najran", "الطائف": "Taif", "القصيم": "Qassim", "بريدة": "Buraydah",
-        
-        # Nationalities (الموسع)
         "سعودي": "Saudi", "سعودية": "Saudi", "مصر": "Egypt", "مصري": "Egyptian", "مصرية": "Egyptian",
         "هندي": "Indian", "هندية": "Indian", "باكستاني": "Pakistani", "باكستانية": "Pakistani",
         "فلبيني": "Filipino", "فلبينية": "Filipino", "فلبينيه": "Filipino", "فلبيي": "Filipino", "فلبين": "Filipino",
@@ -829,15 +832,11 @@ def translate_search_term(term):
         "إثيوبي": "Ethiopian", "إثيوبيا": "Ethiopian", "اثيوبي": "Ethiopian", "اثيوبيا": "Ethiopian",
         "سوداني": "Sudanese", "سودان": "Sudan", "يمني": "Yemeni", "سوري": "Syrian", "أردني": "Jordanian", "لبناني": "Lebanese",
         "نيجيري": "Nigerian", "نيجيريا": "Nigeria", "غاني": "Ghanaian", "غانا": "Ghana",
-        
-        # Beauty & Salon Jobs (مشكلة المنكير والبدكير والشعر)
         "منكير": "Manicure", "بدكير": "Pedicure", "منيكير": "Manicure", "بديكير": "Pedicure",
         "مصففة": "Hairdresser", "مصفف": "Hairdresser", "كوافيرة": "Hairdresser", "حلاقة": "Barber",
         "شعر": "Hair", "تسريحات": "Hairstyles", "صالون": "Salon", "بيوتي": "Beauty",
         "ميك اب": "Makeup", "ميكاب": "Makeup", "مكياج": "Makeup", "خبيرة": "Expert",
         "تجميل": "Cosmetology", "كوافير": "Hairdresser", "حلاق": "Barber",
-        
-        # Jobs (الموسع)
         "باريستا": "Barista", "نادل": "Waiter", "ويتر": "Waiter", "طباخ": "Chef", "شيف": "Chef", "طاهي": "Chef",
         "حلا": "Pastry", "حلويات": "Sweets", "شيف حلا": "Pastry Chef", "سائق": "Driver", "سائق خاص": "Private Driver",
         "عامل نظافة": "Cleaner", "منظف": "Cleaner", "محاسب": "Accountant", "مدير": "Manager", "مبيعات": "Sales",
@@ -850,29 +849,104 @@ def translate_search_term(term):
         "معلم": "Teacher", "معلمة": "Teacher", "مدرس": "Teacher", "مدرسة": "Teacher"
     }
     
-    # Split the query into words and translate each
     words = term.split()
     translated_words = []
     for w in words:
         if w in mapping:
             translated_words.append(mapping[w])
         else:
-            translated_words.append(w) # Keep original if no mapping
+            translated_words.append(w)
             
     return " ".join(translated_words)
 
 def increment_key_version(keys):
-    # If single key string provided, wrap in list
     if isinstance(keys, str):
         keys = [keys]
     for k in keys:
         if k in st.session_state:
             st.session_state[k] += 1
 
+# --- Calculate Contract Status ---
+def calculate_contract_status(expiry_date, lang='ar'):
+    """Calculate contract status and return status info with styling"""
+    today = date.today()
+    
+    if not expiry_date:
+        return {
+            'days': None,
+            'status_text': 'Unknown' if lang == 'en' else 'غير معروف',
+            'status_class': 'unknown',
+            'sort_key': 999999
+        }
+    
+    try:
+        if isinstance(expiry_date, str):
+            expiry = safe_parse_date(expiry_date)
+        else:
+            expiry = expiry_date
+            
+        if not expiry:
+            return {
+                'days': None,
+                'status_text': 'Invalid Date' if lang == 'en' else 'تاريخ غير صالح',
+                'status_class': 'unknown',
+                'sort_key': 999999
+            }
+        
+        diff = (expiry - today).days
+        
+        if diff < 0:
+            status_text = f"{L[lang]['expired_since']} {abs(diff)} {L[lang]['days_left']}" if lang == 'ar' else f"Expired {abs(diff)} days ago"
+            return {
+                'days': diff,
+                'status_text': status_text,
+                'status_class': 'expired',
+                'sort_key': diff
+            }
+        elif diff == 0:
+            status_text = L[lang]['expired_today']
+            return {
+                'days': diff,
+                'status_text': status_text,
+                'status_class': 'urgent',
+                'sort_key': 0
+            }
+        elif diff <= 7:
+            status_text = f"{L[lang]['days_remaining']} {diff} {L[lang]['days_left']}" if lang == 'ar' else f"{diff} days remaining"
+            return {
+                'days': diff,
+                'status_text': status_text,
+                'status_class': 'urgent',
+                'sort_key': diff
+            }
+        elif diff <= 30:
+            status_text = f"{L[lang]['days_remaining']} {diff} {L[lang]['days_left']}" if lang == 'ar' else f"{diff} days remaining"
+            return {
+                'days': diff,
+                'status_text': status_text,
+                'status_class': 'warning',
+                'sort_key': diff
+            }
+        else:
+            status_text = f"{L[lang]['days_remaining']} {diff} {L[lang]['days_left']}" if lang == 'ar' else f"{diff} days remaining"
+            return {
+                'days': diff,
+                'status_text': status_text,
+                'status_class': 'active',
+                'sort_key': diff
+            }
+            
+    except Exception as e:
+        return {
+            'days': None,
+            'status_text': 'Error' if lang == 'en' else 'خطأ',
+            'status_class': 'unknown',
+            'sort_key': 999999
+        }
+
 # --- UI Helpers ---
 def sidebar_content():
     with st.sidebar:
-        # === زر تبديل اللغة أعلى شيء ===
         lang_col1, lang_col2 = st.columns(2)
         with lang_col1:
             if st.button("ع", key="lang_ar", type="primary" if st.session_state.lang == 'ar' else "secondary", use_container_width=True):
@@ -885,7 +959,6 @@ def sidebar_content():
         
         st.markdown("<div style='margin-bottom:20px;'></div>", unsafe_allow_html=True)
         
-        # === الصورة الشخصية ===
         img_found = False
         for p in ["alsaeed.jpg", "image/alsaeed.jpg"]:
             if os.path.exists(p):
@@ -899,7 +972,6 @@ def sidebar_content():
         
         st.markdown("<div style='margin-bottom:20px;'></div>", unsafe_allow_html=True)
         
-        # === اسم المبرمج ===
         st.markdown("""
             <div style='text-align:center;'>
                 <span style='color:#c0a060; font-size:11px; letter-spacing:2px; text-transform:uppercase;'>✦ Programmed by ✦</span><br>
@@ -908,27 +980,20 @@ def sidebar_content():
         """, unsafe_allow_html=True)
         
         st.markdown("<div style='margin-bottom:20px;'></div>", unsafe_allow_html=True)
-        
         st.divider()
-        
         st.markdown("<div style='margin-bottom:20px;'></div>", unsafe_allow_html=True)
         
-        # 1. زر مراقب العقود (الرئيسية)
         if st.button(T['home_title'], type="secondary" if st.session_state.page != "home" else "primary", use_container_width=True):
             st.session_state.page = "home"
             st.rerun()
 
-        # 2. زر البحث والطباعة
         if st.button(T['search_nav'], type="secondary" if st.session_state.page != "search" else "primary", use_container_width=True):
             st.session_state.page = "search"
             st.rerun()
 
         if st.button(T['perms_nav'], type="secondary" if st.session_state.page != "permissions" else "primary", use_container_width=True):
-            # إعادة تحميل وتوحيد حالة الأحرف للتحقق
             updated_users = load_users()
             curr_user = st.session_state.get("current_user", "").lower().strip()
-            
-            # حماية برمجية صلبة لسمر ومايا والمدير
             is_master = curr_user in ["admin", "samar", "maya"]
             has_perm = updated_users.get(curr_user, {}).get("can_manage_users")
             
@@ -938,12 +1003,9 @@ def sidebar_content():
             else:
                 st.error("No Permission" if st.session_state.lang == 'en' else "ليس لديك صلاحية")
 
-        # 4. زر حذف الصف المختار
         if st.button(T['del_nav'], use_container_width=True):
             if st.session_state.get("selected_alert_key"):
                 key_to_block = st.session_state.selected_alert_key
-                
-                # Load existing
                 ignored_file = 'ignored_rows.json'
                 current_ignored = []
                 if os.path.exists(ignored_file):
@@ -958,7 +1020,7 @@ def sidebar_content():
                         with open(ignored_file, 'w', encoding='utf-8') as f:
                             json.dump(current_ignored, f)
                         st.success("تم حذف التنبيه" if st.session_state.lang == 'ar' else "Alert deleted")
-                        time.sleep(1) # Show success briefly
+                        time.sleep(1)
                         st.rerun()
                     except Exception as e:
                         st.error(f"Error saving: {e}")
@@ -967,7 +1029,6 @@ def sidebar_content():
             else:
                 st.warning("يرجى اختيار صف من الجدول أولاً" if st.session_state.lang == 'ar' else "Please select a row first")
 
-        # 5. زر تحديث البيانات
         if st.button(T['refresh_nav'], use_container_width=True):
             st.cache_data.clear()
             st.rerun()
@@ -981,7 +1042,6 @@ def sidebar_content():
 
 # --- Page: Login ---
 def page_login():
-    # تنسيق خاص لشاشة الدخول
     st.markdown("""
         <style>
             [data-testid="stAppViewContainer"] { background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); }
@@ -1003,17 +1063,14 @@ def page_login():
                 margin-top: 8px;
                 font-weight: 500;
             }
-            /* White labels */
             [data-testid="stAppViewContainer"] label { color: white !important; }
             [data-testid="stAppViewContainer"] .stTextInput label { color: white !important; }
         </style>
     """, unsafe_allow_html=True)
 
-    # توسيط المحتوى
     spacer1, center_col, spacer2 = st.columns([1, 1.5, 1])
     
     with center_col:
-        # الصورة الشخصية بحجم صغير
         img_found = False
         for p in ["alsaeed.jpg", "image/alsaeed.jpg"]:
             if os.path.exists(p):
@@ -1023,7 +1080,6 @@ def page_login():
         if not img_found:
             st.markdown("<div style='text-align:center; font-size:40px;'>📷</div>", unsafe_allow_html=True)
         
-        # النص تحت الصورة بشكل فخم
         st.markdown("""
             <div style='text-align:center; margin-top:5px;'>
                 <span style='color:#8a7a5a; font-size:10px; letter-spacing:2px; text-transform:uppercase;'>✦ Programmed by ✦</span><br>
@@ -1032,8 +1088,6 @@ def page_login():
         """, unsafe_allow_html=True)
         
         st.markdown("---")
-        
-        # عنوان تسجيل الدخول
         st.markdown(f"<h2 style='text-align:center; color:white;'>🔐 {T['login_title']}</h2>", unsafe_allow_html=True)
         
         u_in = st.text_input(T['user_lbl'], placeholder="Username")
@@ -1046,7 +1100,6 @@ def page_login():
                 if USERS[username]["password"] == hashed:
                     st.session_state.authenticated = True
                     st.session_state.current_user = username
-                    # حفظ الأسماء الثنائية في الجلسة لاستخدامها في الترحيب حسب اللغة
                     user_info = USERS[username]
                     st.session_state.current_user_name_ar = user_info.get("full_name_ar", user_info.get("full_name", username))
                     st.session_state.current_user_name_en = user_info.get("full_name_en", user_info.get("full_name", username))
@@ -1063,16 +1116,14 @@ def page_login():
 # --- Page: Home (Dashboard) ---
 def page_home():
     sidebar_content()
-    
-    # رسالة الترحيب الجمالية في اليمين
     render_welcome_message()
-    
-    # إضافة التوقيع النيوني ممركزاً
     render_neon_signature()
     
     st.header(T['alerts_title'])
     
-    # Premium Loading for Home Page
+    today = date.today()
+    st.caption(f"📅 {today.strftime('%Y-%m-%d')}")
+    
     loader_placeholder = st.empty()
     with loader_placeholder:
         render_premium_loader()
@@ -1090,239 +1141,230 @@ def page_home():
     headers = deduplicate_columns(data_raw[0])
     df = pd.DataFrame(data_raw[1:], columns=headers)
     
-    # Alert Logic
-    today = date.today()
-    alerts = []
-    
-    # Load ignored rows
-    ignored_file = 'ignored_rows.json'
-    ignored_set = set()
-    if os.path.exists(ignored_file):
-        try:
-            with open(ignored_file, 'r', encoding='utf-8') as f:
-                ignored_set = set(json.load(f))
-        except: pass
-    
-    # Try to find expiry column
     date_col = ""
     for h in df.columns:
-        if any(kw in h.lower() for kw in ["تاريخ انتاء", "expiry", "end date", "تاريخ انتهاء"]):
+        if any(kw in h.lower() for kw in ["تاريخ انتاء", "expiry", "end date", "تاريخ انتهاء", "contract end"]):
             date_col = h
             break
     
-    if date_col:
-        for _, row in df.iterrows():
-            try:
-                # Key Generation (Same as desktop)
-                # Assuming columns: Timestamp, Name, Gender, Nationality, Phone...
-                # Key: Name|Gender|Nationality|Phone...
-                # Indices in df might differ, relying on position 1 to 6 as in desktop app logic
-                # Desktop: key = "|".join([str(v) for v in vals[1:7]])
-                # Here row is a Series. Let's try to match the slicing.
-                # data_raw headers are deduplicated.
-                # We need raw values for the key to match exactly if we want cross-app compatibility.
-                # But for now, let's just use the values we have.
-                # Construct key from specific columns if possible or slice.
-                # Desktop uses index 1 to 7 from the treeview values.
-                # Treeview values in desktop: [msg, col1, col2...]
-                # Actually desktop logic: `vals = self.tree.item(sel[0])['values']`; `key = "|".join([str(v) for v in vals[1:7]])`
-                # In desktop `_process_data`: `processed.append(([msg] + row, ...))`
-                # So vals[0] is msg. vals[1] is row[0] (Timestamp)...
-                # So Key is row[0] to row[5] (first 6 columns of the sheet).
-                
-                row_values = row.values.tolist()
-                key_parts = [str(v) for v in row_values[0:6]]
-                row_key = "|".join(key_parts)
-                
-                if row_key in ignored_set:
-                    continue
-
-                dt = safe_parse_date(row[date_col])
-                if dt:
-                    diff = (dt - today).days
-                    # المنطق الجديد: التنبيه يظهر إذا بقي 7 أيام أو أقل (ويستمر حتى الحذف)
-                    if diff <= 7:
-                        # تصحيح العداد
-                        if diff > 0:
-                            msg = f"باقي {diff} يوم"
-                        elif diff == 0:
-                            msg = "ينتهي اليوم"
-                        else:
-                            msg = f"منتهي منذ {abs(diff)} يوم"
-                        
-                        # Show full row data
-                        alert_row = {T['status']: msg}
-                        alert_row.update(row.to_dict())
-                        alert_row['_key'] = row_key
-                        alerts.append(alert_row)
-            except: pass
+    if not date_col:
+        st.error("لم يتم العثور على عمود تاريخ انتهاء العقد" if st.session_state.lang == 'ar' else "Contract end date column not found")
+        return
+    
+    all_contracts = []
+    deleted_rows = st.session_state.deleted_rows
+    
+    for idx, row in df.iterrows():
+        try:
+            row_values = row.values.tolist()
+            key_parts = [str(v) for v in row_values[0:6]]
+            row_key = "|".join(key_parts)
             
-    if alerts:
-        alert_df = pd.DataFrame(alerts)
-        # Ensure Status is the first column
-        cols = [T['status']] + [c for c in alert_df.columns if c != T['status'] and c != "_key"]
-        display_df = translate_columns(alert_df[cols].copy())
+            if row_key in deleted_rows:
+                continue
+            
+            status_info = calculate_contract_status(row.get(date_col), st.session_state.lang)
+            
+            contract_row = {
+                '_key': row_key,
+                '_original_index': idx,
+                'status_info': status_info,
+                T['contract_status']: status_info['status_text']
+            }
+            contract_row.update(row.to_dict())
+            all_contracts.append(contract_row)
+            
+        except Exception as e:
+            continue
+    
+    if not all_contracts:
+        st.success(T['success_msg'])
+        return
+    
+    all_contracts.sort(key=lambda x: x['status_info']['sort_key'])
+    
+    alert_df = pd.DataFrame(all_contracts)
+    
+    cols = [T['contract_status']] + [c for c in alert_df.columns if c not in [T['contract_status'], '_key', '_original_index', 'status_info']]
+    display_df = alert_df[cols].copy()
+    
+    display_df = translate_columns(display_df)
+    
+    display_df['🗑️'] = "🗑️"
+    
+    col1, col2, col3, col4 = st.columns(4)
+    
+    urgent_count = sum(1 for c in all_contracts if c['status_info']['status_class'] == 'urgent')
+    expired_count = sum(1 for c in all_contracts if c['status_info']['status_class'] == 'expired')
+    warning_count = sum(1 for c in all_contracts if c['status_info']['status_class'] == 'warning')
+    active_count = sum(1 for c in all_contracts if c['status_info']['status_class'] == 'active')
+    
+    with col1:
+        st.metric("🔴 " + ("عقود وشيكة" if st.session_state.lang == 'ar' else "Urgent"), urgent_count)
+    with col2:
+        st.metric("⚫ " + ("عقود منتهية" if st.session_state.lang == 'ar' else "Expired"), expired_count)
+    with col3:
+        st.metric("🟡 " + ("تنبيهات" if st.session_state.lang == 'ar' else "Warnings"), warning_count)
+    with col4:
+        st.metric("🟢 " + ("عقود سارية" if st.session_state.lang == 'ar' else "Active"), active_count)
+    
+    st.markdown("---")
+    
+    st.markdown("### 📋 " + ("قائمة العقود" if st.session_state.lang == 'ar' else "Contracts List"))
+    
+    def get_row_style(status_class):
+        styles = {
+            'urgent': 'background-color: #dc3545 !important; color: white !important; font-weight: bold;',
+            'expired': 'background-color: #6c757d !important; color: white !important;',
+            'warning': 'background-color: #ffc107 !important; color: #000 !important;',
+            'active': 'background-color: #28a745 !important; color: white !important;',
+            'unknown': 'background-color: #f8f9fa !important; color: #6c757d !important;'
+        }
+        return styles.get(status_class, styles['unknown'])
+    
+    html_table = '<table style="width:100%; border-collapse: collapse; font-family: inherit;">'
+    
+    html_table += '<thead><tr style="background-color: #1a252f; color: white;">'
+    for col in display_df.columns:
+        html_table += f'<th style="padding: 12px; text-align: {"right" if st.session_state.lang == "ar" else "left"}; border: 1px solid #ddd;">{col}</th>'
+    html_table += '</tr></thead>'
+    
+    html_table += '<tbody>'
+    for idx, row in display_df.iterrows():
+        status_class = all_contracts[idx]['status_info']['status_class']
+        row_style = get_row_style(status_class)
         
-        # CV Column Configuration - إضافة عمودين: تحميل ومعاينة
-        cv_col_name = ""
-        for cn in display_df.columns:
-            if any(kw in cn.lower() for kw in ["cv", "سيرة", "تحميل", "curriculum"]):
-                cv_col_name = cn
+        html_table += f'<tr style="{row_style}">'
+        for col in display_df.columns:
+            val = row[col]
+            if col == '🗑️':
+                html_table += f'<td style="padding: 10px; border: 1px solid #ddd; text-align: center;"><button onclick="alert(\'Use the delete button below the table\')" style="background: transparent; border: none; cursor: pointer; font-size: 18px;">🗑️</button></td>'
+            else:
+                html_table += f'<td style="padding: 10px; border: 1px solid #ddd;">{val}</td>'
+        html_table += '</tr>'
+    html_table += '</tbody></table>'
+    
+    st.markdown(html_table, unsafe_allow_html=True)
+    
+    st.markdown("---")
+    st.markdown("### ⚙️ " + ("إجراءات" if st.session_state.lang == 'ar' else "Actions"))
+    
+    name_cols = [c for c in display_df.columns if "اسم" in c or "Name" in c]
+    name_col = name_cols[0] if name_cols else display_df.columns[0]
+    
+    all_names = [str(x).strip() for x in display_df[name_col].tolist()]
+    
+    col_select, col_delete = st.columns([3, 1])
+    
+    with col_select:
+        selected_name = st.selectbox(
+            "اختر موظفاً لعرض التفاصيل:" if st.session_state.lang == 'ar' else "Select employee to view details:",
+            [""] + all_names,
+            key="employee_select"
+        )
+    
+    selected_idx = None
+    if selected_name and selected_name in all_names:
+        selected_idx = all_names.index(selected_name)
+    
+    with col_delete:
+        st.markdown("<div style='margin-top: 29px;'></div>", unsafe_allow_html=True)
+        if selected_idx is not None:
+            if st.button(T['delete_btn'], type="primary", use_container_width=True, key="delete_btn_main"):
+                st.session_state.show_delete_confirm = True
+                st.rerun()
+    
+    if st.session_state.get('show_delete_confirm') and selected_idx is not None:
+        st.warning("⚠️ " + T['delete_confirm'])
+        col_yes, col_no = st.columns(2)
+        with col_yes:
+            if st.button("✅ " + ("نعم، احذف" if st.session_state.lang == 'ar' else "Yes, Delete"), key="confirm_delete"):
+                row_key = all_contracts[selected_idx]['_key']
+                st.session_state.deleted_rows.add(row_key)
+                save_deleted_rows(st.session_state.deleted_rows)
+                st.session_state.show_delete_confirm = False
+                st.success(T['delete_success'])
+                time.sleep(1)
+                st.rerun()
+        with col_no:
+            if st.button("❌ " + T['cancel_btn'], key="cancel_delete"):
+                st.session_state.show_delete_confirm = False
+                st.rerun()
+    
+    if selected_idx is not None:
+        st.markdown("---")
+        row_data = all_contracts[selected_idx]
+        original_row = df.iloc[row_data['_original_index']]
+        
+        display_name = selected_name
+        st.markdown(f"### 📋 {display_name}")
+        
+        status_class = row_data['status_info']['status_class']
+        status_text = row_data['status_info']['status_text']
+        
+        badge_colors = {
+            'urgent': '#dc3545',
+            'expired': '#6c757d',
+            'warning': '#ffc107',
+            'active': '#28a745'
+        }
+        badge_color = badge_colors.get(status_class, '#6c757d')
+        text_color = 'white' if status_class != 'warning' else 'black'
+        
+        st.markdown(f"""
+            <div style="display: inline-block; background-color: {badge_color}; color: {text_color}; 
+                        padding: 8px 16px; border-radius: 20px; font-weight: bold; margin-bottom: 15px;">
+                {status_text}
+            </div>
+        """, unsafe_allow_html=True)
+        
+        cv_link = ""
+        for c_name in df.columns:
+            if any(kw in c_name.lower() for kw in ["cv", "سيرة", "تحميل", "curriculum", "download"]):
+                cv_link = original_row.get(c_name, "")
                 break
         
-        col_cfg = {}
-        if cv_col_name:
-            # إنشاء عمود التحميل (رابط مباشر)
-            dl_col = "📥 تحميل" if st.session_state.lang == 'ar' else "📥 Download"
-            display_df[dl_col] = display_df[cv_col_name].apply(
-                lambda x: get_direct_download_link(str(x)) if x and str(x).startswith("http") else ""
-            )
-            # إنشاء عمود المعاينة (رابط Google Drive)
-            pv_col = "👁️ معاينة" if st.session_state.lang == 'ar' else "👁️ Preview"
-            display_df[pv_col] = display_df[cv_col_name].apply(
-                lambda x: str(x) if x and str(x).startswith("http") else ""
-            )
-            # حذف العمود الأصلي
-            display_df = display_df.drop(columns=[cv_col_name])
-            col_cfg[dl_col] = st.column_config.LinkColumn(dl_col, display_text="📥 تحميل")
-            col_cfg[pv_col] = st.column_config.LinkColumn(pv_col, display_text="👁️ معاينة")
-        
-        st.warning("👈 **هام جداً:** لرؤية **السيرة الذاتية مترجمة بالعربي**، يجب الضغط على سطر الموظف في الجدول." if st.session_state.lang == 'ar' else "👈 **Important:** Click employee row to see the **Translated CV**.")
-
-        # Use Dataframe with selection (Versioned Key)
-        selected_index_home = None
-        current_table_key = f"alert_table_{st.session_state.home_table_ver}"
-        
-        try:
-           event = st.dataframe(
-                display_df, 
-                use_container_width=True,
-                selection_mode="single-row",
-                on_select="rerun",
-                key=current_table_key,
-                column_config=col_cfg
-            )
-           if event and len(event.selection['rows']) > 0:
-                selected_index_home = event.selection['rows'][0]
-        except:
-             # Fallback for older streamlit versions
-             st.dataframe(display_df, use_container_width=True)
-
-        # Build name options for dropdown
-        cols = [c for c in display_df.columns if "اسم" in c or "Name" in c]
-        name_col = cols[0] if cols else display_df.columns[0]
-        # Ensure options are clean
-        all_opts = [str(x).strip() for x in display_df[name_col].tolist()]
-
-        # Determine dropdown key for current version
-        dd_key = f"fallback_home_sel_{st.session_state.home_key_ver}"
-        
-        # Logic to determine options and sync
-        dropdown_opts = all_opts 
-        
-        # Calculate index directly for immediate visual feedback
-        dropdown_index = None
-        
-        if selected_index_home is not None:
-             # Sync Table -> Dropdown - Saftey check added
-             if selected_index_home < len(display_df):
-                 raw_name = str(display_df.iloc[selected_index_home][name_col]).strip()
-                 
-                 # Find exact match in options
-                 if raw_name in all_opts:
-                     dropdown_index = all_opts.index(raw_name)
-                     st.session_state[dd_key] = raw_name
-                     st.toast(f"✅ تم اختيار: {raw_name}")
-             else:
-                 st.toast(f"⚠️ الاسم غير موجود في القائمة: {raw_name}")
-        else:
-             # Check if there's a value in session state from previous dropdown selection
-             current_val = st.session_state.get(dd_key)
-             if current_val and current_val in all_opts:
-                 dropdown_index = all_opts.index(current_val)
-
-        # Fallback Selectbox - ALWAYS SHOW ALL OPTS
-        fb_col1, fb_col2, _ = st.columns([1, 0.3, 2]) 
-        with fb_col1:
-             placeholder_text = "اختر موظفاً لعرض التفاصيل..." if st.session_state.lang == 'ar' else "Choose Employee to view details..."
-             sel = st.selectbox("أو اختر الموظف من القائمة:" if st.session_state.lang == 'ar' else "Or Select from list:", 
-                              dropdown_opts, 
-                              index=dropdown_index, 
-                              placeholder=placeholder_text,
-                              key=dd_key)
-        with fb_col2:
-             st.markdown("<div style='margin-top: 29px;'></div>", unsafe_allow_html=True)
-             st.button("❌ مسح" if st.session_state.lang == 'ar' else "Clear", key="clr_home", on_click=increment_key_version, args=(["home_key_ver", "home_table_ver"],))
-
-        if sel:
-             if sel in all_opts:
-                 selected_index_home = all_opts.index(sel)
-
-        if selected_index_home is not None:
-            selected_index = selected_index_home
-            row_data = alert_df.iloc[selected_index]
-            st.session_state.selected_alert_key = row_data["_key"]
+        if cv_link and str(cv_link).startswith("http"):
+            direct_link = get_direct_download_link(str(cv_link))
             
-            # عرض تفاصيل الصف المختار مع ترجمة تلقائية
-            st.markdown("---")
-            with st.container():
-                name = row_data.get(T['name_col'], "Unknown")
-                st.markdown(f"### 📋 {name}")
-                
-                # البحث عن رابط السيرة الذاتية
-                cv_link = ""
-                for c_name in alert_df.columns:
-                    if any(kw in c_name.lower() for kw in ["cv", "سيرة", "تحميل"]):
-                        cv_link = row_data[c_name]
-                        break
-                
-                if cv_link and str(cv_link).startswith("http"):
-                    direct_link = get_direct_download_link(str(cv_link))
-                    
-                    # أزرار التحميل وفتح Drive
-                    c_btn1, c_btn2 = st.columns(2)
-                    with c_btn1:
-                        st.link_button("📥 تحميل PDF (الأصلي)" if st.session_state.lang == 'ar' else "📥 Download Original PDF", direct_link, use_container_width=True)
-                    with c_btn2:
-                        st.link_button("🔗 فتح في Drive" if st.session_state.lang == 'ar' else "🔗 Open in Drive", str(cv_link), use_container_width=True)
-                    
-                    # ترجمة تلقائية عند اختيار الصف
-                    with st.spinner("جاري استخراج وترجمة السيرة الذاتية للعربية..." if st.session_state.lang == 'ar' else "Translating CV to Arabic..."):
-                        translated_text = process_cv_translation(str(cv_link))
-                    
-                    st.markdown("""
-                        <div style='background-color:rgba(30, 144, 255, 0.1); padding:20px; border-radius:15px; border:2px solid #1E90FF; margin-top:20px; margin-bottom:20px;'>
-                            <h3 style='margin:0; color:#1E90FF;'>🌐 المعاينة المترجمة للعربية</h3>
-                        </div>
-                    """, unsafe_allow_html=True)
-                    
-                    st.markdown(f"""
-                        <div style='background-color: #ffffff; padding: 20px; border-radius: 10px; border: 1px solid #e0e0e0; color: #333; line-height: 1.6; text-align: right; direction: rtl;'>
-                            {translated_text}
-                        </div>
-                    """, unsafe_allow_html=True)
-                else:
-                    st.info("لا توجد سيرة ذاتية لهذا الموظف")
+            c_btn1, c_btn2 = st.columns(2)
+            with c_btn1:
+                st.link_button("📥 " + ("تحميل PDF (الأصلي)" if st.session_state.lang == 'ar' else "Download Original PDF"), 
+                              direct_link, use_container_width=True)
+            with c_btn2:
+                st.link_button("🔗 " + ("فتح في Drive" if st.session_state.lang == 'ar' else "Open in Drive"), 
+                              str(cv_link), use_container_width=True)
+            
+            with st.spinner("جاري استخراج وترجمة السيرة الذاتية..." if st.session_state.lang == 'ar' else "Translating CV..."):
+                translated_text = process_cv_translation(str(cv_link))
+            
+            st.markdown("""
+                <div style='background-color:rgba(30, 144, 255, 0.1); padding:20px; border-radius:15px; 
+                            border:2px solid #1E90FF; margin-top:20px; margin-bottom:20px;'>
+                    <h3 style='margin:0; color:#1E90FF;'>🌐 المعاينة المترجمة</h3>
+                </div>
+            """, unsafe_allow_html=True)
+            
+            st.markdown(f"""
+                <div style='background-color: #ffffff; padding: 20px; border-radius: 10px; 
+                            border: 1px solid #e0e0e0; color: #333; line-height: 1.6; 
+                            text-align: right; direction: rtl; max-height: 400px; overflow-y: auto;'>
+                    {translated_text}
+                </div>
+            """, unsafe_allow_html=True)
         else:
-            st.session_state.selected_alert_key = None
-
-    else:
-        st.success(T['success_msg'])
+            st.info("لا توجد سيرة ذاتية لهذا الموظف" if st.session_state.lang == 'ar' else "No CV for this employee")
 
 # --- Page: Search ---
 def page_search():
     sidebar_content()
-    # رسالة الترحيب الجمالية في اليمين
     render_welcome_message()
-    
     st.title(T['search_page_title'])
-    
-    # إضافة التوقيع النيوني ممركزاً موازي للعنوان
     render_neon_signature()
     
     if st.button(T['back_nav']):
         st.session_state.page = "home"
-    # Premium Loading for Search Page
+    
     loader_placeholder = st.empty()
     with loader_placeholder:
         render_premium_loader()
@@ -1337,7 +1379,17 @@ def page_search():
     headers = deduplicate_columns(data_raw[0])
     df = pd.DataFrame(data_raw[1:], columns=headers)
     
-    # Advanced Filters
+    deleted_rows = st.session_state.deleted_rows
+    filtered_data = []
+    for idx, row in df.iterrows():
+        row_values = row.values.tolist()
+        key_parts = [str(v) for v in row_values[0:6]]
+        row_key = "|".join(key_parts)
+        if row_key not in deleted_rows:
+            filtered_data.append(row)
+    
+    df = pd.DataFrame(filtered_data, columns=headers) if filtered_data else df.iloc[0:0]
+    
     col1, col2, col3 = st.columns(3)
     
     with col1:
@@ -1358,29 +1410,30 @@ def page_search():
         reg_from = st.date_input(T['from'], value=date.today(), key="reg_f", format="DD/MM/YYYY")
         reg_to = st.date_input(T['to'], value=date.today(), key="reg_t", format="DD/MM/YYYY")
 
-    query = st.text_input(T['global_search'], placeholder="(Name, Nationality, Job...)")
+    # Search input with phone hint
+    query = st.text_input(T['global_search'], placeholder="(Name, Nationality, Job, Phone Number...)")
+    
+    # Show hint for phone search
+    st.caption(T['phone_search_hint'])
+    
     search_btn_clicked = st.button(T['search_btn'], type="primary")
     
-    # Try to find expiry column
     date_col = ""
     for h in df.columns:
         if any(kw in h.lower() for kw in ["تاريخ انتاء", "expiry", "end date", "تاريخ انتهاء"]):
             date_col = h
             break
-
-    # Find age column
+    
     age_col = ""
     for h in df.columns:
         if any(kw in h.lower() for kw in ["age", "عمر", "العمر", "your age"]):
             age_col = h
             break
 
-    # Apply filters logic
     if search_btn_clicked:
         with st.spinner("جاري استخلاص النتائج..." if st.session_state.lang == 'ar' else "Retrieving results..."):
             results = df
             
-            # Apply Age Filter
             if use_age and age_col:
                 def check_age(val):
                     try:
@@ -1397,33 +1450,32 @@ def page_search():
                 results = results[results.iloc[:, 0].apply(lambda x: reg_from <= safe_parse_date(x) <= reg_to if safe_parse_date(x) else False)]
 
             if query:
-                translated_query = translate_search_term(query)
-                if translated_query.lower() != query.lower():
-                    st.toast(f"Searching for: {translated_query} ({translated_query})")
+                # Check if search is by phone number
+                query_digits = normalize_phone_number(query)
+                is_phone_search = len(query_digits) >= 7
                 
-                # Use smart_search_filter instead of simple regex
-                mask = results.apply(lambda row: smart_search_filter(row, translated_query), axis=1)
+                if is_phone_search:
+                    st.info(f"🔍 {'يبحث برقم الهاتف:' if st.session_state.lang == 'ar' else 'Searching by phone number:'} {query}")
+                
+                translated_query = translate_search_term(query)
+                if translated_query.lower() != query.lower() and not is_phone_search:
+                    st.toast(f"Searching for: {translated_query}")
+                
+                mask = results.apply(lambda row: smart_search_filter(row, translated_query if not is_phone_search else query), axis=1)
                 results = results[mask]
                 
-            # Reset table selection and scroll on new search
             increment_key_version(["search_table_ver"])
             st.session_state.search_results_df = results
-            # تخزين النسخة المترجمة أيضاً لثبات العرض
             st.session_state.search_results_dys = translate_columns(results)
             st.session_state.has_searched = True
 
-    # عرض النتائج إذا كانت موجودة في الذاكرة
     if st.session_state.get("has_searched") and "search_results_df" in st.session_state:
         results = st.session_state.search_results_df
-        # توليد النسخة المترجمة طازجة في كل مرة لضمان وجود الأعمدة الأصلية
-        # This prevents session state corruption where CV column was dropped
         results_dys = translate_columns(results)
-        # Reset index to ensure st.dataframe selection returns 0-based index matching iloc
         results_dys = results_dys.reset_index(drop=True)
         
         st.markdown(f"### 🔍 {T['search_results_title']}: {len(results_dys)}")
         
-        # تحسين شكل عمود السيرة الذاتية في البحث - عمودين: تحميل ومعاينة
         cv_col_s = ""
         for cn in results_dys.columns:
             if any(kw in cn.lower() for kw in ["cv", "سيرة", "تحميل", "curriculum"]):
@@ -1433,7 +1485,6 @@ def page_search():
         cfg_s = {}
         if cv_col_s:
             dl_col_s = "📥 تحميل" if st.session_state.lang == 'ar' else "📥 Download"
-            # Ensure unique column names if they somehow conflict
             if dl_col_s in results_dys.columns: dl_col_s += " "
             
             results_dys[dl_col_s] = results_dys[cv_col_s].apply(
@@ -1447,15 +1498,10 @@ def page_search():
                 lambda x: str(x) if x and str(x).startswith("http") else ""
             )
             
-            # We keep the original CV column for logic but hide it from display dropping it
-            # But wait, we need it for the row selection logic if we use results_dys in future?
-            # Actually we use `results` (original) for the logic below, so dropping from display is fine.
             results_dys = results_dys.drop(columns=[cv_col_s])
-            
             cfg_s[dl_col_s] = st.column_config.LinkColumn(dl_col_s, display_text="📥 تحميل")
             cfg_s[pv_col_s] = st.column_config.LinkColumn(pv_col_s, display_text="👁️ معاينة")
             
-        # Fallback handling
         selected_index = None
         current_table_key = f"search_table_{st.session_state.search_table_ver}"
         
@@ -1473,63 +1519,46 @@ def page_search():
         except:
              st.dataframe(results_dys, use_container_width=True)
 
-        # Build name options for dropdown
         cols = [c for c in results_dys.columns if "اسم" in c or "Name" in c]
         name_col = cols[0] if cols else results_dys.columns[0]
-        # Ensure options are clean
         all_opts = [str(x).strip() for x in results_dys[name_col].tolist()]
 
-        # Determine dropdown key for current version
         dd_key = f"fallback_search_sel_{st.session_state.search_key_ver}"
-        
-        # Logic to determine options and sync
         dropdown_opts = all_opts 
-        
-        # Calculate index directly for immediate visual feedback
         dropdown_index = None
         
         if selected_index is not None and selected_index < len(results_dys):
-             # Sync Table -> Dropdown
              raw_name = str(results_dys.iloc[selected_index][name_col]).strip()
-             
-             # Find exact match in options
              if raw_name in all_opts:
                  dropdown_index = all_opts.index(raw_name)
                  st.session_state[dd_key] = raw_name
                  st.toast(f"✅ تم اختيار: {raw_name}")
-             else:
-                 st.toast(f"⚠️ الاسم غير موجود في القائمة: {raw_name}")
         else:
-             # Check if there's a value in session state from previous dropdown selection
              current_val = st.session_state.get(dd_key)
              if current_val and current_val in all_opts:
                  dropdown_index = all_opts.index(current_val)
 
-        # Fallback Selectbox - ALWAYS SHOW ALL OPTS
         fb_col1, fb_col2, _ = st.columns([1, 0.3, 2]) 
         with fb_col1:
-             placeholder_text = "اختر موظفاً لعرض التفاصيل..." if st.session_state.lang == 'ar' else "Choose Employee to view details..."
-             sel = st.selectbox("أو اختر الموظف من القائمة:" if st.session_state.lang == 'ar' else "Or Select from list:", 
+             placeholder_text = "اختر موظفاً..." if st.session_state.lang == 'ar' else "Choose Employee..."
+             sel = st.selectbox("أو اختر من القائمة:" if st.session_state.lang == 'ar' else "Or Select from list:", 
                               dropdown_opts, 
                               index=dropdown_index, 
                               placeholder=placeholder_text,
                               key=dd_key)
         with fb_col2:
              st.markdown("<div style='margin-top: 29px;'></div>", unsafe_allow_html=True)
-             st.button("❌ مسح" if st.session_state.lang == 'ar' else "Clear", key="clr_search", on_click=increment_key_version, args=(["search_key_ver", "search_table_ver"],))
+             st.button("❌ مسح" if st.session_state.lang == 'ar' else "Clear", key="clr_search", 
+                      on_click=increment_key_version, args=(["search_key_ver", "search_table_ver"],))
 
         if sel:
-             # Map back to original index in the full results
              if sel in all_opts:
                  selected_index = all_opts.index(sel)
 
         if selected_index is not None:
             idx = selected_index
-            # استخدام البيانات الأصلية للحصول على رابط CV
             if idx < len(results):
                 st.markdown("---")
-                
-                # البحث عن الاسم
                 row_display = results_dys.iloc[idx]
                 disp_name = "Unknown"
                 for col_try in ["الاسم الكامل", "Full Name", "الاسم", "Name"]:
@@ -1539,9 +1568,7 @@ def page_search():
                 
                 st.markdown(f"### 📋 {disp_name}")
                 
-                # البحث عن رابط CV في البيانات الأصلية (results) لضمان عدم تأثر الترجمة
                 cv_link_s = ""
-                # نستخدم قائمة واسعة من الاحتمالات
                 possible_cv_cols = [c for c in results.columns if any(k in c.lower() for k in ["cv", "سيرة", "تحميل", "curriculum", "download", "ملف"])]
                 
                 for cn in possible_cv_cols:
@@ -1553,68 +1580,54 @@ def page_search():
                 if cv_link_s:
                     dir_link = get_direct_download_link(str(cv_link_s))
                     
-                    # أزرار التحميل وفتح Drive
                     cs_btn1, cs_btn2 = st.columns(2)
                     with cs_btn1:
-                        st.link_button("📥 تحميل PDF (الأصلي)" if st.session_state.lang == 'ar' else "📥 Download Original PDF", dir_link, use_container_width=True)
+                        st.link_button("📥 تحميل PDF" if st.session_state.lang == 'ar' else "📥 Download PDF", 
+                                      dir_link, use_container_width=True)
                     with cs_btn2:
-                        st.link_button("🔗 فتح في Drive" if st.session_state.lang == 'ar' else "🔗 Open in Drive", str(cv_link_s), use_container_width=True)
+                        st.link_button("🔗 فتح في Drive" if st.session_state.lang == 'ar' else "🔗 Open in Drive", 
+                                      str(cv_link_s), use_container_width=True)
                     
-                    # ترجمة تلقائية
-                    st.markdown("""
-                        <div style='background-color:rgba(30, 144, 255, 0.1); padding:20px; border-radius:15px; border:2px solid #1E90FF; margin-top:20px; margin-bottom:20px;'>
-                            <h3 style='margin:0; color:#1E90FF;'>🌐 المعاينة المترجمة للعربية</h3>
-                        </div>
-                    """, unsafe_allow_html=True)
-                    
-                    with st.spinner("جاري استخراج وترجمة السيرة الذاتية للعربية..." if st.session_state.lang == 'ar' else "Translating CV to Arabic..."):
+                    with st.spinner("جاري الترجمة..." if st.session_state.lang == 'ar' else "Translating..."):
                         translated_text = process_cv_translation(str(cv_link_s))
                     
                     st.markdown(f"""
-                        <div style='background-color: #ffffff; padding: 20px; border-radius: 10px; border: 1px solid #e0e0e0; color: #333; line-height: 1.6; text-align: right; direction: rtl;'>
+                        <div style='background-color: #ffffff; padding: 20px; border-radius: 10px; 
+                                    border: 1px solid #e0e0e0; color: #333; line-height: 1.6; 
+                                    text-align: right; direction: rtl;'>
                             {translated_text}
                         </div>
                     """, unsafe_allow_html=True)
                 else:
-                    st.info("⚠️ لا يوجد ملف سيرة ذاتية (CV) مرتبط بهذا الموظف." if st.session_state.lang == 'ar' else "⚠️ No CV file linked to this employee.")
-    
-
+                    st.info("⚠️ لا يوجد ملف CV" if st.session_state.lang == 'ar' else "⚠️ No CV file")
 
 # --- Page: Permissions ---
 def page_permissions():
     global USERS
     sidebar_content()
     st.title(T['perms_page_title'])
-    
-    # رسالة الترحيب الجمالية في اليمين
     render_welcome_message()
-    
-    # إضافة التوقيع النيوني ممركزاً
     
     if st.button(T['back_nav']):
         st.session_state.page = "home"
         st.rerun()
     
     st.markdown("---")
-    
-    # إعادة تحميل المستخدمين لضمان أحدث البيانات
     USERS = load_users()
     user_list = list(USERS.keys())
         
     col1, col2, col3 = st.columns(3)
     
-    # === تغيير كلمة المرور ===
     with col1:
         st.markdown(f"### 🔒 {'تغيير كلمة المرور' if st.session_state.lang == 'ar' else 'Change Password'}")
-        
-        # اختيار المستخدم
         target_user = st.selectbox(
             "اختر المستخدم" if st.session_state.lang == 'ar' else "Select User",
             user_list, key="change_pass_user"
         )
-        
-        n_p = st.text_input("كلمة المرور الجديدة" if st.session_state.lang == 'ar' else "New Password", type="password", key="new_pass")
-        n_p2 = st.text_input("تأكيد كلمة المرور" if st.session_state.lang == 'ar' else "Confirm Password", type="password", key="confirm_pass")
+        n_p = st.text_input("كلمة المرور الجديدة" if st.session_state.lang == 'ar' else "New Password", 
+                           type="password", key="new_pass")
+        n_p2 = st.text_input("تأكيد كلمة المرور" if st.session_state.lang == 'ar' else "Confirm Password", 
+                            type="password", key="confirm_pass")
         
         if st.button(T['save_btn'], key="save_pass_btn"):
             if not n_p:
@@ -1626,15 +1639,15 @@ def page_permissions():
             else:
                 USERS[target_user]["password"] = hashlib.sha256(n_p.encode()).hexdigest()
                 save_users(USERS)
-                st.success(f"✅ تم تغيير كلمة مرور {target_user} بنجاح" if st.session_state.lang == 'ar' else f"✅ Password changed for {target_user}")
+                st.success(f"✅ تم تغيير كلمة مرور {target_user}" if st.session_state.lang == 'ar' else f"✅ Password changed for {target_user}")
     
-    # === إضافة مستخدم جديد ===
     with col2:
         st.markdown(f"### ➕ {T['add_user_title']}")
         new_name = st.text_input("الاسم الكامل" if st.session_state.lang == 'ar' else "Full Name", key="new_full_name")
         new_u = st.text_input(T['user_lbl'], key="new_u")
         new_p = st.text_input(T['pass_lbl'], type="password", key="new_p")
-        new_p2 = st.text_input("تأكيد كلمة المرور" if st.session_state.lang == 'ar' else "Confirm Password", type="password", key="confirm_new_p")
+        new_p2 = st.text_input("تأكيد كلمة المرور" if st.session_state.lang == 'ar' else "Confirm Password", 
+                              type="password", key="confirm_new_p")
         can_p = st.checkbox(T['can_access_perms'], key="can_perms_cb")
         
         if st.button(T['add_btn'], key="add_user_btn"):
@@ -1652,14 +1665,11 @@ def page_permissions():
                     "can_manage_users": can_p
                 }
                 save_users(USERS)
-                st.success(f"✅ تم إضافة {new_u} ({new_name}) بنجاح" if st.session_state.lang == 'ar' else f"✅ User {new_u} added")
+                st.success(f"✅ تم إضافة {new_u}" if st.session_state.lang == 'ar' else f"✅ User {new_u} added")
                 st.rerun()
     
-    # === حذف مستخدم ===
     with col3:
         st.markdown(f"### 🗑️ {'حذف مستخدم' if st.session_state.lang == 'ar' else 'Delete User'}")
-        
-        # لا تسمح بحذف المستخدم الحالي أو admin
         deletable_users = [u for u in user_list if u != st.session_state.current_user and u != "admin"]
         
         if deletable_users:
@@ -1667,19 +1677,17 @@ def page_permissions():
                 "اختر المستخدم للحذف" if st.session_state.lang == 'ar' else "Select User to Delete",
                 deletable_users, key="del_user_select"
             )
-            
             st.warning(f"⚠️ {'سيتم حذف المستخدم نهائياً' if st.session_state.lang == 'ar' else 'User will be permanently deleted'}")
             
             if st.button("🗑️ حذف" if st.session_state.lang == 'ar' else "🗑️ Delete", key="del_user_btn"):
                 if del_user in USERS:
                     del USERS[del_user]
                     save_users(USERS)
-                    st.success(f"✅ تم حذف {del_user} بنجاح" if st.session_state.lang == 'ar' else f"✅ {del_user} deleted")
+                    st.success(f"✅ تم حذف {del_user}" if st.session_state.lang == 'ar' else f"✅ {del_user} deleted")
                     st.rerun()
         else:
             st.info("لا يوجد مستخدمين يمكن حذفهم" if st.session_state.lang == 'ar' else "No users to delete")
     
-    # === عرض المستخدمين الحاليين ===
     st.markdown("---")
     st.markdown(f"### 👥 {'المستخدمون الحاليون' if st.session_state.lang == 'ar' else 'Current Users'}")
     
