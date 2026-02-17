@@ -114,7 +114,7 @@ except KeyError as e:
 # 4. Page Config
 st.set_page_config(
     page_title="Golden Noura | Contract Monitor",
-    page_icon="🦅",
+    page_icon="",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -234,7 +234,7 @@ def dashboard():
 
 def render_dashboard_content():
     lang = st.session_state.lang
-    st.title(f"📊 {t('contract_dashboard', lang)}")
+    st.title(f" {t('contract_dashboard', lang)}")
     try:
         df = st.session_state.db.fetch_data()
     except Exception as e:
@@ -320,7 +320,7 @@ def render_dashboard_content():
 
 def render_search_content():
     lang = st.session_state.lang
-    st.title(f"🔍 {t('smart_search_title', lang)}")
+    st.title(f" {t('smart_search_title', lang)}")
     
     # Labels
     lbl_age = t("age", lang) if t("age", lang) != "age" else "العمر"
@@ -334,7 +334,7 @@ def render_search_content():
         
         # Registration Date Filter (rightmost in RTL)
         with c1:
-            use_reg = st.checkbox(f"🔘 {lbl_enable} {lbl_reg}", key="use_reg_filter")
+            use_reg = st.checkbox(f" {lbl_enable} {lbl_reg}", key="use_reg_filter")
             if use_reg:
                 st.caption(lbl_reg)
                 today = datetime.now().date()
@@ -345,7 +345,7 @@ def render_search_content():
 
         # Contract End Filter
         with c2:
-            use_contract = st.checkbox(f"🔘 {lbl_enable} {lbl_contract}", key="use_contract_filter")
+            use_contract = st.checkbox(f" {lbl_enable} {lbl_contract}", key="use_contract_filter")
             if use_contract:
                 st.caption(lbl_contract)
                 today = datetime.now().date()
@@ -356,7 +356,7 @@ def render_search_content():
         
         # Age Filter (leftmost in RTL)
         with c3:
-            use_age = st.checkbox(f"🔘 {lbl_enable} {lbl_age}", key="use_age_filter")
+            use_age = st.checkbox(f" {lbl_enable} {lbl_age}", key="use_age_filter")
             if use_age:
                 age_range = st.slider(lbl_age, 18, 60, (20, 45), key="age_slider")
             else:
@@ -433,7 +433,7 @@ def render_search_content():
 
 def render_translator_content():
     lang = st.session_state.lang
-    st.title(f"📄 {t('translator_title', lang)}")
+    st.title(f" {t('translator_title', lang)}")
     st.markdown(t("translator_desc", lang))
     uploaded = st.file_uploader(t("upload_cv", lang), type=["pdf"])
     if uploaded:
@@ -456,7 +456,7 @@ def render_translator_content():
 
 def render_permissions_content():
     lang = st.session_state.lang
-    st.title(f"🔑 {t('permissions_title', lang)}")
+    st.title(f" {t('permissions_title', lang)}")
     
     with st.expander(t("add_user", lang), expanded=False):
         with st.form("new_user"):
