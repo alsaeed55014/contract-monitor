@@ -398,13 +398,13 @@ def render_search_content():
             if active_filter_names:
                 st.info(f"{'الفلاتر النشطة' if lang == 'ar' else 'Active filters'}: {', '.join(active_filter_names)}")
 
-        print(f"🔎 Search triggered - Query: '{query}', Filters: {filters}")
+        print(f"[SEARCH] Search triggered - Query: '{query}', Filters: {filters}")
         
         eng = SmartSearchEngine(st.session_state.db.fetch_data())
         
         # Debug: Print column names
         data = st.session_state.db.fetch_data()
-        print(f"📋 Available columns: {list(data.columns)}")
+        print(f"[DEBUG] Available columns: {list(data.columns)}")
         
         res = eng.search(query, filters=filters)
         
