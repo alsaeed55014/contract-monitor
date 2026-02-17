@@ -427,6 +427,10 @@ def render_search_content():
             
             if is_empty:
                 st.warning(t("no_results", lang))
+            elif has_active_filter and count_found == total_rows:
+                st.warning("تنبيه: تم تفعيل الفلاتر ولكن لم يتم استبعاد أي نتائج. قد يكون ذلك بسبب عدم مطابقة أسماء الأعمدة.")
+                with st.expander("تشخيص الأعمدة (للمطور)"):
+                    st.write("الأعمدة الحالية:", list(original_data.columns))
         except Exception as e:
             st.error(f"حدث خطأ أثناء البحث: {str(e)}")
             return
