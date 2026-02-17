@@ -30,7 +30,7 @@ st.set_page_config(
 # --- استيراد الخطوط العالمية ---
 st.markdown("""
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=Dancing+Script:wght@700&family=Orbitron:wght@400;700&family=Cairo:wght@400;700&family=Amiri:wght@400;700&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Dancing+Script:wght@700&family=Orbitron:wght@400  ;700&family=Cairo:wght@400;700&family=Amiri:wght@400;700&display=swap');
 </style>
 """, unsafe_allow_html=True)
 
@@ -68,10 +68,10 @@ def get_direct_download_link(url):
     try:
         if "id=" in url:
             file_id = url.split("id=")[1].split("&")[0]
-            return f"https://drive.google.com/uc?export=download&id={file_id}"
+            return f"https://drive.google.com/uc?export=download&id=  {file_id}"
         elif "/d/" in url:
             file_id = url.split("/d/")[1].split("/")[0]
-            return f"https://drive.google.com/uc?export=download&id={file_id}"
+            return f"https://drive.google.com/uc?export=download&id=  {file_id}"
     except: pass
     return url
 
@@ -353,7 +353,7 @@ T = L[st.session_state.lang]
 st.markdown("""
 <style>
     /* الخط الرئيسي */
-    @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300  ;400;600&display=swap');
     html, body, [class*="css"] { font-family: 'Outfit', sans-serif; }
 
     /* القائمة الجانبية الفخمة */
@@ -571,7 +571,7 @@ else:
 
 # --- Google Sheets Logic ---
 def get_gspread_client():
-    scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+    scope = ["https://spreadsheets.google.com/feeds  ", "https://www.googleapis.com/auth/drive  "]
     try:
         if "gcp_service_account" in st.secrets:
             creds_dict = dict(st.secrets["gcp_service_account"])
@@ -590,7 +590,7 @@ def fetch_data():
     client = get_gspread_client()
     if not client: return "ERROR: No Google Client Authorized"
     try:
-        sheet_url = "https://docs.google.com/spreadsheets/d/1u87sScIve_-xT_jDG56EKFMXegzAxOqwVJCh3Irerrw/edit"
+        sheet_url = "https://docs.google.com/spreadsheets/d/1u87sScIve_-xT_jDG56EKFMXegzAxOqwVJCh3Irerrw/edit  "
         sheet = client.open_by_url(sheet_url).get_worksheet(0)
         return sheet.get_all_values()
     except Exception as e: 
@@ -640,6 +640,7 @@ def render_welcome_message():
         """, unsafe_allow_html=True)
     else:
         prefix = "Welcome back,"
+        # استخدام الاسم الإنجليزي في الواجهة الإنجليزية
         display_name = name_en if name_en else st.session_state.get("current_user", "")
         # في الإنجليزية نستخدم flex-end للوصول لأقصى اليمين
         st.markdown(f"""
@@ -829,6 +830,13 @@ def translate_search_term(term):
         "سوداني": "Sudanese", "سودان": "Sudan", "يمني": "Yemeni", "سوري": "Syrian", "أردني": "Jordanian", "لبناني": "Lebanese",
         "نيجيري": "Nigerian", "نيجيريا": "Nigeria", "غاني": "Ghanaian", "غانا": "Ghana",
         
+        # Beauty & Salon Jobs (مشكلة المنكير والبدكير والشعر)
+        "منكير": "Manicure", "بدكير": "Pedicure", "منيكير": "Manicure", "بديكير": "Pedicure",
+        "مصففة": "Hairdresser", "مصفف": "Hairdresser", "كوافيرة": "Hairdresser", "حلاقة": "Barber",
+        "شعر": "Hair", "تسريحات": "Hairstyles", "صالون": "Salon", "بيوتي": "Beauty",
+        "ميك اب": "Makeup", "ميكاب": "Makeup", "مكياج": "Makeup", "خبيرة": "Expert",
+        "تجميل": "Cosmetology", "كوافير": "Hairdresser", "حلاق": "Barber",
+        
         # Jobs (الموسع)
         "باريستا": "Barista", "نادل": "Waiter", "ويتر": "Waiter", "طباخ": "Chef", "شيف": "Chef", "طاهي": "Chef",
         "حلا": "Pastry", "حلويات": "Sweets", "شيف حلا": "Pastry Chef", "سائق": "Driver", "سائق خاص": "Private Driver",
@@ -836,7 +844,10 @@ def translate_search_term(term):
         "استقبال": "Reception", "موظف استقبال": "Receptionist", "حارس": "Security", "امن": "Security", "أمن": "Security",
         "فني": "Technician", "مهندس": "Engineer", "طبيب": "Doctor", "ممرض": "Nurse", "ممرضة": "Nurse",
         "عامل": "Worker", "عاملة": "Worker", "عامله": "Worker", "شغالة": "Domestic", "خادمة": "Maid",
-        "حداد": "Blacksmith", "نجار": "Carpenter", "سباك": "Plumber", "كهربائي": "Electrician", "مشرف": "Supervisor"
+        "حداد": "Blacksmith", "نجار": "Carpenter", "سباك": "Plumber", "كهربائي": "Electrician", "مشرف": "Supervisor",
+        "مندوب": "Representative", "مندوبة": "Representative", "مندوب مبيعات": "Sales Representative",
+        "كاتب": "Writer", "سكرتير": "Secretary", "سكرتيرة": "Secretary", "محامي": "Lawyer", "محامية": "Lawyer",
+        "معلم": "Teacher", "معلمة": "Teacher", "مدرس": "Teacher", "مدرسة": "Teacher"
     }
     
     # Split the query into words and translate each
@@ -1357,10 +1368,27 @@ def page_search():
             date_col = h
             break
 
+    # Find age column
+    age_col = ""
+    for h in df.columns:
+        if any(kw in h.lower() for kw in ["age", "عمر", "العمر", "your age"]):
+            age_col = h
+            break
+
     # Apply filters logic
     if search_btn_clicked:
         with st.spinner("جاري استخلاص النتائج..." if st.session_state.lang == 'ar' else "Retrieving results..."):
             results = df
+            
+            # Apply Age Filter
+            if use_age and age_col:
+                def check_age(val):
+                    try:
+                        age_val = int(float(str(val).strip()))
+                        return age_from <= age_val <= age_to
+                    except:
+                        return False
+                results = results[results[age_col].apply(check_age)]
             
             if use_exp and date_col:
                 results = results[results[date_col].apply(lambda x: exp_from <= safe_parse_date(x) <= exp_to if safe_parse_date(x) else False)]
