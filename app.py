@@ -428,9 +428,14 @@ def render_search_content():
             if is_empty:
                 st.warning(t("no_results", lang))
             elif has_active_filter and count_found == total_rows:
-                st.warning("تنبيه: تم تفعيل الفلاتر ولكن لم يتم استبعاد أي نتائج. قد يكون ذلك بسبب عدم مطابقة أسماء الأعمدة.")
+                st.warning("تنبيه: تم تفعيل الفلاتر ولكن لم يتم استبعاد أي نتائج. الأسباب المحتملة:")
+                st.write("1. جميع البيانات تطابق الفلاتر المختارة.")
+                st.write("2. واجه البرنامج مشكلة في التعرف على الأعمدة الصحيحة.")
                 with st.expander("تشخيص الأعمدة (للمطور)"):
-                    st.write("الأعمدة الحالية:", list(original_data.columns))
+                    st.write("الأعمدة المتوفرة حالياً:", list(original_data.columns))
+                    # Try to find columns again just for display
+                    test_eng = SmartSearchEngine(original_data)
+                    st.info(f"عمود العمر المكتشف: {test_eng.search('', filters={'age_enabled':True, 'age_min':0, 'age_max':100}).columns.tolist() if 'age' in str(filters) else 'غير مفعل'}")
         except Exception as e:
             st.error(f"حدث خطأ أثناء البحث: {str(e)}")
             return
