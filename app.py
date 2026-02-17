@@ -286,17 +286,29 @@ def render_dashboard_content():
         show_cols = ['Status'] + [c for c in cols if c in d.columns]
         d_final = d[show_cols].copy()
         
-        # Rename Columns Mechanism
-        rename_map = {c: t_col(c, lang) for c in d_final.columns}
-        d_final.rename(columns=rename_map, inplace=True)
+        # Rename Columns Mechanism (Safe to prevent duplicates)
+        new_names = {}
+        used_names = set()
+        for c in d_final.columns:
+            new_name = t_col(c, lang)
+            original_new_name = new_name
+            counter = 1
+            while new_name in used_names:
+                counter += 1
+                new_name = f"{original_new_name} ({counter})"
+            used_names.add(new_name)
+            new_names[c] = new_name
+            
+        d_final.rename(columns=new_names, inplace=True)
         
         # Recalculate Column Config Key
-        # Because we renamed the columns, the CV column name in the DF is now translated.
-        # We need to map the config to the NEW name.
         final_cfg = {}
-        if cv_col:
-            trans_cv_col = t_col(cv_col, lang)
-            final_cfg[trans_cv_col] = st.column_config.LinkColumn(t("cv_download", display_text=t("download_pdf", lang)))
+        if cv_col and cv_col in new_names:
+            trans_cv_col = new_names[cv_col]
+            final_cfg[trans_cv_col] = st.column_config.LinkColumn(
+                t("cv_download", lang), 
+                display_text=t("download_pdf", lang)
+            )
         
         st.dataframe(d_final, use_container_width=True, column_config=final_cfg)
 
@@ -313,9 +325,20 @@ def render_search_content():
         res = eng.search(query)
         if res.empty: st.warning(t("no_results", lang))
         else:
-            # Rename columns before showing
-            rename_map = {c: t_col(c, lang) for c in res.columns}
-            res_display = res.rename(columns=rename_map)
+            # Rename columns before showing (Safe Rename)
+            new_names = {}
+            used_names = set()
+            for c in res.columns:
+                new_name = t_col(c, lang)
+                original_new_name = new_name
+                counter = 1
+                while new_name in used_names:
+                    counter += 1
+                    new_name = f"{original_new_name} ({counter})"
+                used_names.add(new_name)
+                new_names[c] = new_name
+            
+            res_display = res.rename(columns=new_names)
             st.dataframe(res_display, use_container_width=True)
 
 def render_translator_content():
