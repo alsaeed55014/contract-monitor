@@ -322,6 +322,11 @@ def render_search_content():
     lang = st.session_state.lang
     st.title(f" {t('smart_search_title', lang)}")
     
+    # Force Refresh button in sidebar or top
+    if st.button(t("refresh_data_btn", lang), key="force_refresh_db"):
+        st.session_state.db.fetch_data(force=True)
+        st.success("تم تحديث البيانات من Google Sheets بنجاح!" if lang == 'ar' else "Data refreshed successfully!")
+        st.rerun()
     # Labels
     lbl_age = t("age", lang) if t("age", lang) != "age" else "العمر"
     lbl_contract = t("contract_end", lang) if t("contract_end", lang) != "contract_end" else "تاريخ انتهاء العقد"
@@ -400,19 +405,31 @@ def render_search_content():
 
         print(f"[SEARCH] Search triggered - Query: '{query}', Filters: {filters}")
         
-        eng = SmartSearchEngine(st.session_state.db.fetch_data())
+        # Fetch fresh data
+        original_data = st.session_state.db.fetch_data()
+        total_rows = len(original_data)
         
-        # Debug: Print column names
-        data = st.session_state.db.fetch_data()
-        print(f"[DEBUG] Available columns: {list(data.columns)}")
-        
-        res = eng.search(query, filters=filters)
-        
-        # Handle both DataFrame and list returns
-        is_empty = (isinstance(res, list) and len(res) == 0) or (hasattr(res, 'empty') and res.empty)
-        
-        if is_empty:
-            st.warning(t("no_results", lang))
+        if total_rows == 0:
+            st.error("لم يتم العثور على أي بيانات في قاعدة البيانات. تأكد من الربط مع Google Sheets.")
+            return
+
+        eng = SmartSearchEngine(original_data)
+        try:
+            res = eng.search(query, filters=filters)
+            
+            # Show count in UI
+            count_found = len(res)
+            if count_found > 0:
+                st.success(f"{'تم العثور على' if lang == 'ar' else 'Found'} {count_found} {'نتائج من أصل' if lang == 'ar' else 'results out of'} {total_rows}")
+            
+            # Handle both DataFrame and list returns
+            is_empty = (isinstance(res, list) and len(res) == 0) or (hasattr(res, 'empty') and res.empty)
+            
+            if is_empty:
+                st.warning(t("no_results", lang))
+        except Exception as e:
+            st.error(f"حدث خطأ أثناء البحث: {str(e)}")
+            return
         else:
             # Rename columns before showing (Safe Rename)
             new_names = {}
