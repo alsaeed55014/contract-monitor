@@ -246,6 +246,18 @@ def render_dashboard_content():
 
     # Don't rename yet, logic needs English/Original headers
     cols = df.columns.tolist()
+    
+    # DEBUG: Save columns to file to inspect them
+    debug_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "debug_headers.txt")
+    try:
+        with open(debug_path, "w", encoding="utf-8") as f:
+            f.write("\n".join(cols))
+        st.success(f"Debug file written to: {debug_path}")
+    except Exception as e:
+        st.error(f"Failed to write debug file: {e}")
+        
+    date_col = next((c for c in cols if "contract end" in c.lower() or "انتهاء العقد" in c.lower()), None)
+        
     date_col = next((c for c in cols if "contract end" in c.lower() or "انتهاء العقد" in c.lower()), None)
     if not date_col:
         st.error(f"Date column not found. Available: {cols}")
