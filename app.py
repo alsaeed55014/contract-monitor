@@ -322,43 +322,66 @@ def render_search_content():
     lang = st.session_state.lang
     st.title(f"🔍 {t('smart_search_title', lang)}")
     
+    # Labels
+    lbl_age = t("age", lang) if t("age", lang) != "age" else "العمر"
+    lbl_contract = t("contract_end", lang) if t("contract_end", lang) != "contract_end" else "تاريخ انتهاء العقد"
+    lbl_reg = t("registration_date", lang) if t("registration_date", lang) != "registration_date" else "تاريخ التسجيل"
+    lbl_enable = "تفعيل" if lang == "ar" else "Enable"
+    
     # Advanced Filters UI
     with st.expander(t("advanced_filters", lang) if t("advanced_filters", lang) != "advanced_filters" else "تصفية متقدمة"):
-        c1, c2, c3 = st.columns(3)
+        c3, c2, c1 = st.columns(3)
         
-        # Age Filter
+        # Registration Date Filter (rightmost in RTL)
         with c1:
-            age_range = st.slider(t("age", lang) if t("age", lang) != "age" else "العمر", 18, 60, (20, 45))
-        
+            use_reg = st.checkbox(f"🔘 {lbl_enable} {lbl_reg}", key="use_reg_filter")
+            if use_reg:
+                st.caption(lbl_reg)
+                today = datetime.now().date()
+                first_of_month = today.replace(day=1)
+                reg_range = st.date_input("Registration Range", (first_of_month, today), label_visibility="collapsed", key="reg_range")
+            else:
+                reg_range = []
+
         # Contract End Filter
         with c2:
-            st.caption(t("contract_end", lang) if t("contract_end", lang) != "contract_end" else "تاريخ انتهاء العقد")
-            # Default: Next 30 days
-            today = datetime.now().date()
-            next_month = today + timedelta(days=30)
-            contract_range = st.date_input("Contract Range", (today, next_month), label_visibility="collapsed")
-
-        # Registration Date Filter
+            use_contract = st.checkbox(f"🔘 {lbl_enable} {lbl_contract}", key="use_contract_filter")
+            if use_contract:
+                st.caption(lbl_contract)
+                today = datetime.now().date()
+                next_month = today + timedelta(days=30)
+                contract_range = st.date_input("Contract Range", (today, next_month), label_visibility="collapsed", key="contract_range")
+            else:
+                contract_range = []
+        
+        # Age Filter (leftmost in RTL)
         with c3:
-            st.caption(t("registration_date", lang) if t("registration_date", lang) != "registration_date" else "تاريخ التسجيل")
-            reg_range = st.date_input("Registration Range", [], label_visibility="collapsed")
+            use_age = st.checkbox(f"🔘 {lbl_enable} {lbl_age}", key="use_age_filter")
+            if use_age:
+                age_range = st.slider(lbl_age, 18, 60, (20, 45), key="age_slider")
+            else:
+                age_range = (18, 60)
 
     query = st.text_input(t("smart_search", lang), placeholder=t("search_placeholder", lang))
     
     # Gather Filters
     filters = {}
     
-    # 1. Age
-    filters['age_min'] = age_range[0]
-    filters['age_max'] = age_range[1]
+    # 1. Age (only if enabled)
+    if use_age:
+        filters['age_enabled'] = True
+        filters['age_min'] = age_range[0]
+        filters['age_max'] = age_range[1]
     
-    # 2. Contract End
-    if len(contract_range) == 2:
+    # 2. Contract End (only if enabled and valid range)
+    if use_contract and len(contract_range) == 2:
+        filters['contract_enabled'] = True
         filters['contract_end_start'] = contract_range[0]
         filters['contract_end_end'] = contract_range[1]
         
-    # 3. Registration
-    if len(reg_range) == 2:
+    # 3. Registration (only if enabled and valid range)
+    if use_reg and len(reg_range) == 2:
+        filters['date_enabled'] = True
         filters['date_start'] = reg_range[0]
         filters['date_end'] = reg_range[1]
 
