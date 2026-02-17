@@ -385,10 +385,34 @@ def render_search_content():
         filters['date_start'] = reg_range[0]
         filters['date_end'] = reg_range[1]
 
-    if st.button(t("search_btn", lang)) or query:
+    # Check if any filter is actually active
+    has_active_filter = bool(filters)
+    
+    if st.button(t("search_btn", lang)) or query or has_active_filter:
+        # Debug: Show what filters are being sent
+        if filters:
+            active_filter_names = []
+            if filters.get('age_enabled'): active_filter_names.append(f"{lbl_age}: {filters.get('age_min')}-{filters.get('age_max')}")
+            if filters.get('contract_enabled'): active_filter_names.append(f"{lbl_contract}")
+            if filters.get('date_enabled'): active_filter_names.append(f"{lbl_reg}")
+            if active_filter_names:
+                st.info(f"{'الفلاتر النشطة' if lang == 'ar' else 'Active filters'}: {', '.join(active_filter_names)}")
+
+        print(f"🔎 Search triggered - Query: '{query}', Filters: {filters}")
+        
         eng = SmartSearchEngine(st.session_state.db.fetch_data())
+        
+        # Debug: Print column names
+        data = st.session_state.db.fetch_data()
+        print(f"📋 Available columns: {list(data.columns)}")
+        
         res = eng.search(query, filters=filters)
-        if res.empty: st.warning(t("no_results", lang))
+        
+        # Handle both DataFrame and list returns
+        is_empty = (isinstance(res, list) and len(res) == 0) or (hasattr(res, 'empty') and res.empty)
+        
+        if is_empty:
+            st.warning(t("no_results", lang))
         else:
             # Rename columns before showing (Safe Rename)
             new_names = {}
@@ -404,6 +428,7 @@ def render_search_content():
                 new_names[c] = new_name
             
             res_display = res.rename(columns=new_names)
+            st.success(f"{'تم العثور على' if lang == 'ar' else 'Found'} {len(res_display)} {'نتيجة' if lang == 'ar' else 'results'}")
             st.dataframe(res_display, use_container_width=True)
 
 def render_translator_content():
