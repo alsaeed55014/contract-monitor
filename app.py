@@ -296,7 +296,7 @@ def render_dashboard_content():
         final_cfg = {}
         if cv_col:
             trans_cv_col = t_col(cv_col, lang)
-            final_cfg[trans_cv_col] = st.column_config.LinkColumn(t("cv_download", lang), display_text=t("download_pdf", lang))
+            final_cfg[trans_cv_col] = st.column_config.LinkColumn(t("cv_download", display_text=t("download_pdf", lang)))
         
         st.dataframe(d_final, use_container_width=True, column_config=final_cfg)
 
