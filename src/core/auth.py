@@ -77,3 +77,12 @@ class AuthManager:
             self.save_users()
             return True
         return False
+
+    def update_role(self, username, new_role):
+        username = username.lower().strip()
+        if username in self.users and username != "admin":
+            self.users[username]["role"] = new_role
+            self.users[username]["permissions"] = ["read"] if new_role == "viewer" else ["all"]
+            self.save_users()
+            return True
+        return False
