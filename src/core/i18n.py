@@ -67,39 +67,45 @@ TRANSLATIONS = {
     "error": {"ar": "خطأ", "en": "Error"},
     "success": {"ar": "نجاح", "en": "Success"},
 
-    # Column Headers
+
+    # Column Headers (Exact Matches from User Data)
     "columns": {
-        "Name": {"ar": "الاسم", "en": "Name"},
-        "Passport Number": {"ar": "رقم الجواز", "en": "Passport Number"},
+        "طابع زمني": {"ar": "وقت التسجيل", "en": "Timestamp"},
+        "Full Name:": {"ar": "الاسم الكامل", "en": "Full Name"},
         "Nationality": {"ar": "الجنسية", "en": "Nationality"},
-        "Job": {"ar": "المهنة", "en": "Job"},
-        "Sponsor Name": {"ar": "اسم الكفيل", "en": "Sponsor Name"},
-        "Mobile": {"ar": "رقم الجوال", "en": "Mobile"},
-        "Contract Duration": {"ar": "مدة العقد", "en": "Contract Duration"},
-        "Contract End Date": {"ar": "تاريخ انتهاء العقد", "en": "Contract End Date"},
-        "Status": {"ar": "الحالة", "en": "Status"},
-        "CV": {"ar": "السيرة الذاتية", "en": "CV"},
-        "Religion": {"ar": "الديانة", "en": "Religion"},
-        "Birth Date": {"ar": "تاريخ الميلاد", "en": "Birth Date"},
-        "Arrival Date": {"ar": "تاريخ الوصول", "en": "Arrival Date"},
-        "User": {"ar": "المستخدم", "en": "User"},
-        "Role": {"ar": "الصلاحية", "en": "Role"},
-        
-        # New Columns (User Feedback)
         "Gender": {"ar": "الجنس", "en": "Gender"},
         "Phone Number": {"ar": "رقم الهاتف", "en": "Phone Number"},
         "Is your contract expired": {"ar": "هل العقد منتهي؟", "en": "Is your contract expired?"},
-        "When is your contract end date?": {"ar": "تاريخ انتهاء العقد", "en": "When is your contract end date?"},
-        "your Age:": {"ar": "العمر", "en": "your Age:"},
+        "When is your contract end date?": {"ar": "تاريخ انتهاء العقد", "en": "Contract End Date"},
+        "your Age:": {"ar": "العمر", "en": "Age"},
         "Are you working now?": {"ar": "هل تعمل حالياً؟", "en": "Are you working now?"},
-        "Do you have any financial obligations towards your previous employer?": {"ar": "هل لديك التزامات مالية سابقة؟", "en": "Do you have any financial obligations..."},
-        "Timestamp": {"ar": "وقت التسجيل", "en": "Timestamp"},
-        "notes": {"ar": "ملاحظات", "en": "Notes"},
-        
-        # Round 2 Feedback
-        "Are you in Saudi Arabia now": {"ar": "هل أنت في السعودية الآن؟", "en": "Are you in Saudi Arabia now"},
-        "If you are Huroob, how many days or months have you been Huroob?": {"ar": "مدة الهروب (إن وجد)", "en": "If you are Huroob..."},
-        "Will your employer accept to transfer your sponsorship": {"ar": "هل يقبل كفيلك النقل؟", "en": "Will your employer accept..."},
+        "Do you have any financial obligations towards your previous sponsor": {"ar": "هل لديك التزامات مالية للكفيل السابق؟", "en": "Financial Obligations"},
+        "Do you have to report Huroob": {"ar": "هل لديك بلاغ هروب؟", "en": "Huroob Report"},
+        "If you are Huroob, how many days or months have you been Huroob?": {"ar": "مدة الهروب", "en": "Huroob Duration"},
+        "Will your employer accept to transfer your sponsorship": {"ar": "هل يقبل الكفيل النقل؟", "en": "Sponsorship Transfer"},
+        "Are you in Saudi Arabia now": {"ar": "هل أنت في السعودية؟", "en": "In KSA?"},
+        "Which city in Saudi Arabia are you in": {"ar": "المدينة", "en": "City"},
+        "What is the name of the area where you live?": {"ar": "المنطقة/الحي", "en": "Area"},
+        "Do you speak Arabic": {"ar": "هل تتحدث العربية؟", "en": "Speaks Arabic"},
+        "Which job are you looking for": {"ar": "الوظيفة المطلوبة", "en": "Job Requested"},
+        "How much experience do you have in this field?": {"ar": "الخبرة في هذا المجال", "en": "Experience"},
+        "What other jobs can you do": {"ar": "مهارات أخرى", "en": "Other Skills"},
+        "How much experience do you have in this field?_1": {"ar": "الخبرة (أخرى)", "en": "Experience (Other)"},
+        "Do you have Card Baladiya": {"ar": "هل لديك كرت بلدية؟", "en": "Baladiya Card"},
+        "Is the Card Baladiya  valid?": {"ar": "هل الكرت ساري؟", "en": "Card Valid?"},
+        "how many months Card Baladiya valid": {"ar": "مدة صلاحية الكرت (أشهر)", "en": "Card Validity (Months)"},
+        "how many months Card Baladiya expires": {"ar": "متى ينتهي الكرت (أشهر)", "en": "Card Expiry (Months)"},
+        "Can you work outside your city": {"ar": "هل يمكنك العمل خارج مدينتك؟", "en": "Work Outside City"},
+        "Are you ready to work immediately?": {"ar": "هل أنت جاهز للعمل فوراً؟", "en": "Ready Immediately"},
+        "Are you married and do your children reside with you in Saudi Arabia?": {"ar": "الحالة الاجتماعية وهل العائلة معك؟", "en": "Marital Status & Family"},
+        "Iqama ID number": {"ar": "رقم الإقامة", "en": "Iqama ID"},
+        "What is the occupation listed on your Iqama": {"ar": "المهنة في الإقامة", "en": "Iqama Profession"},
+        "your Iqama Valid": {"ar": "هل الإقامة سارية؟", "en": "Iqama Valid"},
+        "If the Iqama is valid, how many months are left?": {"ar": "المدة المتبقية في الإقامة", "en": "Iqama Remaining"},
+        "If the Iqama expired how many months ago?": {"ar": "مدة انتهاء الإقامة", "en": "Iqama Expired Since"},
+        "How many times did you transfer your sponsorship": {"ar": "عدد مرات نقل الكفالة", "en": "Transfer Count"},
+        "Download CV": {"ar": "تحميل السيرة الذاتية", "en": "Download CV"},
+        "How did you know us?": {"ar": "كيف عرفت عنا؟", "en": "How did you know us?"}
     }
 }
 
@@ -107,7 +113,7 @@ def t(key, lang="ar"):
     return TRANSLATIONS.get(key, {}).get(lang, key)
 
 def t_col(col_name, lang="ar"):
-    """Translates a column name with fuzzy matching (ignores case/spaces)."""
+    """Translates a column name using exact lookups from the `columns` dictionary."""
     if lang == 'en': return col_name
     
     col_str = str(col_name).strip()
@@ -121,14 +127,15 @@ def t_col(col_name, lang="ar"):
     res_fuzzy = cols_map.get(col_str.lower())
     if res_fuzzy: return res_fuzzy
     
-    # 3. Fallback for specific partials (Robust Matching)
+    # 3. Enhanced Partial Matches (Fallback)
     col_lower = col_str.lower()
-    if "financial obligations" in col_lower: return "هل لديك التزامات مالية؟"
+    
+    # Prioritize specific partials causing issues
+    if "financial obligations" in col_lower: return "الالتزامات المالية"
+    if "card baladiya" in col_lower: return "كرت البلدية"
+    if "iqama" in col_lower: return "الإقامة"
+    if "experience" in col_lower: return "الخبرة"
+    if "huroob" in col_lower: return "الهروب"
     if "contract end" in col_lower: return "تاريخ انتهاء العقد"
-    if "mobile" in col_lower: return "رقم الجوال"
-    if "phone" in col_lower: return "رقم الهاتف"
-    if "huroob" in col_lower: return "مدة الهروب (إن وجد)"
-    if "saudi arabia" in col_lower and "now" in col_lower: return "هل أنت في السعودية الآن؟"
-    if "transfer your sponsorship" in col_lower: return "هل يقبل كفيلك النقل؟"
     
     return col_name
