@@ -1,6 +1,9 @@
+streamlit>=1.36.0
+pandas
 gspread
 oauth2client
-pandas
 python-dateutil
 Pillow
+deep-translator
+pdfplumber
 requests
