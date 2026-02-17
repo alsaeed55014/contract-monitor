@@ -5,10 +5,10 @@ import sys
 import json
 import hashlib
 
-# Ensure project root is in path
+# 1. Ensure project root is in path
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-# --- LOCAL AUTH CLASS (TO FIX DEPLOYMENT ISSUES) ---
+# 2. Local Auth Class to prevent Import/Sync Errors
 class AuthManager:
     def __init__(self, users_file_path):
         self.users_file = users_file_path
@@ -28,7 +28,7 @@ class AuthManager:
         # Ensure Default Admin
         if "admin" not in self.users:
             self.users["admin"] = {
-                "password": self.hash_password("admin123"),
+                "password": self.hash_password("admin123"), # Default password
                 "role": "admin",
                 "full_name_ar": "المدير العام",
                 "full_name_en": "General Manager",
@@ -93,17 +93,24 @@ class AuthManager:
             self.save_users()
             return True
         return False
-# ---------------------------------------------------
 
-from src.core.search import SmartSearchEngine
-from src.core.contracts import ContractManager
-from src.core.translation import TranslationManager
-from src.data.db_client import DBClient
-from src.ui.streamlit_styles import get_css
-from src.config import USERS_FILE, ASSETS_DIR
-from src.core.i18n import t
+# 3. Imports with Error Handling
+try:
+    from src.core.search import SmartSearchEngine
+    from src.core.contracts import ContractManager
+    from src.core.translation import TranslationManager
+    from src.data.db_client import DBClient
+    from src.ui.streamlit_styles import get_css
+    from src.config import USERS_FILE, ASSETS_DIR
+    from src.core.i18n import t
+except ImportError as e:
+    st.error(f"Critical Import Error: {e}")
+    st.stop()
+except KeyError as e:
+    st.error(f"Configuration Error (KeyError): {e} - Possible issue in i18n or config.")
+    st.stop()
 
-# Page Config
+# 4. Page Config
 st.set_page_config(
     page_title="Golden Noura | Contract Monitor",
     page_icon="🦅",
@@ -111,41 +118,40 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Apply Styles
+# 5. Apply Styles
 st.markdown(get_css(), unsafe_allow_html=True)
 
-# Initialize Core
-# Force re-init if the stored object is from the old class (missing update_role)
+# 6. Initialize Core (With Force Re-init for Updates)
 if 'auth' not in st.session_state or not hasattr(st.session_state.auth, 'update_role'):
     st.session_state.auth = AuthManager(USERS_FILE)
-if 'db' not in st.session_state:
-    st.session_state.db = DBClient()
+
 if 'db' not in st.session_state:
     st.session_state.db = DBClient()
 
-# Session State & Language
+# 7. Session State Defaults
 if 'user' not in st.session_state:
     st.session_state.user = None
 if 'lang' not in st.session_state:
-    st.session_state.lang = 'ar' # Default Arabic
+    st.session_state.lang = 'ar' 
 
-# Constants
+# 8. Constants
 IMG_PATH = os.path.join(ASSETS_DIR, "alsaeed.jpg")
 if not os.path.exists(IMG_PATH):
-    IMG_PATH = "alsaeed.jpg"
+    IMG_PATH = "alsaeed.jpg" # Fallback
 
+# 9. Language Toggle Helper
 def toggle_lang():
     if st.session_state.lang == 'ar': st.session_state.lang = 'en'
     else: st.session_state.lang = 'ar'
 
-# --- LOGIN SCREEN ---
+# 10. Logic Functions
 def login_screen():
     lang = st.session_state.lang
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
         st.markdown('<div class="login-box">', unsafe_allow_html=True)
         if os.path.exists(IMG_PATH):
-            st.image(IMG_PATH, width=150) # Smaller Image
+            st.image(IMG_PATH, width=150)
         else:
             st.warning(t("image_not_found", lang))
             
@@ -153,9 +159,7 @@ def login_screen():
         st.markdown(f"### {t('system_title', lang)}")
         
         with st.form("login"):
-            # Language Toggle inside form or above? Above is better but form is cleaner
             st.markdown(f'<p style="text-align:right; font-size:0.8em; cursor:pointer;" onclick="window.location.reload()">{"EN" if lang=="ar" else "عربي"}</p>', unsafe_allow_html=True)
-            
             u = st.text_input(t("username", lang), label_visibility="collapsed", placeholder=t("username", lang))
             p = st.text_input(t("password", lang), type="password", label_visibility="collapsed", placeholder=t("password", lang))
             
@@ -171,54 +175,23 @@ def login_screen():
         st.markdown(f'<p class="programmer-credit">{t("programmer", lang)}</p>', unsafe_allow_html=True)
         st.markdown('</div>', unsafe_allow_html=True)
 
-    # Simple Language Toggle Button (Outside box for logic safety)
     with col1:
         if st.button("English / عربي", key="lang_btn_login"):
             toggle_lang()
             st.rerun()
 
-    # --- DEBUG SECTION (REMOVE LATER) ---
-    with st.expander("🛠️ Connection Debugger"):
-        st.write("Checking Secrets...")
-        if hasattr(st, "secrets"):
-            st.success("Secrets found!")
-            if "gcp_service_account" in st.secrets:
-                st.success("Key 'gcp_service_account' found!")
-            else:
-                st.error("Key 'gcp_service_account' MISSING in secrets.")
-        else:
-            st.error("No secrets found at all.")
-            
-        if st.button("Test Connection"):
-            try:
-                db = DBClient()
-                db.connect()
-                if db.client:
-                    st.success("Client Connected!")
-                    data = db.fetch_data(force=True)
-                    st.write(f"Data shape: {data.shape}")
-                else:
-                    st.error("Client connection failed.")
-            except Exception as e:
-                st.error(f"Error: {e}")
-
-# --- DASHBOARD ---
 def dashboard():
     user = st.session_state.user
     lang = st.session_state.lang
     
     with st.sidebar:
         st.image(IMG_PATH, width=100)
-        # Removed "User" text, added Programmer Credit
         st.markdown(f'<div style="text-align: center; margin-bottom: 10px; font-size: 0.8em; color: #D4AF37;">{t("programmer", "en")}</div>', unsafe_allow_html=True)
-        
         st.markdown("---")
         
-        # Language Selector
         if st.sidebar.button("English / عربي", key="lang_btn_dashboard"):
             toggle_lang()
             st.rerun()
-            
         st.markdown("---")
 
         if st.button(t("dashboard", lang)):
@@ -239,7 +212,7 @@ def dashboard():
             st.session_state.user = None
             st.rerun()
 
-    # Sidebar Debugger
+    # Admin Debug
     if user.get("role") == "admin":
         with st.sidebar.expander(t("debug", lang)):
             if st.button(t("test_db", lang)):
@@ -261,7 +234,6 @@ def dashboard():
 def render_dashboard_content():
     lang = st.session_state.lang
     st.title(f"📊 {t('contract_dashboard', lang)}")
-    
     try:
         df = st.session_state.db.fetch_data()
     except Exception as e:
@@ -271,12 +243,6 @@ def render_dashboard_content():
     if df.empty:
         st.warning(t("no_data", lang))
         return
-
-    # Translate Headers if Arabic
-    if lang == 'ar':
-        # Simple mapping heuristic or strict mapping
-        # Trying to detect columns dynamically
-        pass 
 
     cols = df.columns.tolist()
     date_col = next((c for c in cols if "contract end" in c.lower() or "انتهاء العقد" in c.lower()), None)
@@ -289,12 +255,12 @@ def render_dashboard_content():
         try:
             status = ContractManager.calculate_status(row[date_col])
             r = row.to_dict()
-            # Translate Status Label
+            global_status = status['status']
             r['Status'] = status['label_ar'] if lang == 'ar' else status['label_en']
             
-            if status['status'] == 'urgent': stats['urgent'].append(r)
-            elif status['status'] == 'expired': stats['expired'].append(r)
-            elif status['status'] == 'active': stats['active'].append(r)
+            if global_status == 'urgent': stats['urgent'].append(r)
+            elif global_status == 'expired': stats['expired'].append(r)
+            elif global_status == 'active': stats['active'].append(r)
         except Exception as e:
             continue
 
@@ -302,7 +268,6 @@ def render_dashboard_content():
     c1.metric(t("urgent_7_days", lang), len(stats['urgent']), delta_color="inverse")
     c2.metric(t("expired", lang), len(stats['expired']), delta_color="inverse")
     c3.metric(t("active", lang), len(stats['active']))
-    
     st.markdown("---")
     
     cv_col = next((c for c in cols if "cv" in c.lower() or "سيرة" in c.lower()), None)
@@ -311,11 +276,9 @@ def render_dashboard_content():
         cfg[cv_col] = st.column_config.LinkColumn(t("cv_download", lang), display_text=t("download_pdf", lang))
 
     t1, t2, t3 = st.tabs([t("tabs_urgent", lang), t("tabs_expired", lang), t("tabs_active", lang)])
-    
     def show(data):
         if not data: st.info(t("no_data", lang)); return
         d = pd.DataFrame(data)
-        # Column selection
         show_cols = ['Status'] + [c for c in cols if c in d.columns]
         st.dataframe(d[show_cols], use_container_width=True, column_config=cfg)
 
@@ -337,7 +300,6 @@ def render_translator_content():
     lang = st.session_state.lang
     st.title(f"📄 {t('translator_title', lang)}")
     st.markdown(t("translator_desc", lang))
-    
     uploaded = st.file_uploader(t("upload_cv", lang), type=["pdf"])
     if uploaded:
         if st.button(t("translate_now", lang)):
@@ -355,14 +317,12 @@ def render_translator_content():
                     with c2:
                         st.subheader(t("translated", lang))
                         st.text_area("Translated", trans, height=400)
-                    
                     st.download_button(t("download_trans", lang), trans, file_name="translated_cv.txt")
 
 def render_permissions_content():
     lang = st.session_state.lang
     st.title(f"🔑 {t('permissions_title', lang)}")
     
-    # Add User
     with st.expander(t("add_user", lang), expanded=False):
         with st.form("new_user"):
             u = st.text_input(t("username", lang))
@@ -373,35 +333,30 @@ def render_permissions_content():
                 if s: st.success(t("user_added", lang))
                 else: st.error(m)
 
-    # List & Edit Users
     st.subheader(t("users_list", lang))
-    
     users = st.session_state.auth.users
     user_list = list(users.keys())
     
-    # Edit User Section
     selected_user = st.selectbox(t("select_user", lang), user_list)
     if selected_user:
         current_data = users[selected_user]
         with st.form("edit_user_form"):
             st.write(f"Editing: **{selected_user}**")
-            new_role = st.selectbox(t("role", lang), ["viewer", "admin"], index=0 if current_data["role"]=="viewer" else 1)
+            current_role_idx = 0 if current_data.get("role") == "viewer" else 1
+            new_role = st.selectbox(t("role", lang), ["viewer", "admin"], index=current_role_idx)
             new_pass = st.text_input(t("new_password", lang), type="password")
             
             if st.form_submit_button(t("update_btn", lang)):
-                # Update Role
                 st.session_state.auth.update_role(selected_user, new_role)
-                # Update Password if provided
                 if new_pass:
                     st.session_state.auth.update_password(selected_user, new_pass)
                 st.success(t("update_success", lang))
                 st.rerun()
     
-    # Read-only Table
-    st.dataframe([{"User": k, "Role": v['role']} for k, v in users.items()], use_container_width=True)
+    st.dataframe([{"User": k, "Role": v.get('role', 'viewer')} for k, v in users.items()], use_container_width=True)
 
+# 11. Main Entry
 if not st.session_state.user:
     login_screen()
 else:
     dashboard()
-
