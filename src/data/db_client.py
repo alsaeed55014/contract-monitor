@@ -4,6 +4,7 @@ import os
 import pandas as pd
 from datetime import datetime
 import time
+import streamlit as st
 
 class DBClient:
     _instance = None
@@ -22,13 +23,25 @@ class DBClient:
         """Initializes the connection to Google Sheets."""
         try:
             scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-            self.creds_file = 'credentials.json' # Assumes file is in root
+            
+            # 1. Try connecting via Streamlit Secrets (Recommended for Cloud)
+            if hasattr(st, "secrets") and "gcp_service_account" in st.secrets:
+                # Create a dictionary from secrets
+                key_dict = dict(st.secrets["gcp_service_account"])
+                creds = ServiceAccountCredentials.from_json_keyfile_dict(key_dict, scope)
+                self.client = gspread.authorize(creds)
+                print("✅ Connected to Google Sheets via Secrets")
+                return
+
+            # 2. Fallback to local file (for local testing)
+            self.creds_file = 'credentials.json'
             if os.path.exists(self.creds_file):
                 creds = ServiceAccountCredentials.from_json_keyfile_name(self.creds_file, scope)
                 self.client = gspread.authorize(creds)
-                print("✅ Connected to Google Sheets")
+                print("✅ Connected to Google Sheets via File")
             else:
-                print("❌ Credentials file not found")
+                print("❌ Credentials file not found & No Secrets available")
+                
         except Exception as e:
             print(f"❌ Connection Error: {e}")
 
@@ -78,7 +91,7 @@ class DBClient:
 
         except Exception as e:
             print(f"❌ Error fetching data: {e}")
-            return pd.DataFrame()
+            raise e  # <--- This is the important change to show the error
 
     def get_headers(self):
         """Returns the list of headers."""
