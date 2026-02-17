@@ -248,15 +248,17 @@ def render_dashboard_content():
     cols = df.columns.tolist()
     
     # DEBUG: Save columns to file to inspect them
-    debug_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "debug_headers.txt")
+    debug_path = "debug_headers.txt" # Use relative path for simplicity in cloud
     try:
         with open(debug_path, "w", encoding="utf-8") as f:
             f.write("\n".join(cols))
-        st.success(f"Debug file written to: {debug_path}")
+        
+        # DISPLAY CONTENT FOR USER TO COPY
+        st.info("Please copy the following list and send it to me:")
+        st.code("\n".join(cols))
+        
     except Exception as e:
         st.error(f"Failed to write debug file: {e}")
-        
-    date_col = next((c for c in cols if "contract end" in c.lower() or "انتهاء العقد" in c.lower()), None)
         
     date_col = next((c for c in cols if "contract end" in c.lower() or "انتهاء العقد" in c.lower()), None)
     if not date_col:
