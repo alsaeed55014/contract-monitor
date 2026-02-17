@@ -102,7 +102,7 @@ try:
     from src.data.db_client import DBClient
     from src.ui.streamlit_styles import get_css
     from src.config import USERS_FILE, ASSETS_DIR
-    from src.core.i18n import t
+    from src.core.i18n import t, t_col # Added t_col
 except ImportError as e:
     st.error(f"Critical Import Error: {e}")
     st.stop()
@@ -244,6 +244,7 @@ def render_dashboard_content():
         st.warning(t("no_data", lang))
         return
 
+    # Don't rename yet, logic needs English/Original headers
     cols = df.columns.tolist()
     date_col = next((c for c in cols if "contract end" in c.lower() or "انتهاء العقد" in c.lower()), None)
     if not date_col:
@@ -271,16 +272,33 @@ def render_dashboard_content():
     st.markdown("---")
     
     cv_col = next((c for c in cols if "cv" in c.lower() or "سيرة" in c.lower()), None)
-    cfg = {}
-    if cv_col:
-        cfg[cv_col] = st.column_config.LinkColumn(t("cv_download", lang), display_text=t("download_pdf", lang))
-
+    
+    # Configuration for LinkColumn needs the TRANSLATED column name if we rename it!
+    # But Streamlit LinkColumn config keys must match the dataframe columns.
+    
     t1, t2, t3 = st.tabs([t("tabs_urgent", lang), t("tabs_expired", lang), t("tabs_active", lang)])
+    
     def show(data):
         if not data: st.info(t("no_data", lang)); return
         d = pd.DataFrame(data)
+        
+        # Select columns
         show_cols = ['Status'] + [c for c in cols if c in d.columns]
-        st.dataframe(d[show_cols], use_container_width=True, column_config=cfg)
+        d_final = d[show_cols].copy()
+        
+        # Rename Columns Mechanism
+        rename_map = {c: t_col(c, lang) for c in d_final.columns}
+        d_final.rename(columns=rename_map, inplace=True)
+        
+        # Recalculate Column Config Key
+        # Because we renamed the columns, the CV column name in the DF is now translated.
+        # We need to map the config to the NEW name.
+        final_cfg = {}
+        if cv_col:
+            trans_cv_col = t_col(cv_col, lang)
+            final_cfg[trans_cv_col] = st.column_config.LinkColumn(t("cv_download", lang), display_text=t("download_pdf", lang))
+        
+        st.dataframe(d_final, use_container_width=True, column_config=final_cfg)
 
     with t1: show(stats['urgent'])
     with t2: show(stats['expired'])
@@ -294,7 +312,11 @@ def render_search_content():
         eng = SmartSearchEngine(st.session_state.db.fetch_data())
         res = eng.search(query)
         if res.empty: st.warning(t("no_results", lang))
-        else: st.dataframe(res, use_container_width=True)
+        else:
+            # Rename columns before showing
+            rename_map = {c: t_col(c, lang) for c in res.columns}
+            res_display = res.rename(columns=rename_map)
+            st.dataframe(res_display, use_container_width=True)
 
 def render_translator_content():
     lang = st.session_state.lang
@@ -353,7 +375,14 @@ def render_permissions_content():
                 st.success(t("update_success", lang))
                 st.rerun()
     
-    st.dataframe([{"User": k, "Role": v.get('role', 'viewer')} for k, v in users.items()], use_container_width=True)
+    # Translate table keys for Users Table
+    table_data = []
+    for k, v in users.items():
+        table_data.append({
+            t_col("User", lang): k,
+            t_col("Role", lang): v.get('role', 'viewer')
+        })
+    st.dataframe(table_data, use_container_width=True)
 
 # 11. Main Entry
 if not st.session_state.user:
