@@ -115,8 +115,11 @@ st.set_page_config(
 st.markdown(get_css(), unsafe_allow_html=True)
 
 # Initialize Core
-if 'auth' not in st.session_state:
+# Force re-init if the stored object is from the old class (missing update_role)
+if 'auth' not in st.session_state or not hasattr(st.session_state.auth, 'update_role'):
     st.session_state.auth = AuthManager(USERS_FILE)
+if 'db' not in st.session_state:
+    st.session_state.db = DBClient()
 if 'db' not in st.session_state:
     st.session_state.db = DBClient()
 
@@ -401,3 +404,4 @@ if not st.session_state.user:
     login_screen()
 else:
     dashboard()
+
