@@ -74,25 +74,11 @@ def login_screen():
             st.success("Secrets found!")
             if "gcp_service_account" in st.secrets:
                 st.success("Key 'gcp_service_account' found!")
-                st.json(dict(st.secrets["gcp_service_account"])) # Show loaded keys (safe mostly)
+                # st.json(dict(st.secrets["gcp_service_account"])) 
             else:
                 st.error("Key 'gcp_service_account' MISSING in secrets.")
-                st.write("Available keys:", list(st.secrets.keys()))
         else:
             st.error("No secrets found at all.")
-            
-        if st.button("Test Connection"):
-            try:
-                db = DBClient()
-                db.connect()
-                if db.client:
-                    st.success("Client Connected!")
-                    data = db.fetch_data(force=True)
-                    st.write(f"Data shape: {data.shape}")
-                else:
-                    st.error("Client connection failed.")
-            except Exception as e:
-                st.error(f"Error: {e}")
 
 # --- DASHBOARD ---
 def dashboard():
@@ -120,6 +106,18 @@ def dashboard():
             st.session_state.user = None
             st.rerun()
 
+    # Sidebar Debugger
+    if user.get("role") == "admin":
+        with st.sidebar.expander("🛠️ Debug"):
+            if st.button("Test DB"):
+                try:
+                    st.session_state.db.connect()
+                    d = st.session_state.db.fetch_data(force=True)
+                    st.write(f"Rows: {len(d)}")
+                    if not d.empty: st.write(d.columns.tolist())
+                except Exception as e:
+                    st.error(f"Err: {e}")
+
     page = st.session_state.get('page', 'dashboard')
     
     if page == "dashboard": render_dashboard_content()
@@ -129,25 +127,34 @@ def dashboard():
 
 def render_dashboard_content():
     st.title("📊 Contract Dashboard")
-    df = st.session_state.db.fetch_data()
+    
+    try:
+        df = st.session_state.db.fetch_data()
+    except Exception as e:
+        st.error(f"Database Error: {e}")
+        return
+
     if df.empty:
-        st.warning("No data found.")
+        st.warning("No data found. Please check 'Test DB' in sidebar.")
         return
 
     cols = df.columns.tolist()
     date_col = next((c for c in cols if "contract end" in c.lower() or "انتهاء العقد" in c.lower()), None)
     if not date_col:
-        st.error("Date column not found.")
+        st.error(f"Date column not found. Available columns: {cols}")
         return
 
     stats = {'urgent': [], 'expired': [], 'active': []}
     for _, row in df.iterrows():
-        status = ContractManager.calculate_status(row[date_col])
-        r = row.to_dict()
-        r['Status'] = status['label_en']
-        if status['status'] == 'urgent': stats['urgent'].append(r)
-        elif status['status'] == 'expired': stats['expired'].append(r)
-        elif status['status'] == 'active': stats['active'].append(r)
+        try:
+            status = ContractManager.calculate_status(row[date_col])
+            r = row.to_dict()
+            r['Status'] = status['label_en']
+            if status['status'] == 'urgent': stats['urgent'].append(r)
+            elif status['status'] == 'expired': stats['expired'].append(r)
+            elif status['status'] == 'active': stats['active'].append(r)
+        except Exception as e:
+            continue
 
     c1, c2, c3 = st.columns(3)
     c1.metric("Urgent (7 Days)", len(stats['urgent']), delta_color="inverse")
