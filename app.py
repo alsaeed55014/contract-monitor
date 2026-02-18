@@ -271,41 +271,37 @@ def get_css():
             box-shadow: 0 0 5px rgba(212, 175, 55, 0.5) !important;
         }
 
-        /* Language Toggle - Large, Square, Centered */
-        .lang-toggle-wrapper {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            margin: 20px auto;
-            width: 100%;
-        }
-        
-        .lang-toggle-wrapper .stButton > button {
-            width: 110px !important;
-            height: 110px !important;
-            min-width: 110px !important;
-            border-radius: 12px !important; /* Elegant softened square */
-            font-size: 2.2rem !important; /* Much larger font */
+        /* Language Toggle - Large, Square, Centered (Ultra Fakhim) */
+        /* Increased specificity to override sidebar defaults */
+        .lang-toggle-wrapper div.stButton > button,
+        section[data-testid="stSidebar"] .lang-toggle-wrapper div.stButton > button {
+            width: 140px !important; /* Even larger for impact */
+            height: 140px !important;
+            min-width: 140px !important;
+            border-radius: 15px !important; 
+            font-size: 3rem !important; 
             font-weight: 900 !important;
             background: linear-gradient(135deg, #FFD700 0%, #D4AF37 50%, #B8860B 100%) !important;
             color: #000 !important;
-            border: 3px solid rgba(255,215,0,0.4) !important;
+            border: 4px solid rgba(255,215,0,0.5) !important;
             box-shadow: 
-                0 15px 35px rgba(0,0,0,0.5), 
-                0 0 20px rgba(212, 175, 55, 0.4),
-                inset 0 0 10px rgba(255,255,255,0.2) !important;
-            transition: all 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+                0 20px 40px rgba(0,0,0,0.6), 
+                0 0 30px rgba(212, 175, 55, 0.5),
+                inset 0 0 15px rgba(255,255,255,0.3) !important;
+            transition: all 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) !important;
             padding: 0 !important;
             display: flex !important;
             justify-content: center !important;
             align-items: center !important;
-            text-transform: uppercase;
+            text-transform: uppercase !important;
+            line-height: 1 !important;
         }
         
-        .lang-toggle-wrapper .stButton > button:hover {
-            transform: scale(1.15) rotate(3deg);
+        .lang-toggle-wrapper div.stButton > button:hover,
+        section[data-testid="stSidebar"] .lang-toggle-wrapper div.stButton > button:hover {
+            transform: scale(1.1) !important;
             background: linear-gradient(135deg, #FFFFFF 0%, #FFD700 30%, #D4AF37 100%) !important;
-            box-shadow: 0 20px 45px rgba(0,0,0,0.6), 0 0 40px rgba(212, 175, 55, 0.8) !important;
+            box-shadow: 0 25px 50px rgba(0,0,0,0.7), 0 0 50px rgba(212, 175, 55, 0.9) !important;
             border-color: #FFF !important;
         }
     </style>
