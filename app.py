@@ -32,8 +32,8 @@ class AuthManager:
             self.users["admin"] = {
                 "password": self.hash_password("admin123"), # Default password
                 "role": "admin",
-                "full_name_ar": "المدير العام",
-                "full_name_en": "General Manager",
+                "first_name": "المدير",
+                "father_name": "العام",
                 "permissions": ["all"]
             }
             self.save_users()
@@ -56,7 +56,7 @@ class AuthManager:
                 return self.users[username]
         return None
 
-    def add_user(self, username, password, role="viewer", name_ar="", name_en=""):
+    def add_user(self, username, password, role="viewer", first_name="", father_name=""):
         username = username.lower().strip()
         if username in self.users:
             return False, "User already exists"
@@ -64,8 +64,8 @@ class AuthManager:
         self.users[username] = {
             "password": self.hash_password(password),
             "role": role,
-            "full_name_ar": name_ar,
-            "full_name_en": name_en,
+            "first_name": first_name,
+            "father_name": father_name,
             "permissions": ["read"] if role == "viewer" else ["all"]
         }
         self.save_users()
@@ -92,6 +92,15 @@ class AuthManager:
         if username in self.users and username != "admin":
             self.users[username]["role"] = new_role
             self.users[username]["permissions"] = ["read"] if new_role == "viewer" else ["all"]
+            self.save_users()
+            return True
+        return False
+
+    def update_profile(self, username, first_name=None, father_name=None):
+        username = username.lower().strip()
+        if username in self.users:
+            if first_name is not None: self.users[username]["first_name"] = first_name
+            if father_name is not None: self.users[username]["father_name"] = father_name
             self.save_users()
             return True
         return False
@@ -337,7 +346,11 @@ def dashboard():
     
     # Welcome Message
     if st.session_state.get('show_welcome'):
-        st.toast(t("welcome_toast", lang), icon="🎉")
+        full_name = f"{user.get('first_name', '')} {user.get('father_name', '')}".strip()
+        if not full_name: full_name = st.session_state.get('user_id', 'User')
+        
+        msg = t("welcome_person", lang).format(name=full_name)
+        st.toast(msg, icon="🎉")
         del st.session_state.show_welcome
 
     with st.sidebar:
@@ -719,9 +732,11 @@ def render_permissions_content():
         with st.form("new_user"):
             u = st.text_input(t("username", lang))
             p = st.text_input(t("password", lang), type="password")
+            fn = st.text_input(t("first_name", lang))
+            ftn = st.text_input(t("father_name", lang))
             r = st.selectbox(t("role", lang), ["viewer", "admin"])
             if st.form_submit_button(t("add_btn", lang)):
-                s, m = st.session_state.auth.add_user(u, p, r)
+                s, m = st.session_state.auth.add_user(u, p, r, fn, ftn)
                 if s: st.success(t("user_added", lang))
                 else: st.error(m)
 
@@ -736,10 +751,13 @@ def render_permissions_content():
             st.write(f"Editing: **{selected_user}**")
             current_role_idx = 0 if current_data.get("role") == "viewer" else 1
             new_role = st.selectbox(t("role", lang), ["viewer", "admin"], index=current_role_idx)
+            new_first = st.text_input(t("first_name", lang), value=current_data.get("first_name", ""))
+            new_father = st.text_input(t("father_name", lang), value=current_data.get("father_name", ""))
             new_pass = st.text_input(t("new_password", lang), type="password")
             
             if st.form_submit_button(t("update_btn", lang)):
                 st.session_state.auth.update_role(selected_user, new_role)
+                st.session_state.auth.update_profile(selected_user, new_first, new_father)
                 if new_pass:
                     st.session_state.auth.update_password(selected_user, new_pass)
                 st.success(t("update_success", lang))
