@@ -18,7 +18,9 @@ TRANSLATIONS = {
     "debug": {"ar": "فحص الأخطاء", "en": "Debug"},
     "test_db": {"ar": "فحص قاعدة البيانات", "en": "Test DB"},
     "programmer": {"ar": "Programmed by Alsaeed Alwazzan", "en": "Programmed by Alsaeed Alwazzan"},
-
+    "welcome_toast": {"ar": "تم تسجيل الدخول بنجاح. أهلاً بك في نظام نايس!", "en": "Logged in successfully. Welcome to NICE System!"},
+    "welcome_subtitle": {"ar": "برمجة السعيد الوزان", "en": "Programmed by Alsaeed Alwazzan"},
+    
     # Dashboard
     "contract_dashboard": {"ar": "لوحة العقود", "en": "Contract Dashboard"},
     "no_data": {"ar": "لا توجد بيانات", "en": "No data found"},
