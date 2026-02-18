@@ -25,13 +25,14 @@ class AuthManager:
                     data = json.load(f)
                     self.users = data.get("users", {})
             except Exception as e:
-                print(f"Error loading users: {e}")
+                # Store error for UI feedback
+                self.load_error = str(e)
                 self.users = {}
         
         # Ensure Default Admin
         if "admin" not in self.users:
             self.users["admin"] = {
-                "password": self.hash_password("admin123"), # Default password
+                "password": self.hash_password("266519111"), # User's preferred password
                 "role": "admin",
                 "first_name_ar": "السعيد",
                 "father_name_ar": "الوزان",
@@ -142,6 +143,10 @@ st.markdown(get_css(), unsafe_allow_html=True)
 # 6. Initialize Core (With Force Re-init for Updates)
 if 'auth' not in st.session_state or not hasattr(st.session_state.auth, 'is_bilingual'):
     st.session_state.auth = AuthManager(USERS_FILE)
+
+# Report DB Load Errors to User
+if hasattr(st.session_state.auth, 'load_error'):
+    st.error(f"⚠️ Error Loading User Database: {st.session_state.auth.load_error}")
 
 if 'db' not in st.session_state:
     st.session_state.db = DBClient()
@@ -334,14 +339,18 @@ def login_screen():
             p = st.text_input(t("password", lang), type="password", label_visibility="collapsed", placeholder=t("password", lang))
             
             if st.form_submit_button(t("login_btn", lang)):
-                user = st.session_state.auth.authenticate(u, p)
+                # Normalize password (prevent hidden ZWSP or Arabic digit issues)
+                p_norm = p.strip()
+                user = st.session_state.auth.authenticate(u, p_norm)
                 if user:
-                    user['username'] = u # Explicitly store for greetings
+                    user['username'] = u
                     st.session_state.user = user
-                    st.session_state.show_welcome = True # Trigger welcome message
+                    st.session_state.show_welcome = True
                     st.rerun()
                 else:
                     st.error(t("invalid_creds", lang))
+                    if u.lower() == "admin" and p_norm == "admin123":
+                        st.info("💡 Try using your new password instead of the old default.")
 
     with col1:
         if st.button("English / عربي", key="lang_btn_login"):
