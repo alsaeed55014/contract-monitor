@@ -271,13 +271,12 @@ def get_css():
             box-shadow: 0 0 5px rgba(212, 175, 55, 0.5) !important;
         }
 
-        /* Language Toggle - Vertical Pill Shape (Clean & Minimal) */
         .lang-toggle-wrapper div.stButton > button,
         section[data-testid="stSidebar"] .lang-toggle-wrapper div.stButton > button {
-            width: 80px !important;
-            height: 150px !important;
-            min-width: 80px !important;
-            border-radius: 40px !important; /* Pill shape */
+            width: 160px !important; /* Twice the previous width */
+            height: 80px !important;  /* Approximately half the previous height */
+            min-width: 160px !important;
+            border-radius: 40px !important; /* Perfect pill shape for horizontal */
             font-size: 1.8rem !important; 
             font-weight: 700 !important;
             background-color: #F7E07E !important; /* Soft Yellow */
