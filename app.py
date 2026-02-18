@@ -329,6 +329,7 @@ def login_screen():
             if st.form_submit_button(t("login_btn", lang)):
                 user = st.session_state.auth.authenticate(u, p)
                 if user:
+                    user['username'] = u # Explicitly store for greetings
                     st.session_state.user = user
                     st.session_state.show_welcome = True # Trigger welcome message
                     st.rerun()
@@ -347,7 +348,7 @@ def dashboard():
     # Welcome Message - Prominent and High Visibility
     if st.session_state.get('show_welcome'):
         full_name = f"{user.get('first_name', '')} {user.get('father_name', '')}".strip()
-        if not full_name: full_name = user.get('id', 'User')
+        if not full_name: full_name = user.get('username', 'User')
         
         msg = t("welcome_person", lang).format(name=full_name)
         st.success(f"💖 {msg}") # Prominent success banner
