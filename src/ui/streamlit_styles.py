@@ -19,33 +19,13 @@ def get_css():
             text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
         }
 
-        /* Stats Cards - Glassmorphism */
+        /* Stats Cards - Standard Appearance */
         div[data-testid="stMetricValue"] {
             color: #D4AF37;
             font-family: 'Orbitron', sans-serif;
         }
-        
-        div[data-testid="metric-container"] {
-            background: rgba(255, 255, 255, 0.05);
-            border-radius: 15px;
-            padding: 15px;
-            border: 1px solid rgba(212, 175, 55, 0.2);
-            backdrop-filter: blur(5px);
-        }
 
-        /* Login Box */
-        .login-box {
-            background: rgba(30, 30, 30, 0.8);
-            padding: 30px;
-            border-radius: 20px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.8);
-            text-align: center;
-            border: 1px solid rgba(212, 175, 55, 0.3);
-            max-width: 450px;
-            margin: 0 auto;
-            backdrop-filter: blur(10px);
-        }
-        
+        /* Programmer Credit */
         .programmer-credit {
             color: #D4AF37;
             font-family: 'Cinzel', serif; /* Elegant English font */
