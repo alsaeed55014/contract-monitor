@@ -428,14 +428,21 @@ def render_search_content():
             if is_empty:
                 st.warning(t("no_results", lang))
             elif has_active_filter and count_found == total_rows:
-                st.warning("تنبيه: تم تفعيل الفلاتر ولكن لم يتم استبعاد أي نتائج. الأسباب المحتملة:")
-                st.write("1. جميع البيانات تطابق الفلاتر المختارة.")
-                st.write("2. واجه البرنامج مشكلة في التعرف على الأعمدة الصحيحة.")
+                st.warning("تنبيه: تم تفعيل الفلاتر ولكن لم يتم استبعاد أي نتائج.")
                 with st.expander("تشخيص الأعمدة (للمطور)"):
-                    st.write("الأعمدة المتوفرة حالياً:", list(original_data.columns))
-                    # Try to find columns again just for display
-                    test_eng = SmartSearchEngine(original_data)
-                    st.info(f"عمود العمر المكتشف: {test_eng.search('', filters={'age_enabled':True, 'age_min':0, 'age_max':100}).columns.tolist() if 'age' in str(filters) else 'غير مفعل'}")
+                    st.write("الأعمدة المتوفرة حالياً في الملف:", list(original_data.columns))
+                    # Check for diagnostic markers
+                    age_c = res['__matched_age_col'].iloc[0] if '__matched_age_col' in res.columns else "لم يتم العثور عليه"
+                    contract_c = res['__matched_contract_col'].iloc[0] if '__matched_contract_col' in res.columns else "لم يتم العثور عليه"
+                    ts_c = res['__matched_ts_col'].iloc[0] if '__matched_ts_col' in res.columns else "لم يتم العثور عليه"
+                    st.info(f"عمود العمر المكتشف: {age_c}")
+                    st.info(f"عمود العقد المكتشف: {contract_c}")
+                    st.info(f"عمود القيد المكتشف: {ts_c}")
+            
+            # Clean up internal diagnostic columns before display
+            for diag_col in ['__matched_age_col', '__matched_contract_col', '__matched_ts_col']:
+                if diag_col in res.columns:
+                    res = res.drop(columns=[diag_col])
         except Exception as e:
             st.error(f"حدث خطأ أثناء البحث: {str(e)}")
             return
