@@ -333,6 +333,7 @@ def login_screen():
             toggle_lang()
             st.rerun()
 
+def dashboard():
     user = st.session_state.user
     lang = st.session_state.lang
     
