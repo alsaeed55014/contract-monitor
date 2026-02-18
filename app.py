@@ -281,27 +281,32 @@ def get_css():
         }
         
         .lang-toggle-wrapper .stButton > button {
-            width: 80px !important;
-            height: 80px !important;
-            min-width: 80px !important;
-            border-radius: 4px !important; /* Sharp 'Square' look with micro-radius for elegance */
-            font-size: 1.6rem !important;
-            font-weight: 800 !important;
-            background: #D4AF37 !important;
+            width: 110px !important;
+            height: 110px !important;
+            min-width: 110px !important;
+            border-radius: 12px !important; /* Elegant softened square */
+            font-size: 2.2rem !important; /* Much larger font */
+            font-weight: 900 !important;
+            background: linear-gradient(135deg, #FFD700 0%, #D4AF37 50%, #B8860B 100%) !important;
             color: #000 !important;
-            border: 2px solid rgba(0,0,0,0.2) !important;
-            box-shadow: 0 10px 20px rgba(0,0,0,0.3), 0 0 15px rgba(212, 175, 55, 0.4) !important;
-            transition: all 0.3s ease;
+            border: 3px solid rgba(255,215,0,0.4) !important;
+            box-shadow: 
+                0 15px 35px rgba(0,0,0,0.5), 
+                0 0 20px rgba(212, 175, 55, 0.4),
+                inset 0 0 10px rgba(255,255,255,0.2) !important;
+            transition: all 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
             padding: 0 !important;
             display: flex !important;
             justify-content: center !important;
             align-items: center !important;
+            text-transform: uppercase;
         }
         
         .lang-toggle-wrapper .stButton > button:hover {
-            transform: scale(1.1) rotate(2deg);
-            background: #ECC846 !important;
-            box-shadow: 0 15px 30px rgba(0,0,0,0.4), 0 0 25px rgba(212, 175, 55, 0.6) !important;
+            transform: scale(1.15) rotate(3deg);
+            background: linear-gradient(135deg, #FFFFFF 0%, #FFD700 30%, #D4AF37 100%) !important;
+            box-shadow: 0 20px 45px rgba(0,0,0,0.6), 0 0 40px rgba(212, 175, 55, 0.8) !important;
+            border-color: #FFF !important;
         }
     </style>
     """
