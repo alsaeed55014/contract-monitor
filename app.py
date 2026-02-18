@@ -133,7 +133,7 @@ st.set_page_config(
 st.markdown(get_css(), unsafe_allow_html=True)
 
 # 6. Initialize Core (With Force Re-init for Updates)
-if 'auth' not in st.session_state or not hasattr(st.session_state.auth, 'update_role'):
+if 'auth' not in st.session_state or not hasattr(st.session_state.auth, 'update_profile'):
     st.session_state.auth = AuthManager(USERS_FILE)
 
 if 'db' not in st.session_state:
