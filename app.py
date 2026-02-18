@@ -491,12 +491,32 @@ def render_search_content():
             # Handle Selection
             if event.selection and event.selection.get("rows"):
                 selected_idx = event.selection["rows"][0]
+                
+                # --- AUTO SCROLL LOGIC ---
+                if "last_selected_row" not in st.session_state or st.session_state.last_selected_row != selected_idx:
+                    st.session_state.last_selected_row = selected_idx
+                    # Inject JS for smooth scroll to the card
+                    st.components.v1.html(
+                        """
+                        <script>
+                            window.parent.document.querySelector('[data-testid="stVerticalBlock"] > div:nth-child(5)').scrollIntoView({behavior: 'smooth'});
+                            // Or more reliably using a dummy element with ID if we catch it fast enough
+                            setTimeout(function() {
+                                var el = window.parent.document.getElementById('cv-profile-card');
+                                if (el) el.scrollIntoView({behavior: 'smooth'});
+                            }, 300);
+                        </script>
+                        """,
+                        height=0
+                    )
+
                 # Map back to original row (res_display and res have same order)
                 worker_row = res.iloc[selected_idx]
                 worker_name = worker_row.get("Full Name:", "Worker")
                 cv_url = worker_row.get(next((c for c in res.columns if "cv" in c.lower()), "Download CV"), "")
                 
                 # --- PROFESSIONAL PROFILE CARD ---
+                st.markdown("<div id='cv-profile-card'></div>", unsafe_allow_html=True)
                 st.markdown(f"""
                 <div style="background-color:#1e2130; padding:20px; border-radius:10px; border-right:5px solid #ffcc00; margin: 20px 0;">
                     <h2 style="color:#ffcc00; margin:0;">👤 {worker_name}</h2>
