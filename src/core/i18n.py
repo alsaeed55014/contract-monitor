@@ -73,6 +73,13 @@ TRANSLATIONS = {
     # Common
     "error": {"ar": "خطأ", "en": "Error"},
     "success": {"ar": "نجاح", "en": "Success"},
+    "delete_btn": {"ar": "🗑️ حذف السجل نهائياً", "en": "🗑️ Delete Record Permanently"},
+    "confirm_delete_title": {"ar": "تأكيد الحذف النهائي", "en": "Confirm Permanent Deletion"},
+    "confirm_delete_msg": {"ar": "تحذير: سيتم مسح بيانات هذا العامل نهائياً من ملف جوجل شيت. هل أنت متأكد؟", "en": "Warning: This worker's data will be permanently deleted from Google Sheets. Are you sure?"},
+    "confirm_btn": {"ar": "نعم، احذف السجل", "en": "Yes, Delete Record"},
+    "cancel_btn": {"ar": "إلغاء", "en": "Cancel"},
+    "delete_success": {"ar": "تم حذف السجل من القاعدة بنجاح ✅", "en": "Record deleted from database successfully ✅"},
+    "delete_error": {"ar": "عذراً، حدث خطأ أثناء الحذف. تأكد من صلاحيات الوصول.", "en": "Sorry, an error occurred during deletion. check permissions."},
 
 
     # Column Headers (Exact Matches from User Data)
