@@ -464,7 +464,7 @@ def render_search_content():
             
             # --- ROW SELECTION & PROFESSIONAL UI ---
             st.divider()
-            st.info("💡 **طريقة الاستخدام**: اضغط على أي صف في الجدول أدناه لمشاهدة السيرة الذاتية وترجمتها فوراً.")
+            st.success("💡 **خطوة إضافية**: اضغط على أي صف في الجدول أدناه لتظهر لك أزرار (المعاينة والترجمة) لهذا العامل بالتحديد.")
             st.subheader(f"{'نتائج البحث' if lang == 'ar' else 'Search Results'}")
             
             # Configure columns for better look
@@ -474,7 +474,7 @@ def render_search_content():
                 cv_col_name,
                 help="Click to open original file",
                 validate="^http",
-                display_text="PDF/Link"
+                display_text="فتح الملف 🔗"
             )
 
             # Use on_select to capture row selection
@@ -496,14 +496,19 @@ def render_search_content():
                 worker_name = worker_row.get("Full Name:", "Worker")
                 cv_url = worker_row.get(next((c for c in res.columns if "cv" in c.lower()), "Download CV"), "")
                 
-                st.divider()
-                st.markdown(f"### 👤 {t('selected_worker', lang)}: {worker_name}")
+                # --- PROFESSIONAL PROFILE CARD ---
+                st.markdown(f"""
+                <div style="background-color:#1e2130; padding:20px; border-radius:10px; border-right:5px solid #ffcc00; margin: 20px 0;">
+                    <h2 style="color:#ffcc00; margin:0;">👤 {worker_name}</h2>
+                    <p style="color:#ffffff; margin-top:5px;">يمكنك الآن معاينة السيرة الذاتية أو ترجمتها للغة العربية باستخدام الأزرار أدناه.</p>
+                </div>
+                """, unsafe_allow_html=True)
                 
                 # Action Buttons
-                col_a, col_b, col_c = st.columns([1, 1, 1])
+                col_a, col_b = st.columns([1, 1])
                 
                 with col_a:
-                    if st.button(f"📄 {t('translate_cv_btn', lang)}", use_container_width=True, type="primary"):
+                    if st.button(f"✨ {t('translate_cv_btn', lang)}", use_container_width=True, type="primary"):
                         if cv_url and str(cv_url).startswith("http"):
                             with st.spinner(t("extracting", lang)):
                                 try:
