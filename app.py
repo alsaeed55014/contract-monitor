@@ -239,6 +239,27 @@ def render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search"):
                     except Exception as e: st.error(f"Error: {str(e)}")
             else: st.warning("رابط السيرة الذاتية غير موجود أو غير صالح.")
 
+    with col_b:
+        # Permanent Deletion with Confirmation
+        sheet_row = worker_row.get('__sheet_row')
+        if sheet_row:
+            with st.popover(f"🗑️ {t('delete_btn', lang)}", use_container_width=True):
+                st.warning(t("confirm_delete_msg", lang))
+                if st.button(t("confirm_btn", lang), type="primary", use_container_width=True, key=f"del_confirm_{key_prefix}_{selected_idx}"):
+                    with st.spinner("⏳ جارٍ الحذف النهائي..."):
+                        success = st.session_state.db.delete_row(sheet_row)
+                        if success == True:
+                            st.success(t("delete_success", lang))
+                            time.sleep(1)
+                            # Clear selection and rerun
+                            if f"last_scroll_{key_prefix}" in st.session_state:
+                                del st.session_state[f"last_scroll_{key_prefix}"]
+                            st.rerun()
+                        else:
+                            st.error(f"{t('delete_error', lang)}: {success}")
+        else:
+            st.error("⚠️ لا يمكن حذف هذا السجل (معرف السطر غير موجود).")
+
     trans_key = f"trans_{key_prefix}_{selected_idx}"
     if trans_key in st.session_state:
         t_data = st.session_state[trans_key]
@@ -401,7 +422,7 @@ def render_dashboard_content():
         d = pd.DataFrame(data)
         
         # Select columns
-        show_cols = ['Status'] + [c for c in cols if c in d.columns]
+        show_cols = ['Status'] + [c for c in cols if c in d.columns and c != "__sheet_row"]
         d_final = d[show_cols].copy()
         
         # Rename Columns Mechanism (Safe to prevent duplicates)
@@ -590,7 +611,9 @@ def render_search_content():
                 used_names.add(new_name)
                 new_names[c] = new_name
             
-            res_display = res.rename(columns=new_names)
+            # Hide internal sheet row from display but keep in original 'res' for logic
+            res_to_rename = res.drop(columns=["__sheet_row"]) if "__sheet_row" in res.columns else res
+            res_display = res_to_rename.rename(columns=new_names)
             
             # --- ROW SELECTION & PROFESSIONAL UI ---
             st.divider()
