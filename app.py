@@ -344,12 +344,13 @@ def dashboard():
     user = st.session_state.user
     lang = st.session_state.lang
     
-    # Welcome Message
+    # Welcome Message - Prominent and High Visibility
     if st.session_state.get('show_welcome'):
         full_name = f"{user.get('first_name', '')} {user.get('father_name', '')}".strip()
-        if not full_name: full_name = st.session_state.get('user_id', 'User')
+        if not full_name: full_name = user.get('id', 'User')
         
         msg = t("welcome_person", lang).format(name=full_name)
+        st.success(f"💖 {msg}") # Prominent success banner
         st.toast(msg, icon="🎉")
         del st.session_state.show_welcome
 
@@ -728,6 +729,11 @@ def render_permissions_content():
     lang = st.session_state.lang
     st.title(f" {t('permissions_title', lang)}")
     
+    # Persistent Success Message after Rerun
+    if st.session_state.get('permissions_success'):
+        st.success(st.session_state.permissions_success)
+        del st.session_state.permissions_success
+
     with st.expander(t("add_user", lang), expanded=False):
         with st.form("new_user"):
             u = st.text_input(t("username", lang))
@@ -737,7 +743,9 @@ def render_permissions_content():
             r = st.selectbox(t("role", lang), ["viewer", "admin"])
             if st.form_submit_button(t("add_btn", lang)):
                 s, m = st.session_state.auth.add_user(u, p, r, fn, ftn)
-                if s: st.success(t("user_added", lang))
+                if s: 
+                    st.session_state.permissions_success = t("user_added", lang)
+                    st.rerun()
                 else: st.error(m)
 
     st.subheader(t("users_list", lang))
@@ -760,7 +768,8 @@ def render_permissions_content():
                 st.session_state.auth.update_profile(selected_user, new_first, new_father)
                 if new_pass:
                     st.session_state.auth.update_password(selected_user, new_pass)
-                st.success(t("update_success", lang))
+                
+                st.session_state.permissions_success = t("update_success", lang)
                 st.rerun()
     
     # Translate table keys for Users Table
