@@ -7,8 +7,12 @@ import hashlib
 import time
 from datetime import datetime, timedelta
 
-# 1. Ensure project root is in path
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+# 1. Ensure project root is in path (Robust Injection)
+import os
+import sys
+ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
+if ROOT_DIR not in sys.path:
+    sys.path.insert(0, ROOT_DIR)
 
 # 2. Local Auth Class to prevent Import/Sync Errors
 class AuthManager:
@@ -311,10 +315,14 @@ try:
     from src.config import USERS_FILE, ASSETS_DIR
     from src.core.i18n import t, t_col # Added t_col
 except ImportError as e:
+    # Diagnostic: Check if 'src' exists
+    import os
+    src_exists = os.path.isdir(os.path.join(ROOT_DIR, "src"))
     st.error(f"Critical Import Error: {e}")
-    st.stop()
-except KeyError as e:
-    st.error(f"Configuration Error (KeyError): {e} - Possible issue in i18n or config.")
+    if not src_exists:
+        st.warning(f"⚠️ 'src' directory not found in: {ROOT_DIR}. Please ensure you are running the app from the correct folder.")
+    else:
+        st.info(f"💡 'src' found at {ROOT_DIR}. Internal module error or configuration issue.")
     st.stop()
 
 # 4. Page Config
