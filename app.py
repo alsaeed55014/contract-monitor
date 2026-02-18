@@ -463,8 +463,20 @@ def render_search_content():
             res_display = res.rename(columns=new_names)
             
             # --- ROW SELECTION & PROFESSIONAL UI ---
+            st.divider()
+            st.info("💡 **طريقة الاستخدام**: اضغط على أي صف في الجدول أدناه لمشاهدة السيرة الذاتية وترجمتها فوراً.")
             st.subheader(f"{'نتائج البحث' if lang == 'ar' else 'Search Results'}")
             
+            # Configure columns for better look
+            column_config = {}
+            cv_col_name = t_col("Download CV", lang)
+            column_config[cv_col_name] = st.column_config.LinkColumn(
+                cv_col_name,
+                help="Click to open original file",
+                validate="^http",
+                display_text="PDF/Link"
+            )
+
             # Use on_select to capture row selection
             event = st.dataframe(
                 res_display, 
@@ -472,6 +484,7 @@ def render_search_content():
                 on_select="rerun",
                 selection_mode="single-row",
                 hide_index=True,
+                column_config=column_config,
                 key="search_results_table"
             )
 
@@ -481,13 +494,13 @@ def render_search_content():
                 # Map back to original row (res_display and res have same order)
                 worker_row = res.iloc[selected_idx]
                 worker_name = worker_row.get("Full Name:", "Worker")
-                cv_url = worker_row.get("Download CV", "")
+                cv_url = worker_row.get(next((c for c in res.columns if "cv" in c.lower()), "Download CV"), "")
                 
                 st.divider()
                 st.markdown(f"### 👤 {t('selected_worker', lang)}: {worker_name}")
                 
                 # Action Buttons
-                col_a, col_b = st.columns([1, 1])
+                col_a, col_b, col_c = st.columns([1, 1, 1])
                 
                 with col_a:
                     if st.button(f"📄 {t('translate_cv_btn', lang)}", use_container_width=True, type="primary"):
@@ -495,7 +508,17 @@ def render_search_content():
                             with st.spinner(t("extracting", lang)):
                                 try:
                                     import requests
-                                    resp = requests.get(cv_url)
+                                    # Convert Drive open link to direct download link
+                                    dl_url = cv_url
+                                    if "drive.google.com" in cv_url:
+                                        if "id=" in cv_url:
+                                            file_id = cv_url.split("id=")[1].split("&")[0]
+                                            dl_url = f"https://docs.google.com/uc?export=download&id={file_id}"
+                                        elif "/d/" in cv_url:
+                                            file_id = cv_url.split("/d/")[1].split("/")[0]
+                                            dl_url = f"https://docs.google.com/uc?export=download&id={file_id}"
+
+                                    resp = requests.get(dl_url)
                                     if resp.status_code == 200:
                                         tm = TranslationManager()
                                         text = tm.extract_text_from_pdf(resp.content)
@@ -523,17 +546,19 @@ def render_search_content():
                         st.caption("العربية (المترجمة)")
                         st.text_area("Trans", t_data["trans"], height=300, key=f"trans_area_{selected_idx}")
                 
-                # Professional Preview (using st.markdown iframe for PDF)
+                # Professional Preview
                 st.markdown(f"#### 🔎 {t('preview_cv', lang)}")
                 if cv_url and str(cv_url).startswith("http"):
-                    # Create a nice iframe preview
-                    # Note: Many PDF links might be blocked by CSP or need /view wrapper if using Google Drive
                     preview_url = cv_url
-                    if "drive.google.com" in cv_url and "/file/d/" in cv_url:
-                        # Convert to preview URL
-                        preview_url = cv_url.replace("/view?usp=sharing", "/preview").replace("/view", "/preview")
+                    if "drive.google.com" in cv_url:
+                        if "id=" in cv_url:
+                            file_id = cv_url.split("id=")[1].split("&")[0]
+                            preview_url = f"https://drive.google.com/file/d/{file_id}/preview"
+                        elif "/d/" in cv_url:
+                            file_id = cv_url.split("/d/")[1].split("/")[0]
+                            preview_url = f"https://drive.google.com/file/d/{file_id}/preview"
                     
-                    st.components.v1.iframe(preview_url, height=800, scrolling=True)
+                    st.components.v1.iframe(preview_url, height=600, scrolling=True)
                 else:
                     st.info("لا يتوفر رابط معاينة لهذا العامل.")
             else:
