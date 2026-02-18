@@ -97,11 +97,12 @@ class DBClient:
             df = pd.DataFrame(data[1:], columns=clean_headers)
             
             # Inject hidden sheet row index (1-indexed for gspread, starts at 2 because index 1 is header)
-            df['__sheet_row'] = range(2, len(df) + 2)
+            # Using list() to ensure it serializes well and is accessible
+            df.insert(0, '__sheet_row', list(range(2, len(df) + 2)))
             
             self._data_cache = df
             self._last_fetch = current_time
-            print("[DEBUG] Data fetched from Google Sheets")
+            print(f"[DEBUG] Data fetched. Total rows with IDs: {len(df)}")
             return df
 
         except Exception as e:
