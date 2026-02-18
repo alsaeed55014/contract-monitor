@@ -258,8 +258,12 @@ def render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search"):
                         else:
                             st.error(f"{t('delete_error', lang)}: {success}")
         else:
+            # DEBUG logging for the developer
+            print(f"[DEBUG] Row ID missing for {worker_name}. Available keys: {list(worker_row.keys())}")
             st.error(f"⚠️ {t('delete_error', lang)} (ID Missing)")
-            st.info("💡 جرب الضغط على زر **'تحديث البيانات من المصدر'** في صفحة البحث ثم المحاولة مرة أخرى.")
+            if st.button("🔄 تحديث البيانات الآن / Refresh Data", key=f"force_fix_id_{key_prefix}"):
+                st.session_state.db.fetch_data(force=True)
+                st.rerun()
 
     trans_key = f"trans_{key_prefix}_{selected_idx}"
     if trans_key in st.session_state:
