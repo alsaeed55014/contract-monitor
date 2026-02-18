@@ -2,12 +2,12 @@ def get_css():
     return """
     <style>
         /* General Imports */
-        @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;700&family=Orbitron:wght@600&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;700&family=Cinzel:wght@600&family=Orbitron:wght@600&display=swap');
         
         /* Main Container */
         .stApp {
-            background-color: #121212;
-            color: #E0E0E0;
+            background-color: #0F0F0F;
+            color: #F8F8F8;
             font-family: 'Tajawal', sans-serif;
         }
 
@@ -16,69 +16,114 @@ def get_css():
             color: #D4AF37 !important; /* Gold */
             font-family: 'Tajawal', sans-serif;
             text-align: center;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
         }
 
-        /* Stats Cards */
+        /* Stats Cards - Glassmorphism */
         div[data-testid="stMetricValue"] {
             color: #D4AF37;
             font-family: 'Orbitron', sans-serif;
         }
+        
+        div[data-testid="metric-container"] {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 15px;
+            padding: 15px;
+            border: 1px solid rgba(212, 175, 55, 0.2);
+            backdrop-filter: blur(5px);
+        }
 
         /* Login Box */
         .login-box {
-            background-color: #1E1E1E;
-            padding: 20px; /* Reduced padding */
-            border-radius: 10px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+            background: rgba(30, 30, 30, 0.8);
+            padding: 30px;
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.8);
             text-align: center;
-            border: 1px solid #333;
-            max-width: 400px; /* Limit width */
+            border: 1px solid rgba(212, 175, 55, 0.3);
+            max-width: 450px;
             margin: 0 auto;
+            backdrop-filter: blur(10px);
         }
         
         .programmer-credit {
             color: #D4AF37;
-            font-family: 'Orbitron', sans-serif;
-            margin-top: 15px;
-            font-size: 0.8em;
-            letter-spacing: 1px;
+            font-family: 'Cinzel', serif; /* Elegant English font */
+            margin-top: 10px;
+            font-size: 0.9em;
+            letter-spacing: 2px;
             text-align: center;
+            font-weight: 600;
         }
 
-        /* Custom Buttons */
-        .stButton > button {
-            background-color: #D4AF37;
-            color: #000000;
-            font-weight: bold;
-            border: none;
-            border-radius: 5px;
-            padding: 8px 20px;
-            transition: all 0.3s;
-            width: 100%;
-        }
-        .stButton > button:hover {
-            background-color: #B2912F;
-            color: #fff;
-            box-shadow: 0 0 10px #D4AF37;
-        }
-        
-        /* Sidebar */
+        /* Sidebar Styling & Centering */
         section[data-testid="stSidebar"] {
-            background-color: #1E1E1E;
+            background-color: #161616 !important;
+            border-left: 1px solid rgba(212, 175, 55, 0.1);
         }
         
-        /* Smaller Inputs for Login */
+        section[data-testid="stSidebar"] .stImage {
+             display: flex;
+             justify-content: center;
+             margin-bottom: 0px !important;
+        }
+        
+        section[data-testid="stSidebar"] .stImage img {
+            border-radius: 50%;
+            border: 2px solid #D4AF37;
+            padding: 3px;
+        }
+
+        /* All Sidebar Buttons Uniform */
+        section[data-testid="stSidebar"] .stButton > button {
+            background-color: #D4AF37;
+            color: #000;
+            font-weight: 700;
+            border: none;
+            border-radius: 8px;
+            padding: 12px 0px;
+            margin: 8px 0px !important; /* Equal spacing */
+            width: 100% !important;
+            height: 45px !important;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            font-size: 0.95rem;
+        }
+        
+        section[data-testid="stSidebar"] .stButton > button:hover {
+            background-color: #ECC846;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(212, 175, 55, 0.4);
+        }
+
+        /* Data Tables - Modern Green Text */
+        div[data-testid="stDataFrame"] td, 
+        div[data-testid="stTable"] td,
+        .styled-table td {
+            color: #4CAF50 !important; /* Elegant Green */
+            font-weight: 500;
+        }
+        
+        div[data-testid="stDataFrame"] th, 
+        div[data-testid="stTable"] th {
+            color: #D4AF37 !important;
+            font-weight: 700;
+            background-color: #1A1A1A !important;
+        }
+
+        /* Custom Inputs */
         .stTextInput > div > div > input {
-            background-color: #2b2b2b;
-            color: white;
-            border: 1px solid #444;
-            padding: 5px 10px; /* Smaller padding */
-            font-size: 0.9rem;
+            background-color: #222 !important;
+            color: #fff !important;
+            border: 1px solid #444 !important;
+            border-radius: 8px !important;
         }
         
-        /* Hide User Text */
-        .user-text {
-            display: None;
+        .stTextInput > div > div > input:focus {
+            border-color: #D4AF37 !important;
+            box-shadow: 0 0 5px rgba(212, 175, 55, 0.5) !important;
         }
     </style>
     """
