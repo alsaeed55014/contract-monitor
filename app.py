@@ -526,45 +526,46 @@ def render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search"):
 # 11. Logic Functions
 def login_screen():
     lang = st.session_state.lang
-    col1, col2, col3 = st.columns([1, 2, 1])
-    with col2:
-        st.markdown('<div class="login-screen-wrapper">', unsafe_allow_html=True)
+    
+    # Main container that centers everything via Flexbox CSS
+    st.markdown('<div class="login-screen-wrapper">', unsafe_allow_html=True)
+    
+    # 1. Profile Image (Small & Circular via CSS)
+    if os.path.exists(IMG_PATH):
+        st.image(IMG_PATH) # Width handled by CSS (approx 84px)
+    
+    # 2. Welcome Titles
+    st.markdown(f'<h1 class="welcome-title">{t("welcome_back", lang)}</h1>', unsafe_allow_html=True)
+    st.markdown(f"<p class='welcome-subtitle'>{t('system_title', lang)}</p>", unsafe_allow_html=True)
+    
+    # 3. Compact Form
+    with st.form("login"):
+        u = st.text_input(t("username", lang), label_visibility="collapsed", placeholder=t("username", lang))
+        p = st.text_input(t("password", lang), type="password", label_visibility="collapsed", placeholder=t("password", lang))
         
-        # 1. Image at the very top, centered
-        if os.path.exists(IMG_PATH):
-            st.image(IMG_PATH, width=150)
-        
-        # 2. Credits and Titles
-        st.markdown(f'<p class="programmer-credit">{t("welcome_subtitle", lang)}</p>', unsafe_allow_html=True)
-        st.markdown(f"<h1 style='text-align:center; color:white; margin-bottom:0;'>{t('welcome_back', lang)}</h1>", unsafe_allow_html=True)
-        st.markdown(f"<p style='text-align:center; color:#888; letter-spacing:1px; margin-bottom:30px;'>{t('system_title', lang)}</p>", unsafe_allow_html=True)
-        
-        # 3. Form (Styled via CSS in get_css)
-        with st.form("login"):
-            u = st.text_input(t("username", lang), label_visibility="collapsed", placeholder=t("username", lang))
-            p = st.text_input(t("password", lang), type="password", label_visibility="collapsed", placeholder=t("password", lang))
-            
-            if st.form_submit_button(t("login_btn", lang)):
-                p_norm = p.strip()
-                user = st.session_state.auth.authenticate(u, p_norm)
-                if user:
-                    user['username'] = u
-                    st.session_state.user = user
-                    st.session_state.show_welcome = True
-                    st.rerun()
-                else:
-                    st.error(t("invalid_creds", lang))
-                    if u.lower() == "admin" and p_norm == "admin123":
-                        st.info("💡 Try using your new password instead of the old default.")
+        if st.form_submit_button(t("login_btn", lang)):
+            p_norm = p.strip()
+            user = st.session_state.auth.authenticate(u, p_norm)
+            if user:
+                user['username'] = u
+                st.session_state.user = user
+                st.session_state.show_welcome = True
+                st.rerun()
+            else:
+                st.error(t("invalid_creds", lang))
+                if u.lower() == "admin" and p_norm == "admin123":
+                    st.info("💡 Try using your new password instead of the old default.")
 
-        # 4. Language Button (Styled via Anchor)
-        st.markdown("<div id='lang-toggle-anchor'></div>", unsafe_allow_html=True)
-        btn_label = "En" if lang == "ar" else "عربي"
-        if st.button(btn_label, key="lang_btn_login"):
-            toggle_lang()
-            st.rerun()
-        
-        st.markdown('</div>', unsafe_allow_html=True)
+    # 4. Footer & Language (Compact)
+    st.markdown(f'<p class="programmer-credit">{t("welcome_subtitle", lang)}</p>', unsafe_allow_html=True)
+    
+    st.markdown("<div id='lang-toggle-anchor'></div>", unsafe_allow_html=True)
+    btn_label = "EN" if lang == "ar" else "عربي"
+    if st.button(btn_label, key="lang_btn_login"):
+        toggle_lang()
+        st.rerun()
+    
+    st.markdown('</div>', unsafe_allow_html=True)
 
 def dashboard():
     user = st.session_state.user
@@ -839,8 +840,6 @@ def render_search_content():
             if active_filter_names:
                 st.info(f"{'الفلاتر النشطة' if lang == 'ar' else 'Active filters'}: {', '.join(active_filter_names)}")
 
-        print(f"[SEARCH] Search triggered - Query: '{query}', Filters: {filters}")
-        
         # Fetch fresh data
         original_data = st.session_state.db.fetch_data()
         total_rows = len(original_data)
@@ -858,22 +857,25 @@ def render_search_content():
             if count_found > 0:
                 st.success(f"{'تم العثور على' if lang == 'ar' else 'Found'} {count_found} {'نتائج من أصل' if lang == 'ar' else 'results out of'} {total_rows}")
             
+            # Debug Panel (for diagnosing search issues)
+            with st.expander("🔧 تشخيص البحث | Search Debug", expanded=False):
+                debug = eng.last_debug
+                st.code(f"Query: {debug.get('query_raw', '?')}\n"
+                        f"Query repr: {debug.get('query_repr', '?')}\n"
+                        f"Search type: {debug.get('search_type', 'none (no query)')}\n"
+                        f"Bundles: {debug.get('bundles', 'N/A')}\n"
+                        f"Phone target: {debug.get('target_phone', 'N/A')}\n"
+                        f"Total before: {debug.get('total_before_search', '?')}\n"
+                        f"Matched: {debug.get('matched_count', debug.get('final_count', '?'))}\n"
+                        f"Note: {debug.get('note', '-')}")
+            
             # Handle both DataFrame and list returns
             is_empty = (isinstance(res, list) and len(res) == 0) or (hasattr(res, 'empty') and res.empty)
             
             if is_empty:
                 st.warning(t("no_results", lang))
-            elif has_active_filter and count_found == total_rows:
-                st.warning("تنبيه: تم تفعيل الفلاتر ولكن لم يتم استبعاد أي نتائج.")
-                with st.expander("تشخيص الأعمدة (للمطور)"):
-                    st.write("الأعمدة المتوفرة حالياً في الملف:", list(original_data.columns))
-                    # Check for diagnostic markers
-                    age_c = res['__matched_age_col'].iloc[0] if '__matched_age_col' in res.columns else "لم يتم العثور عليه"
-                    contract_c = res['__matched_contract_col'].iloc[0] if '__matched_contract_col' in res.columns else "لم يتم العثور عليه"
-                    ts_c = res['__matched_ts_col'].iloc[0] if '__matched_ts_col' in res.columns else "لم يتم العثور عليه"
-                    st.info(f"عمود العمر المكتشف: {age_c}")
-                    st.info(f"عمود العقد المكتشف: {contract_c}")
-                    st.info(f"عمود القيد المكتشف: {ts_c}")
+            elif query and count_found == total_rows:
+                st.warning("تنبيه: البحث أرجع جميع النتائج. تحقق من تشخيص البحث أعلاه." if lang == 'ar' else "Warning: Search returned all results. Check debug panel above.")
             
             # Clean up internal diagnostic columns before display
             for diag_col in ['__matched_age_col', '__matched_contract_col', '__matched_ts_col']:
@@ -881,6 +883,8 @@ def render_search_content():
                     res = res.drop(columns=[diag_col])
         except Exception as e:
             st.error(f"حدث خطأ أثناء البحث: {str(e)}")
+            import traceback
+            st.code(traceback.format_exc())
             return
         else:
             # Rename columns before showing (Safe Rename)
