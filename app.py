@@ -171,7 +171,7 @@ def get_css():
             color: #D4AF37;
             font-family: 'Alex Brush', cursive;
             margin-top: 10px;
-            font-size: 2.2em; /* Larger for signature look */
+            font-size: 3.2em; /* Increased size for even more impact */
             letter-spacing: 1px;
             text-align: center;
             font-weight: 400;
@@ -511,9 +511,10 @@ def login_screen():
                     if u.lower() == "admin" and p_norm == "admin123":
                         st.info("💡 Try using your new password instead of the old default.")
 
-        # 4. Language Button directly below the box
+        # 4. Language Button (Dynamic Toggle En/عربي)
         st.markdown("<div style='text-align:center; margin-top:20px;'>", unsafe_allow_html=True)
-        if st.button("English / عربي", key="lang_btn_login", use_container_width=False):
+        btn_label = "En" if lang == "ar" else "عربي"
+        if st.button(btn_label, key="lang_btn_login", use_container_width=False):
             toggle_lang()
             st.rerun()
         st.markdown("</div>", unsafe_allow_html=True)
@@ -544,10 +545,11 @@ def dashboard():
 
     with st.sidebar:
         st.image(IMG_PATH, width=100)
-        st.markdown(f'<p class="programmer-credit" style="font-size:0.7em;">{t("programmer", "en")}</p>', unsafe_allow_html=True)
+        st.markdown(f'<p class="programmer-credit">{t("welcome_subtitle", lang)}</p>', unsafe_allow_html=True)
         st.markdown("<br>", unsafe_allow_html=True)
         
-        if st.sidebar.button("English / عربي", key="lang_btn_dashboard"):
+        btn_label = "En" if lang == "ar" else "عربي"
+        if st.sidebar.button(btn_label, key="lang_btn_dashboard"):
             toggle_lang()
             st.rerun()
         
