@@ -239,31 +239,41 @@ def render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search"):
                     except Exception as e: st.error(f"Error: {str(e)}")
             else: st.warning("رابط السيرة الذاتية غير موجود أو غير صالح.")
 
-    with col_b:
-        # Permanent Deletion with Confirmation
-        sheet_row = worker_row.get('__sheet_row')
-        if sheet_row:
-            with st.popover(f"🗑️ {t('delete_btn', lang)}", use_container_width=True):
-                st.warning(t("confirm_delete_msg", lang))
-                if st.button(t("confirm_btn", lang), type="primary", use_container_width=True, key=f"del_confirm_{key_prefix}_{selected_idx}"):
-                    with st.spinner("⏳ جارٍ الحذف النهائي..."):
-                        success = st.session_state.db.delete_row(sheet_row)
-                        if success == True:
-                            st.success(t("delete_success", lang))
-                            time.sleep(1)
-                            # Clear selection and rerun
-                            if f"last_scroll_{key_prefix}" in st.session_state:
-                                del st.session_state[f"last_scroll_{key_prefix}"]
-                            st.rerun()
-                        else:
-                            st.error(f"{t('delete_error', lang)}: {success}")
-        else:
-            # DEBUG logging for the developer
-            print(f"[DEBUG] Row ID missing for {worker_name}. Available keys: {list(worker_row.keys())}")
-            st.error(f"⚠️ {t('delete_error', lang)} (ID Missing)")
-            if st.button("🔄 تحديث البيانات الآن / Refresh Data", key=f"force_fix_id_{key_prefix}"):
-                st.session_state.db.fetch_data(force=True)
-                st.rerun()
+    # Permanent Deletion with Confirmation
+    sheet_row = worker_row.get('__sheet_row')
+    if not sheet_row: sheet_row = worker_row.get('__sheet_row_backup') # Try backup key
+    
+    # Fallback lookup if ID is missing (Sync issues)
+    if not sheet_row:
+        with st.spinner("⏳ محاولة البحث عن معرف السطر..."):
+            sheet_row = st.session_state.db.find_row_by_data(worker_name)
+
+    if sheet_row:
+        with st.popover(f"🗑️ {t('delete_btn', lang)}", use_container_width=True):
+            st.warning(t("confirm_delete_msg", lang))
+            if st.button(t("confirm_btn", lang), type="primary", use_container_width=True, key=f"del_confirm_{key_prefix}_{selected_idx}"):
+                with st.spinner("⏳ جارٍ الحذف النهائي..."):
+                    success = st.session_state.db.delete_row(sheet_row)
+                    if success == True:
+                        st.success(t("delete_success", lang))
+                        time.sleep(1)
+                        if f"last_scroll_{key_prefix}" in st.session_state: del st.session_state[f"last_scroll_{key_prefix}"]
+                        st.rerun()
+                    else:
+                        st.error(f"{t('delete_error', lang)}: {success}")
+    else:
+        # Final Error UI with reset options
+        st.error(f"⚠️ {t('delete_error', lang)} (ID Missing)")
+        c1, c2 = st.columns(2)
+        with c1:
+            if st.button("🔄 إصلاح وتحديث / Fix IDs", key=f"fix_id_{key_prefix}_{selected_idx}", use_container_width=True):
+                st.session_state.db.fetch_data(force=True); st.rerun()
+        with c2:
+            if st.button("🧼 تنظيف شامل / Deep Reset", key=f"reset_all_{key_prefix}_{selected_idx}", use_container_width=True):
+                # Clear all tab data and cache
+                for k in list(st.session_state.keys()):
+                    if k.startswith("dash_table_") or k.startswith("last_scroll_"): del st.session_state[k]
+                st.session_state.db.fetch_data(force=True); st.rerun()
 
     trans_key = f"trans_{key_prefix}_{selected_idx}"
     if trans_key in st.session_state:
@@ -427,7 +437,7 @@ def render_dashboard_content():
         d = pd.DataFrame(data)
         
         # Select columns
-        show_cols = ['Status'] + [c for c in cols if c in d.columns and c != "__sheet_row"]
+        show_cols = ['Status'] + [c for c in cols if c in d.columns and c not in ["__sheet_row", "__sheet_row_backup"]]
         d_final = d[show_cols].copy()
         
         # Rename Columns Mechanism (Safe to prevent duplicates)
@@ -617,7 +627,11 @@ def render_search_content():
                 new_names[c] = new_name
             
             # Hide internal sheet row from display but keep in original 'res' for logic
-            res_to_rename = res.drop(columns=["__sheet_row"]) if "__sheet_row" in res.columns else res
+            res_to_rename = res.copy()
+            for int_col in ["__sheet_row", "__sheet_row_backup"]:
+                if int_col in res_to_rename.columns:
+                    res_to_rename = res_to_rename.drop(columns=[int_col])
+            
             res_display = res_to_rename.rename(columns=new_names)
             
             # --- ROW SELECTION & PROFESSIONAL UI ---
