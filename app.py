@@ -327,19 +327,24 @@ def login_screen():
     lang = st.session_state.lang
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
+        st.markdown('<div class="login-screen-wrapper">', unsafe_allow_html=True)
+        
+        # 1. Image at the very top, centered
         if os.path.exists(IMG_PATH):
-            st.image(IMG_PATH, width=120)
+            st.image(IMG_PATH, width=150)
         
-        st.markdown(f'<p class="programmer-credit">{t("welcome_subtitle", "en")}</p>', unsafe_allow_html=True)
-        st.markdown(f"<h2 style='margin-top:20px;'>{t('welcome_back', lang)}</h2>", unsafe_allow_html=True)
-        st.markdown(f"<h3 style='color:#888 !important; font-size:1rem;'>{t('system_title', lang)}</h3>", unsafe_allow_html=True)
+        # 2. Credits and Titles
+        st.markdown(f'<p class="programmer-credit" style="font-size:1.1em; color:#D4AF37;">{t("welcome_subtitle", "en")}</p>', unsafe_allow_html=True)
+        st.markdown(f"<h1 style='text-align:center; color:white; margin-bottom:0;'>{t('welcome_back', lang)}</h1>", unsafe_allow_html=True)
+        st.markdown(f"<p style='text-align:center; color:#888; letter-spacing:1px; margin-bottom:30px;'>{t('system_title', lang)}</p>", unsafe_allow_html=True)
         
+        # 3. Luxurious Login Box
+        st.markdown('<div class="login-box-premium">', unsafe_allow_html=True)
         with st.form("login"):
             u = st.text_input(t("username", lang), label_visibility="collapsed", placeholder=t("username", lang))
             p = st.text_input(t("password", lang), type="password", label_visibility="collapsed", placeholder=t("password", lang))
             
             if st.form_submit_button(t("login_btn", lang)):
-                # Normalize password (prevent hidden ZWSP or Arabic digit issues)
                 p_norm = p.strip()
                 user = st.session_state.auth.authenticate(u, p_norm)
                 if user:
@@ -351,11 +356,16 @@ def login_screen():
                     st.error(t("invalid_creds", lang))
                     if u.lower() == "admin" and p_norm == "admin123":
                         st.info("💡 Try using your new password instead of the old default.")
+        st.markdown('</div>', unsafe_allow_html=True)
 
-    with col1:
-        if st.button("English / عربي", key="lang_btn_login"):
+        # 4. Language Button directly below the box
+        st.markdown("<div style='text-align:center; margin-top:20px;'>", unsafe_allow_html=True)
+        if st.button("English / عربي", key="lang_btn_login", use_container_width=False):
             toggle_lang()
             st.rerun()
+        st.markdown("</div>", unsafe_allow_html=True)
+        
+        st.markdown('</div>', unsafe_allow_html=True)
 
 def dashboard():
     user = st.session_state.user
