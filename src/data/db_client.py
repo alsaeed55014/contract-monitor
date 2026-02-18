@@ -88,7 +88,11 @@ class DBClient:
                     seen[h] = 0
                     clean_headers.append(h)
 
+            # Create DataFrame
             df = pd.DataFrame(data[1:], columns=clean_headers)
+            
+            # Inject hidden sheet row index (1-indexed for gspread, starts at 2 because index 1 is header)
+            df['__sheet_row'] = range(2, len(df) + 2)
             
             self._data_cache = df
             self._last_fetch = current_time
@@ -98,6 +102,27 @@ class DBClient:
         except Exception as e:
             print(f"[ERROR] Error fetching data: {e}")
             raise e
+
+    def delete_row(self, row_number):
+        """Permanently deletes a row from Google Sheets by its 1-indexed row number."""
+        if not self.client:
+            self.connect()
+        
+        try:
+            sheet_url = "https://docs.google.com/spreadsheets/d/1u87sScIve_-xT_jDG56EKFMXegzAxOqwVJCh3Irerrw/edit"
+            sheet = self.client.open_by_url(sheet_url).sheet1
+            
+            # Perform deletion
+            sheet.delete_rows(int(row_number))
+            
+            # Clear cache to force refresh
+            self._data_cache = None
+            self._last_fetch = 0
+            print(f"[DEBUG] Row {row_number} deleted successfully")
+            return True
+        except Exception as e:
+            print(f"[ERROR] Failed to delete row: {e}")
+            return False, str(e)
 
     def get_headers(self):
         """Returns the list of headers."""
