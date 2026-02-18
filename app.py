@@ -266,10 +266,10 @@ def render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search"):
         st.error(f"⚠️ {t('delete_error', lang)} (ID Missing)")
         c1, c2 = st.columns(2)
         with c1:
-            if st.button("🔄 إصلاح وتحديث / Fix IDs", key=f"fix_id_{key_prefix}_{selected_idx}", use_container_width=True):
+            if st.button(t("fix_ids", lang), key=f"fix_id_{key_prefix}_{selected_idx}", use_container_width=True):
                 st.session_state.db.fetch_data(force=True); st.rerun()
         with c2:
-            if st.button("🧼 تنظيف شامل / Deep Reset", key=f"reset_all_{key_prefix}_{selected_idx}", use_container_width=True):
+            if st.button(t("deep_reset", lang), key=f"reset_all_{key_prefix}_{selected_idx}", use_container_width=True):
                 # Clear all tab data and cache
                 for k in list(st.session_state.keys()):
                     if k.startswith("dash_table_") or k.startswith("last_scroll_"): del st.session_state[k]
@@ -364,6 +364,20 @@ def dashboard():
         if st.button(t("logout", lang), type="primary"):
             st.session_state.user = None
             st.rerun()
+        
+        # Global Deep Reset Opportunity
+        st.sidebar.divider()
+        with st.sidebar.expander(t("deep_reset", lang)):
+            st.caption(t("deep_reset_desc", lang))
+            if st.button(t("deep_reset", lang), key="sidebar_deep_reset", use_container_width=True):
+                # Clear all navigation and table caches
+                for k in list(st.session_state.keys()):
+                    if any(k.startswith(prefix) for prefix in ["dash_table_", "last_scroll_", "trans_", "search_results"]):
+                        del st.session_state[k]
+                st.session_state.db.fetch_data(force=True)
+                st.success("تم تنظيف الذاكرة وتحديث البيانات!")
+                time.sleep(1)
+                st.rerun()
 
     # Admin Debug
     if user.get("role") == "admin":
