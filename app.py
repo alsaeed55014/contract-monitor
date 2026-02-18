@@ -532,7 +532,7 @@ def login_screen():
     
     # 1. Profile Image (Small & Circular via CSS)
     if os.path.exists(IMG_PATH):
-        st.image(IMG_PATH) # Width handled by CSS (approx 80px)
+        st.image(IMG_PATH) # Width handled by CSS (approx 84px)
     
     # 2. Welcome Titles
     st.markdown(f'<h1 class="welcome-title">{t("welcome_back", lang)}</h1>', unsafe_allow_html=True)
