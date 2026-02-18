@@ -470,7 +470,7 @@ def render_search_content():
                 res_display, 
                 use_container_width=True,
                 on_select="rerun",
-                selection_mode="single_row",
+                selection_mode="single-row",
                 hide_index=True,
                 key="search_results_table"
             )
