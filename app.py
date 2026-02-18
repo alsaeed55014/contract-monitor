@@ -308,15 +308,13 @@ def login_screen():
     with col2:
         st.markdown('<div class="login-box">', unsafe_allow_html=True)
         if os.path.exists(IMG_PATH):
-            st.image(IMG_PATH, width=150)
-        else:
-            st.warning(t("image_not_found", lang))
-            
-        st.markdown(f"## {t('welcome_back', lang)}")
-        st.markdown(f"### {t('system_title', lang)}")
+            st.image(IMG_PATH, width=120)
+        
+        st.markdown(f'<p class="programmer-credit">{t("welcome_subtitle", "en")}</p>', unsafe_allow_html=True)
+        st.markdown(f"<h2 style='margin-top:20px;'>{t('welcome_back', lang)}</h2>", unsafe_allow_html=True)
+        st.markdown(f"<h3 style='color:#888 !important; font-size:1rem;'>{t('system_title', lang)}</h3>", unsafe_allow_html=True)
         
         with st.form("login"):
-            st.markdown(f'<p style="text-align:right; font-size:0.8em; cursor:pointer;" onclick="window.location.reload()">{"EN" if lang=="ar" else "عربي"}</p>', unsafe_allow_html=True)
             u = st.text_input(t("username", lang), label_visibility="collapsed", placeholder=t("username", lang))
             p = st.text_input(t("password", lang), type="password", label_visibility="collapsed", placeholder=t("password", lang))
             
@@ -324,12 +322,10 @@ def login_screen():
                 user = st.session_state.auth.authenticate(u, p)
                 if user:
                     st.session_state.user = user
-                    st.success(t("success", lang))
+                    st.session_state.show_welcome = True # Trigger welcome message
                     st.rerun()
                 else:
                     st.error(t("invalid_creds", lang))
-        
-        st.markdown(f'<p class="programmer-credit">{t("programmer", lang)}</p>', unsafe_allow_html=True)
         st.markdown('</div>', unsafe_allow_html=True)
 
     with col1:
@@ -337,35 +333,42 @@ def login_screen():
             toggle_lang()
             st.rerun()
 
-def dashboard():
     user = st.session_state.user
     lang = st.session_state.lang
     
+    # Welcome Message
+    if st.session_state.get('show_welcome'):
+        st.toast(t("welcome_toast", lang), icon="🎉")
+        del st.session_state.show_welcome
+
     with st.sidebar:
         st.image(IMG_PATH, width=100)
-        st.markdown(f'<div style="text-align: center; margin-bottom: 10px; font-size: 0.8em; color: #D4AF37;">{t("programmer", "en")}</div>', unsafe_allow_html=True)
-        st.markdown("---")
+        st.markdown(f'<p class="programmer-credit" style="font-size:0.7em;">{t("programmer", "en")}</p>', unsafe_allow_html=True)
+        st.markdown("<br>", unsafe_allow_html=True)
         
         if st.sidebar.button("English / عربي", key="lang_btn_dashboard"):
             toggle_lang()
             st.rerun()
-        st.markdown("---")
+        
+        st.markdown("<div style='margin: 15px 0;'></div>", unsafe_allow_html=True)
 
-        if st.button(t("dashboard", lang)):
+        if st.button(t("dashboard", lang), use_container_width=True):
             st.session_state.page = "dashboard"
             st.rerun()
-        if st.button(t("smart_search", lang)):
+        if st.button(t("smart_search", lang), use_container_width=True):
             st.session_state.page = "search"
             st.rerun()
-        if st.button(t("cv_translator", lang)):
+        if st.button(t("cv_translator", lang), use_container_width=True):
             st.session_state.page = "translator"
             st.rerun()
         if user.get("role") == "admin":
-            if st.button(t("permissions", lang)):
+            if st.button(t("permissions", lang), use_container_width=True):
                 st.session_state.page = "permissions"
                 st.rerun()
-        st.markdown("---")
-        if st.button(t("logout", lang), type="primary"):
+        
+        st.markdown("<div style='margin: 15px 0;'></div>", unsafe_allow_html=True)
+        
+        if st.button(t("logout", lang), type="primary", use_container_width=True):
             st.session_state.user = None
             st.rerun()
         
