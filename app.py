@@ -273,17 +273,17 @@ def get_css():
 
         /* Language Toggle - Robust Anchor-Based Targeting */
         div:has(> #lang-toggle-anchor) + div .stButton > button {
-            width: 70px !important;
-            height: 70px !important;
-            min-width: 70px !important;
-            max-width: 70px !important;
-            border-radius: 15px !important;
-            font-size: 1.4rem !important; 
-            font-weight: 700 !important;
+            width: 120px !important;
+            height: 120px !important;
+            min-width: 120px !important;
+            max-width: 120px !important;
+            border-radius: 25px !important;
+            font-size: 2.2rem !important; 
+            font-weight: 800 !important;
             background-color: #1E1E1E !important; /* Dark Premium */
             color: #F8F8F8 !important; /* Off White */
-            border: 1px solid rgba(212, 175, 55, 0.5) !important;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.6) !important;
+            border: 2px solid rgba(212, 175, 55, 0.6) !important;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.7) !important;
             transition: all 0.3s ease !important;
             display: flex !important;
             justify-content: center !important;
@@ -296,16 +296,16 @@ def get_css():
             background-color: #2A2A2A !important;
             border-color: #D4AF37 !important;
             transform: scale(1.05) !important;
-            box-shadow: 0 0 20px rgba(212, 175, 55, 0.4) !important;
+            box-shadow: 0 0 30px rgba(212, 175, 55, 0.5) !important;
         }
 
         /* Essential Override for Sidebar */
         section[data-testid="stSidebar"] div:has(> #lang-toggle-anchor) + div .stButton > button {
-             height: 70px !important; /* Force override generic sidebar 45px */
+             height: 120px !important; /* Matches larger size */
+             width: 120px !important;
              background-color: #1E1E1E !important;
              color: #F8F8F8 !important;
-             border-radius: 15px !important;
-             width: 70px !important;
+             border-radius: 25px !important;
              margin: 0 auto !important;
         }
     </style>
