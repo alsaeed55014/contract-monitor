@@ -1,5 +1,6 @@
 import re
 import io
+from itertools import product
 
 try:
     import pdfplumber
@@ -13,118 +14,49 @@ class TranslationManager:
     def __init__(self):
 
         # -------------------------
-        # Jobs / Professions
+        # Dictionary
         # -------------------------
         self.dictionary = {
-            # Core Jobs
-            "باريستا": "Barista",
-            "طباخ": "Cook",
-            "شيف": "Chef",
-            "حلا": ["Pastry", "Dessert"],
-            "حلويات": ["Pastry", "Dessert", "Sweets"],
-            "نادل": ["Waiter", "Male"],
-            "نادلة": ["Waitress", "Female"],
-            "سائق": "Driver",
-            "ممرض": "Nurse",
-            "ممرضة": "Nurse",
-            "طبيب": "Doctor",
-            "نظافة": "Cleaner",
-            "عامل نظافة": "Cleaner",
-            "عاملة نظافة": "Cleaner",
 
-            # Beauty / Salon
+            # Jobs
+            "باريستا": ["Barista"],
+            "طباخ": ["Cook", "Chef"],
+            "شيف": ["Chef"],
+            "نظافه": ["Cleaner"],
+            "عامل نظافه": ["Cleaner"],
+            "عامله نظافه": ["Cleaner"],
             "بدكير": ["Pedicure", "Technician"],
             "منكير": ["Manicure", "Technician"],
-            "حلاق": "Barber",
+            "حلاق": ["Barber"],
+            "مصفف شعر": ["Hairdresser", "Hair Stylist"],
             "كوافير": ["Hairdresser", "Hair Stylist"],
-            "مصففة": ["Hairdresser", "Hair Stylist"],
-            "بشرة": "Skin",
-            "بروتين": "Protein",
-            "شعر": "Hair",
             "مساج": ["Massage", "Therapist"],
+            "سويت": ["Suite"],
+            "خادمه": ["Housemaid", "Domestic Worker"],
+            "عامله منزليه": ["Housemaid", "Domestic Worker"],
+            "عامله": ["Worker"],
+            "عامل": ["Worker"],
 
-            # Office / Technical
-            "سكرتيرة": "Secretary",
-            "كاميرا": "Camera",
-            "كاميرات": "Camera",
-            "مبرمج": "Programmer",
-            "مهندس": "Engineer",
-            "فني": "Technician",
-            "مطعم": "Restaurant",
-            "ايطالي": "Italian",
-            "مكتب": "Office",
-            "مكتبيه": "Office",
-            "اعمال": "Work",
-            "ppf": ["PPF", "Installer"],
-
-            # Domestic Workers
-            "خادمة": ["Housemaid", "Domestic"],
-            "عاملة": ["Housemaid", "Domestic", "Worker"],
-            "شغالة": ["Housemaid", "Domestic"],
-            "منزلية": "Domestic",
-
-            # -------------------------
             # Nationalities
-            # -------------------------
-            "فلبيني": "Filipino",
-            "فلبينية": "Filipino",
-            "هندي": "Indian",
-            "هندية": "Indian",
-            "باكستاني": "Pakistani",
-            "باكستانية": "Pakistani",
-            "بنجلاديشي": "Bangladeshi",
-            "بنجالية": "Bangladeshi",
-            "مصري": "Egyptian",
-            "مصرية": "Egyptian",
-            "نيبالي": "Nepali",
-            "نيبالية": "Nepali",
-            "سيريلانكي": "Sri Lankan",
-            "سيريلانكية": "Sri Lankan",
-            "كيني": "Kenyan",
-            "كينية": "Kenyan",
-            "اوغندي": "Ugandan",
-            "اوغندية": "Ugandan",
-            "اثيوبي": "Ethiopian",
-            "اثيوبية": "Ethiopian",
-            "مغربي": "Moroccan",
-            "مغربية": "Moroccan",
-            "سوداني": "Sudanese",
-            "سودانية": "Sudanese",
-            "يمني": "Yemeni",
-            "يمنية": "Yemeni",
-            "نيجيري": "Nigerian",
-            "نيجيرية": "Nigerian",
-            "غاني": "Ghanaian",
-            "غانية": "Ghanaian",
-            "سنغالي": "Senegalese",
-            "سنغالية": "Senegalese",
-            "تونسي": "Tunisian",
-            "تونسية": "Tunisian",
-            "تنزاني": "Tanzanian",
-            "تنزانية": "Tanzanian",
+            "فلبيني": ["Filipino"],
+            "فلبينيه": ["Filipino"],
+            "هندي": ["Indian"],
+            "هنديه": ["Indian"],
+            "مصري": ["Egyptian"],
+            "مغربي": ["Moroccan"],
 
-            # Africa Continent Mapping
-            "افريقي": [
-                "Nigeria", "Kenya", "Ghana", "Ethiopia",
-                "Senegal", "Sudan", "Morocco", "Tunisia",
-                "Tanzania", "Uganda", "Somalia",
-                "Eritrea", "Rwanda", "Burundi", "African"
-            ],
-
-            # -------------------------
             # Gender
-            # -------------------------
-            "بنت": "Female",
-            "سيدة": "Female",
-            "امرأة": "Female",
-            "انثى": "Female",
-            "ولد": "Male",
-            "رجل": "Male",
-            "ذكر": "Male",
+            "ذكر": ["Male"],
+            "رجل": ["Male"],
+            "ولد": ["Male"],
+            "انثى": ["Female"],
+            "بنت": ["Female"],
+            "سيده": ["Female"],
+            "امراه": ["Female"],
         }
 
     # ---------------------------------
-    # Normalization
+    # Normalize Arabic
     # ---------------------------------
     def normalize_text(self, text):
         if not text:
@@ -132,11 +64,6 @@ class TranslationManager:
 
         text = str(text).lower().strip()
 
-        # Remove Arabic definite article
-        if text.startswith("ال") and len(text) > 4:
-            text = text[2:]
-
-        # Normalize Arabic letters
         text = (
             text.replace("أ", "ا")
                 .replace("إ", "ا")
@@ -145,52 +72,95 @@ class TranslationManager:
                 .replace("ى", "ي")
         )
 
+        if text.startswith("ال") and len(text) > 3:
+            text = text[2:]
+
         return text
 
     # ---------------------------------
-    # Translation
+    # Normalize Phone Numbers
     # ---------------------------------
-    def translate_word(self, word):
-        norm_word = self.normalize_text(word)
-        for k, v in self.dictionary.items():
-            if self.normalize_text(k) == norm_word:
-                return v
-        return word
+    def normalize_phone(self, text):
+        digits = re.sub(r"\D", "", text)
+
+        variants = set()
+
+        if digits.startswith("966"):
+            local = digits[3:]
+            variants.add(local)
+            variants.add("0" + local)
+
+        if digits.startswith("0"):
+            variants.add(digits)
+            variants.add(digits[1:])
+
+        if len(digits) == 9:
+            variants.add(digits)
+            variants.add("0" + digits)
+
+        return list(variants)
 
     # ---------------------------------
-    # Query Analyzer
+    # Extract multi-word phrases
+    # ---------------------------------
+    def extract_phrases(self, query):
+        words = query.split()
+        phrases = []
+
+        # Try 2-word combinations
+        for i in range(len(words) - 1):
+            two = words[i] + " " + words[i + 1]
+            phrases.append(two)
+
+        return phrases
+
+    # ---------------------------------
+    # Query Analyzer (Advanced)
     # ---------------------------------
     def analyze_query(self, query):
 
-        clean_query = query.lower().strip()
-        ignore_words = ["جميع", "كل", "دول", "دولة", "قارة", "قاره"]
+        query = self.normalize_text(query)
 
-        words = clean_query.split()
-        bundle_list = []
+        # Detect phone number
+        phone_variants = self.normalize_phone(query)
+        if phone_variants:
+            return phone_variants
 
+        words = query.split()
+        phrases = self.extract_phrases(query)
+
+        bundles = []
+
+        # Check phrases first
+        for phrase in phrases:
+            norm = self.normalize_text(phrase)
+            if norm in self.dictionary:
+                bundles.append(self.dictionary[norm])
+
+        # Then single words
         for word in words:
-            if word in ignore_words or len(word) < 2:
-                continue
+            norm = self.normalize_text(word)
 
-            synonyms = {word}
-            trans = self.translate_word(word)
+            if norm in self.dictionary:
+                bundles.append(self.dictionary[norm])
+            else:
+                bundles.append([word])
 
-            if isinstance(trans, list):
-                for t in trans:
-                    synonyms.add(t.lower())
-            elif trans.lower() != word.lower():
-                synonyms.add(trans.lower())
+        # Generate combined search possibilities
+        combinations = list(product(*bundles))
 
-            bundle_list.append(list(synonyms))
+        final_queries = []
+        for combo in combinations:
+            final_queries.append(" ".join(combo))
 
-        return bundle_list
+        return final_queries
 
     # ---------------------------------
-    # PDF FEATURES
+    # PDF Features (unchanged)
     # ---------------------------------
     def extract_text_from_pdf(self, file_bytes):
         if not HAS_DEPS:
-            return "Error: Libraries (pdfplumber) not installed."
+            return "Error: Libraries not installed."
 
         text = ""
         try:
@@ -206,7 +176,7 @@ class TranslationManager:
 
     def translate_full_text(self, text, target_lang='ar'):
         if not HAS_DEPS:
-            return "Error: Libraries (deep-translator) not installed."
+            return "Error: Libraries not installed."
         if not text:
             return ""
 
