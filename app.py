@@ -266,6 +266,39 @@ def get_css():
             border-color: #D4AF37 !important;
             box-shadow: 0 0 5px rgba(212, 175, 55, 0.5) !important;
         }
+
+        /* Language Toggle - Large, Square, Centered */
+        .lang-toggle-wrapper {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin: 20px auto;
+            width: 100%;
+        }
+        
+        .lang-toggle-wrapper .stButton > button {
+            width: 80px !important;
+            height: 80px !important;
+            min-width: 80px !important;
+            border-radius: 4px !important; /* Sharp 'Square' look with micro-radius for elegance */
+            font-size: 1.6rem !important;
+            font-weight: 800 !important;
+            background: #D4AF37 !important;
+            color: #000 !important;
+            border: 2px solid rgba(0,0,0,0.2) !important;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.3), 0 0 15px rgba(212, 175, 55, 0.4) !important;
+            transition: all 0.3s ease;
+            padding: 0 !important;
+            display: flex !important;
+            justify-content: center !important;
+            align-items: center !important;
+        }
+        
+        .lang-toggle-wrapper .stButton > button:hover {
+            transform: scale(1.1) rotate(2deg);
+            background: #ECC846 !important;
+            box-shadow: 0 15px 30px rgba(0,0,0,0.4), 0 0 25px rgba(212, 175, 55, 0.6) !important;
+        }
     </style>
     """
 
@@ -511,10 +544,10 @@ def login_screen():
                     if u.lower() == "admin" and p_norm == "admin123":
                         st.info("💡 Try using your new password instead of the old default.")
 
-        # 4. Language Button (Dynamic Toggle En/عربي)
-        st.markdown("<div style='text-align:center; margin-top:20px;'>", unsafe_allow_html=True)
+        # 4. Language Button (Styled as Square & Centered)
+        st.markdown("<div class='lang-toggle-wrapper'>", unsafe_allow_html=True)
         btn_label = "En" if lang == "ar" else "عربي"
-        if st.button(btn_label, key="lang_btn_login", use_container_width=False):
+        if st.button(btn_label, key="lang_btn_login"):
             toggle_lang()
             st.rerun()
         st.markdown("</div>", unsafe_allow_html=True)
@@ -548,10 +581,12 @@ def dashboard():
         st.markdown(f'<p class="programmer-credit">{t("welcome_subtitle", lang)}</p>', unsafe_allow_html=True)
         st.markdown("<br>", unsafe_allow_html=True)
         
+        st.markdown("<div class='lang-toggle-wrapper'>", unsafe_allow_html=True)
         btn_label = "En" if lang == "ar" else "عربي"
-        if st.sidebar.button(btn_label, key="lang_btn_dashboard"):
+        if st.button(btn_label, key="lang_btn_dashboard"):
             toggle_lang()
             st.rerun()
+        st.markdown("</div>", unsafe_allow_html=True)
         
         st.markdown("<div style='margin: 15px 0;'></div>", unsafe_allow_html=True)
 
