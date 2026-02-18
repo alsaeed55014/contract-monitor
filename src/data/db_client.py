@@ -51,9 +51,14 @@ class DBClient:
         """Fetches data from Google Sheets with caching."""
         current_time = time.time()
         
-        if not force and self._data_cache is not None and (current_time - self._last_fetch < self.CACHE_DURATION):
-            print("[DEBUG] Returning cached data")
-            return self._data_cache
+        # Check if cache exists and has the required tracking column
+        if not force and self._data_cache is not None:
+            if '__sheet_row' in self._data_cache.columns and (current_time - self._last_fetch < self.CACHE_DURATION):
+                print("[DEBUG] Returning valid cached data")
+                return self._data_cache
+            else:
+                print("[DEBUG] Cache missing tracking column or expired. Refreshing...")
+                force = True
 
         if not self.client:
             try:
