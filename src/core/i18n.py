@@ -8,6 +8,11 @@ TRANSLATIONS = {
     "login_btn": {"ar": "دخول", "en": "LOGIN"},
     "invalid_creds": {"ar": "بيانات الدخول غير صحيحة", "en": "Invalid credentials"},
     "image_not_found": {"ar": "الصورة غير موجودة", "en": "Image not found"},
+    "first_name_ar": {"ar": "الاسم الأول (بالعربي)", "en": "First Name (AR)"},
+    "father_name_ar": {"ar": "اسم الأب (بالعربي)", "en": "Father's Name (AR)"},
+    "first_name_en": {"ar": "الاسم الأول (إنجليزي)", "en": "First Name (EN)"},
+    "father_name_en": {"ar": "اسم الأب (إنجليزي)", "en": "Father's Name (EN)"},
+    "welcome_person": {"ar": "أهلاً بك يا {name}", "en": "Welcome, {name}"},
     
     # Sidebar
     "dashboard": {"ar": "الرئيسية", "en": "Dashboard"},
