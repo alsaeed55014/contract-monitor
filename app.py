@@ -593,6 +593,11 @@ def dashboard():
         st.markdown(f'<p class="programmer-credit">{t("welcome_subtitle", lang)}</p>', unsafe_allow_html=True)
         st.markdown("<br>", unsafe_allow_html=True)
         
+        st.markdown("<div id='lang-toggle-anchor'></div>", unsafe_allow_html=True)
+        btn_label = "En" if lang == "ar" else "عربي"
+        if st.button(btn_label, key="lang_btn_dashboard"):
+            toggle_lang()
+            st.rerun()
         
         st.markdown("<div style='margin: 15px 0;'></div>", unsafe_allow_html=True)
 
