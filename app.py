@@ -199,21 +199,33 @@ def render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search"):
 
                         if file_id:
                             session = requests.Session()
+                            session.headers.update({"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"})
+                            
                             dl_url = f"https://docs.google.com/uc?export=download&id={file_id}"
-                            resp = session.get(dl_url, stream=True)
+                            resp = session.get(dl_url, stream=True, timeout=15)
+                            
+                            # Handle Drive Virus Warning
                             token = None
                             for k, v in resp.cookies.items():
                                 if k.startswith('download_warning'): token = v; break
                             if token:
                                 dl_url = f"https://docs.google.com/uc?export=download&confirm={token}&id={file_id}"
-                                resp = session.get(dl_url, stream=True)
+                                resp = session.get(dl_url, stream=True, timeout=15)
+                            
+                            # Fallback: If still 500, try the absolute direct link if available
+                            if resp.status_code >= 500:
+                                resp = requests.get(cv_url, timeout=15)
+                                
                             pdf_content = resp.content
                         else:
-                            resp = requests.get(cv_url); pdf_content = resp.content
+                            resp = requests.get(cv_url, timeout=15)
+                            pdf_content = resp.content
 
                         if resp.status_code == 200:
                             if not pdf_content.startswith(b"%PDF"):
-                                st.error("⚠️ الملف الذي تم تحميله ليس ملف PDF صالح (قد يكون الرابط خاصاً أو محمياً).")
+                                st.error("⚠️ الملف الذي تم تحميله ليس ملف PDF صالح. قد يكون الرابط محمياً.")
+                                if b"google" in pdf_content.lower():
+                                    st.info("تأكد أن الملف متاح 'لأي شخص لديه الرابط' في إعدادات Google Drive.")
                             else:
                                 tm = TranslationManager()
                                 text = tm.extract_text_from_pdf(pdf_content)
@@ -221,7 +233,9 @@ def render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search"):
                                 else:
                                     trans = tm.translate_full_text(text)
                                     st.session_state[f"trans_{key_prefix}_{selected_idx}"] = {"orig": text, "trans": trans}
-                        else: st.error(f"Failed to fetch CV (HTTP {resp.status_code})")
+                        else:
+                            st.error(f"خطأ في الوصول للملف: (HTTP {resp.status_code}). جرب فتح الرابط يدوياً.")
+                            st.info(f"رابط الملف المستخدم: {cv_url}")
                     except Exception as e: st.error(f"Error: {str(e)}")
             else: st.warning("رابط السيرة الذاتية غير موجود أو غير صالح.")
 
