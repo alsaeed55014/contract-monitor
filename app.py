@@ -145,7 +145,109 @@ def toggle_lang():
     if st.session_state.lang == 'ar': st.session_state.lang = 'en'
     else: st.session_state.lang = 'ar'
 
-# 10. Logic Functions
+# 10. CV Detail Panel Helper
+def render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search"):
+    """
+    Standalone helper to render the professional CV profile card, 
+    preview (iframe), and translation logic.
+    """
+    worker_name = worker_row.get("Full Name:", "Worker")
+    # Dynamically find CV column
+    cv_col = None
+    for c in worker_row.index:
+        if "cv" in str(c).lower() or "سيرة" in str(c).lower():
+            cv_col = c
+            break
+    cv_url = worker_row.get(cv_col, "") if cv_col else ""
+    
+    # --- AUTO SCROLL LOGIC ---
+    scroll_key = f"last_scroll_{key_prefix}"
+    if scroll_key not in st.session_state or st.session_state[scroll_key] != selected_idx:
+        st.session_state[scroll_key] = selected_idx
+        st.components.v1.html(
+            f"""
+            <script>
+                setTimeout(function() {{
+                    var el = window.parent.document.getElementById('cv-anchor-{key_prefix}');
+                    if (el) el.scrollIntoView({{behavior: 'smooth'}});
+                }}, 300);
+            </script>
+            """,
+            height=0
+        )
+
+    # --- PROFESSIONAL PROFILE CARD ---
+    st.markdown(f"<div id='cv-anchor-{key_prefix}'></div>", unsafe_allow_html=True)
+    st.markdown(f"""
+    <div style="background-color:#1e2130; padding:20px; border-radius:10px; border-right:5px solid #ffcc00; margin: 20px 0;">
+        <h2 style="color:#ffcc00; margin:0;">👤 {worker_name}</h2>
+        <p style="color:#ffffff; margin-top:5px;">يمكنك الآن معاينة السيرة الذاتية أو ترجمتها للغة العربية باستخدام الأزرار أدناه.</p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    col_a, col_b = st.columns([1, 1])
+    with col_a:
+        if st.button(f"✨ {t('translate_cv_btn', lang)}", use_container_width=True, type="primary", key=f"btn_trans_{key_prefix}_{selected_idx}"):
+            if cv_url and str(cv_url).startswith("http"):
+                with st.spinner(t("extracting", lang)):
+                    try:
+                        import requests
+                        file_id = None
+                        if "drive.google.com" in cv_url:
+                            if "id=" in cv_url: file_id = cv_url.split("id=")[1].split("&")[0]
+                            elif "/d/" in cv_url: file_id = cv_url.split("/d/")[1].split("/")[0]
+
+                        if file_id:
+                            session = requests.Session()
+                            dl_url = f"https://docs.google.com/uc?export=download&id={file_id}"
+                            resp = session.get(dl_url, stream=True)
+                            token = None
+                            for k, v in resp.cookies.items():
+                                if k.startswith('download_warning'): token = v; break
+                            if token:
+                                dl_url = f"https://docs.google.com/uc?export=download&confirm={token}&id={file_id}"
+                                resp = session.get(dl_url, stream=True)
+                            pdf_content = resp.content
+                        else:
+                            resp = requests.get(cv_url); pdf_content = resp.content
+
+                        if resp.status_code == 200:
+                            if not pdf_content.startswith(b"%PDF"):
+                                st.error("⚠️ الملف الذي تم تحميله ليس ملف PDF صالح (قد يكون الرابط خاصاً أو محمياً).")
+                            else:
+                                tm = TranslationManager()
+                                text = tm.extract_text_from_pdf(pdf_content)
+                                if text.startswith("Error"): st.error(text)
+                                else:
+                                    trans = tm.translate_full_text(text)
+                                    st.session_state[f"trans_{key_prefix}_{selected_idx}"] = {"orig": text, "trans": trans}
+                        else: st.error(f"Failed to fetch CV (HTTP {resp.status_code})")
+                    except Exception as e: st.error(f"Error: {str(e)}")
+            else: st.warning("رابط السيرة الذاتية غير موجود أو غير صالح.")
+
+    trans_key = f"trans_{key_prefix}_{selected_idx}"
+    if trans_key in st.session_state:
+        t_data = st.session_state[trans_key]
+        c1, c2 = st.columns(2)
+        with c1:
+            st.caption("English (Original)")
+            st.text_area("Orig", t_data["orig"], height=300, key=f"orig_area_{key_prefix}_{selected_idx}")
+        with c2:
+            st.caption("العربية (المترجمة)")
+            st.text_area("Trans", t_data["trans"], height=300, key=f"trans_area_{key_prefix}_{selected_idx}")
+    
+    st.markdown(f"#### 🔎 {t('preview_cv', lang)}")
+    if cv_url and str(cv_url).startswith("http"):
+        preview_url = cv_url
+        if "drive.google.com" in cv_url:
+            f_id = None
+            if "id=" in cv_url: f_id = cv_url.split("id=")[1].split("&")[0]
+            elif "/d/" in cv_url: f_id = cv_url.split("/d/")[1].split("/")[0]
+            if f_id: preview_url = f"https://drive.google.com/file/d/{f_id}/preview"
+        st.components.v1.iframe(preview_url, height=600, scrolling=True)
+    else: st.info("لا يتوفر رابط معاينة لهذا العامل.")
+
+# 11. Logic Functions
 def login_screen():
     lang = st.session_state.lang
     col1, col2, col3 = st.columns([1, 2, 1])
@@ -280,7 +382,7 @@ def render_dashboard_content():
     
     t1, t2, t3 = st.tabs([t("tabs_urgent", lang), t("tabs_expired", lang), t("tabs_active", lang)])
     
-    def show(data):
+    def show(data, tab_id):
         if not data: st.info(t("no_data", lang)); return
         d = pd.DataFrame(data)
         
@@ -312,11 +414,25 @@ def render_dashboard_content():
                 display_text=t("download_pdf", lang)
             )
         
-        st.dataframe(d_final, use_container_width=True, column_config=final_cfg)
+        st.info("💡 **نصيحة**: اضغط على أي صف في الجدول لمشاهدة السيرة الذاتية وترجمتها بالأسفل.")
+        event = st.dataframe(
+            d_final, 
+            use_container_width=True, 
+            column_config=final_cfg,
+            on_select="rerun",
+            selection_mode="single-row",
+            hide_index=True,
+            key=f"dash_table_{lang}_{tab_id}"
+        )
+        
+        if event.selection and event.selection.get("rows"):
+            sel_idx = event.selection["rows"][0]
+            worker_row = d.iloc[sel_idx]
+            render_cv_detail_panel(worker_row, sel_idx, lang, key_prefix=f"dash_{tab_id}")
 
-    with t1: show(stats['urgent'])
-    with t2: show(stats['expired'])
-    with t3: show(stats['active'])
+    with t1: show(stats['urgent'], "urgent")
+    with t2: show(stats['expired'], "expired")
+    with t3: show(stats['active'], "active")
 
 def render_search_content():
     lang = st.session_state.lang
@@ -491,126 +607,8 @@ def render_search_content():
             # Handle Selection
             if event.selection and event.selection.get("rows"):
                 selected_idx = event.selection["rows"][0]
-                
-                # --- AUTO SCROLL LOGIC ---
-                if "last_selected_row" not in st.session_state or st.session_state.last_selected_row != selected_idx:
-                    st.session_state.last_selected_row = selected_idx
-                    # Inject JS for smooth scroll to the card
-                    st.components.v1.html(
-                        """
-                        <script>
-                            window.parent.document.querySelector('[data-testid="stVerticalBlock"] > div:nth-child(5)').scrollIntoView({behavior: 'smooth'});
-                            // Or more reliably using a dummy element with ID if we catch it fast enough
-                            setTimeout(function() {
-                                var el = window.parent.document.getElementById('cv-profile-card');
-                                if (el) el.scrollIntoView({behavior: 'smooth'});
-                            }, 300);
-                        </script>
-                        """,
-                        height=0
-                    )
-
-                # Map back to original row (res_display and res have same order)
                 worker_row = res.iloc[selected_idx]
-                worker_name = worker_row.get("Full Name:", "Worker")
-                cv_url = worker_row.get(next((c for c in res.columns if "cv" in c.lower()), "Download CV"), "")
-                
-                # --- PROFESSIONAL PROFILE CARD ---
-                st.markdown("<div id='cv-profile-card'></div>", unsafe_allow_html=True)
-                st.markdown(f"""
-                <div style="background-color:#1e2130; padding:20px; border-radius:10px; border-right:5px solid #ffcc00; margin: 20px 0;">
-                    <h2 style="color:#ffcc00; margin:0;">👤 {worker_name}</h2>
-                    <p style="color:#ffffff; margin-top:5px;">يمكنك الآن معاينة السيرة الذاتية أو ترجمتها للغة العربية باستخدام الأزرار أدناه.</p>
-                </div>
-                """, unsafe_allow_html=True)
-                
-                # Action Buttons
-                col_a, col_b = st.columns([1, 1])
-                
-                with col_a:
-                    if st.button(f"✨ {t('translate_cv_btn', lang)}", use_container_width=True, type="primary"):
-                        if cv_url and str(cv_url).startswith("http"):
-                            with st.spinner(t("extracting", lang)):
-                                try:
-                                    import requests
-                                    # Convert Drive open link to direct download link
-                                    file_id = None
-                                    if "drive.google.com" in cv_url:
-                                        if "id=" in cv_url:
-                                            file_id = cv_url.split("id=")[1].split("&")[0]
-                                        elif "/d/" in cv_url:
-                                            file_id = cv_url.split("/d/")[1].split("/")[0]
-
-                                    if file_id:
-                                        # Robust Drive Downloader that handles "Virus Scan" warning
-                                        session = requests.Session()
-                                        dl_url = f"https://docs.google.com/uc?export=download&id={file_id}"
-                                        resp = session.get(dl_url, stream=True)
-                                        
-                                        # Look for confirmation token in cookies if it's a large file
-                                        token = None
-                                        for key, value in resp.cookies.items():
-                                            if key.startswith('download_warning'):
-                                                token = value
-                                                break
-                                        
-                                        if token:
-                                            dl_url = f"https://docs.google.com/uc?export=download&confirm={token}&id={file_id}"
-                                            resp = session.get(dl_url, stream=True)
-                                        
-                                        pdf_content = resp.content
-                                    else:
-                                        resp = requests.get(cv_url)
-                                        pdf_content = resp.content
-
-                                    if resp.status_code == 200:
-                                        # Verify if it's actually a PDF
-                                        if not pdf_content.startswith(b"%PDF"):
-                                            st.error("⚠️ الملف الذي تم تحميله ليس ملف PDF صالح (قد يكون الرابط خاصاً أو محمياً).")
-                                            if b"google" in pdf_content.lower():
-                                                st.info("تلميح: تأكد أن رابط جوجل درايف متاح 'لأي شخص لديه الرابط' (Anyone with the link).")
-                                        else:
-                                            tm = TranslationManager()
-                                            text = tm.extract_text_from_pdf(pdf_content)
-                                            if text.startswith("Error"):
-                                                st.error(text)
-                                            else:
-                                                trans = tm.translate_full_text(text)
-                                                st.session_state[f"trans_{selected_idx}"] = {"orig": text, "trans": trans}
-                                    else:
-                                        st.error(f"Failed to fetch CV (HTTP {resp.status_code})")
-                                except Exception as e:
-                                    st.error(f"Error fetching/translating CV: {str(e)}")
-                        else:
-                            st.warning("رابط السيرة الذاتية غير موجود أو غير صالح.")
-
-                # Show Side-by-Side Translation if available
-                trans_key = f"trans_{selected_idx}"
-                if trans_key in st.session_state:
-                    t_data = st.session_state[trans_key]
-                    c1, c2 = st.columns(2)
-                    with c1:
-                        st.caption("English (Original)")
-                        st.text_area("Orig", t_data["orig"], height=300, key=f"orig_area_{selected_idx}")
-                    with c2:
-                        st.caption("العربية (المترجمة)")
-                        st.text_area("Trans", t_data["trans"], height=300, key=f"trans_area_{selected_idx}")
-                
-                # Professional Preview
-                st.markdown(f"#### 🔎 {t('preview_cv', lang)}")
-                if cv_url and str(cv_url).startswith("http"):
-                    preview_url = cv_url
-                    if "drive.google.com" in cv_url:
-                        if "id=" in cv_url:
-                            file_id = cv_url.split("id=")[1].split("&")[0]
-                            preview_url = f"https://drive.google.com/file/d/{file_id}/preview"
-                        elif "/d/" in cv_url:
-                            file_id = cv_url.split("/d/")[1].split("/")[0]
-                            preview_url = f"https://drive.google.com/file/d/{file_id}/preview"
-                    
-                    st.components.v1.iframe(preview_url, height=600, scrolling=True)
-                else:
-                    st.info("لا يتوفر رابط معاينة لهذا العامل.")
+                render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search")
             else:
                 st.info("💡 اختر اسماً من الجدول أعلاه لمعاينة السيرة الذاتية وترجمتها.")
 
