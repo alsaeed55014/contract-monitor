@@ -514,24 +514,49 @@ def render_search_content():
                                 try:
                                     import requests
                                     # Convert Drive open link to direct download link
-                                    dl_url = cv_url
+                                    file_id = None
                                     if "drive.google.com" in cv_url:
                                         if "id=" in cv_url:
                                             file_id = cv_url.split("id=")[1].split("&")[0]
-                                            dl_url = f"https://docs.google.com/uc?export=download&id={file_id}"
                                         elif "/d/" in cv_url:
                                             file_id = cv_url.split("/d/")[1].split("/")[0]
-                                            dl_url = f"https://docs.google.com/uc?export=download&id={file_id}"
 
-                                    resp = requests.get(dl_url)
+                                    if file_id:
+                                        # Robust Drive Downloader that handles "Virus Scan" warning
+                                        session = requests.Session()
+                                        dl_url = f"https://docs.google.com/uc?export=download&id={file_id}"
+                                        resp = session.get(dl_url, stream=True)
+                                        
+                                        # Look for confirmation token in cookies if it's a large file
+                                        token = None
+                                        for key, value in resp.cookies.items():
+                                            if key.startswith('download_warning'):
+                                                token = value
+                                                break
+                                        
+                                        if token:
+                                            dl_url = f"https://docs.google.com/uc?export=download&confirm={token}&id={file_id}"
+                                            resp = session.get(dl_url, stream=True)
+                                        
+                                        pdf_content = resp.content
+                                    else:
+                                        resp = requests.get(cv_url)
+                                        pdf_content = resp.content
+
                                     if resp.status_code == 200:
-                                        tm = TranslationManager()
-                                        text = tm.extract_text_from_pdf(resp.content)
-                                        if text.startswith("Error"):
-                                            st.error(text)
+                                        # Verify if it's actually a PDF
+                                        if not pdf_content.startswith(b"%PDF"):
+                                            st.error("⚠️ الملف الذي تم تحميله ليس ملف PDF صالح (قد يكون الرابط خاصاً أو محمياً).")
+                                            if b"google" in pdf_content.lower():
+                                                st.info("تلميح: تأكد أن رابط جوجل درايف متاح 'لأي شخص لديه الرابط' (Anyone with the link).")
                                         else:
-                                            trans = tm.translate_full_text(text)
-                                            st.session_state[f"trans_{selected_idx}"] = {"orig": text, "trans": trans}
+                                            tm = TranslationManager()
+                                            text = tm.extract_text_from_pdf(pdf_content)
+                                            if text.startswith("Error"):
+                                                st.error(text)
+                                            else:
+                                                trans = tm.translate_full_text(text)
+                                                st.session_state[f"trans_{selected_idx}"] = {"orig": text, "trans": trans}
                                     else:
                                         st.error(f"Failed to fetch CV (HTTP {resp.status_code})")
                                 except Exception as e:
