@@ -117,7 +117,7 @@ def get_css():
     return """
     <style>
         /* General Imports */
-        @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;700&family=Cinzel:wght@600&family=Orbitron:wght@600&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;700&family=Cinzel:wght@600&family=Orbitron:wght@600&family=Alex+Brush&display=swap');
         
         /* Main Container */
         .stApp {
@@ -166,17 +166,17 @@ def get_css():
             margin: 0 auto;
         }
 
-        /* Programmer Credit - Prestigious */
+        /* Programmer Credit - Prestigious Signature Style */
         .programmer-credit {
             color: #D4AF37;
-            font-family: 'Cinzel', serif;
-            margin-top: 5px;
-            font-size: 1.2em;
-            letter-spacing: 4px;
+            font-family: 'Alex Brush', cursive;
+            margin-top: 10px;
+            font-size: 2.2em; /* Larger for signature look */
+            letter-spacing: 1px;
             text-align: center;
-            font-weight: 700;
-            text-shadow: 0 0 12px rgba(212, 175, 55, 0.4);
-            text-transform: uppercase;
+            font-weight: 400;
+            text-shadow: 0 0 10px rgba(212, 175, 55, 0.3);
+            white-space: nowrap; /* Force one line */
         }
         
         /* Premium Buttons */
@@ -489,7 +489,7 @@ def login_screen():
             st.image(IMG_PATH, width=150)
         
         # 2. Credits and Titles
-        st.markdown(f'<p class="programmer-credit" style="font-size:1.1em; color:#D4AF37;">{t("welcome_subtitle", "en")}</p>', unsafe_allow_html=True)
+        st.markdown(f'<p class="programmer-credit">{t("welcome_subtitle", lang)}</p>', unsafe_allow_html=True)
         st.markdown(f"<h1 style='text-align:center; color:white; margin-bottom:0;'>{t('welcome_back', lang)}</h1>", unsafe_allow_html=True)
         st.markdown(f"<p style='text-align:center; color:#888; letter-spacing:1px; margin-bottom:30px;'>{t('system_title', lang)}</p>", unsafe_allow_html=True)
         
