@@ -258,7 +258,8 @@ def render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search"):
                         else:
                             st.error(f"{t('delete_error', lang)}: {success}")
         else:
-            st.error("⚠️ لا يمكن حذف هذا السجل (معرف السطر غير موجود).")
+            st.error(f"⚠️ {t('delete_error', lang)} (ID Missing)")
+            st.info("💡 جرب الضغط على زر **'تحديث البيانات من المصدر'** في صفحة البحث ثم المحاولة مرة أخرى.")
 
     trans_key = f"trans_{key_prefix}_{selected_idx}"
     if trans_key in st.session_state:
