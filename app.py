@@ -271,31 +271,36 @@ def get_css():
             box-shadow: 0 0 5px rgba(212, 175, 55, 0.5) !important;
         }
 
-        .lang-toggle-wrapper div.stButton > button,
-        section[data-testid="stSidebar"] .lang-toggle-wrapper div.stButton > button {
-            width: 160px !important; /* Twice the previous width */
-            height: 80px !important;  /* Approximately half the previous height */
-            min-width: 160px !important;
-            border-radius: 40px !important; /* Perfect pill shape for horizontal */
-            font-size: 1.8rem !important; 
+        /* Language Toggle - Aligned & Professional */
+        .lang-toggle-wrapper {
+            display: flex !important;
+            justify-content: center !important;
+            padding: 10px 0 !important;
+        }
+
+        .lang-toggle-wrapper .stButton > button {
+            width: 70px !important;
+            height: 70px !important;
+            min-width: 70px !important;
+            border-radius: 15px !important;
+            font-size: 1.4rem !important; 
             font-weight: 700 !important;
-            background-color: #F7E07E !important; /* Soft Yellow */
-            color: #333 !important; /* Dark Text */
-            border: none !important;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.3) !important;
-            transition: background-color 0.3s ease, transform 0.2s ease !important;
-            padding: 0 !important;
+            background-color: #1E1E1E !important; /* Dark Premium */
+            color: #F8F8F8 !important; /* Off White */
+            border: 1px solid rgba(212, 175, 55, 0.4) !important;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5) !important;
+            transition: all 0.3s ease !important;
             display: flex !important;
             justify-content: center !important;
             align-items: center !important;
-            text-transform: uppercase !important;
+            margin: 0 auto !important;
         }
         
-        .lang-toggle-wrapper div.stButton > button:hover,
-        section[data-testid="stSidebar"] .lang-toggle-wrapper div.stButton > button:hover {
-            background-color: #E6C962 !important; /* Slightly darker yellow */
-            transform: translateY(-2px) !important;
-            box-shadow: 0 6px 15px rgba(0,0,0,0.4) !important;
+        .lang-toggle-wrapper .stButton > button:hover {
+            background-color: #2A2A2A !important;
+            border-color: #D4AF37 !important;
+            transform: scale(1.05) !important;
+            box-shadow: 0 0 20px rgba(212, 175, 55, 0.3) !important;
         }
     </style>
     """
