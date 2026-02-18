@@ -97,17 +97,44 @@ class DBClient:
             df = pd.DataFrame(data[1:], columns=clean_headers)
             
             # Inject hidden sheet row index (1-indexed for gspread, starts at 2 because index 1 is header)
-            # Using list() to ensure it serializes well and is accessible
-            df.insert(0, '__sheet_row', list(range(2, len(df) + 2)))
+            # Triple injection to ensure it's not lost in selection/filtering
+            row_ids = list(range(2, len(df) + 2))
+            if '__sheet_row' not in df.columns:
+                df.insert(0, '__sheet_row', row_ids)
+            df['__sheet_row_backup'] = row_ids # Backup at the end
             
             self._data_cache = df
             self._last_fetch = current_time
-            print(f"[DEBUG] Data fetched. Total rows with IDs: {len(df)}")
+            print(f"[DEBUG] Data fetched. Total records: {len(df)}. IDs injected at start and end.")
             return df
 
         except Exception as e:
             print(f"[ERROR] Error fetching data: {e}")
             raise e
+
+    def find_row_by_data(self, worker_name, phone=""):
+        """Fallback: Tries to find the row index by matching name and optionally phone."""
+        df = self.fetch_data()
+        if df.empty: return None
+        
+        # Search for exact name match
+        name_col = next((c for c in df.columns if "name" in c.lower() or "الاسم" in c), None)
+        if not name_col: return None
+        
+        matches = df[df[name_col].astype(str).str.strip().str.lower() == str(worker_name).strip().lower()]
+        
+        if len(matches) == 1:
+            return matches.iloc[0]['__sheet_row']
+        
+        # If multiple matches, try phone
+        if len(matches) > 1 and phone:
+            phone_col = next((c for c in df.columns if "phone" in c.lower() or "جوال" in c), None)
+            if phone_col:
+                final_matches = matches[matches[phone_col].astype(str).str.contains(str(phone))]
+                if not final_matches.empty:
+                    return final_matches.iloc[0]['__sheet_row']
+        
+        return None
 
     def delete_row(self, row_number):
         """Permanently deletes a row from Google Sheets by its 1-indexed row number."""
