@@ -271,38 +271,32 @@ def get_css():
             box-shadow: 0 0 5px rgba(212, 175, 55, 0.5) !important;
         }
 
-        /* Language Toggle - Large, Square, Centered (Ultra Fakhim) */
-        /* Increased specificity to override sidebar defaults */
+        /* Language Toggle - Vertical Pill Shape (Clean & Minimal) */
         .lang-toggle-wrapper div.stButton > button,
         section[data-testid="stSidebar"] .lang-toggle-wrapper div.stButton > button {
-            width: 140px !important; /* Even larger for impact */
-            height: 140px !important;
-            min-width: 140px !important;
-            border-radius: 15px !important; 
-            font-size: 3rem !important; 
-            font-weight: 900 !important;
-            background: linear-gradient(135deg, #FFD700 0%, #D4AF37 50%, #B8860B 100%) !important;
-            color: #000 !important;
-            border: 4px solid rgba(255,215,0,0.5) !important;
-            box-shadow: 
-                0 20px 40px rgba(0,0,0,0.6), 
-                0 0 30px rgba(212, 175, 55, 0.5),
-                inset 0 0 15px rgba(255,255,255,0.3) !important;
-            transition: all 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) !important;
+            width: 80px !important;
+            height: 150px !important;
+            min-width: 80px !important;
+            border-radius: 40px !important; /* Pill shape */
+            font-size: 1.8rem !important; 
+            font-weight: 700 !important;
+            background-color: #F7E07E !important; /* Soft Yellow */
+            color: #333 !important; /* Dark Text */
+            border: none !important;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3) !important;
+            transition: background-color 0.3s ease, transform 0.2s ease !important;
             padding: 0 !important;
             display: flex !important;
             justify-content: center !important;
             align-items: center !important;
             text-transform: uppercase !important;
-            line-height: 1 !important;
         }
         
         .lang-toggle-wrapper div.stButton > button:hover,
         section[data-testid="stSidebar"] .lang-toggle-wrapper div.stButton > button:hover {
-            transform: scale(1.1) !important;
-            background: linear-gradient(135deg, #FFFFFF 0%, #FFD700 30%, #D4AF37 100%) !important;
-            box-shadow: 0 25px 50px rgba(0,0,0,0.7), 0 0 50px rgba(212, 175, 55, 0.9) !important;
-            border-color: #FFF !important;
+            background-color: #E6C962 !important; /* Slightly darker yellow */
+            transform: translateY(-2px) !important;
+            box-shadow: 0 6px 15px rgba(0,0,0,0.4) !important;
         }
     </style>
     """
