@@ -286,7 +286,7 @@ except KeyError as e:
 
 # 4. Page Config
 st.set_page_config(
-    page_title="Golden Noura | Contract Monitor",
+    page_title="السعيد الوزان | نظام مراقبة العقود",
     page_icon="",
     layout="wide",
     initial_sidebar_state="expanded"
