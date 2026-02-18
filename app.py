@@ -271,15 +271,8 @@ def get_css():
             box-shadow: 0 0 5px rgba(212, 175, 55, 0.5) !important;
         }
 
-        /* Language Toggle - Aligned & Professional */
-        .lang-toggle-wrapper {
-            display: flex !important;
-            justify-content: center !important;
-            padding: 10px 0 !important;
-        }
-
-        .lang-toggle-wrapper .stButton > button,
-        section[data-testid="stSidebar"] .lang-toggle-wrapper .stButton > button {
+        /* Language Toggle - Robust Anchor-Based Targeting */
+        div:has(> #lang-toggle-anchor) + div .stButton > button {
             width: 70px !important;
             height: 70px !important;
             min-width: 70px !important;
@@ -289,8 +282,8 @@ def get_css():
             font-weight: 700 !important;
             background-color: #1E1E1E !important; /* Dark Premium */
             color: #F8F8F8 !important; /* Off White */
-            border: 1px solid rgba(212, 175, 55, 0.4) !important;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.5) !important;
+            border: 1px solid rgba(212, 175, 55, 0.5) !important;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.6) !important;
             transition: all 0.3s ease !important;
             display: flex !important;
             justify-content: center !important;
@@ -299,12 +292,21 @@ def get_css():
             padding: 0 !important;
         }
         
-        .lang-toggle-wrapper .stButton > button:hover,
-        section[data-testid="stSidebar"] .lang-toggle-wrapper .stButton > button:hover {
+        div:has(> #lang-toggle-anchor) + div .stButton > button:hover {
             background-color: #2A2A2A !important;
             border-color: #D4AF37 !important;
             transform: scale(1.05) !important;
-            box-shadow: 0 0 20px rgba(212, 175, 55, 0.3) !important;
+            box-shadow: 0 0 20px rgba(212, 175, 55, 0.4) !important;
+        }
+
+        /* Essential Override for Sidebar */
+        section[data-testid="stSidebar"] div:has(> #lang-toggle-anchor) + div .stButton > button {
+             height: 70px !important; /* Force override generic sidebar 45px */
+             background-color: #1E1E1E !important;
+             color: #F8F8F8 !important;
+             border-radius: 15px !important;
+             width: 70px !important;
+             margin: 0 auto !important;
         }
     </style>
     """
@@ -555,13 +557,12 @@ def login_screen():
                     if u.lower() == "admin" and p_norm == "admin123":
                         st.info("💡 Try using your new password instead of the old default.")
 
-        # 4. Language Button (Styled as Square & Centered)
-        st.markdown("<div class='lang-toggle-wrapper'>", unsafe_allow_html=True)
+        # 4. Language Button (Styled via Anchor)
+        st.markdown("<div id='lang-toggle-anchor'></div>", unsafe_allow_html=True)
         btn_label = "En" if lang == "ar" else "عربي"
         if st.button(btn_label, key="lang_btn_login"):
             toggle_lang()
             st.rerun()
-        st.markdown("</div>", unsafe_allow_html=True)
         
         st.markdown('</div>', unsafe_allow_html=True)
 
@@ -592,12 +593,11 @@ def dashboard():
         st.markdown(f'<p class="programmer-credit">{t("welcome_subtitle", lang)}</p>', unsafe_allow_html=True)
         st.markdown("<br>", unsafe_allow_html=True)
         
-        st.markdown("<div class='lang-toggle-wrapper'>", unsafe_allow_html=True)
+        st.markdown("<div id='lang-toggle-anchor'></div>", unsafe_allow_html=True)
         btn_label = "En" if lang == "ar" else "عربي"
         if st.button(btn_label, key="lang_btn_dashboard"):
             toggle_lang()
             st.rerun()
-        st.markdown("</div>", unsafe_allow_html=True)
         
         st.markdown("<div style='margin: 15px 0;'></div>", unsafe_allow_html=True)
 
