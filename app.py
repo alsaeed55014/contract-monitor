@@ -278,10 +278,12 @@ def get_css():
             padding: 10px 0 !important;
         }
 
-        .lang-toggle-wrapper .stButton > button {
+        .lang-toggle-wrapper .stButton > button,
+        section[data-testid="stSidebar"] .lang-toggle-wrapper .stButton > button {
             width: 70px !important;
             height: 70px !important;
             min-width: 70px !important;
+            max-width: 70px !important;
             border-radius: 15px !important;
             font-size: 1.4rem !important; 
             font-weight: 700 !important;
@@ -294,9 +296,11 @@ def get_css():
             justify-content: center !important;
             align-items: center !important;
             margin: 0 auto !important;
+            padding: 0 !important;
         }
         
-        .lang-toggle-wrapper .stButton > button:hover {
+        .lang-toggle-wrapper .stButton > button:hover,
+        section[data-testid="stSidebar"] .lang-toggle-wrapper .stButton > button:hover {
             background-color: #2A2A2A !important;
             border-color: #D4AF37 !important;
             transform: scale(1.05) !important;
