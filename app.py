@@ -245,8 +245,11 @@ def render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search"):
     
     # Fallback lookup if ID is missing (Sync issues)
     if not sheet_row:
-        with st.spinner("⏳ محاولة البحث عن معرف السطر..."):
-            sheet_row = st.session_state.db.find_row_by_data(worker_name)
+        if hasattr(st.session_state.db, "find_row_by_data"):
+            with st.spinner("⏳ محاولة البحث عن معرف السطر..."):
+                sheet_row = st.session_state.db.find_row_by_data(worker_name)
+        else:
+            st.warning("⚠️ ميزة الحذف الذكي تتطلب تحديث ملف `src/data/db_client.py`. يرجى رفعه لتجنب الأخطاء.")
 
     if sheet_row:
         with st.popover(f"🗑️ {t('delete_btn', lang)}", use_container_width=True):
