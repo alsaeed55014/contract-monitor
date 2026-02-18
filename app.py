@@ -15,6 +15,7 @@ class AuthManager:
     def __init__(self, users_file_path):
         self.users_file = users_file_path
         self.users = {}
+        self.is_bilingual = True # Version marker for session refresh
         self.load_users()
 
     def load_users(self):
@@ -139,7 +140,7 @@ st.set_page_config(
 st.markdown(get_css(), unsafe_allow_html=True)
 
 # 6. Initialize Core (With Force Re-init for Updates)
-if 'auth' not in st.session_state or not hasattr(st.session_state.auth, 'update_profile'):
+if 'auth' not in st.session_state or not hasattr(st.session_state.auth, 'is_bilingual'):
     st.session_state.auth = AuthManager(USERS_FILE)
 
 if 'db' not in st.session_state:
