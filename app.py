@@ -32,8 +32,10 @@ class AuthManager:
             self.users["admin"] = {
                 "password": self.hash_password("admin123"), # Default password
                 "role": "admin",
-                "first_name": "المدير",
-                "father_name": "العام",
+                "first_name_ar": "السعيد",
+                "father_name_ar": "الوزان",
+                "first_name_en": "Alsaeed",
+                "father_name_en": "Alwazzan",
                 "permissions": ["all"]
             }
             self.save_users()
@@ -56,7 +58,7 @@ class AuthManager:
                 return self.users[username]
         return None
 
-    def add_user(self, username, password, role="viewer", first_name="", father_name=""):
+    def add_user(self, username, password, role="viewer", f_ar="", fa_ar="", f_en="", fa_en=""):
         username = username.lower().strip()
         if username in self.users:
             return False, "User already exists"
@@ -64,8 +66,10 @@ class AuthManager:
         self.users[username] = {
             "password": self.hash_password(password),
             "role": role,
-            "first_name": first_name,
-            "father_name": father_name,
+            "first_name_ar": f_ar,
+            "father_name_ar": fa_ar,
+            "first_name_en": f_en,
+            "father_name_en": fa_en,
             "permissions": ["read"] if role == "viewer" else ["all"]
         }
         self.save_users()
@@ -96,11 +100,13 @@ class AuthManager:
             return True
         return False
 
-    def update_profile(self, username, first_name=None, father_name=None):
+    def update_profile(self, username, f_ar=None, fa_ar=None, f_en=None, fa_en=None):
         username = username.lower().strip()
         if username in self.users:
-            if first_name is not None: self.users[username]["first_name"] = first_name
-            if father_name is not None: self.users[username]["father_name"] = father_name
+            if f_ar is not None: self.users[username]["first_name_ar"] = f_ar
+            if fa_ar is not None: self.users[username]["father_name_ar"] = fa_ar
+            if f_en is not None: self.users[username]["first_name_en"] = f_en
+            if fa_en is not None: self.users[username]["father_name_en"] = fa_en
             self.save_users()
             return True
         return False
@@ -347,7 +353,15 @@ def dashboard():
     
     # Welcome Message - Prominent and High Visibility
     if st.session_state.get('show_welcome'):
-        full_name = f"{user.get('first_name', '')} {user.get('father_name', '')}".strip()
+        # Selection based on UI language
+        if lang == 'ar':
+            f_name = user.get('first_name_ar', '')
+            fa_name = user.get('father_name_ar', '')
+        else:
+            f_name = user.get('first_name_en', '')
+            fa_name = user.get('father_name_en', '')
+            
+        full_name = f"{f_name} {fa_name}".strip()
         if not full_name: full_name = user.get('username', 'User')
         
         msg = t("welcome_person", lang).format(name=full_name)
@@ -739,11 +753,19 @@ def render_permissions_content():
         with st.form("new_user"):
             u = st.text_input(t("username", lang))
             p = st.text_input(t("password", lang), type="password")
-            fn = st.text_input(t("first_name", lang))
-            ftn = st.text_input(t("father_name", lang))
+            
+            # Bilingual Name Inputs
+            c1, c2 = st.columns(2)
+            with c1:
+                fn_ar = st.text_input(t("first_name_ar", lang))
+                ftn_ar = st.text_input(t("father_name_ar", lang))
+            with c2:
+                fn_en = st.text_input(t("first_name_en", lang))
+                ftn_en = st.text_input(t("father_name_en", lang))
+                
             r = st.selectbox(t("role", lang), ["viewer", "admin"])
             if st.form_submit_button(t("add_btn", lang)):
-                s, m = st.session_state.auth.add_user(u, p, r, fn, ftn)
+                s, m = st.session_state.auth.add_user(u, p, r, fn_ar, ftn_ar, fn_en, ftn_en)
                 if s: 
                     st.session_state.permissions_success = t("user_added", lang)
                     st.rerun()
@@ -760,13 +782,21 @@ def render_permissions_content():
             st.write(f"Editing: **{selected_user}**")
             current_role_idx = 0 if current_data.get("role") == "viewer" else 1
             new_role = st.selectbox(t("role", lang), ["viewer", "admin"], index=current_role_idx)
-            new_first = st.text_input(t("first_name", lang), value=current_data.get("first_name", ""))
-            new_father = st.text_input(t("father_name", lang), value=current_data.get("father_name", ""))
+            
+            # Bilingual Edits
+            c1, c2 = st.columns(2)
+            with c1:
+                new_f_ar = st.text_input(t("first_name_ar", lang), value=current_data.get("first_name_ar", ""))
+                new_fa_ar = st.text_input(t("father_name_ar", lang), value=current_data.get("father_name_ar", ""))
+            with c2:
+                new_f_en = st.text_input(t("first_name_en", lang), value=current_data.get("first_name_en", ""))
+                new_fa_en = st.text_input(t("father_name_en", lang), value=current_data.get("father_name_en", ""))
+                
             new_pass = st.text_input(t("new_password", lang), type="password")
             
             if st.form_submit_button(t("update_btn", lang)):
                 st.session_state.auth.update_role(selected_user, new_role)
-                st.session_state.auth.update_profile(selected_user, new_first, new_father)
+                st.session_state.auth.update_profile(selected_user, new_f_ar, new_fa_ar, new_f_en, new_fa_en)
                 if new_pass:
                     st.session_state.auth.update_password(selected_user, new_pass)
                 
