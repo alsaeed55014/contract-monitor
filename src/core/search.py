@@ -59,32 +59,28 @@ class SmartSearchEngine:
                 results = results[mask]
                 
             else:
-                # Smart Text Search
-                keywords = self.translator.analyze_query(query)
-                print(f" AI Strings: {keywords}")
+                # Smart Text Search (Compound Search with AND logic)
+                # bundles = [[syn1, syn2], [syn3, syn4]]
+                bundles = self.translator.analyze_query(query)
+                print(f" [SEARCH] Keyword Bundles: {bundles}")
                 
                 def text_match(row):
-                    # Join row to single string
+                    # Join row to single string and normalize
                     row_text = " ".join(row.astype(str)).lower()
                     row_text_norm = self.translator.normalize_text(row_text)
                     
-                    # If ANY keyword matches, it's a hit (Or Logic for Synonyms)
-                    # Actually, for "Filipino Driver", we want AND logic for the concepts, 
-                    # but OR logic for the synonyms of each concept. 
-                    # Current simplifiction: If the whole translated phrase matches OR parts match.
-                    # Let's try matching ALL original tokens OR their translations.
-                    
-                    # Better approach: 
-                    # 1. Normalize Row
-                    # 2. Check if ANY of the generated search_phrases form the full query exist?
-                    # No, "Filipino Driver" -> "فلبيني سائق". 
-                    # If user types "سائق فلبيني", we want it to match "Filipino Driver" in DB.
-                    
-                    # Check 1: Is the 'Translated Full Sentence' present?
-                    for kw in keywords:
-                        if kw.lower() in row_text_norm:
-                            return True
-                    return False
+                    # AND Logic: Every bundle must have at least one synonym matching in the row
+                    for bundle in bundles:
+                        found_match_for_bundle = False
+                        for syn in bundle:
+                            if syn in row_text_norm:
+                                found_match_for_bundle = True
+                                break
+                        
+                        if not found_match_for_bundle:
+                            return False # This bundle failed, so query fails for this row
+                            
+                    return True # All bundles satisfied
 
                 mask = results.apply(text_match, axis=1)
                 results = results[mask]
