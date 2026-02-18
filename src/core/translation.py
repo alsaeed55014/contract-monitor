@@ -11,7 +11,9 @@ except ImportError:
 
 class TranslationManager:
     def __init__(self):
+        # Comprehensive dictionary for Job Titles, Nationalities, and Gender
         self.dictionary = {
+            # --- Jobs / Professions ---
             "باريستا": "Barista", "barista": "باريستا",
             "طباخ": "Cook", "cook": "طباخ",
             "شيف": "Chef", "chef": "شيف",
@@ -22,14 +24,39 @@ class TranslationManager:
             "عاملة": "Housemaid", "شغالة": "Housemaid",
             "ممرض": "Nurse", "nurse": "ممرض", "ممرضة": "Nurse",
             "طبيب": "Doctor", "doctor": "طبيب",
-            
+            "نظافة": "Cleaner", "cleaner": "نظافة", "عامل نظافة": "Cleaner", "عاملة نظافة": "Cleaner",
+            "بدكير": "Pedicure", "pedicure": "بدكير", "منكير": "Manicure", "manicure": "منكير",
+            "حلاق": "Barber", "barber": "حلاق", "كوافير": "Hairdresser", "hairdresser": "كوافير",
+            "خياط": "Tailor", "tailor": "خياط",
+            "كهربائي": "Electrician", "electrician": "كهربائي",
+            "سباك": "Plumber", "plumber": "سباك",
+            "عامل": "Worker", "worker": "عامل",
+            "فني": "Technician", "technician": "فني",
+            "محاسب": "Accountant", "accountant": "محاسب",
+            "مبيعات": "Sales", "sales": "مبيعات",
+            "استقبال": "Reception", "reception": "استقبال",
+            "أمن": "Security", "security": "أمن",
+            "نجار": "Carpenter", "carpenter": "نجار",
+            "دهان": "Painter", "painter": "دهان",
+            "حداد": "Blacksmith", "blacksmith": "حداد",
+            "خبير": "Expert", "expert": "خبير",
+
+            # --- Nationalities ---
             "فلبيني": "Filipino", "filipino": "فلبيني", "فلبينية": "Filipino",
-            "هندي": "Indian", "indian": "هندي",
-            "باكستاني": "Pakistani", "pakistani": "باكستاني",
-            "بنجلاديشي": "Bangladeshi", "bangladeshi": "بنجلاديشي",
-            "مصري": "Egyptian", "egyptian": "مصري",
-            "نيبالي": "Nepali", "nepali": "نيبالي",
-            
+            "هندي": "Indian", "indian": "هندي", "هندية": "Indian",
+            "باكستاني": "Pakistani", "pakistani": "باكستاني", "باكستانية": "Pakistani",
+            "بنجلاديشي": "Bangladeshi", "bangladeshi": "بنجلاديشي", "بنجالية": "Bangladeshi",
+            "مصري": "Egyptian", "egyptian": "مصري", "مصرية": "Egyptian",
+            "نيبالي": "Nepali", "nepali": "نيبالي", "نيبالية": "Nepali",
+            "سيريلانكي": "Sri Lankan", "sri lankan": "سيريلانكي", "سيريلانكية": "Sri Lankan",
+            "كينيا": "Kenyan", "كيني": "Kenyan", "كينية": "Kenyan",
+            "اوغندي": "Ugandan", "اوغندية": "Ugandan",
+            "اثيوبي": "Ethiopian", "اثيوبية": "Ethiopian",
+            "مغربي": "Moroccan", "مغربية": "Moroccan",
+            "سوداني": "Sudanese", "سودانية": "Sudanese",
+            "يمني": "Yemeni", "يمنية": "Yemeni",
+
+            # --- Gender / Sex ---
             "بنت": "Female", "girl": "Female", "سيدة": "Female", "lady": "Female",
             "امرأة": "Female", "woman": "Female", "انثى": "Female", "أنثى": "Female", "female": "أنثى",
             "ولد": "Male", "boy": "Male", "رجل": "Male", "man": "Male", "ذكر": "Male", "male": "ذكر",
@@ -38,6 +65,7 @@ class TranslationManager:
     def normalize_text(self, text):
         if not text: return ""
         text = str(text).lower().strip()
+        # Essential normalization for search flexibility
         text = text.replace("أ", "ا").replace("إ", "ا").replace("آ", "ا")
         text = text.replace("ة", "ه").replace("ى", "ي")
         return text
@@ -50,22 +78,23 @@ class TranslationManager:
         return word
 
     def analyze_query(self, query):
+        """
+        Breaks query into bundles of synonyms.
+        Example: "فلبيني باريستا" -> [["فلبيني", "Filipino"], ["باريستا", "Barista"]]
+        """
         clean_query = self.normalize_text(query)
         words = clean_query.split()
-        search_terms = set([clean_query])
-        tokens_translated = []
+        
+        bundle_list = []
         for word in words:
-            search_terms.add(word)
+            # For each word, create a set of synonyms (Arabic norm + English trans)
+            synonyms = {word}
             trans = self.translate_word(word)
             if trans.lower() != word:
-                search_terms.add(trans.lower())
-                tokens_translated.append(trans)
-            else:
-                tokens_translated.append(word)
-        full_trans = " ".join(tokens_translated)
-        if full_trans != clean_query:
-            search_terms.add(full_trans)
-        return list(search_terms)
+                synonyms.add(trans.lower())
+            bundle_list.append(list(synonyms))
+            
+        return bundle_list
 
     # --- PDF TRANSLATION FEATURES ---
     def extract_text_from_pdf(self, file_bytes):
