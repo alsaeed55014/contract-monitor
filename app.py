@@ -994,7 +994,7 @@ def render_dashboard_content():
                     r['Status'] = "متبقى"
                     r['المتبقى'] = days
                 else: # active
-                    r['Status'] = f"ساري ({days} يوم)"
+                    r['Status'] = "ساري"
                     r['المتبقى'] = days
             else:
                 r['Status'] = status['label_en']
@@ -1250,7 +1250,7 @@ def render_search_content():
                             status_list.append("متبقى")
                             rem_list.append(ds)
                         else:
-                            status_list.append(f"ساري ({ds} يوم)")
+                            status_list.append("ساري")
                             rem_list.append(ds)
                     else:
                         status_list.append(s['label_en'])
