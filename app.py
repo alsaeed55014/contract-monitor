@@ -1559,12 +1559,18 @@ def render_permissions_content():
                 with st.popover("حذف المستخدم" if lang=='ar' else "Delete User"):
                     st.warning("هل أنت متأكد من حذف هذا المستخدم؟" if lang=='ar' else "Are you sure you want to delete this user?")
                     if st.button("نعم، احذف المستخدم" if lang=='ar' else "Yes, Delete User", type="primary", use_container_width=True):
-                        success, message = st.session_state.auth.delete_user(selected_user)
+                        res = st.session_state.auth.delete_user(selected_user)
+                        
+                        # Handle both old (bool) and new (tuple) return types safely
+                        if isinstance(res, tuple):
+                            success, message = res
+                        else:
+                            success, message = res, ("تم الحذف" if res else "فشل الحذف")
+                            
                         if success:
                             st.session_state.permissions_success = "تم الحذف"
                             st.rerun()
                         else:
-                            # Show the specific error message from the backend
                             st.error(f"خطأ: {message}")
     
     # Translate table keys for Users Table
