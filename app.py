@@ -138,36 +138,36 @@ def get_css():
             text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
         }
 
-        /* Login Screen Prestigious Layout */
+        /* Login Screen Image & Title Layout */
         .login-screen-wrapper {
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            padding: 40px 20px;
+            width: 100%;
         }
 
         .login-screen-wrapper img {
             border-radius: 50%;
             border: 3px solid #D4AF37;
-            box-shadow: 0 0 25px rgba(212, 175, 55, 0.4);
-            margin-bottom: 25px;
+            box-shadow: 0 0 15px rgba(212, 175, 55, 0.4);
+            margin-bottom: 10px;
         }
 
-        /* Target Streamlit Forms directly for Luxury look */
+        /* Essential Card Tweaks - Login Form Container */
         div[data-testid="stForm"] {
-            background: rgba(30, 30, 30, 0.85) !important;
-            padding: 30px !important;
-            border-radius: 25px !important;
-            box-shadow: 0 20px 50px rgba(0,0,0,0.8) !important;
+            background-color: #1A1A1A !important;
             border: 1px solid rgba(212, 175, 55, 0.3) !important;
-            backdrop-filter: blur(20px) !important;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5) !important;
+            max-width: 420px !important;
+            margin: 0 auto !important;
+            padding: 30px !important;
+            border-radius: 20px !important; /* Rounded corners */
         }
         
-        /* Specific tweaks for Login Form inside the wrapper */
-        .login-screen-wrapper div[data-testid="stForm"] {
-            max-width: 480px;
-            margin: 0 auto;
+        /* Form Inner Spacing */
+        div[data-testid="stForm"] > div {
+             gap: 1.5rem !important; /* Space between inputs */
         }
 
         /* Programmer Credit - Prestigious Signature Style */
@@ -183,7 +183,7 @@ def get_css():
             white-space: nowrap; /* Force one line */
         }
         
-        /* Premium Buttons */
+        /* Premium Buttons (General) */
         div[data-testid="stForm"] .stButton > button {
             background: linear-gradient(135deg, #D4AF37 0%, #B8860B 100%) !important;
             color: #000 !important;
@@ -193,6 +193,8 @@ def get_css():
             padding: 12px 0 !important;
             box-shadow: 0 4px 15px rgba(212, 175, 55, 0.4) !important;
             width: 100% !important;
+            border-radius: 8px !important;
+            margin-top: 10px !important;
         }
         
         div[data-testid="stForm"] .stButton > button:hover {
@@ -227,9 +229,9 @@ def get_css():
             border: none;
             border-radius: 8px;
             padding: 12px 0px;
-            margin: 8px 0px !important; /* Equal spacing */
+            margin: 8px 0px !important; /**/
             width: 100% !important;
-            height: 45px !important;
+            height: 45px !important; /* Fixed height for normal buttons */
             display: flex;
             justify-content: center;
             align-items: center;
@@ -258,12 +260,13 @@ def get_css():
             background-color: #1A1A1A !important;
         }
 
-        /* Custom Inputs */
+        /* Custom Inputs (Robust targeting) */
         .stTextInput > div > div > input {
             background-color: #222 !important;
             color: #fff !important;
             border: 1px solid #444 !important;
             border-radius: 8px !important;
+            padding: 10px !important; /* Comfortable padding */
         }
         
         .stTextInput > div > div > input:focus {
@@ -271,8 +274,11 @@ def get_css():
             box-shadow: 0 0 5px rgba(212, 175, 55, 0.5) !important;
         }
 
-        /* Language Toggle - Robust Anchor-Based Targeting */
-        div:has(> #lang-toggle-anchor) + div .stButton > button {
+        /* 
+           LANGUAGE TOGGLE - ROBUST TARGETING
+           Using General Sibling Combinator (~) to skip hidden elements injected by Streamlit
+        */
+        div:has(> #lang-toggle-anchor) ~ div .stButton > button {
             width: 120px !important;
             height: 120px !important;
             min-width: 120px !important;
@@ -282,31 +288,31 @@ def get_css():
             font-weight: 800 !important;
             background-color: #1E1E1E !important; /* Dark Premium */
             color: #F8F8F8 !important; /* Off White */
-            border: 2px solid rgba(212, 175, 55, 0.6) !important;
+            border: 2px solid rgba(212, 175, 55, 0.8) !important; /* Distinctive border */
             box-shadow: 0 8px 25px rgba(0,0,0,0.7) !important;
             transition: all 0.3s ease !important;
             display: flex !important;
             justify-content: center !important;
             align-items: center !important;
-            margin: 0 auto !important;
+            margin: 20px auto !important; /* Centered with vertical space */
             padding: 0 !important;
+            aspect-ratio: 1/1 !important; /* Force square/circle ratio */
         }
         
-        div:has(> #lang-toggle-anchor) + div .stButton > button:hover {
+        div:has(> #lang-toggle-anchor) ~ div .stButton > button:hover {
             background-color: #2A2A2A !important;
-            border-color: #D4AF37 !important;
+            border-color: #ECC846 !important;
             transform: scale(1.05) !important;
             box-shadow: 0 0 30px rgba(212, 175, 55, 0.5) !important;
+            color: #ECC846 !important;
         }
 
-        /* Essential Override for Sidebar */
-        section[data-testid="stSidebar"] div:has(> #lang-toggle-anchor) + div .stButton > button {
-             height: 120px !important; /* Matches larger size */
+        /* Sidebar Specific Override (ensure it works there too) */
+        section[data-testid="stSidebar"] div:has(> #lang-toggle-anchor) ~ div .stButton > button {
+             height: 120px !important; 
              width: 120px !important;
-             background-color: #1E1E1E !important;
-             color: #F8F8F8 !important;
              border-radius: 25px !important;
-             margin: 0 auto !important;
+             margin: 15px auto !important;
         }
     </style>
     """
