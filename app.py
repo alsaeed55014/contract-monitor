@@ -1051,8 +1051,15 @@ def render_dashboard_content():
         if not data: st.info(t("no_data", lang)); return
         d = pd.DataFrame(data)
         
-        # Sort from smallest to largest days (most expired or soonest to expire first)
-        d = d.sort_values(by='__days_sort', ascending=True)
+        # Sort Logic:
+        # For Expired: sort by absolute days (smallest number of days ago first)
+        # For others: sort by raw days (soonest to expire first)
+        if tab_id == 'expired':
+            d['__abs_days'] = d['__days_sort'].abs()
+            d = d.sort_values(by='__abs_days', ascending=True)
+            d = d.drop(columns=['__abs_days'])
+        else:
+            d = d.sort_values(by='__days_sort', ascending=True)
         
         # Select columns: Remaining (المتبقى) then Status, then the rest
         rem_col = 'المتبقى' if lang == 'ar' else 'Remaining'
