@@ -361,58 +361,45 @@ def get_css():
            Using the "Marker + Sibling" pattern to target specific buttons
         */
         
-        /* --- LOGIN UI CONSOLIDATED FIXES --- */
+        /* --- LOGIN UI CONSOLIDATED FIXES (STABLE VERSION) --- */
         
-        /* 1. Remove markers from the layout flow so they don't create extra gaps */
-        div[data-testid="stForm"] > div > div:has(#login-btn-anchor), 
-        div[data-testid="stForm"] > div > div:has(#login-lang-new-anchor) {
-            position: absolute !important;
-            height: 0 !important;
-            width: 0 !important;
-            margin: 0 !important;
-            padding: 0 !important;
-            overflow: hidden !important;
-            visibility: hidden !important;
-        }
-
-        /* 2. Unified Button Styling for Login Card */
-        .login-screen-wrapper .stButton button {
+        /* 1. Target ALL buttons inside the login card for width and dark theme */
+        .login-screen-wrapper [data-testid="stForm"] .stButton button {
             width: 100% !important;
-            margin: 0 !important;
             background: #1A1A1B !important; 
             border: 1px solid rgba(212, 175, 55, 0.4) !important;
-            height: 50px !important;
+            height: 52px !important;
             border-radius: 12px !important;
-            display: flex !important;
-            align-items: center !important;
-            justify-content: center !important;
-            transition: all 0.3s ease !important;
+            margin: 0 !important; /* Let form gap handle vertical space */
         }
 
-        /* 3. Login Button: Glowing Yellow Text (Ultimate Priority) */
-        div:has(> #login-btn-anchor) + div .stButton button,
-        div:has(> #login-btn-anchor) + div .stButton button p,
-        div:has(> #login-btn-anchor) + div .stButton button span {
+        /* 2. Login Button: Glowing Yellow Text (First Submit Button in Form) */
+        .login-screen-wrapper [data-testid="stForm"] [data-testid="stFormSubmitButton"]:first-of-type button p,
+        .login-screen-wrapper [data-testid="stForm"] [data-testid="stFormSubmitButton"]:first-of-type button span,
+        .login-screen-wrapper [data-testid="stForm"] [data-testid="stFormSubmitButton"]:first-of-type button {
             color: #FFFF00 !important; 
-            text-shadow: 0 0 10px #FFFF00, 0 0 20px #FFFF00, 0 0 40px rgba(255, 255, 0, 0.8) !important;
+            text-shadow: 
+                0 0 8px #FFFF00, 
+                0 0 15px #FFFF00, 
+                0 0 30px rgba(255, 255, 0, 0.6) !important;
             font-weight: 900 !important;
-            font-size: 1.2rem !important;
+            font-size: 1.25rem !important;
         }
 
-        /* 4. Language Button: Gold Text (Override following sibling logic) */
-        div:has(> #login-lang-new-anchor) + div .stButton button,
-        div:has(> #login-lang-new-anchor) + div .stButton button p,
-        div:has(> #login-lang-new-anchor) + div .stButton button span {
+        /* 3. Language Button: Gold Text (Second Submit Button in Form) */
+        .login-screen-wrapper [data-testid="stForm"] [data-testid="stFormSubmitButton"]:nth-of-type(2) button p,
+        .login-screen-wrapper [data-testid="stForm"] [data-testid="stFormSubmitButton"]:nth-of-type(2) button span,
+        .login-screen-wrapper [data-testid="stForm"] [data-testid="stFormSubmitButton"]:nth-of-type(2) button {
             color: #D4AF37 !important;
-            text-shadow: none !important;
             font-weight: 700 !important;
             font-size: 1.1rem !important;
         }
         
-        .login-screen-wrapper .stButton button:hover {
+        /* 4. Unified Hover Effect */
+        .login-screen-wrapper [data-testid="stForm"] .stButton button:hover {
             border-color: #FFFF00 !important;
             box-shadow: 0 0 20px rgba(255, 255, 0, 0.4) !important;
-            background: #252525 !important;
+            background: #222 !important;
         }
 
         /* 2. Sidebar Toggle (Large Green Pill) */
@@ -863,8 +850,7 @@ def login_screen():
             u = st.text_input(t("username", lang), label_visibility="collapsed", placeholder=t("username", lang))
             p = st.text_input(t("password", lang), type="password", label_visibility="collapsed", placeholder=t("password", lang))
             
-            st.markdown('<div id="login-btn-anchor"></div>', unsafe_allow_html=True)
-            if st.form_submit_button(t("login_btn", lang)):
+            if st.form_submit_button(t("login_btn", lang), use_container_width=True):
                 login_loader = show_loading_hourglass()
                 p_norm = p.strip()
                 user = st.session_state.auth.authenticate(u, p_norm)
@@ -880,8 +866,7 @@ def login_screen():
                         st.info("💡 Try using your new password instead of the old default.")
 
             # New Professional Language Toggle inside the form
-            st.markdown('<div id="login-lang-new-anchor"></div>', unsafe_allow_html=True)
-            if st.form_submit_button("En" if lang == "ar" else "عربي"):
+            if st.form_submit_button("En" if lang == "ar" else "عربي", use_container_width=True):
                 toggle_lang()
                 st.rerun()
         
