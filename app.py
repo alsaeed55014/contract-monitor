@@ -361,23 +361,22 @@ def get_css():
            Using the "Marker + Sibling" pattern to target specific buttons
         */
         
-        /* 1. Login Page Toggle (Small, Dark, Bottom-Left) */
-        div:has(> #login-lang-anchor) + div .stButton > button {
-            width: 70px !important;
-            height: 45px !important;
-            min-width: 70px !important;
-            max-width: 70px !important;
-            border-radius: 12px !important;
-            font-size: 1.1rem !important; 
+        /* New Professional Login Language Toggle */
+        div:has(> #login-lang-new-anchor) + div .stButton > button {
+            background-color: #1A1A1B !important; 
+            color: #D4AF37 !important;
+            border: 1px solid rgba(212, 175, 55, 0.5) !important;
+            border-radius: 10px !important;
             font-weight: 700 !important;
-            background-color: #1A1A1B !important; /* Dark Grey as in image */
-            color: #FFFFFF !important;
-            border: 1px solid rgba(255, 255, 255, 0.2) !important;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.5) !important;
-            margin: 10px 0 0 10px !important; 
-            padding: 0 !important;
+            height: 42px !important;
+            width: 100% !important;
+            margin: 5px 0 !important;
             transition: all 0.3s ease !important;
-            transform: none !important; /* Reset any global transforms */
+        }
+        div:has(> #login-lang-new-anchor) + div .stButton > button:hover {
+            border-color: #D4AF37 !important;
+            box-shadow: 0 0 15px rgba(212, 175, 55, 0.3) !important;
+            background-color: #222 !important;
         }
 
         /* 2. Sidebar Toggle (Large Green Pill) */
@@ -402,8 +401,7 @@ def get_css():
             transition: all 0.3s ease !important;
         }
 
-        /* Reset Hover Opacity for markers */
-        div:has(> #login-lang-anchor) + div .stButton > button:hover,
+        /* Reset Hover Opacity for marker in sidebar */
         div:has(> #sidebar-lang-anchor) + div .stButton > button:hover {
             opacity: 0.9 !important;
             transform: scale(1.05) !important;
@@ -829,6 +827,12 @@ def login_screen():
             u = st.text_input(t("username", lang), label_visibility="collapsed", placeholder=t("username", lang))
             p = st.text_input(t("password", lang), type="password", label_visibility="collapsed", placeholder=t("password", lang))
             
+            # New Professional Language Toggle inside the form
+            st.markdown('<div id="login-lang-new-anchor"></div>', unsafe_allow_html=True)
+            if st.form_submit_button("En" if lang == "ar" else "عربي"):
+                toggle_lang()
+                st.rerun()
+
             if st.form_submit_button(t("login_btn", lang)):
                 login_loader = show_loading_hourglass()
                 p_norm = p.strip()
@@ -843,13 +847,6 @@ def login_screen():
                     st.error(t("invalid_creds", lang))
                     if u.lower() == "admin" and p_norm == "admin123":
                         st.info("💡 Try using your new password instead of the old default.")
-
-        # 4. Language Button (Using Marker ID)
-        st.markdown('<div id="login-lang-anchor"></div>', unsafe_allow_html=True)
-        btn_label = "En" if lang == "ar" else "عربي"
-        if st.button(btn_label, key="lang_btn_login"):
-            toggle_lang()
-            st.rerun()
         
         st.markdown('</div>', unsafe_allow_html=True)
 
