@@ -1496,14 +1496,39 @@ def render_permissions_content():
                 st.session_state.permissions_success = t("update_success", lang)
                 st.rerun()
 
-        # Delete User Button (Outside the edit form for safety/clarity)
+        # Delete User Section
         if selected_user != "admin":
-            if st.button(t("delete_user_btn", lang), type="secondary", use_container_width=True):
-                if st.session_state.auth.delete_user(selected_user):
-                    st.session_state.permissions_success = t("user_deleted", lang)
-                    st.rerun()
-                else:
-                    st.error("Error deleting user")
+            st.markdown("""
+                <style>
+                /* Style only the delete button within the popover trigger */
+                div[data-testid="stPopover"] > button {
+                    background-color: #c0392b !important;
+                    color: white !important;
+                    border: none !important;
+                    padding: 5px 15px !important;
+                    font-size: 14px !important;
+                    border-radius: 5px !important;
+                    transition: 0.3s !important;
+                }
+                div[data-testid="stPopover"] > button:hover {
+                    background-color: #e74c3c !important;
+                    color: white !important;
+                    box-shadow: 0 4px 8px rgba(0,0,0,0.2) !important;
+                }
+                </style>
+            """, unsafe_allow_html=True)
+            
+            # Use columns to make the button "small" or centered
+            c1, c2, c3 = st.columns([1, 1, 1])
+            with c1:
+                with st.popover(t("delete_user_btn", lang)):
+                    st.warning(t("confirm_delete_user", lang))
+                    if st.button(t("confirm_btn", lang), type="primary", use_container_width=True):
+                        if st.session_state.auth.delete_user(selected_user):
+                            st.session_state.permissions_success = t("user_deleted", lang)
+                            st.rerun()
+                        else:
+                            st.error("Error deleting user")
     
     # Translate table keys for Users Table
     table_data = []
