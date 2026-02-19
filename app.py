@@ -82,37 +82,62 @@ class AuthManager:
         return True, "User added successfully"
 
     def update_password(self, username, new_password):
-        username = username.lower().strip()
-        if username in self.users:
-            self.users[username]["password"] = self.hash_password(new_password)
+        username = str(username).strip()
+        target = None
+        for u in self.users:
+            if u.lower() == username.lower():
+                target = u
+                break
+        
+        if target:
+            self.users[target]["password"] = self.hash_password(new_password)
             self.save_users()
             return True
         return False
 
     def delete_user(self, username):
-        username = username.lower().strip()
-        if username in self.users and username != "admin":
-            del self.users[username]
+        username = str(username).strip()
+        # Case-insensitive removal
+        user_to_del = None
+        for u in self.users:
+            if u.lower() == username.lower():
+                user_to_del = u
+                break
+        
+        if user_to_del and user_to_del.lower() != "admin":
+            del self.users[user_to_del]
             self.save_users()
             return True
         return False
 
     def update_role(self, username, new_role):
-        username = username.lower().strip()
-        if username in self.users and username != "admin":
-            self.users[username]["role"] = new_role
-            self.users[username]["permissions"] = ["read"] if new_role == "viewer" else ["all"]
+        username = str(username).strip()
+        target = None
+        for u in self.users:
+            if u.lower() == username.lower():
+                target = u
+                break
+        
+        if target:
+            self.users[target]["role"] = new_role
+            self.users[target]["permissions"] = ["read"] if new_role == "viewer" else ["all"]
             self.save_users()
             return True
         return False
 
     def update_profile(self, username, f_ar=None, fa_ar=None, f_en=None, fa_en=None):
-        username = username.lower().strip()
-        if username in self.users:
-            if f_ar is not None: self.users[username]["first_name_ar"] = f_ar
-            if fa_ar is not None: self.users[username]["father_name_ar"] = fa_ar
-            if f_en is not None: self.users[username]["first_name_en"] = f_en
-            if fa_en is not None: self.users[username]["father_name_en"] = fa_en
+        username = str(username).strip()
+        target = None
+        for u in self.users:
+            if u.lower() == username.lower():
+                target = u
+                break
+        
+        if target:
+            if f_ar is not None: self.users[target]["first_name_ar"] = f_ar
+            if fa_ar is not None: self.users[target]["father_name_ar"] = fa_ar
+            if f_en is not None: self.users[target]["first_name_en"] = f_en
+            if fa_en is not None: self.users[target]["father_name_en"] = fa_en
             self.save_users()
             return True
         return False
@@ -1521,14 +1546,14 @@ def render_permissions_content():
             # Use columns to make the button "small" or centered
             c1, c2, c3 = st.columns([1, 1, 1])
             with c1:
-                with st.popover(t("delete_user_btn", lang)):
-                    st.warning(t("confirm_delete_user", lang))
-                    if st.button(t("confirm_btn", lang), type="primary", use_container_width=True):
+                with st.popover("حذف المستخدم" if lang=='ar' else "Delete User"):
+                    st.warning("هل أنت متأكد من حذف هذا المستخدم؟" if lang=='ar' else "Are you sure you want to delete this user?")
+                    if st.button("نعم، احذف المستخدم" if lang=='ar' else "Yes, Delete User", type="primary", use_container_width=True):
                         if st.session_state.auth.delete_user(selected_user):
-                            st.session_state.permissions_success = t("user_deleted", lang)
+                            st.session_state.permissions_success = "تم الحذف" if lang=='ar' else "User Deleted"
                             st.rerun()
                         else:
-                            st.error("Error deleting user")
+                            st.error("خطأ في الحذف" if lang=='ar' else "Error during deletion")
     
     # Translate table keys for Users Table
     table_data = []
