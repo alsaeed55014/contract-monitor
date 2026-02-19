@@ -215,13 +215,15 @@ def get_css():
         .programmer-credit {
             color: #D4AF37;
             font-family: 'Alex Brush', cursive;
-            margin-top: 10px;
-            font-size: 3.2em; /* Increased size for even more impact */
+            margin: 15px auto !important; /* Center and add spacing */
+            font-size: 2.8em; /* Refined size */
             letter-spacing: 1px;
             text-align: center;
             font-weight: 400;
             text-shadow: 0 0 10px rgba(212, 175, 55, 0.3);
             white-space: nowrap; /* Force one line */
+            width: 100%;
+            display: block;
         }
         
         /* Premium Buttons (General) */
@@ -250,9 +252,17 @@ def get_css():
             border-left: 1px solid rgba(212, 175, 55, 0.1);
         }
         
+        /* Force centering for sidebar image container */
+        section[data-testid="stSidebar"] [data-testid="stVerticalBlock"] > div:has(div.stImage) {
+            display: flex !important;
+            justify-content: center !important;
+            width: 100% !important;
+        }
+
         section[data-testid="stSidebar"] .stImage {
-             display: flex;
-             justify-content: center;
+             display: flex !important;
+             justify-content: center !important;
+             width: 100% !important;
              margin-bottom: 0px !important;
         }
         
@@ -260,6 +270,7 @@ def get_css():
             border-radius: 50%;
             border: 2px solid #D4AF37;
             padding: 3px;
+            margin: 0 auto !important; /* Extra insurance */
         }
 
         /* All Sidebar Buttons Uniform */
