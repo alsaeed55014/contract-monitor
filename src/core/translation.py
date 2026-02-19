@@ -161,6 +161,10 @@ class TranslationManager:
     # ---------------------------------
     # Query Analyzer
     # ---------------------------------
+    def _normalize_query_word(self, word):
+        """Helper to normalize a single word for matching"""
+        return self.normalize_text(word)
+
     def analyze_query(self, query):
 
         clean_query = query.lower().strip()
@@ -172,15 +176,27 @@ class TranslationManager:
         for word in words:
             if word in ignore_words or len(word) < 2:
                 continue
-
+            
+            # Use a Set to avoid duplicates
             synonyms = {word}
+            
+            # 1. Direct translation
             trans = self.translate_word(word)
-
+            
             if isinstance(trans, list):
-                for t in trans:
-                    synonyms.add(t.lower())
-            elif trans.lower() != word.lower():
-                synonyms.add(trans.lower())
+                for t in trans: synonyms.add(t)
+            elif trans and trans.lower() != word.lower():
+                synonyms.add(trans)
+                
+            # 2. Check for compound word matches in dictionary keys
+            # (Simple heuristic: if word is part of a key, add the value)
+            norm_word = self.normalize_text(word)
+            for k, v in self.dictionary.items():
+                if norm_word in self.normalize_text(k) and len(k.split()) > 1:
+                     if isinstance(v, list):
+                         for t in v: synonyms.add(t)
+                     else:
+                         synonyms.add(v)
 
             bundle_list.append(list(synonyms))
 
