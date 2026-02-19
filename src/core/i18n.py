@@ -40,7 +40,7 @@ TRANSLATIONS = {
     "tabs_active": {"ar": " ساري", "en": " Active"},
 
     # Search
-    "smart_search_title": {"ar": "البحث الذكي (AI)", "en": "Smart AI Search"},
+    "smart_search_title": {"ar": "البحث الذكي (AI)", "en": "AI Smart Search"},
     "search_placeholder": {"ar": "مثال: سائق فلبيني، +96650...", "en": "e.g. Filipino Driver, +96650..."},
     "search_btn": {"ar": "بحث", "en": "Search"},
     "no_results": {"ar": "لا توجد نتائج", "en": "No results"},
@@ -65,6 +65,7 @@ TRANSLATIONS = {
     # Permissions
     "permissions_title": {"ar": "إدارة الصلاحيات", "en": "Permissions Management"},
     "add_user": {"ar": "إضافة مستخدم جديد", "en": "Add New User"},
+    "delete_user_btn": {"ar": "حذف المستخدم", "en": "Delete User"},
     "role": {"ar": "الصلاحية", "en": "Role"},
     "add_btn": {"ar": "إضافة", "en": "Add User"},
     "users_list": {"ar": "قائمة المستخدمين", "en": "Users List"},
@@ -72,9 +73,9 @@ TRANSLATIONS = {
     "select_user": {"ar": "اختر المستخدم", "en": "Select User"},
     "new_password": {"ar": "كلمة المرور الجديدة (اختياري)", "en": "New Password (Optional)"},
     "update_btn": {"ar": "تحديث البيانات", "en": "Update User"},
-    "update_success": {"ar": "تم التحديث بنجاح", "en": "Updated successfully"},
+    "update_success": {"ar": "تم التحديث", "en": "Updated successfully"},
     "user_exists": {"ar": "المستخدم موجود مسبقاً", "en": "User already exists"},
-    "user_added": {"ar": "تمت الإضافة بنجاح", "en": "User added successfully"},
+    "user_added": {"ar": "تم الاضافة", "en": "User added successfully"},
     "image_error": {"ar": "خطأ في الصورة", "en": "Image Error"},
     
     # Common
@@ -90,6 +91,16 @@ TRANSLATIONS = {
     "deep_reset": {"ar": "🧼 تنظيف شامل (Deep Reset)", "en": "🧼 Deep Reset (Clear Cache)"},
     "fix_ids": {"ar": "🔄 إصلاح وتحديث المعرفات", "en": "🔄 Fix & Update IDs"},
     "deep_reset_desc": {"ar": "سيتم مسح كافة البيانات المؤقتة وإعادة التحميل من جوجل شيت.", "en": "Will clear all temporary data and reload from Google Sheets."},
+    
+    # User Roles & Confirmation
+    "role_admin": {"ar": "مدير (Admin)", "en": "Admin"},
+    "role_viewer": {"ar": "مشاهد (Viewer)", "en": "Viewer"},
+    "confirm_delete_user": {"ar": "هل أنت متأكد من حذف هذا المستخدم؟", "en": "Are you sure you want to delete this user?"},
+    "cannot_delete_admin": {"ar": "لا يمكن حذف حساب المدير الرئيسي", "en": "Cannot delete primary admin account"},
+    "password_changed": {"ar": "تم تغيير كلمة المرور بنجاح", "en": "Password changed successfully"},
+    "user_deleted": {"ar": "تم الحذف", "en": "User deleted successfully"},
+    "select_user_edit": {"ar": "الرجاء اختيار مستخدم من القائمة للتعديل", "en": "Please select a user from the list to edit"},
+
 
 
     # Column Headers (Exact Matches from User Data)
@@ -124,12 +135,14 @@ TRANSLATIONS = {
         "Are you married and do your children reside with you in Saudi Arabia?": {"ar": "الحالة الاجتماعية وهل العائلة معك؟", "en": "Marital Status & Family"},
         "Iqama ID number": {"ar": "رقم الإقامة", "en": "Iqama ID"},
         "What is the occupation listed on your Iqama": {"ar": "المهنة في الإقامة", "en": "Iqama Profession"},
-        "your Iqama Valid": {"ar": "هل الإقامة سارية؟", "en": "Iqama Valid"},
+        "Iqama valid": {"ar": "هل الإقامة سارية؟", "en": "Iqama Valid"},
         "If the Iqama is valid, how many months are left?": {"ar": "المدة المتبقية في الإقامة", "en": "Iqama Remaining"},
         "If the Iqama expired how many months ago?": {"ar": "مدة انتهاء الإقامة", "en": "Iqama Expired Since"},
         "How many times did you transfer your sponsorship": {"ar": "عدد مرات نقل الكفالة", "en": "Transfer Count"},
         "Download CV": {"ar": "تحميل السيرة الذاتية", "en": "Download CV"},
-        "How did you know us?": {"ar": "كيف عرفت عنا؟", "en": "How did you know us?"}
+        "How did you know us?": {"ar": "كيف عرفت عنا؟", "en": "How did you know us?"},
+        "Remaining": {"ar": "المتبقى", "en": "Remaining"},
+        "Status": {"ar": "الحالة (STATUS)", "en": "Status"}
     }
 }
 
