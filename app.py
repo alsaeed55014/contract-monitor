@@ -540,16 +540,19 @@ def style_df(df):
     return df
 
 # 2.5 Hourglass Loader Helper
-def show_loading_hourglass(text=None):
+def show_loading_hourglass(text=None, container=None):
     if text is None:
         text = "جاري التحميل..." if st.session_state.get('lang') == 'ar' else "Loading..."
-    if 'st' in globals():
+    
+    target = container if container else st.empty()
+    with target:
         st.markdown(f"""
             <div class="loader-wrapper">
                 <div class="hourglass"></div>
                 <div class="loading-text">{text}</div>
             </div>
         """, unsafe_allow_html=True)
+    return target
 
 # 3. Imports with Error Handling
 try:
@@ -581,16 +584,13 @@ st.set_page_config(
 # 5. Apply Styles
 st.markdown(get_css(), unsafe_allow_html=True)
 
-# 6. Global Page Load Loader (Simulated or triggered on rerun)
-if 'initialized' not in st.session_state:
-    show_loading_hourglass()
-    st.session_state.initialized = True
-    time.sleep(0.5) # Brief pause for a smooth animation feel
-    st.rerun()
-
 # 6. Initialize Core (With Force Re-init for Updates)
 if 'auth' not in st.session_state or not hasattr(st.session_state.auth, 'is_bilingual'):
+    # Show a brief initial loader for a premium feel
+    loading = show_loading_hourglass()
+    time.sleep(0.4)
     st.session_state.auth = AuthManager(USERS_FILE)
+    loading.empty()
 
 # Report DB Load Errors to User
 if hasattr(st.session_state.auth, 'load_error'):
@@ -798,8 +798,10 @@ def login_screen():
             p = st.text_input(t("password", lang), type="password", label_visibility="collapsed", placeholder=t("password", lang))
             
             if st.form_submit_button(t("login_btn", lang)):
+                login_loader = show_loading_hourglass()
                 p_norm = p.strip()
                 user = st.session_state.auth.authenticate(u, p_norm)
+                login_loader.empty()
                 if user:
                     user['username'] = u
                     st.session_state.user = user
@@ -879,7 +881,9 @@ def dashboard():
             
             # Refresh Data button below Permissions for Admins
             if st.button(t("refresh_data_btn", lang), key="force_refresh_db", use_container_width=True):
+                refresh_loader = show_loading_hourglass()
                 st.session_state.db.fetch_data(force=True)
+                refresh_loader.empty()
                 st.success("تم تحديث البيانات من Google Sheets بنجاح!" if lang == 'ar' else "Data refreshed successfully!")
                 time.sleep(1)
                 st.rerun()
@@ -926,13 +930,20 @@ def dashboard():
 def render_dashboard_content():
     lang = st.session_state.lang
     st.title(f" {t('contract_dashboard', lang)}")
+    
+    # Show loader while fetching data
+    loading_placeholder = show_loading_hourglass()
+    start_time = time.time()
+    
     try:
         df = st.session_state.db.fetch_data()
     except Exception as e:
+        loading_placeholder.empty()
         st.error(f"{t('error', lang)}: {e}")
         return
 
     if df.empty:
+        loading_placeholder.empty()
         st.warning(t("no_data", lang))
         return
 
@@ -957,6 +968,13 @@ def render_dashboard_content():
             elif global_status == 'active': stats['active'].append(r)
         except Exception as e:
             continue
+
+    # Clear loader once stats are ready
+    # Ensure at least 0.5s of visibility for the premium feel
+    elapsed = time.time() - start_time
+    if elapsed < 0.5:
+        time.sleep(0.5 - elapsed)
+    loading_placeholder.empty()
 
     c1, c2, c3 = st.columns(3)
     
@@ -1128,7 +1146,7 @@ def render_search_content():
     
     # Trigger on button click OR when query changes (Enter is pressed)
     if search_clicked or query:
-        show_loading_hourglass() # Custom premium loader
+        search_loader = show_loading_hourglass() # Custom premium loader
         
         # Debug: Show what filters are being sent
         if filters:
@@ -1150,6 +1168,7 @@ def render_search_content():
         eng = SmartSearchEngine(original_data)
         try:
             res = eng.search(query, filters=filters)
+            search_loader.empty() # Clear loader immediately after search results are ready
             
             # Show count in UI
             count_found = len(res)
@@ -1158,15 +1177,8 @@ def render_search_content():
             
             # Debug Panel (for diagnosing search issues)
             with st.expander("🔧 تشخيص البحث | Search Debug", expanded=False):
-                debug = eng.last_debug
-                st.code(f"Query: {debug.get('query_raw', '?')}\n"
-                        f"Query repr: {debug.get('query_repr', '?')}\n"
-                        f"Search type: {debug.get('search_type', 'none (no query)')}\n"
-                        f"Bundles: {debug.get('bundles', 'N/A')}\n"
-                        f"Phone target: {debug.get('target_phone', 'N/A')}\n"
-                        f"Total before: {debug.get('total_before_search', '?')}\n"
-                        f"Matched: {debug.get('matched_count', debug.get('final_count', '?'))}\n"
-                        f"Note: {debug.get('note', '-')}")
+                debug = eng.debug_info
+                st.json(debug)
             
             # Handle both DataFrame and list returns
             is_empty = (isinstance(res, list) and len(res) == 0) or (hasattr(res, 'empty') and res.empty)
