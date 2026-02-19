@@ -121,7 +121,7 @@ def get_css():
     return """
     <style>
         /* General Imports */
-        @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;700&family=Cinzel:wght@600&family=Orbitron:wght@600&family=Alex+Brush&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;700&family=Cinzel:wght@600&family=Orbitron:wght@600&family=Alex+Brush&family=Aref+Ruqaa&display=swap');
         
         /* Main Container */
         .stApp {
@@ -211,19 +211,22 @@ def get_css():
              gap: 1.5rem !important; /* Space between inputs */
         }
 
-        /* Programmer Credit - Prestigious Signature Style */
+        /* Programmer Credit - Neon Green Handwritten Style */
         .programmer-credit {
-            color: #D4AF37;
-            font-family: 'Alex Brush', cursive;
-            margin: 15px auto !important; /* Center and add spacing */
-            font-size: 2.8em; /* Refined size */
+            color: #39FF14 !important; /* Neon Green */
+            font-family: 'Aref Ruqaa', serif; /* Handwritten Arabic style */
+            margin: 10px auto !important; /* Center and add spacing */
+            font-size: 1.4em !important; /* Smaller size to prevent overflow */
             letter-spacing: 1px;
             text-align: center;
             font-weight: 400;
-            text-shadow: 0 0 10px rgba(212, 175, 55, 0.3);
-            white-space: nowrap; /* Force one line */
-            width: 100%;
+            text-shadow: 
+                0 0 5px rgba(57, 255, 20, 0.5),
+                0 0 10px rgba(57, 255, 20, 0.3);
+            white-space: normal !important; /* Allow wrapping if needed */
+            width: 90% !important; /* Keep it inside sidebar boundaries */
             display: block;
+            line-height: 1.2;
         }
         
         /* Premium Buttons (General) */
