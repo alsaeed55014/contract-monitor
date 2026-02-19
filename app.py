@@ -451,7 +451,7 @@ def render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search"):
     st.markdown(f"""
     <div style="background-color:#1e2130; padding:20px; border-radius:10px; border-right:5px solid #ffcc00; margin: 20px 0;">
         <h2 style="color:#ffcc00; margin:0;">👤 {worker_name}</h2>
-        <p style="color:#ffffff; margin-top:5px;">يمكنك الآن معاينة السيرة الذاتية أو ترجمتها للغة العربية باستخدام الأزرار أدناه.</p>
+
     </div>
     """, unsafe_allow_html=True)
     
@@ -786,7 +786,7 @@ def render_dashboard_content():
                 display_text=t("download_pdf", lang)
             )
         
-        st.info("💡 **نصيحة**: اضغط على أي صف في الجدول لمشاهدة السيرة الذاتية وترجمتها بالأسفل.")
+
         event = st.dataframe(
             d_final, 
             use_container_width=True, 
@@ -961,7 +961,7 @@ def render_search_content():
             
             # --- ROW SELECTION & PROFESSIONAL UI ---
             st.divider()
-            st.success("💡 **خطوة إضافية**: اضغط على أي صف في الجدول أدناه لتظهر لك أزرار (المعاينة والترجمة) لهذا العامل بالتحديد.")
+
             st.subheader(f"{'نتائج البحث' if lang == 'ar' else 'Search Results'}")
             
             # Configure columns for better look
@@ -990,8 +990,7 @@ def render_search_content():
                 selected_idx = event.selection["rows"][0]
                 worker_row = res.iloc[selected_idx]
                 render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search")
-            else:
-                st.info("💡 اختر اسماً من الجدول أعلاه لمعاينة السيرة الذاتية وترجمتها.")
+
 
 def render_translator_content():
     lang = st.session_state.lang
