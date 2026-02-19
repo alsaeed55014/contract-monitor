@@ -777,6 +777,13 @@ def dashboard():
             if st.button(t("permissions", lang), use_container_width=True):
                 st.session_state.page = "permissions"
                 st.rerun()
+            
+            # Refresh Data button below Permissions for Admins
+            if st.button(t("refresh_data_btn", lang), key="force_refresh_db", use_container_width=True):
+                st.session_state.db.fetch_data(force=True)
+                st.success("تم تحديث البيانات من Google Sheets بنجاح!" if lang == 'ar' else "Data refreshed successfully!")
+                time.sleep(1)
+                st.rerun()
         
         st.markdown("<div style='margin: 15px 0;'></div>", unsafe_allow_html=True)
         
@@ -945,11 +952,6 @@ def render_search_content():
     lang = st.session_state.lang
     st.title(f" {t('smart_search_title', lang)}")
     
-    # Force Refresh button in sidebar or top
-    if st.button(t("refresh_data_btn", lang), key="force_refresh_db"):
-        st.session_state.db.fetch_data(force=True)
-        st.success("تم تحديث البيانات من Google Sheets بنجاح!" if lang == 'ar' else "Data refreshed successfully!")
-        st.rerun()
     # Labels
     lbl_age = t("age", lang) if t("age", lang) != "age" else "العمر"
     lbl_contract = t("contract_end", lang) if t("contract_end", lang) != "contract_end" else "تاريخ انتهاء العقد"
