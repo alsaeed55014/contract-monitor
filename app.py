@@ -216,17 +216,17 @@ def get_css():
             color: #39FF14 !important; /* Sharp Neon Green */
             font-family: 'Aref Ruqaa', serif;
             margin: 5px auto !important;
-            font-size: 1.6em !important; /* Slightly larger for clarity */
+            font-size: 1.5em !important; /* Adjusted for better fit */
             letter-spacing: 0.5px;
             text-align: center;
-            font-weight: 700 !important; /* Bolder for visibility */
+            font-weight: 700 !important; 
             text-shadow: 
-                0 0 2px rgba(0, 0, 0, 1), /* Dark outline for legibility */
+                0 0 2px rgba(0, 0, 0, 1), 
                 0 0 8px rgba(57, 255, 20, 0.6);
-            white-space: normal !important;
-            width: 95% !important;
+            white-space: nowrap !important; /* Force the name to stay together */
+            width: auto !important;
             display: block;
-            line-height: 1.1; /* Tighter lines */
+            line-height: 1.2;
         }
         
         /* Premium Buttons (General) */
