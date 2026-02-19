@@ -146,12 +146,53 @@ def get_css():
             justify-content: center;
             width: 100%;
         }
-
+        
+        /* Smaller Image as requested */
         .login-screen-wrapper img {
             border-radius: 50%;
             border: 3px solid #D4AF37;
             box-shadow: 0 0 15px rgba(212, 175, 55, 0.4);
-            margin-bottom: 10px;
+            margin-bottom: 5px;
+            width: 80px !important; /* Smaller size */
+            height: 80px !important;
+        }
+
+        /* Container for Welcome Text + Signature side-by-side */
+        .welcome-signature-container {
+             display: flex;
+             align-items: baseline; /* Align text baselines */
+             justify-content: center;
+             gap: 15px;
+             margin-bottom: 20px;
+             flex-wrap: wrap; 
+        }
+
+        /* Programmer Signature - Neon English Style */
+        .programmer-signature-neon {
+            font-family: 'Alex Brush', cursive; /* Handwritten font */
+            font-size: 1.8rem;
+            color: #fff;
+            text-shadow:
+                0 0 5px #fff,
+                0 0 10px #fff,
+                0 0 20px #D4AF37,
+                0 0 30px #D4AF37,
+                0 0 40px #D4AF37;
+            animation: neon-flicker 1.5s infinite alternate;       
+        }
+        
+        @keyframes neon-flicker {
+            0%, 19%, 21%, 23%, 25%, 54%, 56%, 100% {
+                text-shadow:
+                    0 0 4px #fff,
+                    0 0 10px #fff,
+                    0 0 18px #D4AF37,
+                    0 0 38px #D4AF37,
+                    0 0 73px #D4AF37;
+            }
+            20%, 24%, 55% {        
+                text-shadow: none;
+            }
         }
 
         /* Essential Card Tweaks - Login Form Container */
@@ -536,13 +577,18 @@ def login_screen():
     with col2:
         st.markdown('<div class="login-screen-wrapper">', unsafe_allow_html=True)
         
-        # 1. Image at the very top, centered
+        # 1. Image at the very top, centered (CSS makes it smaller)
         if os.path.exists(IMG_PATH):
-            st.image(IMG_PATH, width=150)
+            st.image(IMG_PATH, width=80) # Explicit width in Streamlit also helps
         
-        # 2. Credits and Titles
-        st.markdown(f'<p class="programmer-credit">{t("welcome_subtitle", lang)}</p>', unsafe_allow_html=True)
-        st.markdown(f"<h1 style='text-align:center; color:white; margin-bottom:0;'>{t('welcome_back', lang)}</h1>", unsafe_allow_html=True)
+        # 2. Welcome + Signature (Side by Side)
+        st.markdown(f"""
+            <div class="welcome-signature-container">
+                <h1 style='margin:0; padding:0; display:inline-block;'>{t('welcome_back', lang)}</h1>
+                <span class="programmer-signature-neon">By: Alsaeed Alwazzan</span>
+            </div>
+            """, unsafe_allow_html=True)
+            
         st.markdown(f"<p style='text-align:center; color:#888; letter-spacing:1px; margin-bottom:30px;'>{t('system_title', lang)}</p>", unsafe_allow_html=True)
         
         # 3. Form (Styled via CSS in get_css)
