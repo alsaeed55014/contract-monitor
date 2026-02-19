@@ -465,6 +465,15 @@ def get_css():
             display: block !important;
             font-family: 'Tajawal', sans-serif;
         }
+
+        /* Large Search Button Specifically */
+        div.search-btn-container .stButton > button {
+            height: 60px !important;
+            font-size: 1.5rem !important;
+            background: linear-gradient(135deg, #2E7D32 0%, #1B5E20 100%) !important;
+            box-shadow: 0 6px 20px rgba(46, 125, 50, 0.5) !important;
+            border-radius: 12px !important;
+        }
     </style>
     """
 
@@ -1012,10 +1021,16 @@ def render_search_content():
             else:
                 age_range = (18, 60)
 
-    query = st.text_input(t("smart_search", lang), placeholder=t("search_placeholder", lang))
+    query = st.text_input(t("smart_search", lang), placeholder=t("search_placeholder", lang), key="search_query_input")
+    
+    st.markdown('<div class="search-btn-container">', unsafe_allow_html=True)
+    search_clicked = st.button(t("search_btn", lang), key="main_search_btn", use_container_width=True)
+    st.markdown('</div>', unsafe_allow_html=True)
     
     # Gather Filters
     filters = {}
+    
+    
     
     # 1. Age (only if enabled)
     if use_age:
@@ -1034,11 +1049,12 @@ def render_search_content():
         filters['date_enabled'] = True
         filters['date_start'] = reg_range[0]
         filters['date_end'] = reg_range[1]
-
+    
     # Check if any filter is actually active
     has_active_filter = bool(filters)
     
-    if st.button(t("search_btn", lang)) or query or has_active_filter:
+    # Trigger on button click OR when query changes (Enter is pressed)
+    if search_clicked or query:
         # Debug: Show what filters are being sent
         if filters:
             active_filter_names = []
