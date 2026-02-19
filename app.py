@@ -475,9 +475,7 @@ def get_css():
         }
         div.search-btn-container .stButton > button {
             height: 60px !important;
-            width: auto !important; /* Narrower width */
-            padding-left: 30px !important; /* ~0.5cm+ on each side */
-            padding-right: 30px !important;
+            width: 5cm !important; /* Exactly 5cm */
             font-size: 1.5rem !important;
             background: linear-gradient(135deg, #2E7D32 0%, #1B5E20 100%) !important;
             box-shadow: 0 6px 20px rgba(46, 125, 50, 0.5) !important;
