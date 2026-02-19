@@ -1495,6 +1495,15 @@ def render_permissions_content():
                 
                 st.session_state.permissions_success = t("update_success", lang)
                 st.rerun()
+
+        # Delete User Button (Outside the edit form for safety/clarity)
+        if selected_user != "admin":
+            if st.button(t("delete_user_btn", lang), type="secondary", use_container_width=True):
+                if st.session_state.auth.delete_user(selected_user):
+                    st.session_state.permissions_success = t("user_deleted", lang)
+                    st.rerun()
+                else:
+                    st.error("Error deleting user")
     
     # Translate table keys for Users Table
     table_data = []
