@@ -980,12 +980,30 @@ def render_dashboard_content():
             status = ContractManager.calculate_status(row[date_col])
             r = row.to_dict()
             global_status = status['status']
-            r['Status'] = status['label_ar'] if lang == 'ar' else status['label_en']
+            days = status.get('days', 0)
+            if days is None: days = 9999
             
-            if global_status == 'urgent': stats['urgent'].append(r)
+            # Numeric Days for sorting
+            r['__days_sort'] = days
+            
+            if lang == 'ar':
+                if global_status == 'expired':
+                    r['Status'] = "منتهي"
+                    r['المتبقى'] = f"{abs(days)} يوم"
+                elif global_status in ['urgent', 'warning']:
+                    r['Status'] = "متبقى"
+                    r['المتبقى'] = f"{days} يوم"
+                else: # active
+                    r['Status'] = f"ساري ({days} يوم)"
+                    r['المتبقى'] = f"{days} يوم"
+            else:
+                r['Status'] = status['label_en']
+                r['Remaining'] = f"{abs(days)} Days"
+
+            if global_status == 'urgent' or global_status == 'warning': stats['urgent'].append(r)
             elif global_status == 'expired': stats['expired'].append(r)
             elif global_status == 'active': stats['active'].append(r)
-        except Exception as e:
+        except Exception:
             continue
 
     # Clear loader once stats are ready
@@ -1033,8 +1051,12 @@ def render_dashboard_content():
         if not data: st.info(t("no_data", lang)); return
         d = pd.DataFrame(data)
         
-        # Select columns
-        show_cols = ['Status'] + [c for c in cols if c in d.columns and c not in ["__sheet_row", "__sheet_row_backup"]]
+        # Sort from smallest to largest days (most expired or soonest to expire first)
+        d = d.sort_values(by='__days_sort', ascending=True)
+        
+        # Select columns: Remaining (المتبقى) then Status, then the rest
+        rem_col = 'المتبقى' if lang == 'ar' else 'Remaining'
+        show_cols = [rem_col, 'Status'] + [c for c in cols if c in d.columns and c not in ["__sheet_row", "__sheet_row_backup", "__days_sort"]]
         d_final = d[show_cols].copy()
         
         # Rename Columns Mechanism (Safe to prevent duplicates)
@@ -1192,6 +1214,41 @@ def render_search_content():
             res = eng.search(query, filters=filters)
             search_loader.empty() # Clear loader immediately after search results are ready
             
+            # --- CUSTOM STATUS LOGIC FOR SEARCH RESULTS ---
+            # Try to find date column in results
+            res_cols = res.columns.tolist()
+            date_col_search = next((c for c in res_cols if "contract end" in c.lower() or "انتهاء العقد" in c.lower()), None)
+            
+            if date_col_search:
+                status_list = []
+                rem_list = []
+                sort_list = []
+                for _, row in res.iterrows():
+                    s = ContractManager.calculate_status(row[date_col_search])
+                    gs = s['status']
+                    ds = s.get('days', 0)
+                    if ds is None: ds = 9999
+                    sort_list.append(ds)
+                    if lang == 'ar':
+                        if gs == 'expired':
+                            status_list.append("منتهي")
+                            rem_list.append(f"{abs(ds)} يوم")
+                        elif gs in ['urgent', 'warning']:
+                            status_list.append("متبقى")
+                            rem_list.append(f"{ds} يوم")
+                        else:
+                            status_list.append(f"ساري ({ds} يوم)")
+                            rem_list.append(f"{ds} يوم")
+                    else:
+                        status_list.append(s['label_en'])
+                        rem_list.append(f"{abs(ds)} Days")
+                
+                res['Status'] = status_list
+                res['المتبقى' if lang == 'ar' else 'Remaining'] = rem_list
+                res['__days_sort'] = sort_list
+                # Sort Results
+                res = res.sort_values(by='__days_sort', ascending=True)
+            
             # Show count in UI
             count_found = len(res)
             if count_found > 0:
@@ -1211,7 +1268,7 @@ def render_search_content():
                 st.warning("تنبيه: البحث أرجع جميع النتائج. تحقق من تشخيص البحث أعلاه." if lang == 'ar' else "Warning: Search returned all results. Check debug panel above.")
             
             # Clean up internal diagnostic columns before display
-            for diag_col in ['__matched_age_col', '__matched_contract_col', '__matched_ts_col']:
+            for diag_col in ['__matched_age_col', '__matched_contract_col', '__matched_ts_col', '__days_sort']:
                 if diag_col in res.columns:
                     res = res.drop(columns=[diag_col])
         except Exception as e:
@@ -1239,6 +1296,12 @@ def render_search_content():
                 if int_col in res_to_rename.columns:
                     res_to_rename = res_to_rename.drop(columns=[int_col])
             
+            # Reorder columns for Search Table (Remaining then Status)
+            rem_key = 'المتبقى' if lang == 'ar' else 'Remaining'
+            if rem_key in res_to_rename.columns and "Status" in res_to_rename.columns:
+                other_cols = [c for c in res_to_rename.columns if c not in [rem_key, "Status"]]
+                res_to_rename = res_to_rename[[rem_key, "Status"] + other_cols]
+
             res_display = res_to_rename.rename(columns=new_names)
             
             # --- ROW SELECTION & PROFESSIONAL UI ---
