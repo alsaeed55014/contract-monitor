@@ -970,7 +970,7 @@ def render_search_content():
     lang = st.session_state.lang
     
     # 1. Glowing Title at the Absolute Top
-    st.markdown('<div class="glowing-title">البحث الذكي <span style="direction: ltr; display: inline-block;">(AI)</span></div>', unsafe_allow_html=True)
+    st.markdown('<div class="glowing-title">البحث الذكي (AI)</div>', unsafe_allow_html=True)
     
     # Rest of the content
     lbl_age = t("age", lang) if t("age", lang) != "age" else "العمر"
