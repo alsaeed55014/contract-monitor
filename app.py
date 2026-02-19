@@ -476,7 +476,8 @@ def get_css():
             min-width: 5cm !important; /* Force width even in flex */
             max-width: 5cm !important;
             color: #D4AF37 !important; /* Gold text */
-            font-size: 1.5rem !important;
+            font-size: 1.8rem !important; /* Larger text */
+            font-weight: 900 !important; /* Extra bold */
             display: block !important;
             margin: 0 auto !important;
         }
