@@ -357,12 +357,12 @@ def get_css():
         }
 
         /* 
-           LANGUAGE TOGGLE - ROBUST TARGETING
-           Differentiating between Sidebar (Large Green) and Login (Small Dark)
+           LANGUAGE TOGGLE - ULTRA ROBUST TARGETING
+           Using the "Marker + Sibling" pattern to target specific buttons
         */
         
         /* 1. Login Page Toggle (Small, Dark, Bottom-Left) */
-        .login-lang-container .stButton > button {
+        div:has(> #login-lang-anchor) + div .stButton > button {
             width: 70px !important;
             height: 45px !important;
             min-width: 70px !important;
@@ -374,12 +374,14 @@ def get_css():
             color: #FFFFFF !important;
             border: 1px solid rgba(255, 255, 255, 0.2) !important;
             box-shadow: 0 4px 10px rgba(0,0,0,0.5) !important;
+            margin: 10px 0 0 10px !important; 
             padding: 0 !important;
             transition: all 0.3s ease !important;
+            transform: none !important; /* Reset any global transforms */
         }
 
         /* 2. Sidebar Toggle (Large Green Pill) */
-        .sidebar-lang-container .stButton > button {
+        div:has(> #sidebar-lang-anchor) + div .stButton > button {
             width: 120px !important;
             height: 120px !important;
             min-width: 120px !important;
@@ -400,22 +402,12 @@ def get_css():
             transition: all 0.3s ease !important;
         }
 
-        /* Shared Hover for Toggle */
-        .login-lang-container .stButton > button:hover,
-        .sidebar-lang-container .stButton > button:hover {
+        /* Reset Hover Opacity for markers */
+        div:has(> #login-lang-anchor) + div .stButton > button:hover,
+        div:has(> #sidebar-lang-anchor) + div .stButton > button:hover {
             opacity: 0.9 !important;
             transform: scale(1.05) !important;
             border-color: #D4AF37 !important;
-        }
-
-        /* Login Toggle Position Container */
-        .login-lang-container {
-            display: flex !important;
-            justify-content: flex-start !important;
-            width: 100% !important;
-            max-width: 420px !important;
-            margin: 10px auto 0 auto !important;
-            padding-left: 0px !important;
         }
 
         /* 
@@ -852,13 +844,12 @@ def login_screen():
                     if u.lower() == "admin" and p_norm == "admin123":
                         st.info("💡 Try using your new password instead of the old default.")
 
-        # 4. Language Button (Styled via dedicated container)
-        st.markdown('<div class="login-lang-container"><div id="login-lang-anchor"></div>', unsafe_allow_html=True)
+        # 4. Language Button (Using Marker ID)
+        st.markdown('<div id="login-lang-anchor"></div>', unsafe_allow_html=True)
         btn_label = "En" if lang == "ar" else "عربي"
         if st.button(btn_label, key="lang_btn_login"):
             toggle_lang()
             st.rerun()
-        st.markdown('</div>', unsafe_allow_html=True)
         
         st.markdown('</div>', unsafe_allow_html=True)
 
@@ -897,13 +888,12 @@ def dashboard():
         # Spacing
         st.markdown("<div style='margin-bottom: 20px;'></div>", unsafe_allow_html=True)
         
-        # Language Toggle (Styled via dedicated container)
-        st.markdown('<div class="sidebar-lang-container"><div id="sidebar-lang-anchor"></div>', unsafe_allow_html=True)
+        # Language Toggle (Using Marker ID)
+        st.markdown('<div id="sidebar-lang-anchor"></div>', unsafe_allow_html=True)
         btn_label = "En" if lang == "ar" else "عربي"
         if st.button(btn_label, key="lang_btn_dashboard"):
             toggle_lang()
             st.rerun()
-        st.markdown('</div>', unsafe_allow_html=True)
         
         st.markdown("<div style='margin-bottom: 30px;'></div>", unsafe_allow_html=True)
 
