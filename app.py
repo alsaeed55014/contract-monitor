@@ -294,12 +294,7 @@ def get_css():
             font-weight: 500;
         }
         
-        div[data-testid="stDataFrame"] th, 
-        div[data-testid="stTable"] th {
-            color: #D4AF37 !important;
-            font-weight: 700;
-            background-color: #1A1A1A !important;
-        }
+
 
         /* Custom Inputs (Robust targeting) */
         .stTextInput > div > div > input {
@@ -348,34 +343,41 @@ def get_css():
             color: #ECC846 !important;
         }
 
-        /* Sidebar Specific Override (ensure it works there too) */
         section[data-testid="stSidebar"] div:has(> #lang-toggle-anchor) ~ div .stButton > button {
              height: 120px !important; 
              width: 120px !important;
              border-radius: 25px !important;
              margin: 15px auto !important;
         }
-             margin: 15px auto !important;
-        }
 
         /* 
            GLOBAL TABLE STYLING 
-           1. Headers: Gold Color
-           2. Cells: Green Color (Handled via Pandas Styler mostly, but fallback here)
+           Headers: Gold Color (#D4AF37)
+           We target multiple possible DOM structures for Streamlit DataFrames
         */
-        [data-testid="stDataFrame"] th, 
-        [data-testid="stDataFrame"] div[role="columnheader"] {
-            color: #D4AF37 !important; /* Gold Title */
-            font-size: 1.1rem !important;
+        
+        /* 1. Standard DataFrame Headers (Glide/Modern) */
+        [data-testid="stDataFrame"] thead th,
+        [data-testid="stDataFrame"] [role="columnheader"],
+        [data-testid="stDataFrame"] [role="columnheader"] *,
+        [data-testid="stDataFrame"] [data-testid="stHeader"] *,
+        [data-testid="stDataFrame"] .st-emotion-cache-12w0u95 *,
+        [data-testid="stDataFrame"] div:has(> [role="columnheader"]) * {
+            color: #D4AF37 !important;
+            font-weight: bold !important;
+            font-size: 1.05rem !important;
+        }
+
+        /* 2. Legacy Table Headers */
+        table th, table th * {
+            color: #D4AF37 !important;
             font-weight: bold !important;
         }
 
-        /* For st.table (if used) */
-        table th {
-            color: #D4AF37 !important;
-        }
+        /* 3. Global Text exclusion for cells (Green) */
+        [data-testid="stDataFrame"] td,
         table td {
-            color: #4CAF50 !important; /* Green Text */
+            color: #4CAF50 !important;
             font-weight: 500 !important;
         }
     </style>
