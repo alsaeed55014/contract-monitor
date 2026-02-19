@@ -398,11 +398,54 @@ def get_css():
             font-weight: bold !important;
         }
 
-        /* 3. Global Text exclusion for cells (Green) */
-        [data-testid="stDataFrame"] td,
-        table td {
-            color: #4CAF50 !important;
-            font-weight: 500 !important;
+        /* Glowing Metric Cards */
+        .metric-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 15px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            transition: transform 0.3s ease;
+            width: 100%;
+        }
+        .metric-container:hover {
+            transform: translateY(-5px);
+            background: rgba(255, 255, 255, 0.05);
+        }
+        .metric-label {
+            font-size: 1.4rem !important;
+            font-weight: 700 !important;
+            margin-bottom: 10px !important;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+        }
+        .metric-value {
+            font-size: 3.5rem !important;
+            font-weight: 800 !important;
+            margin: 0 !important;
+            line-height: 1;
+        }
+        
+        /* Specific Glow Colors */
+        .glow-green .metric-label { color: #4CAF50 !important; }
+        .glow-green .metric-value { 
+            color: #4CAF50 !important; 
+            text-shadow: 0 0 15px rgba(76, 175, 80, 0.8), 0 0 30px rgba(76, 175, 80, 0.4);
+        }
+        
+        .glow-red .metric-label { color: #FF5252 !important; }
+        .glow-red .metric-value { 
+            color: #FF5252 !important; 
+            text-shadow: 0 0 15px rgba(255, 82, 82, 0.8), 0 0 30px rgba(255, 82, 82, 0.4);
+        }
+        
+        .glow-orange .metric-label { color: #FFAB40 !important; }
+        .glow-orange .metric-value { 
+            color: #FFAB40 !important; 
+            text-shadow: 0 0 15px rgba(255, 171, 64, 0.8), 0 0 30px rgba(255, 171, 64, 0.4);
         }
     </style>
     """
@@ -810,9 +853,30 @@ def render_dashboard_content():
             continue
 
     c1, c2, c3 = st.columns(3)
-    c1.metric(t("urgent_7_days", lang), len(stats['urgent']), delta_color="inverse")
-    c2.metric(t("expired", lang), len(stats['expired']), delta_color="inverse")
-    c3.metric(t("active", lang), len(stats['active']))
+    
+    with c1:
+        st.markdown(f"""
+            <div class="metric-container glow-orange">
+                <div class="metric-label">{t("urgent_7_days", lang)}</div>
+                <div class="metric-value">{len(stats['urgent'])}</div>
+            </div>
+            """, unsafe_allow_html=True)
+            
+    with c2:
+        st.markdown(f"""
+            <div class="metric-container glow-red">
+                <div class="metric-label">{t("expired", lang)}</div>
+                <div class="metric-value">{len(stats['expired'])}</div>
+            </div>
+            """, unsafe_allow_html=True)
+            
+    with c3:
+        st.markdown(f"""
+            <div class="metric-container glow-green">
+                <div class="metric-label">{t("active", lang)}</div>
+                <div class="metric-value">{len(stats['active'])}</div>
+            </div>
+            """, unsafe_allow_html=True)
     st.markdown("---")
     
     cv_col = next((c for c in cols if "cv" in c.lower() or "سيرة" in c.lower()), None)
