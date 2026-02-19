@@ -358,9 +358,29 @@ def get_css():
 
         /* 
            LANGUAGE TOGGLE - ROBUST TARGETING
-           Using General Sibling Combinator (~) to skip hidden elements injected by Streamlit
+           Differentiating between Sidebar (Large Green) and Login (Small Dark)
         */
-        div:has(> #lang-toggle-anchor) ~ div .stButton > button {
+        
+        /* 1. Login Page Toggle (Small, Dark, Bottom-Left) */
+        .login-screen-wrapper div:has(> #lang-toggle-anchor) ~ div .stButton > button {
+            width: 70px !important;
+            height: 45px !important;
+            min-width: 70px !important;
+            max-width: 70px !important;
+            border-radius: 12px !important;
+            font-size: 1.1rem !important; 
+            font-weight: 700 !important;
+            background-color: #1A1A1B !important; /* Dark Grey as in image */
+            color: #FFFFFF !important;
+            border: 1px solid rgba(255, 255, 255, 0.2) !important;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.5) !important;
+            margin: 10px 0 0 -350px !important; /* Align towards bottom-left of card width */
+            padding: 0 !important;
+            transition: all 0.3s ease !important;
+        }
+
+        /* 2. Sidebar Toggle (Large Green Pill) */
+        section[data-testid="stSidebar"] div:has(> #lang-toggle-anchor) ~ div .stButton > button {
             width: 120px !important;
             height: 120px !important;
             min-width: 120px !important;
@@ -368,32 +388,24 @@ def get_css():
             border-radius: 25px !important;
             font-size: 2.2rem !important; 
             font-weight: 800 !important;
-            background-color: #2E7D32 !important; /* Green Toggle */
-            color: #FFFFFF !important; /* White Text */
+            background-color: #2E7D32 !important; 
+            color: #FFFFFF !important; 
             border: 2px solid rgba(255, 255, 255, 0.4) !important;
             box-shadow: 0 8px 25px rgba(0,0,0,0.7) !important;
-            transition: all 0.3s ease !important;
             display: flex !important;
             justify-content: center !important;
             align-items: center !important;
-            margin: 20px auto !important;
+            margin: 15px auto !important;
             padding: 0 !important;
             aspect-ratio: 1/1 !important;
+            transition: all 0.3s ease !important;
         }
         
+        /* Shared Hover for Toggle */
         div:has(> #lang-toggle-anchor) ~ div .stButton > button:hover {
-            background-color: #388E3C !important;
-            border-color: #FFFFFF !important;
+            opacity: 0.9 !important;
             transform: scale(1.05) !important;
-            box-shadow: 0 0 30px rgba(76, 175, 80, 0.6) !important;
-            color: #FFFFFF !important;
-        }
-
-        section[data-testid="stSidebar"] div:has(> #lang-toggle-anchor) ~ div .stButton > button {
-             height: 120px !important; 
-             width: 120px !important;
-             border-radius: 25px !important;
-             margin: 15px auto !important;
+            border-color: #D4AF37 !important;
         }
 
         /* 
