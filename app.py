@@ -1363,13 +1363,15 @@ def render_translator_content():
     uploaded = st.file_uploader(t("upload_cv", lang), type=["pdf"])
     if uploaded:
         if st.button(t("translate_now", lang)):
+            trans_loader = show_loading_hourglass() # Premium Hourglass Loader
             tm = TranslationManager()
-            with st.spinner(t("extracting", lang)):
+            try:
                 text = tm.extract_text_from_pdf(uploaded.read())
                 if text.startswith("Error"):
                     st.error(text)
                 else:
                     trans = tm.translate_full_text(text)
+                    
                     c1, c2 = st.columns(2)
                     with c1:
                         st.subheader(t("original", lang))
@@ -1378,6 +1380,10 @@ def render_translator_content():
                         st.subheader(t("translated", lang))
                         st.text_area("Translated", trans, height=400)
                     st.download_button(t("download_trans", lang), trans, file_name="translated_cv.txt")
+            except Exception as e:
+                st.error(f"{t('error', lang)}: {e}")
+            finally:
+                trans_loader.empty() # Always clear loader
 
 def render_permissions_content():
     lang = st.session_state.lang
