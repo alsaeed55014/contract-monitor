@@ -229,24 +229,28 @@ def get_css():
             line-height: 1.2;
         }
         
-        /* Premium Buttons (General) */
-        div[data-testid="stForm"] .stButton > button {
-            background: linear-gradient(135deg, #D4AF37 0%, #B8860B 100%) !important;
-            color: #000 !important;
+        /* Premium Buttons (General - Form/Main) */
+        div[data-testid="stForm"] .stButton > button,
+        .stButton > button {
+            background: linear-gradient(135deg, #2E7D32 0%, #1B5E20 100%) !important;
+            color: #FFFFFF !important; /* White Text for clarity */
             font-weight: 800 !important;
             letter-spacing: 1px !important;
             border: none !important;
             padding: 12px 0 !important;
-            box-shadow: 0 4px 15px rgba(212, 175, 55, 0.4) !important;
+            box-shadow: 0 4px 15px rgba(46, 125, 50, 0.4) !important;
             width: 100% !important;
             border-radius: 8px !important;
             margin-top: 10px !important;
+            transition: all 0.3s ease !important;
         }
         
-        div[data-testid="stForm"] .stButton > button:hover {
-            background: linear-gradient(135deg, #ECC846 0%, #D4AF37 100%) !important;
-            box-shadow: 0 0 25px rgba(212, 175, 55, 0.7) !important;
+        div[data-testid="stForm"] .stButton > button:hover,
+        .stButton > button:hover {
+            background: linear-gradient(135deg, #388E3C 0%, #2E7D32 100%) !important;
+            box-shadow: 0 0 25px rgba(76, 175, 80, 0.6) !important;
             transform: scale(1.02);
+            color: #FFFFFF !important;
         }
 
         /* Sidebar Styling & Centering */
@@ -281,17 +285,17 @@ def get_css():
             margin: 0 auto !important;
         }
 
-        /* All Sidebar Buttons Uniform */
+        /* All Sidebar Buttons Uniform - Green */
         section[data-testid="stSidebar"] .stButton > button {
-            background-color: #D4AF37;
-            color: #000;
+            background-color: #2E7D32 !important;
+            color: #FFFFFF !important;
             font-weight: 700;
             border: none;
             border-radius: 8px;
             padding: 12px 0px;
-            margin: 8px 0px !important; /**/
+            margin: 8px 0px !important;
             width: 100% !important;
-            height: 45px !important; /* Fixed height for normal buttons */
+            height: 45px !important;
             display: flex;
             justify-content: center;
             align-items: center;
@@ -300,9 +304,10 @@ def get_css():
         }
         
         section[data-testid="stSidebar"] .stButton > button:hover {
-            background-color: #ECC846;
+            background-color: #388E3C !important;
             transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(212, 175, 55, 0.4);
+            box-shadow: 0 5px 15px rgba(46, 125, 50, 0.5);
+            color: #FFFFFF !important;
         }
 
         /* Data Tables - Modern Green Text */
@@ -341,25 +346,25 @@ def get_css():
             border-radius: 25px !important;
             font-size: 2.2rem !important; 
             font-weight: 800 !important;
-            background-color: #1E1E1E !important; /* Dark Premium */
-            color: #F8F8F8 !important; /* Off White */
-            border: 2px solid rgba(212, 175, 55, 0.8) !important; /* Distinctive border */
+            background-color: #2E7D32 !important; /* Green Toggle */
+            color: #FFFFFF !important; /* White Text */
+            border: 2px solid rgba(255, 255, 255, 0.4) !important;
             box-shadow: 0 8px 25px rgba(0,0,0,0.7) !important;
             transition: all 0.3s ease !important;
             display: flex !important;
             justify-content: center !important;
             align-items: center !important;
-            margin: 20px auto !important; /* Centered with vertical space */
+            margin: 20px auto !important;
             padding: 0 !important;
-            aspect-ratio: 1/1 !important; /* Force square/circle ratio */
+            aspect-ratio: 1/1 !important;
         }
         
         div:has(> #lang-toggle-anchor) ~ div .stButton > button:hover {
-            background-color: #2A2A2A !important;
-            border-color: #ECC846 !important;
+            background-color: #388E3C !important;
+            border-color: #FFFFFF !important;
             transform: scale(1.05) !important;
-            box-shadow: 0 0 30px rgba(212, 175, 55, 0.5) !important;
-            color: #ECC846 !important;
+            box-shadow: 0 0 30px rgba(76, 175, 80, 0.6) !important;
+            color: #FFFFFF !important;
         }
 
         section[data-testid="stSidebar"] div:has(> #lang-toggle-anchor) ~ div .stButton > button {
