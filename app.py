@@ -361,43 +361,54 @@ def get_css():
            Using the "Marker + Sibling" pattern to target specific buttons
         */
         
-        /* --- LOGIN BUTTONS ROBUST STYLING --- */
+        /* --- LOGIN UI CONSOLIDATED FIXES --- */
         
-        /* 1. Hide the anchor containers themselves so they don't take up space in the form's GAP layout */
-        div:has(> #login-btn-anchor), 
-        div:has(> #login-lang-new-anchor) {
-            display: none !important;
+        /* 1. Remove markers from the layout flow so they don't create extra gaps */
+        div[data-testid="stForm"] > div > div:has(#login-btn-anchor), 
+        div[data-testid="stForm"] > div > div:has(#login-lang-new-anchor) {
+            position: absolute !important;
+            height: 0 !important;
+            width: 0 !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            overflow: hidden !important;
+            visibility: hidden !important;
         }
 
-        /* 2. Unify all buttons in the login card */
+        /* 2. Unified Button Styling for Login Card */
         .login-screen-wrapper .stButton button {
             width: 100% !important;
-            margin: 0 !important; /* Let the form gap handle spacing */
+            margin: 0 !important;
             background: #1A1A1B !important; 
             border: 1px solid rgba(212, 175, 55, 0.4) !important;
-            height: 48px !important;
-            border-radius: 10px !important;
+            height: 50px !important;
+            border-radius: 12px !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
             transition: all 0.3s ease !important;
         }
 
-        /* 3. SPECIFIC: Login Button (Yellow Glow) - Target EVERYTHING to ensure it changes */
+        /* 3. Login Button: Glowing Yellow Text (Ultimate Priority) */
         div:has(> #login-btn-anchor) + div .stButton button,
         div:has(> #login-btn-anchor) + div .stButton button p,
         div:has(> #login-btn-anchor) + div .stButton button span {
             color: #FFFF00 !important; 
-            text-shadow: 0 0 10px #FFFF00, 0 0 20px #FFFF00 !important;
+            text-shadow: 0 0 10px #FFFF00, 0 0 20px #FFFF00, 0 0 40px rgba(255, 255, 0, 0.8) !important;
             font-weight: 900 !important;
+            font-size: 1.2rem !important;
         }
 
-        /* 4. SPECIFIC: Language Button (Gold Theme) */
+        /* 4. Language Button: Gold Text (Override following sibling logic) */
         div:has(> #login-lang-new-anchor) + div .stButton button,
         div:has(> #login-lang-new-anchor) + div .stButton button p,
         div:has(> #login-lang-new-anchor) + div .stButton button span {
             color: #D4AF37 !important;
+            text-shadow: none !important;
             font-weight: 700 !important;
+            font-size: 1.1rem !important;
         }
         
-        /* 5. Hover Effects */
         .login-screen-wrapper .stButton button:hover {
             border-color: #FFFF00 !important;
             box-shadow: 0 0 20px rgba(255, 255, 0, 0.4) !important;
