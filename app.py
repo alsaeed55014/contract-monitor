@@ -472,9 +472,10 @@ def get_css():
         /* Large Search Button Specifically targeting via anchor */
         div:has(#search-btn-anchor) ~ div .stButton button {
             height: 60px !important;
-            width: 10cm !important; 
-            min-width: 10cm !important; /* Force width even in flex */
-            max-width: 10cm !important;
+            width: 5cm !important; 
+            min-width: 5cm !important; /* Force width even in flex */
+            max-width: 5cm !important;
+            color: #D4AF37 !important; /* Gold text */
             font-size: 1.5rem !important;
             display: block !important;
             margin: 0 auto !important;
