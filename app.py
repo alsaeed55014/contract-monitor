@@ -361,36 +361,46 @@ def get_css():
            Using the "Marker + Sibling" pattern to target specific buttons
         */
         
-        /* --- LOGIN BUTTONS ROBUSH STYLING --- */
+        /* --- LOGIN BUTTONS ROBUST STYLING --- */
         
-        /* 1. Ensure ALL buttons in the login card are full width and have a dark background */
-        .login-screen-wrapper .stButton button {
-            width: 100% !important;
-            margin: 5px 0 !important;
-            background: #1A1A1B !important; 
-            border: 1px solid rgba(212, 175, 55, 0.4) !important;
+        /* 1. Hide the anchor containers themselves so they don't take up space in the form's GAP layout */
+        div:has(> #login-btn-anchor), 
+        div:has(> #login-lang-new-anchor) {
+            display: none !important;
         }
 
-        /* 2. SPECIFIC: Login Button (Yellow Glow) */
-        div:has(> #login-btn-anchor) ~ div .stButton button p,
-        div:has(> #login-btn-anchor) ~ div .stButton button span,
-        div:has(> #login-btn-anchor) ~ div .stButton button {
+        /* 2. Unify all buttons in the login card */
+        .login-screen-wrapper .stButton button {
+            width: 100% !important;
+            margin: 0 !important; /* Let the form gap handle spacing */
+            background: #1A1A1B !important; 
+            border: 1px solid rgba(212, 175, 55, 0.4) !important;
+            height: 48px !important;
+            border-radius: 10px !important;
+            transition: all 0.3s ease !important;
+        }
+
+        /* 3. SPECIFIC: Login Button (Yellow Glow) - Target EVERYTHING to ensure it changes */
+        div:has(> #login-btn-anchor) + div .stButton button,
+        div:has(> #login-btn-anchor) + div .stButton button p,
+        div:has(> #login-btn-anchor) + div .stButton button span {
             color: #FFFF00 !important; 
-            text-shadow: 0 0 10px #FFFF00, 0 0 20px #FFFF00, 0 0 30px rgba(255, 255, 0, 0.5) !important;
+            text-shadow: 0 0 10px #FFFF00, 0 0 20px #FFFF00 !important;
             font-weight: 900 !important;
         }
 
-        /* 3. SPECIFIC: Language Button (Gold Theme) */
-        div:has(> #login-lang-new-anchor) ~ div .stButton button p,
-        div:has(> #login-lang-new-anchor) ~ div .stButton button span,
-        div:has(> #login-lang-new-anchor) ~ div .stButton button {
+        /* 4. SPECIFIC: Language Button (Gold Theme) */
+        div:has(> #login-lang-new-anchor) + div .stButton button,
+        div:has(> #login-lang-new-anchor) + div .stButton button p,
+        div:has(> #login-lang-new-anchor) + div .stButton button span {
             color: #D4AF37 !important;
             font-weight: 700 !important;
         }
         
+        /* 5. Hover Effects */
         .login-screen-wrapper .stButton button:hover {
             border-color: #FFFF00 !important;
-            box-shadow: 0 0 15px rgba(255, 255, 0, 0.3) !important;
+            box-shadow: 0 0 20px rgba(255, 255, 0, 0.4) !important;
             background: #252525 !important;
         }
 
