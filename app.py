@@ -96,19 +96,29 @@ class AuthManager:
         return False
 
     def delete_user(self, username):
-        username = str(username).strip()
-        # Case-insensitive removal
+        if not username:
+            return False, "اسم المستخدم فارغ"
+        
+        target = str(username).strip().lower()
+        if target == "admin":
+            return False, "لا يمكن حذف المدير الرئيسي"
+            
+        # find original key
         user_to_del = None
         for u in self.users:
-            if u.lower() == username.lower():
+            if u.lower() == target:
                 user_to_del = u
                 break
         
-        if user_to_del and user_to_del.lower() != "admin":
-            del self.users[user_to_del]
-            self.save_users()
-            return True
-        return False
+        if user_to_del:
+            try:
+                del self.users[user_to_del]
+                self.save_users()
+                return True, "تم الحذف"
+            except Exception as e:
+                return False, f"خطأ أثناء الحذف: {str(e)}"
+        
+        return False, "المستخدم غير موجود في النظام"
 
     def update_role(self, username, new_role):
         username = str(username).strip()
@@ -1549,11 +1559,13 @@ def render_permissions_content():
                 with st.popover("حذف المستخدم" if lang=='ar' else "Delete User"):
                     st.warning("هل أنت متأكد من حذف هذا المستخدم؟" if lang=='ar' else "Are you sure you want to delete this user?")
                     if st.button("نعم، احذف المستخدم" if lang=='ar' else "Yes, Delete User", type="primary", use_container_width=True):
-                        if st.session_state.auth.delete_user(selected_user):
-                            st.session_state.permissions_success = "تم الحذف" if lang=='ar' else "User Deleted"
+                        success, message = st.session_state.auth.delete_user(selected_user)
+                        if success:
+                            st.session_state.permissions_success = "تم الحذف"
                             st.rerun()
                         else:
-                            st.error("خطأ في الحذف" if lang=='ar' else "Error during deletion")
+                            # Show the specific error message from the backend
+                            st.error(f"خطأ: {message}")
     
     # Translate table keys for Users Table
     table_data = []
