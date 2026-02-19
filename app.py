@@ -485,6 +485,47 @@ def get_css():
             justify-content: center !important;
             margin: 0 auto !important;
         }
+
+        /* --- CUSTOM HOURGLASS LOADER --- */
+        .loader-wrapper {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 40px;
+            width: 100%;
+        }
+        .hourglass {
+            display: inline-block;
+            position: relative;
+            width: 80px;
+            height: 80px;
+        }
+        .hourglass:after {
+            content: " ";
+            display: block;
+            border-radius: 50%;
+            width: 0;
+            height: 0;
+            margin: 6px;
+            box-sizing: border-box;
+            border: 32px solid #D4AF37;
+            border-color: #D4AF37 transparent #D4AF37 transparent;
+            animation: hourglass 1.2s infinite;
+        }
+        @keyframes hourglass {
+            0% { transform: rotate(0); animation-timing-function: cubic-bezier(0.55, 0.055, 0.675, 0.19); }
+            50% { transform: rotate(900deg); animation-timing-function: cubic-bezier(0.215, 0.61, 0.355, 1); }
+            100% { transform: rotate(1800deg); }
+        }
+        .loading-text {
+            color: #D4AF37;
+            font-family: 'Tajawal', sans-serif;
+            font-size: 1.5rem;
+            margin-top: 20px;
+            font-weight: 700;
+            text-shadow: 0 0 10px rgba(212, 175, 55, 0.5);
+        }
     </style>
     """
 
@@ -528,6 +569,13 @@ st.set_page_config(
 # 5. Apply Styles
 st.markdown(get_css(), unsafe_allow_html=True)
 
+# 6. Global Page Load Loader (Simulated or triggered on rerun)
+if 'initialized' not in st.session_state:
+    show_loading_hourglass()
+    st.session_state.initialized = True
+    time.sleep(0.5) # Brief pause for a smooth animation feel
+    st.rerun()
+
 # 6. Initialize Core (With Force Re-init for Updates)
 if 'auth' not in st.session_state or not hasattr(st.session_state.auth, 'is_bilingual'):
     st.session_state.auth = AuthManager(USERS_FILE)
@@ -555,7 +603,18 @@ def toggle_lang():
     if st.session_state.lang == 'ar': st.session_state.lang = 'en'
     else: st.session_state.lang = 'ar'
 
-# 10. CV Detail Panel Helper
+# 10. Hourglass Loader Helper
+def show_loading_hourglass(text=None):
+    if text is None:
+        text = "جاري التحميل..." if st.session_state.get('lang') == 'ar' else "Loading..."
+    st.markdown(f"""
+        <div class="loader-wrapper">
+            <div class="hourglass"></div>
+            <div class="loading-text">{text}</div>
+        </div>
+    """, unsafe_allow_html=True)
+
+# 11. CV Detail Panel Helper
 def render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search"):
     """
     Standalone helper to render the professional CV profile card, 
@@ -1067,6 +1126,8 @@ def render_search_content():
     
     # Trigger on button click OR when query changes (Enter is pressed)
     if search_clicked or query:
+        show_loading_hourglass() # Custom premium loader
+        
         # Debug: Show what filters are being sent
         if filters:
             active_filter_names = []
