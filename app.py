@@ -470,15 +470,19 @@ def get_css():
         }
 
         /* Large Search Button Specifically targeting via anchor */
-        div:has(#search-btn-anchor) ~ div .stButton button {
+        div:has(#search-btn-anchor) ~ div .stButton button,
+        div:has(#search-btn-anchor) ~ div .stButton button p,
+        div:has(#search-btn-anchor) ~ div .stButton button span {
             height: 60px !important;
             width: 5cm !important; 
-            min-width: 5cm !important; /* Force width even in flex */
+            min-width: 5cm !important; 
             max-width: 5cm !important;
             color: #D4AF37 !important; /* Gold text */
-            font-size: 1.8rem !important; /* Larger text */
+            font-size: 2.1rem !important; /* Size 21 scale */
             font-weight: 900 !important; /* Extra bold */
-            display: block !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
             margin: 0 auto !important;
         }
     </style>
