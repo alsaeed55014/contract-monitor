@@ -1195,7 +1195,7 @@ def render_search_content():
     st.markdown('<div class="red-neon-signature">By: Alsaeed Alwazzan</div>', unsafe_allow_html=True)
     
     # 1. Glowing Title at the Absolute Top
-    st.markdown('<div class="glowing-title">(AI) البحث الذكي</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="glowing-title">{t("smart_search_title", lang)}</div>', unsafe_allow_html=True)
     
     # Rest of the content
     lbl_age = t("age", lang) if t("age", lang) != "age" else "العمر"
