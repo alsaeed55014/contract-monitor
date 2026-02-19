@@ -909,8 +909,6 @@ def dashboard():
         st.markdown("<div style='margin: 15px 0;'></div>", unsafe_allow_html=True)
         
         if st.button(t("logout", lang), type="primary", use_container_width=True):
-            st.toast(t("logout_msg", lang), icon="👋")
-            time.sleep(5.0) # Extended to 5 seconds as requested
             st.session_state.user = None
             st.rerun()
         
