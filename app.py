@@ -989,16 +989,16 @@ def render_dashboard_content():
             if lang == 'ar':
                 if global_status == 'expired':
                     r['Status'] = "منتهي"
-                    r['المتبقى'] = f"{abs(days)} يوم"
+                    r['المتبقى'] = abs(days)
                 elif global_status in ['urgent', 'warning']:
                     r['Status'] = "متبقى"
-                    r['المتبقى'] = f"{days} يوم"
+                    r['المتبقى'] = days
                 else: # active
                     r['Status'] = f"ساري ({days} يوم)"
-                    r['المتبقى'] = f"{days} يوم"
+                    r['المتبقى'] = days
             else:
                 r['Status'] = status['label_en']
-                r['Remaining'] = f"{abs(days)} Days"
+                r['Remaining'] = abs(days)
 
             if global_status == 'urgent' or global_status == 'warning': stats['urgent'].append(r)
             elif global_status == 'expired': stats['expired'].append(r)
@@ -1090,6 +1090,12 @@ def render_dashboard_content():
                 display_text=t("download_pdf", lang)
             )
         
+        # Suffix Configuration for Numeric Remaining Column
+        rem_key_display = new_names.get('المتبقى', 'المتبقى') if lang == 'ar' else new_names.get('Remaining', 'Remaining')
+        final_cfg[rem_key_display] = st.column_config.NumberColumn(
+            rem_key_display,
+            format="%d يوم" if lang == 'ar' else "%d Days"
+        )
 
         # Apply Green Text Styling
         styled_final = style_df(d_final)
@@ -1239,16 +1245,16 @@ def render_search_content():
                     if lang == 'ar':
                         if gs == 'expired':
                             status_list.append("منتهي")
-                            rem_list.append(f"{abs(ds)} يوم")
+                            rem_list.append(abs(ds))
                         elif gs in ['urgent', 'warning']:
                             status_list.append("متبقى")
-                            rem_list.append(f"{ds} يوم")
+                            rem_list.append(ds)
                         else:
                             status_list.append(f"ساري ({ds} يوم)")
-                            rem_list.append(f"{ds} يوم")
+                            rem_list.append(ds)
                     else:
                         status_list.append(s['label_en'])
-                        rem_list.append(f"{abs(ds)} Days")
+                        rem_list.append(abs(ds))
                 
                 res['Status'] = status_list
                 res['المتبقى' if lang == 'ar' else 'Remaining'] = rem_list
@@ -1322,6 +1328,13 @@ def render_search_content():
                 help="Click to open original file",
                 validate="^http",
                 display_text="فتح الملف 🔗"
+            )
+            
+            # Numeric Suffix for Search
+            rem_key_search = t_col('المتبقى' if lang == 'ar' else 'Remaining', lang)
+            column_config[rem_key_search] = st.column_config.NumberColumn(
+                rem_key_search,
+                format="%d يوم" if lang == 'ar' else "%d Days"
             )
 
             # Use on_select to capture row selection
