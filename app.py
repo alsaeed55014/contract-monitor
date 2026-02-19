@@ -539,6 +539,18 @@ def style_df(df):
         return df.style.map(lambda _: "color: #4CAF50;")
     return df
 
+# 2.5 Hourglass Loader Helper
+def show_loading_hourglass(text=None):
+    if text is None:
+        text = "جاري التحميل..." if st.session_state.get('lang') == 'ar' else "Loading..."
+    if 'st' in globals():
+        st.markdown(f"""
+            <div class="loader-wrapper">
+                <div class="hourglass"></div>
+                <div class="loading-text">{text}</div>
+            </div>
+        """, unsafe_allow_html=True)
+
 # 3. Imports with Error Handling
 try:
     from src.core.search import SmartSearchEngine
@@ -603,16 +615,6 @@ def toggle_lang():
     if st.session_state.lang == 'ar': st.session_state.lang = 'en'
     else: st.session_state.lang = 'ar'
 
-# 10. Hourglass Loader Helper
-def show_loading_hourglass(text=None):
-    if text is None:
-        text = "جاري التحميل..." if st.session_state.get('lang') == 'ar' else "Loading..."
-    st.markdown(f"""
-        <div class="loader-wrapper">
-            <div class="hourglass"></div>
-            <div class="loading-text">{text}</div>
-        </div>
-    """, unsafe_allow_html=True)
 
 # 11. CV Detail Panel Helper
 def render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search"):
