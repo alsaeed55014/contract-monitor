@@ -361,29 +361,37 @@ def get_css():
            Using the "Marker + Sibling" pattern to target specific buttons
         */
         
-        /* Glowing Yellow Login Button Text */
-        div:has(> #login-btn-anchor) + div .stButton > button {
+        /* --- LOGIN BUTTONS ROBUSH STYLING --- */
+        
+        /* 1. Ensure ALL buttons in the login card are full width and have a dark background */
+        .login-screen-wrapper .stButton button {
+            width: 100% !important;
+            margin: 5px 0 !important;
+            background: #1A1A1B !important; 
+            border: 1px solid rgba(212, 175, 55, 0.4) !important;
+        }
+
+        /* 2. SPECIFIC: Login Button (Yellow Glow) */
+        div:has(> #login-btn-anchor) ~ div .stButton button p,
+        div:has(> #login-btn-anchor) ~ div .stButton button span,
+        div:has(> #login-btn-anchor) ~ div .stButton button {
             color: #FFFF00 !important; 
-            text-shadow: 0 0 10px #FFFF00, 0 0 20px rgba(255, 255, 0, 0.6) !important;
+            text-shadow: 0 0 10px #FFFF00, 0 0 20px #FFFF00, 0 0 30px rgba(255, 255, 0, 0.5) !important;
             font-weight: 900 !important;
         }
 
-        /* New Professional Login Language Toggle */
-        div:has(> #login-lang-new-anchor) + div .stButton > button {
-            background-color: #1A1A1B !important; 
+        /* 3. SPECIFIC: Language Button (Gold Theme) */
+        div:has(> #login-lang-new-anchor) ~ div .stButton button p,
+        div:has(> #login-lang-new-anchor) ~ div .stButton button span,
+        div:has(> #login-lang-new-anchor) ~ div .stButton button {
             color: #D4AF37 !important;
-            border: 1px solid rgba(212, 175, 55, 0.5) !important;
-            border-radius: 10px !important;
             font-weight: 700 !important;
-            height: 42px !important;
-            width: 100% !important;
-            margin: 5px 0 !important;
-            transition: all 0.3s ease !important;
         }
-        div:has(> #login-lang-new-anchor) + div .stButton > button:hover {
-            border-color: #D4AF37 !important;
-            box-shadow: 0 0 15px rgba(212, 175, 55, 0.3) !important;
-            background-color: #222 !important;
+        
+        .login-screen-wrapper .stButton button:hover {
+            border-color: #FFFF00 !important;
+            box-shadow: 0 0 15px rgba(255, 255, 0, 0.3) !important;
+            background: #252525 !important;
         }
 
         /* 2. Sidebar Toggle (Large Green Pill) */
