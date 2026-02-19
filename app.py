@@ -466,20 +466,16 @@ def get_css():
             font-family: 'Tajawal', sans-serif;
         }
 
-        /* Large Search Button Specifically */
-        .search-btn-container {
-            display: flex !important;
-            justify-content: center !important;
-            width: 100% !important;
-            margin-bottom: 20px !important;
-        }
-        div.search-btn-container .stButton > button {
+        /* Large Search Button Specifically targeting via anchor */
+        div:has(> #search-btn-anchor) + div .stButton button {
             height: 60px !important;
-            width: 20cm !important; /* Exactly 20cm */
+            width: 10cm !important; /* Exactly 10cm as requested */
             font-size: 1.5rem !important;
             background: linear-gradient(135deg, #2E7D32 0%, #1B5E20 100%) !important;
             box-shadow: 0 6px 20px rgba(46, 125, 50, 0.5) !important;
             border-radius: 12px !important;
+            display: block !important;
+            margin: 0 auto !important;
         }
     </style>
     """
@@ -1030,9 +1026,8 @@ def render_search_content():
 
     query = st.text_input(t("smart_search", lang), placeholder=t("search_placeholder", lang), key="search_query_input")
     
-    st.markdown('<div class="search-btn-container">', unsafe_allow_html=True)
+    st.markdown('<div id="search-btn-anchor"></div>', unsafe_allow_html=True)
     search_clicked = st.button(t("search_btn", lang), key="main_search_btn", use_container_width=False)
-    st.markdown('</div>', unsafe_allow_html=True)
     
     # Gather Filters
     filters = {}
