@@ -673,11 +673,12 @@ st.set_page_config(
 st.markdown(get_css(), unsafe_allow_html=True)
 
 # 6. Initialize Core (With Force Re-init for Updates)
-if 'auth' not in st.session_state or not hasattr(st.session_state.auth, 'is_bilingual'):
+if 'auth' not in st.session_state or not hasattr(st.session_state.auth, 'v5_marker'):
     # Show a brief initial loader for a premium feel
     loading = show_loading_hourglass()
     time.sleep(0.4)
     st.session_state.auth = AuthManager(USERS_FILE)
+    st.session_state.auth.v5_marker = True # Marker to ensure object picks up new methods
     loading.empty()
 
 # Report DB Load Errors to User
