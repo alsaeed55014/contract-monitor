@@ -447,6 +447,23 @@ def get_css():
             color: #FFAB40 !important; 
             text-shadow: 0 0 15px rgba(255, 171, 64, 0.8), 0 0 30px rgba(255, 171, 64, 0.4);
         }
+
+        /* Glowing Page Title for Search */
+        .glowing-title {
+            color: #D4AF37 !important; /* Gold */
+            font-size: 3rem !important;
+            font-weight: 900 !important;
+            text-align: center !important;
+            text-shadow: 
+                0 0 10px rgba(212, 175, 55, 0.9),
+                0 0 20px rgba(212, 175, 55, 0.6),
+                0 0 30px rgba(212, 175, 55, 0.3) !important;
+            margin-bottom: 30px !important;
+            padding-top: 10px !important;
+            width: 100% !important;
+            display: block !important;
+            font-family: 'Tajawal', sans-serif;
+        }
     </style>
     """
 
@@ -950,9 +967,11 @@ def render_dashboard_content():
 
 def render_search_content():
     lang = st.session_state.lang
-    st.title(f" {t('smart_search_title', lang)}")
     
-    # Labels
+    # 1. Glowing Title at the Absolute Top
+    st.markdown('<div class="glowing-title">البحث الذكي (AI)</div>', unsafe_allow_html=True)
+    
+    # Rest of the content
     lbl_age = t("age", lang) if t("age", lang) != "age" else "العمر"
     lbl_contract = t("contract_end", lang) if t("contract_end", lang) != "contract_end" else "تاريخ انتهاء العقد"
     lbl_reg = t("registration_date", lang) if t("registration_date", lang) != "registration_date" else "تاريخ التسجيل"
