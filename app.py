@@ -1362,28 +1362,43 @@ def render_translator_content():
     st.markdown(t("translator_desc", lang))
     uploaded = st.file_uploader(t("upload_cv", lang), type=["pdf"])
     if uploaded:
-        if st.button(t("translate_now", lang)):
-            trans_loader = show_loading_hourglass() # Premium Hourglass Loader
+        # Avoid redundant translation on every rerun by using session state
+        file_id = f"cv_{uploaded.name}_{uploaded.size}"
+        if st.session_state.get('last_trans_file') != file_id:
+            trans_loader = show_loading_hourglass()
             tm = TranslationManager()
             try:
-                text = tm.extract_text_from_pdf(uploaded.read())
+                # Read once
+                file_bytes = uploaded.read()
+                text = tm.extract_text_from_pdf(file_bytes)
                 if text.startswith("Error"):
                     st.error(text)
                 else:
                     trans = tm.translate_full_text(text)
-                    
-                    c1, c2 = st.columns(2)
-                    with c1:
-                        st.subheader(t("original", lang))
-                        st.text_area("Original", text, height=400)
-                    with c2:
-                        st.subheader(t("translated", lang))
-                        st.text_area("Translated", trans, height=400)
-                    st.download_button(t("download_trans", lang), trans, file_name="translated_cv.txt")
+                    st.session_state.last_trans_result = {'text': text, 'trans': trans}
+                    st.session_state.last_trans_file = file_id
             except Exception as e:
                 st.error(f"{t('error', lang)}: {e}")
             finally:
-                trans_loader.empty() # Always clear loader
+                trans_loader.empty()
+
+        # Display results if they exist
+        res = st.session_state.get('last_trans_result')
+        if res and st.session_state.get('last_trans_file') == file_id:
+            c1, c2 = st.columns(2)
+            with c1:
+                st.subheader(t("original", lang))
+                st.text_area("Original", res['text'], height=400)
+            with c2:
+                st.subheader(t("translated", lang))
+                st.text_area("Translated", res['trans'], height=400)
+            st.download_button(t("download_trans", lang), res['trans'], file_name="translated_cv.txt")
+    else:
+        # Clear cache if no file is uploaded
+        if 'last_trans_file' in st.session_state:
+            del st.session_state.last_trans_file
+            if 'last_trans_result' in st.session_state:
+                del st.session_state.last_trans_result
 
 def render_permissions_content():
     lang = st.session_state.lang
