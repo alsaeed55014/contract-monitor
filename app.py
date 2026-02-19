@@ -960,9 +960,7 @@ def render_search_content():
             res_display = res_to_rename.rename(columns=new_names)
             
             # --- ROW SELECTION & PROFESSIONAL UI ---
-            st.divider()
 
-            st.subheader(f"{'نتائج البحث' if lang == 'ar' else 'Search Results'}")
             
             # Configure columns for better look
             column_config = {}
