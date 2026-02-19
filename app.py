@@ -213,20 +213,20 @@ def get_css():
 
         /* Programmer Credit - Neon Green Handwritten Style */
         .programmer-credit {
-            color: #39FF14 !important; /* Neon Green */
-            font-family: 'Aref Ruqaa', serif; /* Handwritten Arabic style */
-            margin: 10px auto !important; /* Center and add spacing */
-            font-size: 1.4em !important; /* Smaller size to prevent overflow */
-            letter-spacing: 1px;
+            color: #39FF14 !important; /* Sharp Neon Green */
+            font-family: 'Aref Ruqaa', serif;
+            margin: 5px auto !important;
+            font-size: 1.6em !important; /* Slightly larger for clarity */
+            letter-spacing: 0.5px;
             text-align: center;
-            font-weight: 400;
+            font-weight: 700 !important; /* Bolder for visibility */
             text-shadow: 
-                0 0 5px rgba(57, 255, 20, 0.5),
-                0 0 10px rgba(57, 255, 20, 0.3);
-            white-space: normal !important; /* Allow wrapping if needed */
-            width: 90% !important; /* Keep it inside sidebar boundaries */
+                0 0 2px rgba(0, 0, 0, 1), /* Dark outline for legibility */
+                0 0 8px rgba(57, 255, 20, 0.6);
+            white-space: normal !important;
+            width: 95% !important;
             display: block;
-            line-height: 1.2;
+            line-height: 1.1; /* Tighter lines */
         }
         
         /* Premium Buttons (General) */
@@ -701,8 +701,8 @@ def dashboard():
             if os.path.exists(IMG_PATH):
                 st.image(IMG_PATH, use_container_width=True)
         
-        # Credit text
-        st.markdown(f'<div class="programmer-credit">{t("welcome_subtitle", lang)}</div>', unsafe_allow_html=True)
+        # Credit text - Split into two lines for clarity
+        st.markdown(f'<div class="programmer-credit">{"برمجة" if lang == "ar" else "By:"}<br>{"السعيد الوزان" if lang == "ar" else "Alsaeed Alwazzan"}</div>', unsafe_allow_html=True)
         
         # Spacing
         st.markdown("<div style='margin-bottom: 20px;'></div>", unsafe_allow_html=True)
