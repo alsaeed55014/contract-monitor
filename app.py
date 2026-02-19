@@ -229,28 +229,31 @@ def get_css():
             line-height: 1.2;
         }
         
-        /* Premium Buttons (General - Form/Main) */
-        div[data-testid="stForm"] .stButton > button,
+        /* Premium Buttons (General styling) */
         .stButton > button {
             background: linear-gradient(135deg, #2E7D32 0%, #1B5E20 100%) !important;
-            color: #FFFFFF !important; /* White Text for clarity */
+            color: #FFFFFF !important;
             font-weight: 800 !important;
             letter-spacing: 1px !important;
             border: none !important;
             padding: 12px 0 !important;
             box-shadow: 0 4px 15px rgba(46, 125, 50, 0.4) !important;
-            width: 100% !important;
             border-radius: 8px !important;
-            margin-top: 10px !important;
             transition: all 0.3s ease !important;
         }
+
+        /* Full-width context for buttons that need it (Forms, Sidebar, etc.) */
+        div[data-testid="stForm"] .stButton > button,
+        section[data-testid="stSidebar"] .stButton > button,
+        .full-width-btn .stButton > button {
+            width: 100% !important;
+            margin-top: 10px !important;
+        }
         
-        div[data-testid="stForm"] .stButton > button:hover,
-        .stButton > button:hover {
+        div.stButton > button:hover {
             background: linear-gradient(135deg, #388E3C 0%, #2E7D32 100%) !important;
             box-shadow: 0 0 25px rgba(76, 175, 80, 0.6) !important;
             transform: scale(1.02);
-            color: #FFFFFF !important;
         }
 
         /* Sidebar Styling & Centering */
@@ -467,13 +470,12 @@ def get_css():
         }
 
         /* Large Search Button Specifically targeting via anchor */
-        div:has(> #search-btn-anchor) + div .stButton button {
+        div:has(#search-btn-anchor) ~ div .stButton button {
             height: 60px !important;
-            width: 10cm !important; /* Exactly 10cm as requested */
+            width: 10cm !important; 
+            min-width: 10cm !important; /* Force width even in flex */
+            max-width: 10cm !important;
             font-size: 1.5rem !important;
-            background: linear-gradient(135deg, #2E7D32 0%, #1B5E20 100%) !important;
-            box-shadow: 0 6px 20px rgba(46, 125, 50, 0.5) !important;
-            border-radius: 12px !important;
             display: block !important;
             margin: 0 auto !important;
         }
@@ -1026,8 +1028,10 @@ def render_search_content():
 
     query = st.text_input(t("smart_search", lang), placeholder=t("search_placeholder", lang), key="search_query_input")
     
-    st.markdown('<div id="search-btn-anchor"></div>', unsafe_allow_html=True)
-    search_clicked = st.button(t("search_btn", lang), key="main_search_btn", use_container_width=False)
+    # 2. Search Button Wrapped in Container for better DOM targeting
+    with st.container():
+        st.markdown('<div id="search-btn-anchor"></div>', unsafe_allow_html=True)
+        search_clicked = st.button(t("search_btn", lang), key="main_search_btn", use_container_width=False)
     
     # Gather Filters
     filters = {}
