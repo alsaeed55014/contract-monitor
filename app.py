@@ -355,8 +355,41 @@ def get_css():
              border-radius: 25px !important;
              margin: 15px auto !important;
         }
+             margin: 15px auto !important;
+        }
+
+        /* 
+           GLOBAL TABLE STYLING 
+           1. Headers: Gold Color
+           2. Cells: Green Color (Handled via Pandas Styler mostly, but fallback here)
+        */
+        [data-testid="stDataFrame"] th, 
+        [data-testid="stDataFrame"] div[role="columnheader"] {
+            color: #D4AF37 !important; /* Gold Title */
+            font-size: 1.1rem !important;
+            font-weight: bold !important;
+        }
+
+        /* For st.table (if used) */
+        table th {
+            color: #D4AF37 !important;
+        }
+        table td {
+            color: #4CAF50 !important; /* Green Text */
+            font-weight: 500 !important;
+        }
     </style>
     """
+
+def style_df(df):
+    """
+    Applies custom styling to DataFrames.
+    - Text Color: Green (#4CAF50)
+    - Background: Transparent/Dark
+    """
+    if isinstance(df, pd.DataFrame):
+        return df.style.map(lambda _: "color: #4CAF50;")
+    return df
 
 # 3. Imports with Error Handling
 try:
@@ -787,8 +820,11 @@ def render_dashboard_content():
             )
         
 
+        # Apply Green Text Styling
+        styled_final = style_df(d_final)
+        
         event = st.dataframe(
-            d_final, 
+            styled_final, 
             use_container_width=True, 
             column_config=final_cfg,
             on_select="rerun",
@@ -973,8 +1009,9 @@ def render_search_content():
             )
 
             # Use on_select to capture row selection
+            styled_res = style_df(res_display)
             event = st.dataframe(
-                res_display, 
+                styled_res, 
                 use_container_width=True,
                 on_select="rerun",
                 selection_mode="single-row",
@@ -1083,7 +1120,10 @@ def render_permissions_content():
             t_col("User", lang): k,
             t_col("Role", lang): v.get('role', 'viewer')
         })
-    st.dataframe(table_data, use_container_width=True)
+    
+    # Stylized DataFrame
+    df_users = pd.DataFrame(table_data)
+    st.dataframe(style_df(df_users), use_container_width=True)
 
 # 11. Main Entry
 if not st.session_state.user:
