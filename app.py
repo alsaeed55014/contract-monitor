@@ -361,6 +361,13 @@ def get_css():
            Using the "Marker + Sibling" pattern to target specific buttons
         */
         
+        /* Glowing Yellow Login Button Text */
+        div:has(> #login-btn-anchor) + div .stButton > button {
+            color: #FFFF00 !important; 
+            text-shadow: 0 0 10px #FFFF00, 0 0 20px rgba(255, 255, 0, 0.6) !important;
+            font-weight: 900 !important;
+        }
+
         /* New Professional Login Language Toggle */
         div:has(> #login-lang-new-anchor) + div .stButton > button {
             background-color: #1A1A1B !important; 
@@ -827,6 +834,7 @@ def login_screen():
             u = st.text_input(t("username", lang), label_visibility="collapsed", placeholder=t("username", lang))
             p = st.text_input(t("password", lang), type="password", label_visibility="collapsed", placeholder=t("password", lang))
             
+            st.markdown('<div id="login-btn-anchor"></div>', unsafe_allow_html=True)
             if st.form_submit_button(t("login_btn", lang)):
                 login_loader = show_loading_hourglass()
                 p_norm = p.strip()
