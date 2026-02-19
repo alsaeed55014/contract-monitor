@@ -1177,7 +1177,7 @@ def render_search_content():
             
             # Debug Panel (for diagnosing search issues)
             with st.expander("🔧 تشخيص البحث | Search Debug", expanded=False):
-                debug = eng.debug_info
+                debug = eng.last_debug
                 st.json(debug)
             
             # Handle both DataFrame and list returns
