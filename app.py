@@ -827,12 +827,6 @@ def login_screen():
             u = st.text_input(t("username", lang), label_visibility="collapsed", placeholder=t("username", lang))
             p = st.text_input(t("password", lang), type="password", label_visibility="collapsed", placeholder=t("password", lang))
             
-            # New Professional Language Toggle inside the form
-            st.markdown('<div id="login-lang-new-anchor"></div>', unsafe_allow_html=True)
-            if st.form_submit_button("En" if lang == "ar" else "عربي"):
-                toggle_lang()
-                st.rerun()
-
             if st.form_submit_button(t("login_btn", lang)):
                 login_loader = show_loading_hourglass()
                 p_norm = p.strip()
@@ -847,6 +841,12 @@ def login_screen():
                     st.error(t("invalid_creds", lang))
                     if u.lower() == "admin" and p_norm == "admin123":
                         st.info("💡 Try using your new password instead of the old default.")
+
+            # New Professional Language Toggle inside the form
+            st.markdown('<div id="login-lang-new-anchor"></div>', unsafe_allow_html=True)
+            if st.form_submit_button("En" if lang == "ar" else "عربي"):
+                toggle_lang()
+                st.rerun()
         
         st.markdown('</div>', unsafe_allow_html=True)
 
