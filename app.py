@@ -252,25 +252,30 @@ def get_css():
             border-left: 1px solid rgba(212, 175, 55, 0.1);
         }
         
-        /* Force centering for sidebar image container */
-        section[data-testid="stSidebar"] [data-testid="stVerticalBlock"] > div:has(div.stImage) {
+        /* 
+           AGGRESSIVE SIDEBAR CENTERING 
+           Targeting the vertical block containers that Streamlit uses
+        */
+        section[data-testid="stSidebar"] [data-testid="stVerticalBlock"] > div {
             display: flex !important;
             justify-content: center !important;
+            align-items: center !important;
             width: 100% !important;
+            text-align: center !important;
         }
 
         section[data-testid="stSidebar"] .stImage {
              display: flex !important;
              justify-content: center !important;
              width: 100% !important;
-             margin-bottom: 0px !important;
+             margin: 0 auto !important;
         }
         
         section[data-testid="stSidebar"] .stImage img {
             border-radius: 50%;
             border: 2px solid #D4AF37;
             padding: 3px;
-            margin: 0 auto !important; /* Extra insurance */
+            margin: 0 auto !important;
         }
 
         /* All Sidebar Buttons Uniform */
@@ -687,17 +692,26 @@ def dashboard():
         del st.session_state.show_welcome
 
     with st.sidebar:
-        st.image(IMG_PATH, width=100)
-        st.markdown(f'<p class="programmer-credit">{t("welcome_subtitle", lang)}</p>', unsafe_allow_html=True)
-        st.markdown("<br>", unsafe_allow_html=True)
+        # Use columns to force horizontal centering for the image block
+        sc1, sc2, sc3 = st.columns([1, 2, 1])
+        with sc2:
+            if os.path.exists(IMG_PATH):
+                st.image(IMG_PATH, use_container_width=True)
         
+        # Credit text
+        st.markdown(f'<div class="programmer-credit">{t("welcome_subtitle", lang)}</div>', unsafe_allow_html=True)
+        
+        # Spacing
+        st.markdown("<div style='margin-bottom: 20px;'></div>", unsafe_allow_html=True)
+        
+        # Language Toggle anchor and button
         st.markdown("<div id='lang-toggle-anchor'></div>", unsafe_allow_html=True)
         btn_label = "En" if lang == "ar" else "عربي"
         if st.button(btn_label, key="lang_btn_dashboard"):
             toggle_lang()
             st.rerun()
         
-        st.markdown("<div style='margin: 15px 0;'></div>", unsafe_allow_html=True)
+        st.markdown("<div style='margin-bottom: 30px;'></div>", unsafe_allow_html=True)
 
         if st.button(t("dashboard", lang), use_container_width=True):
             st.session_state.page = "dashboard"
