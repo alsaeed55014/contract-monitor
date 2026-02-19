@@ -169,7 +169,7 @@ def get_css():
 
         /* Programmer Signature - Neon English Style */
         .programmer-signature-neon {
-            font-family: 'Alex Brush', cursive; /* Handwritten font */
+            font-family: 'Alex Brush', cursive;
             font-size: 1.8rem;
             color: #fff;
             text-shadow:
@@ -179,6 +179,24 @@ def get_css():
                 0 0 30px #D4AF37,
                 0 0 40px #D4AF37;
             animation: neon-flicker 1.5s infinite alternate;       
+        }
+
+        /* Red Neon Signature - Requested for page tops */
+        .red-neon-signature {
+            font-family: 'Alex Brush', cursive;
+            font-size: 2.5rem;
+            color: #FF3131; /* Bright Neon Red */
+            text-align: center;
+            width: 100%;
+            display: block;
+            margin-bottom: 0px;
+            padding-bottom: 5px;
+            text-shadow:
+                0 0 7px #FF3131,
+                0 0 15px #FF3131,
+                0 0 25px #FF3131,
+                0 0 45px #FF0000;
+            font-weight: 900 !important;
         }
         
         @keyframes neon-flicker {
@@ -929,6 +947,7 @@ def dashboard():
 
 def render_dashboard_content():
     lang = st.session_state.lang
+    st.markdown('<div class="red-neon-signature">By: Alsaeed Alwazzan</div>', unsafe_allow_html=True)
     st.title(f" {t('contract_dashboard', lang)}")
     
     # Show loader while fetching data
@@ -1067,6 +1086,9 @@ def render_dashboard_content():
 
 def render_search_content():
     lang = st.session_state.lang
+    
+    # Absolute Top Signature
+    st.markdown('<div class="red-neon-signature">By: Alsaeed Alwazzan</div>', unsafe_allow_html=True)
     
     # 1. Glowing Title at the Absolute Top
     st.markdown('<div class="glowing-title">(AI) البحث الذكي</div>', unsafe_allow_html=True)
