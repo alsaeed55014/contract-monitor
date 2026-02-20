@@ -202,56 +202,74 @@ def get_css():
         }
 
         /* ---------------------------------------------------------
-           2) MOBILE STYLES (< 480px)
+           2) MOBILE & TABLET STYLES (< 768px)
            --------------------------------------------------------- */
-        @media (max-width: 480px) {
+        @media (max-width: 768px) {
             .main .block-container {
-                padding-left: 0.5rem !important;
-                padding-right: 0.5rem !important;
-                padding-top: 1rem !important;
+                padding: 1rem !important;
             }
             
             h1 { font-size: 1.8rem !important; }
             h2 { font-size: 1.5rem !important; }
             h3 { font-size: 1.25rem !important; }
             
-            /* Full width buttons in mobile */
+            /* Enhanced Buttons for Mobile Visibility */
             .stButton > button, 
             div[data-testid="stForm"] .stButton > button,
             section[data-testid="stSidebar"] .stButton > button {
                 width: 100% !important;
-                font-size: 1rem !important;
+                min-height: 50px !important;
+                font-size: 16px !important;
+                font-weight: bold !important;
+                color: #ffffff !important;
+                background-color: #b68b2c !important;
+                border-radius: 10px !important;
+                border: none !important;
+                opacity: 1 !important;
+                box-shadow: 0 4px 10px rgba(0,0,0,0.3) !important;
             }
 
-            /* Metric sizes in mobile */
+            .stButton > button:hover,
+            .stButton > button:focus,
+            .stButton > button:active {
+                color: #ffffff !important;
+                background-color: #b68b2c !important;
+                outline: none !important;
+                box-shadow: none !important;
+                transform: none !important;
+            }
+
+            /* Metric & Data Table Adjustments */
+            td {
+                font-size: 15px !important;
+                font-weight: 600 !important;
+                white-space: nowrap !important;
+            }
+
             .metric-value { font-size: 2.2rem !important; }
             .metric-label { font-size: 1rem !important; }
 
             /* Signature sizing */
             .red-neon-signature { font-size: 1.8rem !important; }
             .programmer-signature-neon { font-size: 1.4rem !important; }
+            
+            /* Search Inputs */
+            .stTextInput input {
+                font-size: 16px !important;
+                padding: 12px !important;
+            }
         }
 
         /* ---------------------------------------------------------
-           3) TABLET STYLES (481px - 1024px)
+           3) LAPTOP STYLES (769px - 1440px)
            --------------------------------------------------------- */
-        @media (min-width: 481px) and (max-width: 1024px) {
+        @media (min-width: 769px) and (max-width: 1440px) {
             .main .block-container {
-                padding-left: 2rem !important;
-                padding-right: 2rem !important;
+                padding-left: 3rem !important;
+                padding-right: 3rem !important;
             }
-            h1 { font-size: 2.4rem !important; }
-            h2 { font-size: 2rem !important; }
-        }
-
-        /* ---------------------------------------------------------
-           4) LAPTOP STYLES (1025px - 1440px)
-           --------------------------------------------------------- */
-        @media (min-width: 1025px) and (max-width: 1440px) {
-            .main .block-container {
-                padding-left: 4rem !important;
-                padding-right: 4rem !important;
-            }
+            h1 { font-size: 2.5rem !important; }
+            h2 { font-size: 2.1rem !important; }
         }
 
         /* ---------------------------------------------------------
