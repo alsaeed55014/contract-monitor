@@ -165,6 +165,34 @@ def get_css():
             font-family: 'Tajawal', sans-serif;
         }
 
+        /* ---------------------------------------------------------
+           1) GLOBAL RESPONSIVE RESET & PADDING
+           --------------------------------------------------------- */
+        [data-testid="stAppViewContainer"] {
+            padding: 1rem;
+        }
+        
+        .main .block-container {
+            padding-top: 2rem !important;
+            padding-bottom: 2rem !important;
+        }
+
+        /* Prevent text breaking in buttons and headers */
+        .stButton > button, h1, h2, h3, p, span, label {
+            white-space: normal !important;
+            word-wrap: break-word !important;
+            overflow-wrap: break-word !important;
+        }
+
+        /* Responsive Tables Wrapper */
+        div[data-testid="stDataFrame"], 
+        div[data-testid="stTable"],
+        .stTable, .stDataFrame {
+            width: 100% !important;
+            overflow-x: auto !important;
+            display: block !important;
+        }
+
         /* Headers */
         h1, h2, h3 {
             color: #D4AF37 !important; /* Gold */
@@ -172,6 +200,81 @@ def get_css():
             text-align: center;
             text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
         }
+
+        /* ---------------------------------------------------------
+           2) MOBILE STYLES (< 480px)
+           --------------------------------------------------------- */
+        @media (max-width: 480px) {
+            .main .block-container {
+                padding-left: 0.5rem !important;
+                padding-right: 0.5rem !important;
+                padding-top: 1rem !important;
+            }
+            
+            h1 { font-size: 1.8rem !important; }
+            h2 { font-size: 1.5rem !important; }
+            h3 { font-size: 1.25rem !important; }
+            
+            /* Full width buttons in mobile */
+            .stButton > button, 
+            div[data-testid="stForm"] .stButton > button,
+            section[data-testid="stSidebar"] .stButton > button {
+                width: 100% !important;
+                font-size: 1rem !important;
+            }
+
+            /* Metric sizes in mobile */
+            .metric-value { font-size: 2.2rem !important; }
+            .metric-label { font-size: 1rem !important; }
+
+            /* Signature sizing */
+            .red-neon-signature { font-size: 1.8rem !important; }
+            .programmer-signature-neon { font-size: 1.4rem !important; }
+        }
+
+        /* ---------------------------------------------------------
+           3) TABLET STYLES (481px - 1024px)
+           --------------------------------------------------------- */
+        @media (min-width: 481px) and (max-width: 1024px) {
+            .main .block-container {
+                padding-left: 2rem !important;
+                padding-right: 2rem !important;
+            }
+            h1 { font-size: 2.4rem !important; }
+            h2 { font-size: 2rem !important; }
+        }
+
+        /* ---------------------------------------------------------
+           4) LAPTOP STYLES (1025px - 1440px)
+           --------------------------------------------------------- */
+        @media (min-width: 1025px) and (max-width: 1440px) {
+            .main .block-container {
+                padding-left: 4rem !important;
+                padding-right: 4rem !important;
+            }
+        }
+
+        /* ---------------------------------------------------------
+           5) LARGE DESKTOP STYLES (> 1441px)
+           --------------------------------------------------------- */
+        @media (min-width: 1441px) {
+            .main .block-container {
+                max-width: 1600px !important;
+                margin: 0 auto !important;
+                padding-left: 8rem !important;
+                padding-right: 8rem !important;
+            }
+            
+            /* Scale fonts for large screens */
+            body, p, label, .stMarkdown, .stTextInput input {
+                font-size: 1.15rem !important;
+            }
+            h1 { font-size: 3.5rem !important; }
+            h2 { font-size: 2.8rem !important; }
+            .metric-value { font-size: 4.5rem !important; }
+        }
+
+        /* Existing component styles integrated with responsiveness */
 
         /* Login Screen Image & Title Layout */
         .login-screen-wrapper {
@@ -182,157 +285,100 @@ def get_css():
             width: 100%;
         }
         
-        /* Smaller Image as requested */
         .login-screen-wrapper img {
             border-radius: 50%;
             border: 3px solid #D4AF37;
             box-shadow: 0 0 15px rgba(212, 175, 55, 0.4);
-            margin-bottom: 5px;
-            width: 80px !important; /* Smaller size */
+            margin-bottom: 10px;
+            width: 80px !important;
             height: 80px !important;
         }
 
-        /* Container for Welcome Text + Signature side-by-side */
         .welcome-signature-container {
              display: flex;
-             align-items: baseline; /* Align text baselines */
+             align-items: baseline;
              justify-content: center;
              gap: 15px;
              margin-bottom: 20px;
              flex-wrap: wrap; 
         }
 
-        /* Programmer Signature - Neon English Style */
         .programmer-signature-neon {
             font-family: 'Alex Brush', cursive;
             font-size: 1.8rem;
             color: #fff;
-            text-shadow:
-                0 0 5px #fff,
-                0 0 10px #fff,
-                0 0 20px #D4AF37,
-                0 0 30px #D4AF37,
-                0 0 40px #D4AF37;
+            text-shadow: 0 0 5px #fff, 0 0 10px #fff, 0 0 20px #D4AF37, 0 0 30px #D4AF37, 0 0 40px #D4AF37;
             animation: neon-flicker 1.5s infinite alternate;       
         }
 
-        /* Red Neon Signature - Requested for page tops */
         .red-neon-signature {
             font-family: 'Alex Brush', cursive;
             font-size: 2.5rem;
-            color: #FF3131; /* Bright Neon Red */
+            color: #FF3131; 
             text-align: center;
             width: 100%;
             display: block;
             margin-bottom: 0px;
             padding-bottom: 5px;
-            text-shadow:
-                0 0 7px #FF3131,
-                0 0 15px #FF3131,
-                0 0 25px #FF3131,
-                0 0 45px #FF0000;
+            text-shadow: 0 0 7px #FF3131, 0 0 15px #FF3131, 0 0 25px #FF3131, 0 0 45px #FF0000;
             font-weight: 900 !important;
         }
         
         @keyframes neon-flicker {
             0%, 19%, 21%, 23%, 25%, 54%, 56%, 100% {
-                text-shadow:
-                    0 0 4px #fff,
-                    0 0 10px #fff,
-                    0 0 18px #D4AF37,
-                    0 0 38px #D4AF37,
-                    0 0 73px #D4AF37;
+                text-shadow: 0 0 4px #fff, 0 0 10px #fff, 0 0 18px #D4AF37, 0 0 38px #D4AF37, 0 0 73px #D4AF37;
             }
-            20%, 24%, 55% {        
-                text-shadow: none;
-            }
+            20%, 24%, 55% { text-shadow: none; }
         }
 
-        /* Essential Card Tweaks - Login Form Container */
+        /* Form Styling */
         div[data-testid="stForm"] {
             background-color: #1A1A1A !important;
             border: 1px solid rgba(212, 175, 55, 0.3) !important;
             box-shadow: 0 10px 30px rgba(0,0,0,0.5) !important;
-            max-width: 420px !important;
+            max-width: 450px !important;
             margin: 0 auto !important;
             padding: 30px !important;
-            border-radius: 20px !important; /* Rounded corners */
+            border-radius: 20px !important;
         }
         
-        /* Form Inner Spacing */
-        div[data-testid="stForm"] > div {
-             gap: 1.5rem !important; /* Space between inputs */
-        }
-
-        /* Programmer Credit - Neon Green Handwritten Style */
         .programmer-credit {
-            color: #39FF14 !important; /* Sharp Neon Green */
+            color: #39FF14 !important;
             font-family: 'Aref Ruqaa', serif;
             margin: 5px auto !important;
-            font-size: 1.5em !important; /* Adjusted for better fit */
+            font-size: 1.5em !important;
             letter-spacing: 0.5px;
             text-align: center;
             font-weight: 700 !important; 
-            text-shadow: 
-                0 0 2px rgba(0, 0, 0, 1), 
-                0 0 8px rgba(57, 255, 20, 0.6);
-            white-space: nowrap !important; /* Force the name to stay together */
+            text-shadow: 0 0 2px rgba(0, 0, 0, 1), 0 0 8px rgba(57, 255, 20, 0.6);
+            white-space: nowrap !important;
             width: auto !important;
             display: block;
-            line-height: 1.2;
         }
         
-        /* Premium Buttons (General styling) */
+        /* Premium Buttons */
         .stButton > button {
             background: linear-gradient(135deg, #2E7D32 0%, #1B5E20 100%) !important;
             color: #FFFFFF !important;
             font-weight: 800 !important;
             letter-spacing: 1px !important;
             border: none !important;
-            padding: 12px 0 !important;
+            padding: 12px 15px !important;
             box-shadow: 0 4px 15px rgba(46, 125, 50, 0.4) !important;
             border-radius: 8px !important;
             transition: all 0.3s ease !important;
         }
 
-        /* Full-width context for buttons that need it (Forms, Sidebar, etc.) */
-        div[data-testid="stForm"] .stButton > button,
-        section[data-testid="stSidebar"] .stButton > button,
-        .full-width-btn .stButton > button {
-            width: 100% !important;
-            margin-top: 10px !important;
-        }
-        
-        div.stButton > button:hover {
+        .stButton > button:hover {
             background: linear-gradient(135deg, #388E3C 0%, #2E7D32 100%) !important;
             box-shadow: 0 0 25px rgba(76, 175, 80, 0.6) !important;
-            transform: scale(1.02);
+            transform: translateY(-2px);
         }
 
-        /* Sidebar Styling & Centering */
+        /* Sidebar Styling */
         section[data-testid="stSidebar"] {
             background-color: #161616 !important;
             border-left: 1px solid rgba(212, 175, 55, 0.1);
-            padding-top: 2rem !important; /* Ensure image starts below header */
-        }
-        
-        /* 
-           AGGRESSIVE SIDEBAR CENTERING 
-           Targeting the vertical block containers that Streamlit uses
-        */
-        section[data-testid="stSidebar"] [data-testid="stVerticalBlock"] > div {
-            display: flex !important;
-            justify-content: center !important;
-            align-items: center !important;
-            width: 100% !important;
-            text-align: center !important;
-        }
-
-        section[data-testid="stSidebar"] .stImage {
-             display: flex !important;
-             justify-content: center !important;
-             width: 100% !important;
-             margin: 0 auto !important;
         }
         
         section[data-testid="stSidebar"] .stImage img {
@@ -340,157 +386,23 @@ def get_css():
             border: 2px solid #D4AF37;
             padding: 3px;
             margin: 0 auto !important;
+            display: block;
         }
 
-        /* All Sidebar Buttons Uniform - Green */
-        section[data-testid="stSidebar"] .stButton > button {
-            background-color: #2E7D32 !important;
-            color: #FFFFFF !important;
-            font-weight: 700;
-            border: none;
-            border-radius: 8px;
-            padding: 12px 0px;
-            margin: 8px 0px !important;
-            width: 100% !important;
-            height: 45px !important;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-            font-size: 0.95rem;
-        }
-        
-        section[data-testid="stSidebar"] .stButton > button:hover {
-            background-color: #388E3C !important;
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(46, 125, 50, 0.5);
-            color: #FFFFFF !important;
-        }
-
-        /* Data Tables - Modern Green Text */
+        /* Data Tables */
         div[data-testid="stDataFrame"] td, 
-        div[data-testid="stTable"] td,
-        .styled-table td {
-            color: #4CAF50 !important; /* Elegant Green */
+        div[data-testid="stTable"] td {
+            color: #4CAF50 !important;
             font-weight: 500;
         }
         
-
-
-        /* Custom Inputs (Robust targeting) */
-        .stTextInput > div > div > input {
-            background-color: #222 !important;
-            color: #fff !important;
-            border: 1px solid #444 !important;
-            border-radius: 8px !important;
-            padding: 10px !important; /* Comfortable padding */
-        }
-        
-        .stTextInput > div > div > input:focus {
-            border-color: #D4AF37 !important;
-            box-shadow: 0 0 5px rgba(212, 175, 55, 0.5) !important;
-        }
-
-        /* 
-           LANGUAGE TOGGLE - ULTRA ROBUST TARGETING
-           Using the "Marker + Sibling" pattern to target specific buttons
-        */
-        
-        /* --- LOGIN UI CONSOLIDATED FIXES (STABLE VERSION) --- */
-        
-        /* 1. Target ALL buttons inside the login card for width and dark theme */
-        .login-screen-wrapper [data-testid="stForm"] .stButton button {
-            width: 100% !important;
-            background: #1A1A1B !important; 
-            border: 1px solid rgba(212, 175, 55, 0.4) !important;
-            height: 52px !important;
-            border-radius: 12px !important;
-            margin: 0 !important; /* Let form gap handle vertical space */
-        }
-
-        /* 2. Login Button: Glowing Yellow Text (First Submit Button in Form) */
-        .login-screen-wrapper [data-testid="stForm"] [data-testid="stFormSubmitButton"]:first-of-type button p,
-        .login-screen-wrapper [data-testid="stForm"] [data-testid="stFormSubmitButton"]:first-of-type button span,
-        .login-screen-wrapper [data-testid="stForm"] [data-testid="stFormSubmitButton"]:first-of-type button {
-            color: #FFFF00 !important; 
-            text-shadow: 
-                0 0 8px #FFFF00, 
-                0 0 15px #FFFF00, 
-                0 0 30px rgba(255, 255, 0, 0.6) !important;
-            font-weight: 900 !important;
-            font-size: 1.25rem !important;
-        }
-
-        /* 3. Language Button: Gold Text (Second Submit Button in Form) */
-        .login-screen-wrapper [data-testid="stForm"] [data-testid="stFormSubmitButton"]:nth-of-type(2) button p,
-        .login-screen-wrapper [data-testid="stForm"] [data-testid="stFormSubmitButton"]:nth-of-type(2) button span,
-        .login-screen-wrapper [data-testid="stForm"] [data-testid="stFormSubmitButton"]:nth-of-type(2) button {
-            color: #D4AF37 !important;
-            font-weight: 700 !important;
-            font-size: 1.1rem !important;
-        }
-        
-        /* 4. Unified Hover Effect */
-        .login-screen-wrapper [data-testid="stForm"] .stButton button:hover {
-            border-color: #FFFF00 !important;
-            box-shadow: 0 0 20px rgba(255, 255, 0, 0.4) !important;
-            background: #222 !important;
-        }
-
-        /* 2. Sidebar Toggle (Large Green Pill) */
-        div:has(> #sidebar-lang-anchor) + div .stButton > button {
-            width: 120px !important;
-            height: 120px !important;
-            min-width: 120px !important;
-            max-width: 120px !important;
-            border-radius: 25px !important;
-            font-size: 2.2rem !important; 
-            font-weight: 800 !important;
-            background-color: #2E7D32 !important; 
-            color: #FFFFFF !important; 
-            border: 2px solid rgba(255, 255, 255, 0.4) !important;
-            box-shadow: 0 8px 25px rgba(0,0,0,0.7) !important;
-            display: flex !important;
-            justify-content: center !important;
-            align-items: center !important;
-            margin: 15px auto !important;
-            padding: 0 !important;
-            aspect-ratio: 1/1 !important;
-            transition: all 0.3s ease !important;
-        }
-
-        /* Reset Hover Opacity for marker in sidebar */
-        div:has(> #sidebar-lang-anchor) + div .stButton > button:hover {
-            opacity: 0.9 !important;
-            transform: scale(1.05) !important;
-            border-color: #D4AF37 !important;
-        }
-
-        /* 
-           GLOBAL TABLE STYLING 
-           Headers: Gold Color (#D4AF37)
-           We target multiple possible DOM structures for Streamlit DataFrames
-        */
-        
-        /* 1. Standard DataFrame Headers (Glide/Modern) */
         [data-testid="stDataFrame"] thead th,
-        [data-testid="stDataFrame"] [role="columnheader"],
-        [data-testid="stDataFrame"] [role="columnheader"] *,
-        [data-testid="stDataFrame"] [data-testid="stHeader"] *,
-        [data-testid="stDataFrame"] .st-emotion-cache-12w0u95 *,
-        [data-testid="stDataFrame"] div:has(> [role="columnheader"]) * {
-            color: #D4AF37 !important;
-            font-weight: bold !important;
-            font-size: 1.05rem !important;
-        }
-
-        /* 2. Legacy Table Headers */
-        table th, table th * {
+        [data-testid="stDataFrame"] [role="columnheader"] {
             color: #D4AF37 !important;
             font-weight: bold !important;
         }
 
-        /* Glowing Metric Cards */
+        /* Metrics */
         .metric-container {
             display: flex;
             flex-direction: column;
@@ -500,81 +412,30 @@ def get_css():
             background: rgba(255, 255, 255, 0.03);
             border-radius: 15px;
             border: 1px solid rgba(255, 255, 255, 0.05);
-            transition: transform 0.3s ease;
-            width: 100%;
-        }
-        .metric-container:hover {
-            transform: translateY(-5px);
-            background: rgba(255, 255, 255, 0.05);
-        }
-        .metric-label {
-            font-size: 1.4rem !important;
-            font-weight: 700 !important;
-            margin-bottom: 10px !important;
-            letter-spacing: 1px;
-            text-transform: uppercase;
-        }
-        .metric-value {
-            font-size: 3.5rem !important;
-            font-weight: 800 !important;
-            margin: 0 !important;
-            line-height: 1;
+            margin: 10px 0;
         }
         
-        /* Specific Glow Colors */
-        .glow-green .metric-label { color: #4CAF50 !important; }
-        .glow-green .metric-value { 
-            color: #4CAF50 !important; 
-            text-shadow: 0 0 15px rgba(76, 175, 80, 0.8), 0 0 30px rgba(76, 175, 80, 0.4);
-        }
-        
-        .glow-red .metric-label { color: #FF5252 !important; }
-        .glow-red .metric-value { 
-            color: #FF5252 !important; 
-            text-shadow: 0 0 15px rgba(255, 82, 82, 0.8), 0 0 30px rgba(255, 82, 82, 0.4);
-        }
-        
-        .glow-orange .metric-label { color: #FFAB40 !important; }
-        .glow-orange .metric-value { 
-            color: #FFAB40 !important; 
-            text-shadow: 0 0 15px rgba(255, 171, 64, 0.8), 0 0 30px rgba(255, 171, 64, 0.4);
-        }
+        .metric-label { font-weight: 700; color: #888; margin-bottom: 5px; text-transform: uppercase; }
+        .metric-value { font-weight: 800; line-height: 1.1; }
 
-        /* Glowing Page Title for Search */
-        .glowing-title {
-            color: #D4AF37 !important; /* Gold */
-            font-size: 3rem !important;
+        .glow-green .metric-value { color: #4CAF50 !important; text-shadow: 0 0 15px rgba(76, 175, 80, 0.5); }
+        .glow-red .metric-value { color: #FF5252 !important; text-shadow: 0 0 15px rgba(255, 82, 82, 0.5); }
+        .glow-orange .metric-value { color: #FFAB40 !important; text-shadow: 0 0 15px rgba(255, 171, 64, 0.5); }
+
+        /* Login Button Glowing Yellow */
+        .login-screen-wrapper [data-testid="stForm"] [data-testid="stFormSubmitButton"]:first-of-type button p {
+            color: #FFFF00 !important; 
+            text-shadow: 0 0 8px #FFFF00, 0 0 15px #FFFF00;
             font-weight: 900 !important;
-            text-align: center !important;
-            text-shadow: 
-                0 0 10px rgba(212, 175, 55, 0.9),
-                0 0 20px rgba(212, 175, 55, 0.6),
-                0 0 30px rgba(212, 175, 55, 0.3) !important;
-            margin-bottom: 30px !important;
-            padding-top: 10px !important;
-            width: 100% !important;
-            display: block !important;
-            font-family: 'Tajawal', sans-serif;
         }
 
-        /* Large Search Button Specifically targeting via anchor */
-        div:has(#search-btn-anchor) ~ div .stButton button,
-        div:has(#search-btn-anchor) ~ div .stButton button p,
-        div:has(#search-btn-anchor) ~ div .stButton button span {
-            height: 60px !important;
-            width: 5cm !important; 
-            min-width: 5cm !important; 
-            max-width: 5cm !important;
-            color: #D4AF37 !important; /* Gold text */
-            font-size: 2.1rem !important; /* Size 21 scale */
-            font-weight: 900 !important; /* Extra bold */
-            display: flex !important;
-            align-items: center !important;
-            justify-content: center !important;
-            margin: 0 auto !important;
+        /* Language Button Gold */
+        .login-screen-wrapper [data-testid="stForm"] [data-testid="stFormSubmitButton"]:nth-of-type(2) button p {
+            color: #D4AF37 !important;
+            font-weight: 700 !important;
         }
 
-        /* --- CUSTOM HOURGLASS LOADER --- */
+        /* Hourglass Loader */
         .loader-wrapper {
             display: flex;
             flex-direction: column;
@@ -608,11 +469,9 @@ def get_css():
         }
         .loading-text {
             color: #D4AF37;
-            font-family: 'Tajawal', sans-serif;
             font-size: 1.5rem;
             margin-top: 20px;
             font-weight: 700;
-            text-shadow: 0 0 10px rgba(212, 175, 55, 0.5);
         }
     </style>
     """
