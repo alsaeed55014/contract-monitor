@@ -155,341 +155,213 @@ class AuthManager:
 def get_css():
     return """
     <style>
-        /* General Imports */
-        @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;700&family=Cinzel:wght@600&family=Orbitron:wght@600&family=Alex+Brush&family=Aref+Ruqaa&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;700&family=Alex+Brush&family=Aref+Ruqaa&display=swap');
         
-        /* Main Container */
+        :root {
+            --bg-dark: #0F0F0F;
+            --card-bg: #1A1A1A;
+            --gold: #D4AF37;
+            --green: #2E7D32;
+            --light-green: #39FF14;
+            --header-bg: #161616;
+            --text-main: #F8F8F8;
+            --text-dim: #BBBBBB;
+            --radius: 14px;
+            --transition: 0.15s ease;
+        }
+
+        /* 1️⃣ MOBILE-FIRST LAYOUT & WRAPPER */
         .stApp {
-            background-color: #0F0F0F;
-            color: #F8F8F8;
+            background-color: var(--bg-dark);
+            color: var(--text-main);
             font-family: 'Tajawal', sans-serif;
+            margin: 0 auto;
+            max-width: 430px !important; /* Mobile Standard */
+            border-left: 1px solid rgba(255,255,255,0.05);
+            border-right: 1px solid rgba(255,255,255,0.05);
+            box-shadow: 0 0 50px rgba(0,0,0,0.5);
+            padding-bottom: 80px !important; /* Avoid system buttons */
         }
 
-        /* ---------------------------------------------------------
-           1) GLOBAL RESPONSIVE RESET & PADDING
-           --------------------------------------------------------- */
-        [data-testid="stAppViewContainer"] {
-            padding: 1rem;
+        /* Prevent web-like behaviors */
+        * {
+            -webkit-tap-highlight-color: transparent;
+            user-select: none;
+            -webkit-user-select: none;
         }
         
+        p, h1, h2, h3, span, label, input, textarea {
+            user-select: text;
+            -webkit-user-select: text;
+        }
+
+        [data-testid="stAppViewContainer"] {
+            background-color: #000; /* Backdrop for wide screens */
+            display: flex;
+            justify-content: center;
+        }
+
         .main .block-container {
-            padding-top: 2rem !important;
-            padding-bottom: 2rem !important;
+            padding: 70px 16px 80px 16px !important; /* Top space for Sticky Header */
+            max-width: 430px !important;
         }
 
-        /* Prevent text breaking in buttons and headers */
-        .stButton > button, h1, h2, h3, p, span, label {
-            white-space: normal !important;
-            word-wrap: break-word !important;
-            overflow-wrap: break-word !important;
+        /* 2️⃣ STICKY HEADER STYLE */
+        .app-header {
+            position: fixed;
+            top: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 100%;
+            max-width: 430px;
+            height: 65px;
+            background: rgba(22, 22, 22, 0.95);
+            backdrop-filter: blur(10px);
+            display: flex;
+            align-items: center;
+            padding: 0 16px;
+            z-index: 999999;
+            border-bottom: 1px solid rgba(212, 175, 55, 0.2);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
         }
 
-        /* Responsive Tables Wrapper - Refined */
-        div[data-testid="stDataFrame"], 
-        div[data-testid="stTable"],
-        .stTable, .stDataFrame {
-            width: 100% !important;
-            overflow-x: auto !important;
-            /* display: block !important; <- REMOVED to avoid breaking event handling */
+        .header-profile {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            border: 2px solid var(--gold);
+            margin-inline-end: 12px;
+            object-fit: cover;
         }
 
-        /* Headers */
-        h1, h2, h3 {
-            color: #D4AF37 !important; /* Gold */
-            font-family: 'Tajawal', sans-serif;
-            text-align: center;
-            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
-        }
-
-        /* ---------------------------------------------------------
-           2) MOBILE & TABLET STYLES (< 768px)
-           --------------------------------------------------------- */
-        @media (max-width: 768px) {
-            .main .block-container {
-                padding: 1rem !important;
-            }
-            
-            h1 { font-size: 1.8rem !important; }
-            h2 { font-size: 1.5rem !important; }
-            h3 { font-size: 1.25rem !important; }
-            
-            /* Enhanced Buttons for Mobile Visibility */
-            .stButton > button, 
-            div[data-testid="stForm"] .stButton > button,
-            section[data-testid="stSidebar"] .stButton > button {
-                width: 100% !important;
-                min-height: 50px !important;
-                font-size: 16px !important;
-                font-weight: bold !important;
-                color: #ffffff !important;
-                background-color: #b68b2c !important;
-                border-radius: 10px !important;
-                border: none !important;
-                opacity: 1 !important;
-                box-shadow: 0 4px 10px rgba(0,0,0,0.3) !important;
-            }
-
-            .stButton > button:hover,
-            .stButton > button:focus,
-            .stButton > button:active {
-                color: #ffffff !important;
-                background-color: #b68b2c !important;
-                outline: none !important;
-                box-shadow: none !important;
-                transform: none !important;
-            }
-
-            /* Metric & Data Table Adjustments */
-            td {
-                font-size: 15px !important;
-                font-weight: 600 !important;
-                white-space: nowrap !important;
-            }
-
-            .metric-value { font-size: 2.2rem !important; }
-            .metric-label { font-size: 1rem !important; }
-
-            /* Signature sizing */
-            .red-neon-signature { font-size: 1.8rem !important; }
-            .programmer-signature-neon { font-size: 1.4rem !important; }
-            
-            /* Search Inputs */
-            .stTextInput input {
-                font-size: 16px !important;
-                padding: 12px !important;
-            }
-        }
-
-        /* ---------------------------------------------------------
-           3) LAPTOP STYLES (769px - 1440px)
-           --------------------------------------------------------- */
-        @media (min-width: 769px) and (max-width: 1440px) {
-            .main .block-container {
-                padding-left: 3rem !important;
-                padding-right: 3rem !important;
-            }
-            h1 { font-size: 2.5rem !important; }
-            h2 { font-size: 2.1rem !important; }
-        }
-
-        /* ---------------------------------------------------------
-           5) LARGE DESKTOP STYLES (> 1441px)
-           --------------------------------------------------------- */
-        @media (min-width: 1441px) {
-            .main .block-container {
-                max-width: 1600px !important;
-                margin: 0 auto !important;
-                padding-left: 8rem !important;
-                padding-right: 8rem !important;
-            }
-            
-            /* Scale fonts for large screens */
-            body, p, label, .stMarkdown, .stTextInput input {
-                font-size: 1.15rem !important;
-            }
-            h1 { font-size: 3.5rem !important; }
-            h2 { font-size: 2.8rem !important; }
-            .metric-value { font-size: 4.5rem !important; }
-        }
-
-        /* Existing component styles integrated with responsiveness */
-
-        /* Login Screen Image & Title Layout */
-        .login-screen-wrapper {
+        .header-title-box {
             display: flex;
             flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            width: 100%;
-        }
-        
-        .login-screen-wrapper img {
-            border-radius: 50%;
-            border: 3px solid #D4AF37;
-            box-shadow: 0 0 15px rgba(212, 175, 55, 0.4);
-            margin-bottom: 10px;
-            width: 80px !important;
-            height: 80px !important;
+            flex-grow: 1;
         }
 
-        .welcome-signature-container {
-             display: flex;
-             align-items: baseline;
-             justify-content: center;
-             gap: 15px;
-             margin-bottom: 20px;
-             flex-wrap: wrap; 
+        .header-welcome {
+            font-size: 0.75rem;
+            color: var(--text-dim);
+            margin-bottom: -2px;
         }
 
-        .programmer-signature-neon {
-            font-family: 'Alex Brush', cursive;
-            font-size: 1.8rem;
-            color: #fff;
-            text-shadow: 0 0 5px #fff, 0 0 10px #fff, 0 0 20px #D4AF37, 0 0 30px #D4AF37, 0 0 40px #D4AF37;
-            animation: neon-flicker 1.5s infinite alternate;       
+        .header-app-name {
+            font-size: 0.95rem;
+            font-weight: 700;
+            color: var(--gold);
         }
 
-        .red-neon-signature {
-            font-family: 'Alex Brush', cursive;
-            font-size: 2.5rem;
-            color: #FF3131; 
-            text-align: center;
-            width: 100%;
-            display: block;
-            margin-bottom: 0px;
-            padding-bottom: 5px;
-            text-shadow: 0 0 7px #FF3131, 0 0 15px #FF3131, 0 0 25px #FF3131, 0 0 45px #FF0000;
-            font-weight: 900 !important;
-        }
-        
-        @keyframes neon-flicker {
-            0%, 19%, 21%, 23%, 25%, 54%, 56%, 100% {
-                text-shadow: 0 0 4px #fff, 0 0 10px #fff, 0 0 18px #D4AF37, 0 0 38px #D4AF37, 0 0 73px #D4AF37;
-            }
-            20%, 24%, 55% { text-shadow: none; }
-        }
-
-        /* Form Styling */
-        div[data-testid="stForm"] {
-            background-color: #1A1A1A !important;
-            border: 1px solid rgba(212, 175, 55, 0.3) !important;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.5) !important;
-            max-width: 450px !important;
-            margin: 0 auto !important;
-            padding: 30px !important;
-            border-radius: 20px !important;
-        }
-        
-        .programmer-credit {
-            color: #39FF14 !important;
-            font-family: 'Aref Ruqaa', serif;
-            margin: 5px auto !important;
-            font-size: 1.5em !important;
-            letter-spacing: 0.5px;
-            text-align: center;
-            font-weight: 700 !important; 
-            text-shadow: 0 0 2px rgba(0, 0, 0, 1), 0 0 8px rgba(57, 255, 20, 0.6);
-            white-space: nowrap !important;
-            width: auto !important;
-            display: block;
-        }
-        
-        /* Premium Buttons */
+        /* 3️⃣ APP BUTTONS */
         .stButton > button {
+            width: 100% !important;
+            height: 52px !important;
+            border-radius: var(--radius) !important;
             background: linear-gradient(135deg, #2E7D32 0%, #1B5E20 100%) !important;
             color: #FFFFFF !important;
-            font-weight: 800 !important;
-            letter-spacing: 1px !important;
-            border: none !important;
-            padding: 12px 15px !important;
-            box-shadow: 0 4px 15px rgba(46, 125, 50, 0.4) !important;
-            border-radius: 8px !important;
-            transition: all 0.3s ease !important;
-        }
-
-        .stButton > button:hover {
-            background: linear-gradient(135deg, #388E3C 0%, #2E7D32 100%) !important;
-            box-shadow: 0 0 25px rgba(76, 175, 80, 0.6) !important;
-            transform: translateY(-2px);
-        }
-
-        /* Sidebar Styling */
-        section[data-testid="stSidebar"] {
-            background-color: #161616 !important;
-            border-left: 1px solid rgba(212, 175, 55, 0.1);
-        }
-        
-        section[data-testid="stSidebar"] .stImage img {
-            border-radius: 50%;
-            border: 2px solid #D4AF37;
-            padding: 3px;
-            margin: 0 auto !important;
-            display: block;
-        }
-
-        /* Data Tables */
-        div[data-testid="stDataFrame"] td, 
-        div[data-testid="stTable"] td {
-            color: #4CAF50 !important;
-            font-weight: 500;
-        }
-        
-        [data-testid="stDataFrame"] thead th,
-        [data-testid="stDataFrame"] [role="columnheader"] {
-            color: #D4AF37 !important;
-            font-weight: bold !important;
-        }
-
-        /* Metrics */
-        .metric-container {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            padding: 20px;
-            background: rgba(255, 255, 255, 0.03);
-            border-radius: 15px;
-            border: 1px solid rgba(255, 255, 255, 0.05);
-            margin: 10px 0;
-        }
-        
-        .metric-label { font-weight: 700; color: #888; margin-bottom: 5px; text-transform: uppercase; }
-        .metric-value { font-weight: 800; line-height: 1.1; }
-
-        .glow-green .metric-value { color: #4CAF50 !important; text-shadow: 0 0 15px rgba(76, 175, 80, 0.5); }
-        .glow-red .metric-value { color: #FF5252 !important; text-shadow: 0 0 15px rgba(255, 82, 82, 0.5); }
-        .glow-orange .metric-value { color: #FFAB40 !important; text-shadow: 0 0 15px rgba(255, 171, 64, 0.5); }
-
-        /* Login Button Glowing Yellow */
-        .login-screen-wrapper [data-testid="stForm"] [data-testid="stFormSubmitButton"]:first-of-type button p {
-            color: #FFFF00 !important; 
-            text-shadow: 0 0 8px #FFFF00, 0 0 15px #FFFF00;
-            font-weight: 900 !important;
-        }
-
-        /* Language Button Gold */
-        .login-screen-wrapper [data-testid="stForm"] [data-testid="stFormSubmitButton"]:nth-of-type(2) button p {
-            color: #D4AF37 !important;
             font-weight: 700 !important;
+            font-size: 1rem !important;
+            border: none !important;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.2) !important;
+            transition: transform var(--transition), opacity var(--transition) !important;
+            margin-bottom: 12px !important;
         }
 
-        /* Hourglass Loader */
-        .loader-wrapper {
+        .stButton > button:active {
+            transform: scale(0.96) !important;
+            opacity: 0.8 !important;
+        }
+
+        /* Secondary/Primary Button Tweeks */
+        .stButton > button[kind="primary"] {
+            background: var(--gold) !important;
+            color: #000 !important;
+        }
+
+        /* 4️⃣ NATIVE INPUTS UX */
+        .stTextInput input, .stTextArea textarea, .stSelectbox [data-baseweb="select"] {
+            background-color: #222 !important;
+            border: 1px solid #333 !important;
+            border-radius: 12px !important;
+            height: 52px !important;
+            font-size: 1rem !important;
+            color: #fff !important;
+            transition: var(--transition) !important;
+        }
+
+        .stTextInput input:focus {
+            border-color: var(--gold) !important;
+            box-shadow: 0 0 10px rgba(212, 175, 55, 0.2) !important;
+        }
+
+        /* 5️⃣ CARD LIST STYLING (For manually created cards) */
+        .app-card {
+            background-color: var(--card-bg);
+            border-radius: var(--radius);
+            padding: 16px;
+            margin-bottom: 16px;
+            border: 1px solid rgba(255,255,255,0.05);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        }
+
+        .card-header {
             display: flex;
-            flex-direction: column;
+            justify-content: space-between;
             align-items: center;
-            justify-content: center;
-            padding: 40px;
-            width: 100%;
+            margin-bottom: 12px;
         }
-        .hourglass {
-            display: inline-block;
-            position: relative;
-            width: 80px;
-            height: 80px;
-        }
-        .hourglass:after {
-            content: " ";
-            display: block;
-            border-radius: 50%;
-            width: 0;
-            height: 0;
-            margin: 6px;
-            box-sizing: border-box;
-            border: 32px solid #D4AF37;
-            border-color: #D4AF37 transparent #D4AF37 transparent;
-            animation: hourglass 1.2s infinite;
-        }
-        @keyframes hourglass {
-            0% { transform: rotate(0); animation-timing-function: cubic-bezier(0.55, 0.055, 0.675, 0.19); }
-            50% { transform: rotate(900deg); animation-timing-function: cubic-bezier(0.215, 0.61, 0.355, 1); }
-            100% { transform: rotate(1800deg); }
-        }
-        .loading-text {
-            color: #D4AF37;
-            font-size: 1.5rem;
-            margin-top: 20px;
+
+        .card-title {
+            font-size: 1.1rem;
             font-weight: 700;
+            color: var(--gold);
+        }
+
+        .badge {
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 700;
+        }
+
+        .badge-active { background: rgba(46, 125, 50, 0.2); color: #4CAF50; border: 1px solid #4CAF50; }
+        .badge-expired { background: rgba(255, 82, 82, 0.2); color: #FF5252; border: 1px solid #FF5252; }
+        .badge-warning { background: rgba(255, 171, 64, 0.2); color: #FFAB40; border: 1px solid #FFAB40; }
+
+        .card-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 6px;
+            font-size: 0.9rem;
+        }
+
+        .card-label { color: var(--text-dim); }
+        .card-value { font-weight: 500; }
+
+        /* 6️⃣ HIDE STREAMLIT ELEMENTS */
+        #MainMenu, footer, header {
+            visibility: hidden !important;
+            display: none !important;
+        }
+        
+        [data-testid="stHeader"] {
+            display: none !important;
+        }
+
+        /* Metric sizes in mobile app */
+        .metric-container {
+            background: #222 !important;
+            padding: 12px !important;
+            border-radius: 12px !important;
+            border: 1px solid #333 !important;
+        }
+        .metric-value { font-size: 1.8rem !important; }
+        .metric-label { font-size: 0.85rem !important; }
+
+        /* Sidebar Styling (Drawer Style) */
+        section[data-testid="stSidebar"] {
+            background-color: #111 !important;
+            width: 280px !important;
         }
     </style>
     """
@@ -736,6 +608,97 @@ def render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search"):
             if f_id: preview_url = f"https://drive.google.com/file/d/{f_id}/preview"
         st.components.v1.iframe(preview_url, height=600, scrolling=True)
     else: st.info("لا يتوفر رابط معاينة لهذا العامل.")
+    st.markdown('<div style="margin-bottom: 30px;"></div>', unsafe_allow_html=True)
+
+# 11.2 Native App Components
+def render_sticky_header():
+    lang = st.session_state.lang
+    user = st.session_state.user
+    profile_img = IMG_PATH if os.path.exists(IMG_PATH) else "https://ui-avatars.com/api/?name=" + (user.get('first_name_en', 'User'))
+    
+    st.markdown(f"""
+        <div class="app-header">
+            <img src="{profile_img}" class="header-profile">
+            <div class="header-title-box">
+                <div class="header-welcome">{t('welcome_back', lang)} {user.get('first_name_ar' if lang == 'ar' else 'first_name_en', '')} 👋</div>
+                <div class="header-app-name">{t('system_title', lang)}</div>
+            </div>
+            <div style="cursor: pointer; font-size: 1.2rem;" onclick="window.parent.document.querySelector('[data-testid=stSidebar]').toggle()">
+                ⚙️
+            </div>
+        </div>
+    """, unsafe_allow_html=True)
+
+def render_card_list(df, lang, key_prefix="card"):
+    if df.empty:
+        st.info(t("no_data", lang))
+        return
+
+    # Helper to get badge class
+    def get_badge_info(row):
+        # Find Status column
+        status = str(row.get('Status', '')).lower()
+        if 'expired' in status or 'منتهي' in status:
+            return 'badge-expired', '🔴'
+        if 'urgent' in status or 'warning' in status or 'متبقى' in status:
+            return 'badge-warning', '🟠'
+        return 'badge-active', '🟢'
+
+    # CV Column detection
+    cv_col = next((c for c in df.columns if "cv" in str(c).lower() or "سيرة" in str(c).lower()), None)
+    name_col = next((c for c in df.columns if "name" in str(c).lower() or "اسم" in str(c).lower()), df.columns[0])
+    rem_col = next((c for c in df.columns if "remaining" in str(c).lower() or "المتبقى" in str(c).lower()), None)
+
+    for idx, row in df.iterrows():
+        b_class, b_icon = get_badge_info(row)
+        
+        with st.container():
+            st.markdown(f"""
+                <div class="app-card">
+                    <div class="card-header">
+                        <div class="card-title">{row[name_col]}</div>
+                        <div class="badge {b_class}">{row.get('Status', '')} {b_icon}</div>
+                    </div>
+            """, unsafe_allow_html=True)
+            
+            # Show 3-4 key fields
+            if rem_col:
+                st.markdown(f"""
+                    <div class="card-row">
+                        <span class="card-label">{"المتبقى" if lang == 'ar' else "Remaining"}</span>
+                        <span class="card-value">{row[rem_col]} {"يوم" if lang == 'ar' else "Days"}</span>
+                    </div>
+                """, unsafe_allow_html=True)
+            
+            # Find a date column
+            date_col = next((c for c in df.columns if "end" in str(c).lower() or "انتهاء" in str(c).lower()), None)
+            if date_col:
+                st.markdown(f"""
+                    <div class="card-row">
+                        <span class="card-label">{"النهاية" if lang == 'ar' else "End"}</span>
+                        <span class="card-value">{row[date_col]}</span>
+                    </div>
+                """, unsafe_allow_html=True)
+            
+            # Action Buttons inside card (App style)
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.button("تفاصيل 📄" if lang == 'ar' else "Detail 📄", key=f"det_{key_prefix}_{idx}", use_container_width=True):
+                    st.session_state[f"selected_worker_{key_prefix}"] = idx
+            with col2:
+                if cv_col and row.get(cv_col) and str(row[cv_col]).startswith("http"):
+                    st.link_button("الملف 🔗" if lang == 'ar' else "File 🔗", row[cv_col], use_container_width=True)
+                else:
+                    st.button("لا يوجد 🚫" if lang == 'ar' else "No CV 🚫", disabled=True, use_container_width=True, key=f"nocv_{key_prefix}_{idx}")
+            
+            st.markdown("</div>", unsafe_allow_html=True)
+        
+        # If detail clicked
+        if st.session_state.get(f"selected_worker_{key_prefix}") == idx:
+            render_cv_detail_panel(row, idx, lang, key_prefix=key_prefix)
+            if st.button("إغلاق ❌" if lang == 'ar' else "Close ❌", key=f"close_{key_prefix}_{idx}", use_container_width=True):
+                del st.session_state[f"selected_worker_{key_prefix}"]
+                st.rerun()
 
 # 11. Logic Functions
 def login_screen():
@@ -772,6 +735,8 @@ def login_screen():
                     user['username'] = u
                     st.session_state.user = user
                     st.session_state.show_welcome = True
+                    # Bottom spacing for login
+                    st.markdown('<div style="height: 50px;"></div>', unsafe_allow_html=True)
                     st.rerun()
                 else:
                     st.error(t("invalid_creds", lang))
@@ -886,10 +851,16 @@ def dashboard():
 
     page = st.session_state.get('page', 'dashboard')
     
+    # Native Mobile Header
+    render_sticky_header()
+    
     if page == "dashboard": render_dashboard_content()
     elif page == "search": render_search_content()
     elif page == "translator": render_translator_content()
     elif page == "permissions": render_permissions_content()
+    
+    # Global Bottom Spacing for all pages
+    st.markdown('<div class="app-bottom-spacer" style="height: 80px;"></div>', unsafe_allow_html=True)
 
 def render_dashboard_content():
     lang = st.session_state.lang
@@ -1027,39 +998,8 @@ def render_dashboard_content():
             
         d_final.rename(columns=new_names, inplace=True)
         
-        # Recalculate Column Config Key
-        final_cfg = {}
-        if cv_col and cv_col in new_names:
-            trans_cv_col = new_names[cv_col]
-            final_cfg[trans_cv_col] = st.column_config.LinkColumn(
-                t("cv_download", lang), 
-                display_text=t("download_pdf", lang)
-            )
-        
-        # Suffix Configuration for Numeric Remaining Column
-        rem_key_display = new_names.get('المتبقى', 'المتبقى') if lang == 'ar' else new_names.get('Remaining', 'Remaining')
-        final_cfg[rem_key_display] = st.column_config.NumberColumn(
-            rem_key_display,
-            format="%d يوم" if lang == 'ar' else "%d Days"
-        )
-
-        # Apply Green Text Styling
-        styled_final = style_df(d_final)
-        
-        event = st.dataframe(
-            styled_final, 
-            use_container_width=True, 
-            column_config=final_cfg,
-            on_select="rerun",
-            selection_mode="single-row",
-            hide_index=True,
-            key=f"dash_table_{lang}_{tab_id}"
-        )
-        
-        if event.selection and event.selection.get("rows"):
-            sel_idx = event.selection["rows"][0]
-            worker_row = d.iloc[sel_idx]
-            render_cv_detail_panel(worker_row, sel_idx, lang, key_prefix=f"dash_{tab_id}")
+        # render_card_list handles display and detail panel internally
+        render_card_list(d, lang, key_prefix=tab_id)
 
     with t1: show(stats['urgent'], "urgent")
     with t2: show(stats['expired'], "expired")
@@ -1264,46 +1204,11 @@ def render_search_content():
 
             res_display = res_to_rename.rename(columns=new_names)
             
-            # --- ROW SELECTION & PROFESSIONAL UI ---
-
-            
-            # Configure columns for better look
-            column_config = {}
-            cv_col_name = t_col("Download CV", lang)
-            column_config[cv_col_name] = st.column_config.LinkColumn(
-                cv_col_name,
-                help="Click to open original file",
-                validate="^http",
-                display_text="فتح الملف 🔗"
-            )
-            
-            # Numeric Suffix for Search
-            rem_key_search = t_col('المتبقى' if lang == 'ar' else 'Remaining', lang)
-            column_config[rem_key_search] = st.column_config.NumberColumn(
-                rem_key_search,
-                format="%d يوم" if lang == 'ar' else "%d Days"
-            )
-
-            # Use on_select to capture row selection
-            styled_res = style_df(res_display)
-            event = st.dataframe(
-                styled_res, 
-                use_container_width=True,
-                on_select="rerun",
-                selection_mode="single-row",
-                hide_index=True,
-                column_config=column_config,
-                key="search_results_table"
-            )
-
-            # Handle Selection with Safety Check
-            if event.selection and event.selection.get("rows"):
-                selected_idx = event.selection["rows"][0]
-                if 0 <= selected_idx < len(res):
-                    worker_row = res.iloc[selected_idx]
-                    render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search")
-                else:
-                    st.toast("⚠️ Selection out of bounds. Please refresh search." if lang == 'en' else "⚠️ التحديد خارج النطاق. يرجى تحديث البحث.")
+            # Card View instead of Table
+            render_card_list(res, lang, key_prefix="search")
+    
+    # Global Bottom Spacing for search page
+    st.markdown('<div class="app-bottom-spacer" style="height: 80px;"></div>', unsafe_allow_html=True)
 
 
 def render_translator_content():
