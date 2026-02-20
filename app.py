@@ -184,13 +184,13 @@ def get_css():
             overflow-wrap: break-word !important;
         }
 
-        /* Responsive Tables Wrapper */
+        /* Responsive Tables Wrapper - Refined */
         div[data-testid="stDataFrame"], 
         div[data-testid="stTable"],
         .stTable, .stDataFrame {
             width: 100% !important;
             overflow-x: auto !important;
-            display: block !important;
+            /* display: block !important; <- REMOVED to avoid breaking event handling */
         }
 
         /* Headers */
@@ -1278,11 +1278,14 @@ def render_search_content():
                 key="search_results_table"
             )
 
-            # Handle Selection
+            # Handle Selection with Safety Check
             if event.selection and event.selection.get("rows"):
                 selected_idx = event.selection["rows"][0]
-                worker_row = res.iloc[selected_idx]
-                render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search")
+                if 0 <= selected_idx < len(res):
+                    worker_row = res.iloc[selected_idx]
+                    render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search")
+                else:
+                    st.toast("⚠️ Selection out of bounds. Please refresh search." if lang == 'en' else "⚠️ التحديد خارج النطاق. يرجى تحديث البحث.")
 
 
 def render_translator_content():
