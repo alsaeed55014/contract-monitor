@@ -341,73 +341,14 @@ def get_css():
         }
         
         /* Metric Styling */
+        .metric-container {
+            background: rgba(255, 255, 255, 0.02) !important;
+            border-radius: 20px !important;
+            border: 1px solid rgba(212, 175, 55, 0.05) !important;
+            padding: 1.5rem !important;
+            transition: transform 0.3s ease !important;
+        }
         .metric-container:hover { transform: scale(1.05); }
-
-        /* 9) Custom HTML Table for Order Processing */
-        .custom-table-wrapper {
-            width: 100%;
-            overflow-x: auto !important;
-            background: rgba(10, 10, 10, 0.4);
-            border-radius: 15px;
-            border: 1px solid var(--border-glow);
-            margin: 20px 0;
-            padding-bottom: 5px;
-        }
-
-        .luxury-table {
-            width: 100%;
-            min-width: 1300px; /* Force overflow for horizontal scroll */
-            border-collapse: collapse;
-            font-family: 'Inter', 'Tajawal', sans-serif;
-            font-size: 0.95rem;
-            direction: rtl; /* Support Arabic RTL */
-        }
-
-        .luxury-table th {
-            background: rgba(30, 30, 30, 0.82) !important;
-            color: var(--luxury-gold) !important;
-            padding: 15px 12px;
-            text-align: center;
-            font-weight: 600;
-            border-bottom: 1px solid var(--border-glow);
-            position: sticky;
-            top: 0;
-            z-index: 10;
-        }
-
-        .luxury-table td {
-            padding: 12px;
-            text-align: center;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-            color: #DDD;
-            white-space: nowrap; /* Prevent wrapping for clean scroll */
-        }
-
-        .luxury-table tr:hover {
-            background: rgba(212, 175, 55, 0.05);
-        }
-
-        /* Status Colors */
-        .status-valid { color: #00FF41 !important; font-weight: bold; }
-        .status-expired { color: #FF3131 !important; font-weight: bold; }
-        .status-urgent { color: #FF9100 !important; font-weight: bold; }
-
-        /* Sticky Columns (Optional but Premium) */
-        .sticky-col {
-            position: sticky;
-            right: 0; /* RTL context */
-            background: rgba(20, 20, 20, 0.95) !important;
-            z-index: 5;
-            border-left: 1px solid var(--border-glow) !important;
-        }
-        
-        /* Custom Scrollbar for Wrapper */
-        .custom-table-wrapper::-webkit-scrollbar { height: 10px; }
-        .custom-table-wrapper::-webkit-scrollbar-thumb { 
-            background: var(--luxury-gold); 
-            border-radius: 5px; 
-        }
-        .custom-table-wrapper::-webkit-scrollbar-track { background: rgba(0,0,0,0.2); }
     </style>
     """
 
@@ -1717,12 +1658,6 @@ def render_order_processing_content():
     def build_worker_table(worker_list, score_list):
         rows = []
         filtered_indices = []
-        
-        # Identify registration date column (Timestamp)
-        w_reg_col = next((c for c in workers_df.columns if any(kw in str(c).lower() for kw in ["timestamp", "طابع", "تاريخ التسجيل"])), None)
-        # Identify contract end date column
-        w_expiry_col = next((c for c in workers_df.columns if any(kw in str(c).lower() for kw in ["contract end", "انتهاء العقد", "contract expiry"])), None)
-
         for i, (worker, score) in enumerate(zip(worker_list, score_list)):
             # Unique ID for hiding (using name and phone)
             w_name = str(worker.get(w_name_col, "")) if w_name_col else ""
@@ -1735,39 +1670,6 @@ def render_order_processing_content():
             row = {}
             row[t('match_score', lang)] = f"{score}%"
             if w_name_col: row[t('worker_name', lang)] = w_name
-            
-            # 1. NEW COLUMN: Registration Date
-            reg_val = str(worker.get(w_reg_col, "")) if w_reg_col else ""
-            row[t('registration_date_time', lang)] = reg_val
-            
-            # 2. NEW COLUMN: Contract Status
-            status_html = ""
-            status_text = ""
-            status_class = ""
-            if w_expiry_col:
-                expiry_val = worker.get(w_expiry_col)
-                status_res = ContractManager.calculate_status(expiry_val)
-                days = status_res.get('days')
-                
-                # Logic: Expired (<0), Urgent (0-30), Valid (>30)
-                if days is None:
-                    status_text = "غير معروف" if lang == 'ar' else "Unknown"
-                    status_class = ""
-                elif days < 0:
-                    status_text = "منتهي" if lang == 'ar' else "Expired"
-                    status_class = "status-expired"
-                elif days <= 30:
-                    status_text = "عاجل" if lang == 'ar' else "Urgent"
-                    status_class = "status-urgent"
-                else:
-                    status_text = "ساري" if lang == 'ar' else "Valid"
-                    status_class = "status-valid"
-                
-                # We'll use this in the HTML table
-                row["__status_class"] = status_class
-                row["__status_text"] = status_text
-                row[t('contract_status', lang)] = status_text
-
             if w_nationality_col: row[t('worker_nationality', lang)] = str(worker.get(w_nationality_col, ""))
             if w_gender_col: row[t('worker_gender', lang)] = str(worker.get(w_gender_col, ""))
             if w_job_col: row[t('worker_job', lang)] = str(worker.get(w_job_col, ""))
@@ -1781,39 +1683,6 @@ def render_order_processing_content():
             filtered_indices.append(i)
             
         return pd.DataFrame(rows), filtered_indices
-
-    def render_luxury_table(df, key_id):
-        """Generates a custom HTML table for horizontal scrolling and status colors."""
-        if df.empty: return
-        
-        # Prepare headers (skip internal columns)
-        visible_cols = [c for c in df.columns if not str(c).startswith("__")]
-        
-        # Build Table HTML
-        html = '<div class="custom-table-wrapper"><table class="luxury-table"><thead><tr>'
-        for col in visible_cols:
-            is_sticky = "sticky-col" if col in [t('worker_name', lang), t('match_score', lang)] else ""
-            html += f'<th class="{is_sticky}">{col}</th>'
-        html += '</tr></thead><tbody>'
-        
-        for _, row in df.iterrows():
-            html += '<tr>'
-            for col in visible_cols:
-                val = row[col]
-                extra_class = ""
-                
-                # Apply Status Colors
-                if col == t('contract_status', lang):
-                    extra_class = row.get("__status_class", "")
-                
-                # Column Sticky Logic (RTL: first columns on the right)
-                is_sticky = "sticky-col" if col in [t('worker_name', lang), t('match_score', lang)] else ""
-                
-                html += f'<td class="{extra_class} {is_sticky}">{val}</td>'
-            html += '</tr>'
-            
-        html += '</tbody></table></div>'
-        st.markdown(html, unsafe_allow_html=True)
 
     def info_cell(icon, label_text, value, color="#F4F4F4"):
         st.markdown(f"""
@@ -1898,36 +1767,32 @@ def render_order_processing_content():
                     if not city_df.empty:
                         st.markdown(f"""<div style="color: #D4AF37; font-weight: 700; margin: 10px 5px;">📍 عمال في نفس المدينة ({str(customer_row.get(c_location, ""))}) — {len(city_df)}</div>""", unsafe_allow_html=True)
                         
-                        # Render with Luxury HTML Table
-                        render_luxury_table(city_df, f"city_{idx}")
+                        # Use selection
+                        df_city_height = min((len(city_df) + 1) * 35 + 40, 500)
+                        event_city = st.dataframe(
+                            city_df.drop(columns=["__uid"]),
+                            use_container_width=True,
+                            hide_index=True,
+                            on_select="rerun",
+                            selection_mode="single-row",
+                            key=f"op_city_table_{idx}",
+                            height=df_city_height
+                        )
                         
-                        # Selection functionality for details
-                        st.markdown(f"""<div style="font-size: 0.85rem; color: #888; margin-bottom: 10px;">
-                            {'اختر موظفاً من القائمة أدناه لعرض تفاصيله:' if lang == 'ar' else 'Select a worker from the list below to view details:'}
-                        </div>""", unsafe_allow_html=True)
-                        
-                        col_sel_1, col_sel_2 = st.columns([3, 1])
-                        with col_sel_1:
-                            sel_worker_name = st.selectbox(
-                                "اختر العامل" if lang == 'ar' else "Select Worker",
-                                options=city_df[t('worker_name', lang)].tolist(),
-                                key=f"sel_city_{idx}"
-                            )
-                        
-                        if sel_worker_name:
-                            # Find index in cities_df
-                            sel_row_idx = city_df[city_df[t('worker_name', lang)] == sel_worker_name].index[0]
+                        if event_city.selection and event_city.selection.get("rows"):
+                            sel_row_idx = event_city.selection["rows"][0]
                             original_idx = city_idx_map[sel_row_idx]
                             worker_row = city_list[original_idx]
                             worker_uid = city_df.iloc[sel_row_idx]["__uid"]
                             
-                            with st.container():
-                                render_cv_detail_panel(worker_row, sel_row_idx, lang, key_prefix=f"op_city_{idx}")
-                                
-                                if st.button("🚫 " + ("إخفاء هذا العامل" if lang == 'ar' else "Hide this worker"), 
-                                             key=f"hide_city_{idx}_{worker_uid}"):
-                                    st.session_state.op_hidden_workers.add(worker_uid)
-                                    st.rerun()
+                            # Detail Panel
+                            render_cv_detail_panel(worker_row, sel_row_idx, lang, key_prefix=f"op_city_{idx}")
+                            
+                            # Hide Button
+                            if st.button("🚫 " + ("إخفاء هذا العامل" if lang == 'ar' else "Hide this worker"), 
+                                         key=f"hide_city_{idx}_{worker_uid}"):
+                                st.session_state.op_hidden_workers.add(worker_uid)
+                                st.rerun()
 
                 # Other Cities Table
                 if other_list:
@@ -1935,34 +1800,31 @@ def render_order_processing_content():
                     if not other_df.empty:
                         st.markdown(f"""<div style="color: #8888FF; font-weight: 700; margin: 10px 5px;">🌐 عمال في مدن أخرى — {len(other_df)}</div>""", unsafe_allow_html=True)
                         
-                        # Render with Luxury HTML Table
-                        render_luxury_table(other_df, f"other_{idx}")
-
-                        st.markdown(f"""<div style="font-size: 0.85rem; color: #888; margin-bottom: 10px;">
-                            {'اختر موظفاً من القائمة أدناه لعرض تفاصيله:' if lang == 'ar' else 'Select a worker from the list below to view details:'}
-                        </div>""", unsafe_allow_html=True)
-
-                        col_sel_3, col_sel_4 = st.columns([3, 1])
-                        with col_sel_3:
-                            sel_other_name = st.selectbox(
-                                "اختر العامل" if lang == 'ar' else "Select Worker",
-                                options=other_df[t('worker_name', lang)].tolist(),
-                                key=f"sel_other_{idx}"
-                            )
-
-                        if sel_other_name:
-                            sel_row_idx = other_df[other_df[t('worker_name', lang)] == sel_other_name].index[0]
+                        df_other_height = min((len(other_df) + 1) * 35 + 40, 500)
+                        event_other = st.dataframe(
+                            other_df.drop(columns=["__uid"]),
+                            use_container_width=True,
+                            hide_index=True,
+                            on_select="rerun",
+                            selection_mode="single-row",
+                            key=f"op_other_table_{idx}",
+                            height=df_other_height
+                        )
+                        
+                        if event_other.selection and event_other.selection.get("rows"):
+                            sel_row_idx = event_other.selection["rows"][0]
                             original_idx = other_idx_map[sel_row_idx]
                             worker_row = other_list[original_idx]
                             worker_uid = other_df.iloc[sel_row_idx]["__uid"]
                             
-                            with st.container():
-                                render_cv_detail_panel(worker_row, sel_row_idx, lang, key_prefix=f"op_other_{idx}")
-                                
-                                if st.button("🚫 " + ("إخفاء هذا العامل" if lang == 'ar' else "Hide this worker"), 
-                                             key=f"hide_other_{idx}_{worker_uid}"):
-                                    st.session_state.op_hidden_workers.add(worker_uid)
-                                    st.rerun()
+                            # Detail Panel
+                            render_cv_detail_panel(worker_row, sel_row_idx, lang, key_prefix=f"op_other_{idx}")
+                            
+                            # Hide Button
+                            if st.button("🚫 " + ("إخفاء هذا العامل" if lang == 'ar' else "Hide this worker"), 
+                                         key=f"hide_other_{idx}_{worker_uid}"):
+                                st.session_state.op_hidden_workers.add(worker_uid)
+                                st.rerun()
                 
                 if (not city_list or build_worker_table(city_list, city_scores)[0].empty) and \
                    (not other_list or build_worker_table(other_list, other_scores)[0].empty):

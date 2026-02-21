@@ -138,8 +138,8 @@ TRANSLATIONS = {
     "filter_dates_group": {"ar": "جدولة وتواريخ", "en": "Dates & Scheduling"},
     "filter_advanced_group": {"ar": "تصفية ذكية متقدمة", "en": "Advanced Smart Filters"},
     "age": {"ar": "العمر", "en": "age"},
-    "contract_status": {"ar": "حالة العقد", "en": "contract status"},
-    "registration_date_time": {"ar": "تاريخ ووقت التسجيل", "en": "registration date & time"},
+    "contract_end": {"ar": "تاريخ انتهاء العقد", "en": "contract expiry date"},
+    "registration_date": {"ar": "تاريخ التسجيل", "en": "registration date"},
     "no_huroob": {"ar": "بدون بلاغ هروب (No)", "en": "No Huroob"},
     "work_outside_city": {"ar": "يقبل العمل خارج مدينته (Yes)", "en": "Can work outside city"},
 
