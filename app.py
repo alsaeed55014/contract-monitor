@@ -537,19 +537,30 @@ def get_css():
             padding-bottom: 5px;
         }
 
-        /* Search Button Premium Primary */
+        /* Search Button Premium Primary (High-End Corporate Look) */
         button[kind="primary"] {
-            background: linear-gradient(135deg, #D4AF37 0%, #B8860B 100%) !important;
-            color: #000 !important;
-            border: none !important;
-            box-shadow: 0 0 15px rgba(212, 175, 55, 0.4) !important;
-            font-weight: 900 !important;
-            transition: 0.4s all !important;
+            background: rgba(26, 26, 26, 0.9) !important;
+            backdrop-filter: blur(10px) !important;
+            color: #D4AF37 !important;
+            border: 1px solid rgba(212, 175, 55, 0.5) !important;
+            border-radius: 4px !important;
+            padding: 0.8rem 2.5rem !important;
+            font-family: 'Inter', sans-serif !important;
+            font-weight: 500 !important;
+            text-transform: uppercase !important;
+            letter-spacing: 3px !important;
+            transition: all 0.4s cubic-bezier(0.165, 0.84, 0.44, 1) !important;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5) !important;
+            min-width: 160px !important;
         }
         
         button[kind="primary"]:hover {
-            box-shadow: 0 0 25px rgba(212, 175, 55, 0.7) !important;
-            transform: scale(1.02) !important;
+            background: #D4AF37 !important;
+            color: #000 !important;
+            border-color: #D4AF37 !important;
+            box-shadow: 0 0 25px rgba(212, 175, 55, 0.4) !important;
+            transform: scale(1.05) !important;
+            letter-spacing: 4px !important;
         }
 
         /* Expander Styling */
@@ -1217,8 +1228,8 @@ def render_search_content():
     st.markdown('<div class="search-container">', unsafe_allow_html=True)
     query = st.text_input(t("smart_search", lang), placeholder=t("search_placeholder", lang), key="search_query_input")
     
-    # Search Button Wrapped in Container for better DOM targeting
-    sc1, sc2, sc3 = st.columns([1, 1, 1])
+    # Search Button - Smaller and Centered
+    sc1, sc2, sc3 = st.columns([2.5, 1, 2.5])
     with sc2:
         search_clicked = st.button(t("search_btn", lang), key="main_search_btn", use_container_width=True, type="primary")
     st.markdown('</div>', unsafe_allow_html=True)
