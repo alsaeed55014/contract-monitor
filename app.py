@@ -1337,7 +1337,7 @@ def render_search_content():
                 st.warning("تنبيه: البحث أرجع جميع النتائج. تحقق من تشخيص البحث أعلاه." if lang == 'ar' else "Warning: Search returned all results. Check debug panel above.")
             
             # Clean up internal diagnostic columns before display
-            for diag_col in ['__matched_age_col', '__matched_contract_col', '__matched_ts_col', '__days_sort']:
+            for diag_col in ['__matched_age_col', '__matched_contract_col', '__matched_ts_col', '__days_sort', '__matched_work_col']:
                 if diag_col in res.columns:
                     res = res.drop(columns=[diag_col])
         except Exception as e:

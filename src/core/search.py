@@ -237,12 +237,14 @@ class SmartSearchEngine:
 
             # New: Filter by Working Status (No)
             if filters.get('not_working_only'):
-                work_col = find_col(["Are you working now?", "Are you currently working?", "هل تعمل حالياً؟", "هل انت تعمل حاليا", "العمل الحالي"])
+                work_col = find_col(["Are you working now?", "Are you currently working?", "Are you working", "هل انت تعمل حالياً؟", "هل تعمل حالياً؟", "هل انت تعمل حاليا", "العمل الحالي", "working now"])
                 if work_col:
+                    results['__matched_work_col'] = work_col
                     # Normalize and check for "no" or "لا"
                     def is_no(val):
                         v = str(val).strip().lower()
-                        return v in ['no', 'لا', 'none', 'false', '0', 'no ', ' لا']
+                        # Inclusion for variations and potential typos like "No tr"
+                        return v in ['no', 'لا', 'none', 'false', '0', 'no ', ' لا', 'n', 'no tr', 'no-tr']
                     results = results[results[work_col].apply(is_no)]
 
             # New: Filter by Transfer Count (dropdown)
