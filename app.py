@@ -287,12 +287,22 @@ def get_css():
         }
 
         .programmer-credit {
-            color: var(--accent-green) !important;
-            text-shadow: 0 0 8px rgba(0, 255, 65, 0.5);
+            color: #FFFFFF !important;
+            text-shadow: 0 0 10px rgba(255, 255, 255, 0.8), 
+                         0 0 20px rgba(212, 175, 55, 0.4) !important;
             font-family: 'Tajawal', sans-serif;
             font-weight: 700;
-            font-size: 1.2rem;
+            font-size: 1.3rem;
             text-align: center;
+            margin-top: 10px;
+            line-height: 1.2;
+        }
+        
+        /* English version specific font */
+        .programmer-credit.en {
+            font-family: 'Cinzel', serif !important;
+            font-size: 1.1rem;
+            letter-spacing: 1px;
         }
 
         /* 8) Expander Luxury (Filters) */
@@ -727,8 +737,11 @@ def dashboard():
             if os.path.exists(IMG_PATH):
                 st.image(IMG_PATH, use_container_width=True)
         
-        # Credit text - Split into two lines for clarity
-        st.markdown(f'<div class="programmer-credit">{"برمجة" if lang == "ar" else "By:"}<br>{"السعيد الوزان" if lang == "ar" else "Alsaeed Alwazzan"}</div>', unsafe_allow_html=True)
+        # Credit text - Split into two lines for clarity (with language-specific font class)
+        credit_class = "programmer-credit en" if lang == "en" else "programmer-credit"
+        line1 = "برمجة" if lang == "ar" else "By:"
+        line2 = "السعيد الوزان" if lang == "ar" else "Alsaeed Alwazzan"
+        st.markdown(f'<div class="{credit_class}">{line1}<br>{line2}</div>', unsafe_allow_html=True)
         
         # Spacing
         st.markdown("<div style='margin-bottom: 20px;'></div>", unsafe_allow_html=True)
