@@ -100,6 +100,14 @@ TRANSLATIONS = {
     "password_changed": {"ar": "تم تغيير كلمة المرور بنجاح", "en": "Password changed successfully"},
     "user_deleted": {"ar": "تم الحذف", "en": "User deleted successfully"},
     "select_user_edit": {"ar": "الرجاء اختيار مستخدم من القائمة للتعديل", "en": "Please select a user from the list to edit"},
+    "transfer_all": {"ar": "الكل", "en": "All"},
+    "transfer_1": {"ar": "المرة الأولى", "en": "First time"},
+    "transfer_2": {"ar": "المرة الثانية", "en": "Second time"},
+    "transfer_3": {"ar": "المرة الثالثة", "en": "The third time"},
+    "transfer_more": {"ar": "أكثر من ثلاث مرات", "en": "More than three"},
+    "transfer_count_label": {"ar": "عدد نقل الكفالة", "en": "Transfer Count"},
+    "filter_dates_group": {"ar": "جدولة وتواريخ", "en": "Dates & Scheduling"},
+    "filter_advanced_group": {"ar": "تصفية ذكية متقدمة", "en": "Advanced Smart Filters"},
 
 
 

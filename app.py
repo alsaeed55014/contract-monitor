@@ -1158,11 +1158,12 @@ def render_search_content():
     lbl_enable = "تفعيل" if lang == "ar" else "Enable"
     
     # Advanced Filters UI
+    # Advanced Filters UI
     with st.expander(t("advanced_filters", lang) if t("advanced_filters", lang) != "advanced_filters" else "تصفية متقدمة", expanded=False):
         st.markdown('<div class="filter-card">', unsafe_allow_html=True)
         
         # Row 1: Date & Range Filters
-        st.markdown(f'<div class="premium-filter-label">📅 {"خيارات التواريخ والنطاقات" if lang == "ar" else "Date & Range Options"}</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="premium-filter-label">📅 {t("filter_dates_group", lang)}</div>', unsafe_allow_html=True)
         c1, c2, c3 = st.columns(3)
         
         with c1:
@@ -1184,29 +1185,29 @@ def render_search_content():
             else: reg_range = []
 
         st.markdown("<br>", unsafe_allow_html=True)
-        st.markdown(f'<div class="premium-filter-label">⚙️ {"تصفية متقدمة إضافية" if lang == "ar" else "Additional Advanced Filters"}</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="premium-filter-label">⚙️ {t("filter_advanced_group", lang)}</div>', unsafe_allow_html=True)
         
         # Row 2: Status & Dropdown Filters
         c2_1, c2_2, c2_3 = st.columns(3)
         
         with c2_1:
-            use_expired = st.checkbox("العقود المنتهية" if lang == "ar" else "Expired Contracts", key="use_expired_filter")
+            use_expired = st.checkbox(t("expired", lang) if t("expired", lang) != "expired" else "العقود المنتهية", key="use_expired_filter")
             if use_expired:
-                st.caption("⚠️ تفعيل الترتيب التلقائي" if lang == "ar" else "⚠️ Auto-sorting enabled")
+                st.caption("⚠️ " + ("ترتيب من الأقدم" if lang == "ar" else "Sorting Oldest first"))
         
         with c2_2:
-            use_not_working = st.checkbox("غير موظف" if lang == "ar" else "Not Working (No)", key="use_not_working_filter")
+            use_not_working = st.checkbox("No (هل يعمل حالياً؟)" if lang == "ar" else "Not Working (No)", key="use_not_working_filter")
             
         with c2_3:
             transfer_options = {
-                "": "— " + ("الكل" if lang == "ar" else "All") + " —",
-                "First time": "المرة الأولى" if lang == "ar" else "First time",
-                "Second time": "المرة الثانية" if lang == "ar" else "Second time",
-                "The third time": "المرة الثالثة" if lang == "ar" else "The third time",
-                "More than three": "أكثر من ثلاث مرات" if lang == "ar" else "More than three"
+                "": f"— {t('transfer_all', lang)} —",
+                "First time": t("transfer_1", lang),
+                "Second time": t("transfer_2", lang),
+                "The third time": t("transfer_3", lang),
+                "More than three": t("transfer_more", lang)
             }
             selected_transfer_label = st.selectbox(
-                "عدد مرات نقل الكفالة" if lang == "ar" else "Transfer Count",
+                t("transfer_count_label", lang),
                 options=list(transfer_options.values()),
                 key="transfer_count_dropdown"
             )
