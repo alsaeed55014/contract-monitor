@@ -1497,28 +1497,22 @@ def render_order_processing_content():
         st.warning("لا توجد بيانات عمال" if lang == 'ar' else "No worker data available")
         return
 
-    # --- Customer Column Names (from sheet headers) ---
-    cust_cols = customers_df.columns.tolist()
-    # Indices based on verified headers:
-    # 0: timestamp, 1: company, 2: responsible, 3: mobile, 4: category(gender), 
-    # 5: nationality, 6: location, 7: num_employees, 8: work_nature(job), 
-    # 9: transfer_days, 10: salary, 11: hours, 12: weekly_off, 13: notes
-    
-    def safe_col(df, idx):
-        """Safely get column name by index."""
-        cols = df.columns.tolist()
-        if idx < len(cols): return cols[idx]
+    # --- Customer Column Names (name-based lookup to handle __sheet_row offset) ---
+    def find_cust_col(keywords):
+        for c in customers_df.columns:
+            c_lower = str(c).lower()
+            if all(kw in c_lower for kw in keywords): return c
         return None
     
-    c_company = safe_col(customers_df, 1)
-    c_responsible = safe_col(customers_df, 2)
-    c_mobile = safe_col(customers_df, 3)
-    c_category = safe_col(customers_df, 4)   # Gender: "رجال | Male" / "نساء | Female"
-    c_nationality = safe_col(customers_df, 5) # e.g. "🇳🇵 نيبالي – Nepali, 🇮🇩 إندونيسي – Indonesian"
-    c_location = safe_col(customers_df, 6)    # e.g. "عسير | Asir"
-    c_num_emp = safe_col(customers_df, 7)
-    c_work_nature = safe_col(customers_df, 8) # e.g. "Barista, Tea Boy"
-    c_salary = safe_col(customers_df, 10)
+    c_company = find_cust_col(["company"]) or find_cust_col(["شركه"]) or find_cust_col(["مؤسس"])
+    c_responsible = find_cust_col(["responsible"]) or find_cust_col(["مسؤول"])
+    c_mobile = find_cust_col(["mobile"]) or find_cust_col(["موبيل"])
+    c_category = find_cust_col(["category"]) or find_cust_col(["فئ"])
+    c_nationality = find_cust_col(["nationality"]) or find_cust_col(["جنسي"])
+    c_location = find_cust_col(["location"]) or find_cust_col(["موقع"])
+    c_num_emp = find_cust_col(["number of employees"]) or find_cust_col(["عدد"])
+    c_work_nature = find_cust_col(["nature"]) or find_cust_col(["طبيعة"])
+    c_salary = find_cust_col(["salary"]) or find_cust_col(["راتب"])
     
     # --- Worker Column Names ---
     w_name_col = next((c for c in workers_df.columns if "full name" in c.lower()), None)
@@ -1529,116 +1523,125 @@ def render_order_processing_content():
     w_phone_col = next((c for c in workers_df.columns if "phone" in c.lower()), None)
     w_age_col = next((c for c in workers_df.columns if "age" in c.lower()), None)
 
+    import re
+    
     def normalize(text):
-        """Normalize text for comparison: lowercase, strip, remove extras."""
         if not text: return ""
-        return str(text).strip().lower()
+        s = str(text).strip().lower()
+        s = re.sub(r'[^\w\s\-]', ' ', s, flags=re.UNICODE)
+        return ' '.join(s.split()).strip()
     
     def match_gender(customer_category, worker_gender):
-        """Check if the gender in customer category matches the worker's gender."""
         cat = normalize(customer_category)
         gen = normalize(worker_gender)
-        if not cat or not gen: return True  # If no gender specified, don't filter
-        
-        if "male" in cat or "رجال" in cat:
-            return "male" in gen or "رجل" in gen or "ذكر" in gen
-        elif "female" in cat or "نساء" in cat:
-            return "female" in gen or "أنثى" in gen or "امرأة" in gen
+        if not cat or not gen: return True
+        is_male_request = ("رجال" in cat) or (re.search(r'\bmale\b', cat) and "female" not in cat)
+        is_female_request = ("نساء" in cat) or ("female" in cat)
+        if is_male_request:
+            return re.search(r'\bmale\b', gen) is not None and "female" not in gen
+        elif is_female_request:
+            return "female" in gen
         return True
     
     def match_nationality(customer_nat, worker_nat):
-        """Check if worker's nationality is in the customer's requested nationalities."""
-        c_nat = normalize(customer_nat)
+        c_raw = str(customer_nat).strip()
         w_nat = normalize(worker_nat)
-        if not c_nat or not w_nat: return True
-        
-        # Customer may request multiple nationalities separated by commas
-        requested = [n.strip() for n in c_nat.split(',')]
-        for req in requested:
-            # Check if the worker's nationality name appears in any requested nationality
-            # Handle format like "🇳🇵 نيبالي – Nepali"
-            req_clean = req.lower().strip()
-            if w_nat in req_clean or req_clean in w_nat:
+        if not c_raw or not w_nat: return True
+        parts = [p.strip() for p in c_raw.split(',')]
+        for part in parts:
+            pn = normalize(part)
+            if w_nat in pn or pn in w_nat:
                 return True
-            # Extract English name after " – " or " - "
-            for sep in [' – ', ' - ', '–', '-']:
-                if sep in req:
-                    parts = req.split(sep)
-                    for part in parts:
-                        p = part.strip().lower()
-                        # Remove emoji and extra chars
-                        p = ''.join(c for c in p if not c.startswith('\U0001f1e6'))
-                        p = p.strip()
-                        if p and (p in w_nat or w_nat in p):
-                            return True
+            words = re.split(r'[\s\-–|]+', pn)
+            for word in words:
+                word = word.strip()
+                if len(word) > 2 and (word in w_nat or w_nat in word):
+                    return True
         return False
     
     def match_job(customer_job, worker_job):
-        """Check if worker's job matches the customer's required work nature."""
         c_job = normalize(customer_job)
         w_job = normalize(worker_job)
         if not c_job or not w_job: return True
-        
-        # Customer may request multiple jobs separated by commas
         requested_jobs = [j.strip() for j in c_job.split(',')]
         for rj in requested_jobs:
-            rj = rj.strip().lower()
-            if rj and (rj in w_job or w_job in rj):
+            rj = normalize(rj)
+            if rj and len(rj) > 1 and (rj in w_job or w_job in rj):
                 return True
         return False
     
     def match_city(customer_location, worker_city):
-        """Check if the worker's city matches the customer's work location."""
         c_loc = normalize(customer_location)
-        w_city = normalize(worker_city)
-        if not c_loc or not w_city: return True
-        
-        # Location format: "عسير | Asir" - split and check both parts
-        parts = [p.strip().lower() for p in c_loc.replace('|', ',').split(',')]
+        w_city_val = normalize(worker_city)
+        if not c_loc or not w_city_val: return True
+        parts = re.split(r'[|,،]+', c_loc)
         for part in parts:
-            if part and (part in w_city or w_city in part):
+            part = part.strip()
+            if part and len(part) > 1 and (part in w_city_val or w_city_val in part):
                 return True
         return False
     
     def find_matching_workers(customer_row):
-        """Find workers that match the customer's requirements."""
-        matches = []
-        match_scores = []
+        """Find workers. Returns (all_matches, all_scores, city_count)."""
+        city_matches, city_scores = [], []
+        other_matches, other_scores = [], []
         
         for _, worker in workers_df.iterrows():
             score = 0
             total_criteria = 0
+            city_matched = False
             
-            # Gender match
             if c_category and w_gender_col:
-                total_criteria += 1
-                if match_gender(str(customer_row.get(c_category, "")), str(worker.get(w_gender_col, ""))):
-                    score += 1
+                cv = str(customer_row.get(c_category, ""))
+                wv = str(worker.get(w_gender_col, ""))
+                if cv.strip():
+                    total_criteria += 1
+                    if match_gender(cv, wv): score += 1
             
-            # Nationality match
             if c_nationality and w_nationality_col:
-                total_criteria += 1
-                if match_nationality(str(customer_row.get(c_nationality, "")), str(worker.get(w_nationality_col, ""))):
-                    score += 1
+                cv = str(customer_row.get(c_nationality, ""))
+                wv = str(worker.get(w_nationality_col, ""))
+                if cv.strip():
+                    total_criteria += 1
+                    if match_nationality(cv, wv): score += 1
             
-            # Job match
             if c_work_nature and w_job_col:
-                total_criteria += 1
-                if match_job(str(customer_row.get(c_work_nature, "")), str(worker.get(w_job_col, ""))):
-                    score += 1
+                cv = str(customer_row.get(c_work_nature, ""))
+                wv = str(worker.get(w_job_col, ""))
+                if cv.strip():
+                    total_criteria += 1
+                    if match_job(cv, wv): score += 1
             
-            # City match
             if c_location and w_city_col:
-                total_criteria += 1
-                if match_city(str(customer_row.get(c_location, "")), str(worker.get(w_city_col, ""))):
-                    score += 1
+                cv = str(customer_row.get(c_location, ""))
+                wv = str(worker.get(w_city_col, ""))
+                if cv.strip():
+                    total_criteria += 1
+                    if match_city(cv, wv):
+                        score += 1
+                        city_matched = True
             
-            if total_criteria > 0 and score >= 2:  # At least 2 criteria match
+            if total_criteria > 0 and score >= 1:
                 pct = int((score / total_criteria) * 100)
-                matches.append(worker)
-                match_scores.append(pct)
+                if city_matched:
+                    city_matches.append(worker)
+                    city_scores.append(pct)
+                else:
+                    other_matches.append(worker)
+                    other_scores.append(pct)
         
-        return matches, match_scores
+        # Sort each group by score descending
+        if city_matches:
+            paired = sorted(zip(city_scores, range(len(city_matches)), city_matches), key=lambda x: -x[0])
+            city_scores = [p[0] for p in paired]
+            city_matches = [p[2] for p in paired]
+        if other_matches:
+            paired = sorted(zip(other_scores, range(len(other_matches)), other_matches), key=lambda x: -x[0])
+            other_scores = [p[0] for p in paired]
+            other_matches = [p[2] for p in paired]
+        
+        return city_matches + other_matches, city_scores + other_scores, len(city_matches)
+
 
     # --- Initialize session state for toggles ---
     if 'op_hidden_clients' not in st.session_state:
@@ -1743,11 +1746,14 @@ def render_order_processing_content():
         
         # --- Find Matching Workers ---
         with st.spinner("🔍 " + (t("matching_workers", lang)) + "..."):
-            matches, scores = find_matching_workers(customer_row)
+            matches, scores, city_count = find_matching_workers(customer_row)
         
         if not matches:
-            st.warning(f"⚠️ {t('no_matching_workers', lang)}")
+            st.warning("⚠️ " + t('no_matching_workers', lang))
             return
+        
+        # Determine location label
+        location_label = str(customer_row.get(c_location, "")) if c_location else ""
         
         # --- Results Header ---
         st.markdown(f"""
@@ -1765,8 +1771,38 @@ def render_order_processing_content():
         </div>
         """, unsafe_allow_html=True)
         
+        # --- City Section Label ---
+        if city_count > 0:
+            city_label = "📍 " + ("عمال في نفس المدينة" if lang == 'ar' else "Workers in same city") + f" ({location_label})"
+            st.markdown(f"""
+            <div style="background: rgba(212, 175, 55, 0.08); padding: 10px 18px; border-radius: 12px;
+                        border-left: 4px solid #D4AF37; margin: 10px 0; font-family: 'Tajawal', sans-serif;
+                        color: #D4AF37; font-weight: 600; font-size: 1.05rem;">
+                {city_label} — {city_count}
+            </div>
+            """, unsafe_allow_html=True)
+        
         # --- Display Each Matching Worker ---
         for i, (worker, score) in enumerate(zip(matches, scores)):
+            # Insert divider between city and other-city workers
+            if i == city_count and city_count > 0:
+                other_label = "🌐 " + ("عمال في مدن أخرى" if lang == 'ar' else "Workers in other cities")
+                st.markdown(f"""
+                <div style="background: rgba(100, 100, 255, 0.06); padding: 10px 18px; border-radius: 12px;
+                            border-left: 4px solid #6464FF; margin: 18px 0 10px 0; font-family: 'Tajawal', sans-serif;
+                            color: #8888FF; font-weight: 600; font-size: 1.05rem;">
+                    {other_label} — {len(matches) - city_count}
+                </div>
+                """, unsafe_allow_html=True)
+            elif city_count == 0 and i == 0:
+                other_label = "🌐 " + ("عمال مطابقون في مدن مختلفة" if lang == 'ar' else "Matching workers in various cities")
+                st.markdown(f"""
+                <div style="background: rgba(100, 100, 255, 0.06); padding: 10px 18px; border-radius: 12px;
+                            border-left: 4px solid #6464FF; margin: 10px 0; font-family: 'Tajawal', sans-serif;
+                            color: #8888FF; font-weight: 600; font-size: 1.05rem;">
+                    {other_label} — {len(matches)}
+                </div>
+                """, unsafe_allow_html=True)
             worker_key = f"w_{selected_idx}_{i}"
             
             # Worker visibility toggle
