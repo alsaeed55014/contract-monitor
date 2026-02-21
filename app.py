@@ -155,441 +155,183 @@ class AuthManager:
 def get_css():
     return """
     <style>
-        /* General Imports */
-        @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;700&family=Cinzel:wght@600&family=Orbitron:wght@600&family=Alex+Brush&family=Aref+Ruqaa&display=swap');
+        /* Modern 2026 Luxury Executive Design System */
+        @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700&family=Inter:wght@300;400;500;600;700&family=Cinzel:wght@500;700&family=Alex+Brush&display=swap');
         
-        /* Main Container */
+        :root {
+            --luxury-gold: #D4AF37;
+            --deep-gold: #B8860B;
+            --glass-bg: rgba(26, 26, 26, 0.7);
+            --solid-dark: #0A0A0A;
+            --accent-green: #00FF41;
+            --text-main: #F4F4F4;
+            --border-glow: rgba(212, 175, 55, 0.3);
+        }
+
+        /* 1) Global Aesthetics & Scrollbar */
         .stApp {
-            background-color: #0F0F0F;
-            color: #F8F8F8;
-            font-family: 'Tajawal', sans-serif;
+            background: radial-gradient(circle at top right, #1A1A1A, #050505);
+            color: var(--text-main);
+            font-family: 'Inter', 'Tajawal', sans-serif;
         }
 
-        /* ---------------------------------------------------------
-           1) GLOBAL RESPONSIVE RESET & PADDING
-           --------------------------------------------------------- */
-        [data-testid="stAppViewContainer"] {
-            padding: 1rem;
+        /* Custom Premium Scrollbar */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #050505; }
+        ::-webkit-scrollbar-thumb { 
+            background: linear-gradient(180deg, #333, #D4AF37); 
+            border-radius: 10px; 
         }
-        
+
+        /* 2) Layout & Spacing */
         .main .block-container {
-            padding-top: 2rem !important;
-            padding-bottom: 2rem !important;
+            padding-top: 3rem !important;
+            padding-bottom: 5rem !important;
+            max-width: 1400px !important;
         }
 
-        /* Prevent text breaking in buttons and headers */
-        .stButton > button, h1, h2, h3, p, span, label {
-            white-space: normal !important;
-            word-wrap: break-word !important;
-            overflow-wrap: break-word !important;
-        }
-
-        /* Responsive Tables Wrapper - Refined */
-        div[data-testid="stDataFrame"], 
-        div[data-testid="stTable"],
-        .stTable, .stDataFrame {
-            width: 100% !important;
-            overflow-x: auto !important;
-            /* display: block !important; <- REMOVED to avoid breaking event handling */
-        }
-
-        /* Headers */
+        /* 3) Luxury Typography */
         h1, h2, h3 {
-            color: #D4AF37 !important; /* Gold */
-            font-family: 'Tajawal', sans-serif;
-            text-align: center;
-            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
-        }
-
-        /* ---------------------------------------------------------
-           2) MOBILE STYLES (< 480px)
-           --------------------------------------------------------- */
-        @media (max-width: 480px) {
-            .main .block-container {
-                padding-left: 0.5rem !important;
-                padding-right: 0.5rem !important;
-                padding-top: 1rem !important;
-            }
-            
-            h1 { font-size: 1.8rem !important; }
-            h2 { font-size: 1.5rem !important; }
-            h3 { font-size: 1.25rem !important; }
-            
-            /* Full width buttons in mobile */
-            .stButton > button, 
-            div[data-testid="stForm"] .stButton > button,
-            section[data-testid="stSidebar"] .stButton > button {
-                width: 100% !important;
-                font-size: 1rem !important;
-            }
-
-            /* Metric sizes in mobile */
-            .metric-value { font-size: 2.2rem !important; }
-            .metric-label { font-size: 1rem !important; }
-
-            /* Signature sizing */
-            .red-neon-signature { font-size: 1.8rem !important; }
-            .programmer-signature-neon { font-size: 1.4rem !important; }
-        }
-
-        /* ---------------------------------------------------------
-           3) TABLET STYLES (481px - 1024px)
-           --------------------------------------------------------- */
-        @media (min-width: 481px) and (max-width: 1024px) {
-            .main .block-container {
-                padding-left: 2rem !important;
-                padding-right: 2rem !important;
-            }
-            h1 { font-size: 2.4rem !important; }
-            h2 { font-size: 2rem !important; }
-        }
-
-        /* ---------------------------------------------------------
-           4) LAPTOP STYLES (1025px - 1440px)
-           --------------------------------------------------------- */
-        @media (min-width: 1025px) and (max-width: 1440px) {
-            .main .block-container {
-                padding-left: 4rem !important;
-                padding-right: 4rem !important;
-            }
-        }
-
-        /* ---------------------------------------------------------
-           5) LARGE DESKTOP STYLES (> 1441px)
-           --------------------------------------------------------- */
-        @media (min-width: 1441px) {
-            .main .block-container {
-                max-width: 1600px !important;
-                margin: 0 auto !important;
-                padding-left: 8rem !important;
-                padding-right: 8rem !important;
-            }
-            
-            /* Scale fonts for large screens */
-            body, p, label, .stMarkdown, .stTextInput input {
-                font-size: 1.15rem !important;
-            }
-            h1 { font-size: 3.5rem !important; }
-            h2 { font-size: 2.8rem !important; }
-            .metric-value { font-size: 4.5rem !important; }
-        }
-
-        /* Existing component styles integrated with responsiveness */
-
-        /* Login Screen Image & Title Layout */
-        .login-screen-wrapper {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            width: 100%;
-        }
-        
-        .login-screen-wrapper img {
-            border-radius: 50%;
-            border: 3px solid #D4AF37;
-            box-shadow: 0 0 15px rgba(212, 175, 55, 0.4);
-            margin-bottom: 10px;
-            width: 80px !important;
-            height: 80px !important;
-        }
-
-        .welcome-signature-container {
-             display: flex;
-             align-items: baseline;
-             justify-content: center;
-             gap: 15px;
-             margin-bottom: 20px;
-             flex-wrap: wrap; 
-        }
-
-        .programmer-signature-neon {
-            font-family: 'Alex Brush', cursive;
-            font-size: 1.8rem;
-            color: #fff;
-            text-shadow: 0 0 5px #fff, 0 0 10px #fff, 0 0 20px #D4AF37, 0 0 30px #D4AF37, 0 0 40px #D4AF37;
-            animation: neon-flicker 1.5s infinite alternate;       
-        }
-
-        .red-neon-signature {
-            font-family: 'Alex Brush', cursive;
-            font-size: 2.5rem;
-            color: #FF3131; 
-            text-align: center;
-            width: 100%;
-            display: block;
-            margin-bottom: 0px;
-            padding-bottom: 5px;
-            text-shadow: 0 0 7px #FF3131, 0 0 15px #FF3131, 0 0 25px #FF3131, 0 0 45px #FF0000;
-            font-weight: 900 !important;
-        }
-        
-        @keyframes neon-flicker {
-            0%, 19%, 21%, 23%, 25%, 54%, 56%, 100% {
-                text-shadow: 0 0 4px #fff, 0 0 10px #fff, 0 0 18px #D4AF37, 0 0 38px #D4AF37, 0 0 73px #D4AF37;
-            }
-            20%, 24%, 55% { text-shadow: none; }
-        }
-
-        /* Form Styling */
-        div[data-testid="stForm"] {
-            background-color: #1A1A1A !important;
-            border: 1px solid rgba(212, 175, 55, 0.3) !important;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.5) !important;
-            max-width: 450px !important;
-            margin: 0 auto !important;
-            padding: 30px !important;
-            border-radius: 20px !important;
-        }
-        
-        .programmer-credit {
-            color: #39FF14 !important;
-            font-family: 'Aref Ruqaa', serif;
-            margin: 5px auto !important;
-            font-size: 1.5em !important;
-            letter-spacing: 0.5px;
-            text-align: center;
-            font-weight: 700 !important; 
-            text-shadow: 0 0 2px rgba(0, 0, 0, 1), 0 0 8px rgba(57, 255, 20, 0.6);
-            white-space: nowrap !important;
-            width: auto !important;
-            display: block;
-        }
-        
-        /* Premium Buttons */
-        .stButton > button {
-            background: linear-gradient(135deg, #2E7D32 0%, #1B5E20 100%) !important;
-            color: #FFFFFF !important;
-            font-weight: 800 !important;
-            letter-spacing: 1px !important;
-            border: none !important;
-            padding: 12px 15px !important;
-            box-shadow: 0 4px 15px rgba(46, 125, 50, 0.4) !important;
-            border-radius: 8px !important;
-            transition: all 0.3s ease !important;
-        }
-
-        .stButton > button:hover {
-            background: linear-gradient(135deg, #388E3C 0%, #2E7D32 100%) !important;
-            box-shadow: 0 0 25px rgba(76, 175, 80, 0.6) !important;
-            transform: translateY(-2px);
-        }
-
-        /* Sidebar Styling */
-        section[data-testid="stSidebar"] {
-            background-color: #161616 !important;
-            border-left: 1px solid rgba(212, 175, 55, 0.1);
-        }
-        
-        section[data-testid="stSidebar"] .stImage img {
-            border-radius: 50%;
-            border: 2px solid #D4AF37;
-            padding: 3px;
-            margin: 0 auto !important;
-            display: block;
-        }
-
-        /* Data Tables */
-        div[data-testid="stDataFrame"] td, 
-        div[data-testid="stTable"] td {
-            color: #4CAF50 !important;
-            font-weight: 500;
-        }
-        
-        [data-testid="stDataFrame"] thead th,
-        [data-testid="stDataFrame"] [role="columnheader"] {
-            color: #D4AF37 !important;
-            font-weight: bold !important;
-        }
-
-        /* Metrics */
-        .metric-container {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            padding: 20px;
-            background: rgba(255, 255, 255, 0.03);
-            border-radius: 15px;
-            border: 1px solid rgba(255, 255, 255, 0.05);
-            margin: 10px 0;
-        }
-        
-        .metric-label { font-weight: 700; color: #888; margin-bottom: 5px; text-transform: uppercase; }
-        .metric-value { font-weight: 800; line-height: 1.1; }
-
-        .glow-green .metric-value { color: #4CAF50 !important; text-shadow: 0 0 15px rgba(76, 175, 80, 0.5); }
-        .glow-red .metric-value { color: #FF5252 !important; text-shadow: 0 0 15px rgba(255, 82, 82, 0.5); }
-        .glow-orange .metric-value { color: #FFAB40 !important; text-shadow: 0 0 15px rgba(255, 171, 64, 0.5); }
-
-        /* Login Button Glowing Yellow */
-        .login-screen-wrapper [data-testid="stForm"] [data-testid="stFormSubmitButton"]:first-of-type button p {
-            color: #FFFF00 !important; 
-            text-shadow: 0 0 8px #FFFF00, 0 0 15px #FFFF00;
-            font-weight: 900 !important;
-        }
-
-        /* Language Button Gold */
-        .login-screen-wrapper [data-testid="stForm"] [data-testid="stFormSubmitButton"]:nth-of-type(2) button p {
-            color: #D4AF37 !important;
-            font-weight: 700 !important;
-        }
-
-        /* Hourglass Loader */
-        .loader-wrapper {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            padding: 40px;
-            width: 100%;
-        }
-        .hourglass {
-            display: inline-block;
-            position: relative;
-            width: 80px;
-            height: 80px;
-        }
-        .hourglass:after {
-            content: " ";
-            display: block;
-            border-radius: 50%;
-            width: 0;
-            height: 0;
-            margin: 6px;
-            box-sizing: border-box;
-            border: 32px solid #D4AF37;
-            border-color: #D4AF37 transparent #D4AF37 transparent;
-            animation: hourglass 1.2s infinite;
-        }
-        @keyframes hourglass {
-            0% { transform: rotate(0); animation-timing-function: cubic-bezier(0.55, 0.055, 0.675, 0.19); }
-            50% { transform: rotate(900deg); animation-timing-function: cubic-bezier(0.215, 0.61, 0.355, 1); }
-            100% { transform: rotate(1800deg); }
-        }
-        .loading-text {
-            color: #D4AF37;
-            font-size: 1.5rem;
-            margin-top: 20px;
-            font-weight: 700;
-        }
-
-        /* --- SEARCH PAGE PREMIUM STYLES --- */
-        .glowing-title {
-            font-family: 'Orbitron', sans-serif;
-            font-size: 2.5rem;
-            text-align: center;
-            color: #fff;
-            text-shadow: 0 0 10px rgba(212, 175, 55, 0.8), 0 0 20px rgba(212, 175, 55, 0.5);
-            margin-bottom: 30px;
-            background: linear-gradient(90deg, transparent, rgba(212, 175, 55, 0.2), transparent);
-            padding: 15px;
-            border-radius: 50px;
-        }
-
-        .filter-card {
-            background: rgba(26, 26, 26, 0.8);
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(212, 175, 55, 0.2);
-            border-radius: 15px;
-            padding: 25px;
-            margin-bottom: 25px;
-            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.8);
-        }
-
-        .search-container {
-            background: linear-gradient(180deg, rgba(20, 20, 20, 1) 0%, rgba(10, 10, 10, 1) 100%);
-            padding: 2rem;
-            border-radius: 20px;
-            border: 1px solid rgba(255, 255, 255, 0.05);
-        }
-
-        /* Adjusting Selectbox/Inputs for Premium Look */
-        div[data-baseweb="select"] {
-            background-color: #262626 !important;
-            border-radius: 8px !important;
-        }
-        
-        .stTextInput input {
-            background-color: #262626 !important;
-            border: 1px solid rgba(212, 175, 55, 0.3) !important;
-            color: #fff !important;
-        }
-
-        /* Floating Animation for filters */
-        @keyframes float {
-            0% { transform: translateY(0px); }
-            50% { transform: translateY(-5px); }
-            100% { transform: translateY(0px); }
-        }
-        
-        .premium-filter-label {
-            color: #D4AF37;
-            font-weight: 700;
-            margin-bottom: 8px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            font-size: 1.1rem;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            border-bottom: 1px solid rgba(212, 175, 55, 0.2);
-            padding-bottom: 5px;
-        }
-
-        /* Search Button & Language Button Premium (High-End Corporate Look) */
-        button[kind="primary"], 
-        .lang-toggle-wrapper button {
-            background: rgba(26, 26, 26, 0.9) !important;
-            backdrop-filter: blur(10px) !important;
-            color: #D4AF37 !important;
-            border: 1px solid rgba(212, 175, 55, 0.5) !important;
-            border-radius: 4px !important;
-            padding: 0.8rem 2.5rem !important;
-            font-family: 'Inter', sans-serif !important;
-            font-weight: 500 !important;
+            font-family: 'Cinzel', serif !important;
+            letter-spacing: 2px !important;
             text-transform: uppercase !important;
-            letter-spacing: 3px !important;
+            background: linear-gradient(to bottom, #FFFFFF 0%, #D4AF37 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-shadow: 2px 4px 10px rgba(0,0,0,0.4);
+            margin-bottom: 1.5rem !important;
+        }
+
+        /* 4) Premium Form & Input Styling (The 2026 Look) */
+        div[data-testid="stForm"] {
+            background: var(--glass-bg) !important;
+            backdrop-filter: blur(20px) !important;
+            border: 1px solid var(--border-glow) !important;
+            border-radius: 24px !important;
+            padding: 2.5rem !important;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7) !important;
+            transition: transform 0.3s ease;
+        }
+
+        /* Generic Inputs Styling */
+        .stTextInput input, .stTextArea textarea, div[data-baseweb="select"] {
+            background-color: rgba(40, 40, 40, 0.6) !important;
+            border: 1px solid rgba(255, 255, 255, 0.1) !important;
+            border-radius: 12px !important;
+            color: #FFFFFF !important;
+            padding: 12px 16px !important;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+            box-shadow: inset 0 2px 4px 0 rgba(0, 0, 0, 0.06) !important;
+        }
+
+        .stTextInput input:focus, div[data-baseweb="select"]:focus-within {
+            border-color: var(--luxury-gold) !important;
+            box-shadow: 0 0 0 3px rgba(212, 175, 55, 0.2) !important;
+            background-color: rgba(50, 50, 50, 0.8) !important;
+        }
+
+        /* Slider Styling */
+        div[data-testid="stSlider"] [data-testid="stThumb"] {
+            background-color: var(--luxury-gold) !important;
+            border: 2px solid #FFFFFF !important;
+        }
+        div[data-testid="stSlider"] [data-testid="stTrack"] > div {
+            background: linear-gradient(90deg, #333, #D4AF37) !important;
+        }
+
+        /* 5) Universal Luxury Button Style */
+        .stButton button, div[data-testid="stFormSubmitButton"] button {
+            background: linear-gradient(135deg, #1A1A1A 0%, #262626 100%) !important;
+            color: var(--luxury-gold) !important;
+            border: 1px solid var(--border-glow) !important;
+            border-radius: 12px !important;
+            padding: 0.75rem 2rem !important;
+            font-weight: 600 !important;
+            letter-spacing: 1.5px !important;
+            text-transform: uppercase !important;
             transition: all 0.4s cubic-bezier(0.165, 0.84, 0.44, 1) !important;
             box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5) !important;
-            min-width: 160px !important;
-            display: inline-flex !important;
-            align-items: center !important;
-            justify-content: center !important;
+        }
+
+        .stButton button:hover, div[data-testid="stFormSubmitButton"] button:hover {
+            background: var(--luxury-gold) !important;
+            color: #000 !important;
+            border-color: var(--luxury-gold) !important;
+            box-shadow: 0 0 25px rgba(212, 175, 55, 0.5) !important;
+            transform: translateY(-3px) scale(1.02) !important;
+        }
+
+        /* Primary Search Variation */
+        button[kind="primary"] {
+            background: linear-gradient(135deg, #111, #222) !important;
+            border: 1px solid var(--luxury-gold) !important;
+        }
+
+        /* 6) Table & Data Presentation */
+        [data-testid="stDataFrame"] {
+            background: rgba(20, 20, 20, 0.5) !important;
+            border-radius: 16px !important;
+            border: 1px solid rgba(212, 175, 55, 0.1) !important;
+            padding: 10px !important;
+        }
+
+        /* Status Column Glows */
+        .glow-green { color: var(--accent-green) !important; text-shadow: 0 0 10px var(--accent-green); }
+        .glow-red { color: #FF3131 !important; text-shadow: 0 0 10px #FF3131; }
+        .glow-orange { color: #FF9100 !important; text-shadow: 0 0 10px #FF9100; }
+
+        /* 7) Sidebar Professionalism */
+        section[data-testid="stSidebar"] {
+            background-color: #080808 !important;
+            border-right: 1px solid rgba(212, 175, 55, 0.15) !important;
+        }
+
+        .programmer-credit {
+            color: var(--accent-green) !important;
+            text-shadow: 0 0 8px rgba(0, 255, 65, 0.5);
+            font-family: 'Tajawal', sans-serif;
+            font-weight: 700;
+            font-size: 1.2rem;
+            text-align: center;
+        }
+
+        /* 8) Expander Luxury (Filters) */
+        .streamlit-expanderHeader {
+            background-color: rgba(255, 255, 255, 0.03) !important;
+            border: 1px solid rgba(212, 175, 55, 0.1) !important;
+            border-radius: 16px !important;
+            padding: 1rem !important;
+            font-weight: 600 !important;
+            color: var(--luxury-gold) !important;
+            transition: all 0.3s ease;
+        }
+        .streamlit-expanderHeader:hover {
+            border-color: var(--luxury-gold) !important;
+            background-color: rgba(255, 255, 255, 0.05) !important;
+        }
+
+        /* Signature Neon (Specific Use) */
+        .programmer-signature-neon {
+            font-family: 'Alex Brush', cursive;
+            color: #fff;
+            text-shadow: 0 0 5px #fff, 0 0 15px var(--luxury-gold);
+        }
+
+        /* Login Screen Special Centering */
+        .login-screen-wrapper {
+            margin-top: 5vh;
+            text-align: center;
         }
         
-        button[kind="primary"]:hover,
-        .lang-toggle-wrapper button:hover {
-            background: #D4AF37 !important;
-            color: #000 !important;
-            border-color: #D4AF37 !important;
-            box-shadow: 0 0 25px rgba(212, 175, 55, 0.4) !important;
-            transform: scale(1.05) !important;
-            letter-spacing: 4px !important;
+        /* Metric Styling */
+        .metric-container {
+            background: rgba(255, 255, 255, 0.02) !important;
+            border-radius: 20px !important;
+            border: 1px solid rgba(212, 175, 55, 0.05) !important;
+            padding: 1.5rem !important;
+            transition: transform 0.3s ease !important;
         }
-
-        /* Ensure text paragraphs inside these buttons don't override color */
-        button[kind="primary"] p,
-        .lang-toggle-wrapper button p {
-            color: inherit !important;
-            font-weight: inherit !important;
-        }
-
-        /* Expander Styling */
-        .streamlit-expanderHeader {
-            background-color: rgba(212, 175, 55, 0.05) !important;
-            border: 1px solid rgba(212, 175, 55, 0.1) !important;
-            border-radius: 10px !important;
-            color: #D4AF37 !important;
-            font-weight: bold !important;
-        }
-
-        /* Sidebar Image Centering Fix */
-        [data-testid="stSidebar"] img {
-            border: 3px solid #D4AF37 !important;
-            padding: 5px !important;
-            box-shadow: 0 0 20px rgba(212, 175, 55, 0.3) !important;
-        }
+        .metric-container:hover { transform: scale(1.05); }
     </style>
     """
 
@@ -712,12 +454,25 @@ def render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search"):
             height=0
         )
 
-    # --- PROFESSIONAL PROFILE CARD ---
+    # --- PROFESSIONAL PROFILE CARD (2026 LUXURY) ---
     st.markdown(f"<div id='cv-anchor-{key_prefix}'></div>", unsafe_allow_html=True)
     st.markdown(f"""
-    <div style="background-color:#1e2130; padding:20px; border-radius:10px; border-right:5px solid #ffcc00; margin: 20px 0;">
-        <h2 style="color:#ffcc00; margin:0;">👤 {worker_name}</h2>
-
+    <div style="background: rgba(20, 20, 20, 0.85); 
+                backdrop-filter: blur(15px);
+                padding: 30px; 
+                border-radius: 20px; 
+                border-left: 5px solid #D4AF37; 
+                border-bottom: 1px solid rgba(212, 175, 55, 0.2);
+                margin: 25px 0;
+                box-shadow: 0 15px 35px rgba(0,0,0,0.4);">
+        <h2 style="color: #D4AF37; 
+                   margin: 0; 
+                   font-family: 'Cinzel', serif; 
+                   letter-spacing: 2px;
+                   text-transform: uppercase;
+                   font-size: 1.8rem;">
+            \U0001F464 {worker_name}
+        </h2>
     </div>
     """, unsafe_allow_html=True)
     
@@ -847,15 +602,17 @@ def login_screen():
         if os.path.exists(IMG_PATH):
             st.image(IMG_PATH, width=80) # Explicit width in Streamlit also helps
         
-        # 2. Welcome + Signature (Side by Side)
+        # 2. Welcome + Signature (Refined Luxury)
         st.markdown(f"""
             <div class="welcome-signature-container">
-                <h1 style='margin:0; padding:0; display:inline-block;'>{t('welcome_back', lang)}</h1>
-                <span class="programmer-signature-neon">By: Alsaeed Alwazzan</span>
+                <h1 style='margin:0; padding:0; display:inline-block; font-size: 2.2rem;'>{t('welcome_back', lang)}</h1>
+                <div style="width: 100%; text-align: center; margin-top: -10px;">
+                    <span class="programmer-signature-neon" style="font-size: 1.6rem;">By: Alsaeed Alwazzan</span>
+                </div>
             </div>
             """, unsafe_allow_html=True)
             
-        st.markdown(f"<p style='text-align:center; color:#888; letter-spacing:1px; margin-bottom:30px;'>{t('system_title', lang)}</p>", unsafe_allow_html=True)
+        st.markdown(f"<p style='text-align:center; color:#AAA; letter-spacing:2px; font-weight:300; margin-bottom:35px; text-transform: uppercase;'>{t('system_title', lang)}</p>", unsafe_allow_html=True)
         
         # 3. Form (Styled via CSS in get_css)
         with st.form("login"):
@@ -1570,18 +1327,20 @@ def render_permissions_content():
                 <style>
                 /* Style only the delete button within the popover trigger */
                 div[data-testid="stPopover"] > button {
-                    background-color: #c0392b !important;
-                    color: white !important;
-                    border: none !important;
-                    padding: 5px 15px !important;
+                    background-color: #8B0000 !important;
+                    color: #D4AF37 !important;
+                    border: 1px solid #D4AF37 !important;
+                    padding: 8px 25px !important;
                     font-size: 14px !important;
-                    border-radius: 5px !important;
+                    border-radius: 12px !important;
                     transition: 0.3s !important;
+                    text-transform: uppercase;
+                    letter-spacing: 1px;
                 }
                 div[data-testid="stPopover"] > button:hover {
-                    background-color: #e74c3c !important;
-                    color: white !important;
-                    box-shadow: 0 4px 8px rgba(0,0,0,0.2) !important;
+                    background-color: #D4AF37 !important;
+                    color: #000 !important;
+                    box-shadow: 0 0 15px rgba(212, 175, 55, 0.4) !important;
                 }
                 </style>
             """, unsafe_allow_html=True)
