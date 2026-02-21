@@ -108,6 +108,9 @@ TRANSLATIONS = {
     "transfer_count_label": {"ar": "عدد نقل الكفالة", "en": "Transfer Count"},
     "filter_dates_group": {"ar": "جدولة وتواريخ", "en": "Dates & Scheduling"},
     "filter_advanced_group": {"ar": "تصفية ذكية متقدمة", "en": "Advanced Smart Filters"},
+    "age": {"ar": "العمر", "en": "age"},
+    "contract_end": {"ar": "تاريخ انتهاء العقد", "en": "contract expiry date"},
+    "registration_date": {"ar": "تاريخ التسجيل", "en": "registration date"},
 
 
 
