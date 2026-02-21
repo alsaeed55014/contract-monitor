@@ -247,6 +247,24 @@ class SmartSearchEngine:
                         return v in ['no', 'لا', 'none', 'false', '0', 'no ', ' لا', 'n', 'no tr', 'no-tr']
                     results = results[results[work_col].apply(is_no)]
 
+            # New: Filter by Huroob Status (No)
+            if filters.get('no_huroob'):
+                huroob_col = find_col(["Do you have to report Huroob", "هل لديك بلاغ هروب؟", "بلاغ هروب"])
+                if huroob_col:
+                    def is_no_huroob(val):
+                        v = str(val).strip().lower()
+                        return v in ['no', 'لا', 'none', 'false', '0', 'n']
+                    results = results[results[huroob_col].apply(is_no_huroob)]
+
+            # New: Filter by Work Outside City (Yes)
+            if filters.get('work_outside_city'):
+                outside_col = find_col(["Can you work outside your city", "هل يمكنك العمل خارج مدينتك؟", "خارج المدينة"])
+                if outside_col:
+                    def is_yes(val):
+                        v = str(val).strip().lower()
+                        return v in ['yes', 'نعم', 'true', '1', 'y', 'ok']
+                    results = results[results[outside_col].apply(is_yes)]
+
             # New: Filter by Transfer Count (dropdown)
             if filters.get('transfer_count'):
                 trans_col = find_col(["How many times did you transfer your sponsorship", "عدد مرات نقل الكفالة", "Transfer Count"])

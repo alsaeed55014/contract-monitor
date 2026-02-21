@@ -111,6 +111,8 @@ TRANSLATIONS = {
     "age": {"ar": "العمر", "en": "age"},
     "contract_end": {"ar": "تاريخ انتهاء العقد", "en": "contract expiry date"},
     "registration_date": {"ar": "تاريخ التسجيل", "en": "registration date"},
+    "no_huroob": {"ar": "بدون بلاغ هروب (No)", "en": "No Huroob"},
+    "work_outside_city": {"ar": "يقبل العمل خارج مدينته (Yes)", "en": "Can work outside city"},
 
 
 

@@ -539,8 +539,7 @@ def get_css():
 
         /* Search Button & Language Button Premium (High-End Corporate Look) */
         button[kind="primary"], 
-        .login-screen-wrapper [data-testid="stForm"] [data-testid="stFormSubmitButton"]:nth-of-type(2) button,
-        section[data-testid="stSidebar"] [data-testid="stButton"] button {
+        .lang-toggle-wrapper button {
             background: rgba(26, 26, 26, 0.9) !important;
             backdrop-filter: blur(10px) !important;
             color: #D4AF37 !important;
@@ -554,11 +553,13 @@ def get_css():
             transition: all 0.4s cubic-bezier(0.165, 0.84, 0.44, 1) !important;
             box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5) !important;
             min-width: 160px !important;
+            display: inline-flex !important;
+            align-items: center !important;
+            justify-content: center !important;
         }
         
         button[kind="primary"]:hover,
-        .login-screen-wrapper [data-testid="stForm"] [data-testid="stFormSubmitButton"]:nth-of-type(2) button:hover,
-        section[data-testid="stSidebar"] [data-testid="stButton"] button:hover {
+        .lang-toggle-wrapper button:hover {
             background: #D4AF37 !important;
             color: #000 !important;
             border-color: #D4AF37 !important;
@@ -568,8 +569,8 @@ def get_css():
         }
 
         /* Ensure text paragraphs inside these buttons don't override color */
-        .login-screen-wrapper [data-testid="stForm"] [data-testid="stFormSubmitButton"]:nth-of-type(2) button p,
-        section[data-testid="stSidebar"] [data-testid="stButton"] button p {
+        button[kind="primary"] p,
+        .lang-toggle-wrapper button p {
             color: inherit !important;
             font-weight: inherit !important;
         }
@@ -876,10 +877,12 @@ def login_screen():
                     if u.lower() == "admin" and p_norm == "admin123":
                         st.info("💡 Try using your new password instead of the old default.")
 
-            # New Professional Language Toggle inside the form
+            # Language Toggle Wrapper
+            st.markdown('<div class="lang-toggle-wrapper">', unsafe_allow_html=True)
             if st.form_submit_button("En" if lang == "ar" else "عربي", use_container_width=True):
                 toggle_lang()
                 st.rerun()
+            st.markdown('</div>', unsafe_allow_html=True)
         
         st.markdown('</div>', unsafe_allow_html=True)
 
@@ -918,12 +921,13 @@ def dashboard():
         # Spacing
         st.markdown("<div style='margin-bottom: 20px;'></div>", unsafe_allow_html=True)
         
-        # Language Toggle (Using Marker ID)
-        st.markdown('<div id="sidebar-lang-anchor"></div>', unsafe_allow_html=True)
+        # Language Toggle (Using Wrapper for CSS targeting)
+        st.markdown('<div class="lang-toggle-wrapper">', unsafe_allow_html=True)
         btn_label = "En" if lang == "ar" else "عربي"
-        if st.button(btn_label, key="lang_btn_dashboard"):
+        if st.button(btn_label, key="lang_btn_dashboard", use_container_width=True):
             toggle_lang()
             st.rerun()
+        st.markdown('</div>', unsafe_allow_html=True)
         
         st.markdown("<div style='margin-bottom: 30px;'></div>", unsafe_allow_html=True)
 
@@ -1232,8 +1236,13 @@ def render_search_content():
                 options=list(transfer_options.values()),
                 key="transfer_count_dropdown"
             )
-            # Find the key (English value) from the selected label
-            selected_transfer_key = [k for k, v in transfer_options.items() if v == selected_transfer_label][0]
+        # Row 3: Huroob & Outside City Filters
+        st.markdown("<br>", unsafe_allow_html=True)
+        c3_1, c3_2 = st.columns(2)
+        with c3_1:
+            use_no_huroob = st.checkbox(t("no_huroob", lang), key="use_no_huroob_filter")
+        with c3_2:
+            use_work_outside = st.checkbox(t("work_outside_city", lang), key="use_work_outside_filter")
 
     # 2. Search Input & Button
     st.markdown('<div class="search-container">', unsafe_allow_html=True)
@@ -1268,6 +1277,12 @@ def render_search_content():
 
     if use_not_working:
         filters['not_working_only'] = True
+
+    if use_no_huroob:
+        filters['no_huroob'] = True
+
+    if use_work_outside:
+        filters['work_outside_city'] = True
         
     if selected_transfer_key:
         filters['transfer_count'] = selected_transfer_key
@@ -1287,6 +1302,8 @@ def render_search_content():
             if filters.get('date_enabled'): active_filter_names.append(f"{lbl_reg}")
             if filters.get('expired_only'): active_filter_names.append("العقود المنتهية" if lang == 'ar' else "Expired Contracts")
             if filters.get('not_working_only'): active_filter_names.append("غير موظف" if lang == 'ar' else "Not Working")
+            if filters.get('no_huroob'): active_filter_names.append(t("no_huroob", lang))
+            if filters.get('work_outside_city'): active_filter_names.append(t("work_outside_city", lang))
             if filters.get('transfer_count'): active_filter_names.append("عدد مرات النقل" if lang == 'ar' else "Transfer Count")
             
             if active_filter_names:
