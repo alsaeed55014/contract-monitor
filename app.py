@@ -272,8 +272,11 @@ def get_css():
             background: rgba(20, 20, 20, 0.5) !important;
             border-radius: 16px !important;
             border: 1px solid rgba(212, 175, 55, 0.1) !important;
-            padding: 0 !important;
+            padding: 5px !important;
             margin: 10px 0 !important;
+        }
+        [data-testid="stDataFrame"] > div {
+            border-radius: 12px !important;
         }
 
         /* Status Column Glows */
@@ -1288,15 +1291,16 @@ def render_search_content():
             )
 
             # Use on_select to capture row selection
-            styled_res = style_df(res_display)
+            df_height = min((len(res_display) + 1) * 35 + 40, 600)
             event = st.dataframe(
-                styled_res, 
+                res_display, 
                 use_container_width=True,
                 on_select="rerun",
                 selection_mode="single-row",
                 hide_index=True,
                 column_config=column_config,
-                key="search_results_table"
+                key="search_results_table",
+                height=df_height
             )
 
             # Handle Selection with Safety Check
@@ -1769,13 +1773,15 @@ def render_order_processing_content():
                         st.markdown(f"""<div style="color: #D4AF37; font-weight: 700; margin: 10px 5px;">📍 عمال في نفس المدينة ({str(customer_row.get(c_location, ""))}) — {len(city_df)}</div>""", unsafe_allow_html=True)
                         
                         # Use selection
+                        df_city_height = min((len(city_df) + 1) * 35 + 40, 500)
                         event_city = st.dataframe(
-                            style_df(city_df.drop(columns=["__uid"])),
+                            city_df.drop(columns=["__uid"]),
                             use_container_width=True,
                             hide_index=True,
                             on_select="rerun",
                             selection_mode="single-row",
-                            key=f"op_city_table_{idx}"
+                            key=f"op_city_table_{idx}",
+                            height=df_city_height
                         )
                         
                         if event_city.selection and event_city.selection.get("rows"):
@@ -1799,13 +1805,15 @@ def render_order_processing_content():
                     if not other_df.empty:
                         st.markdown(f"""<div style="color: #8888FF; font-weight: 700; margin: 10px 5px;">🌐 عمال في مدن أخرى — {len(other_df)}</div>""", unsafe_allow_html=True)
                         
+                        df_other_height = min((len(other_df) + 1) * 35 + 40, 500)
                         event_other = st.dataframe(
-                            style_df(other_df.drop(columns=["__uid"])),
+                            other_df.drop(columns=["__uid"]),
                             use_container_width=True,
                             hide_index=True,
                             on_select="rerun",
                             selection_mode="single-row",
-                            key=f"op_other_table_{idx}"
+                            key=f"op_other_table_{idx}",
+                            height=df_other_height
                         )
                         
                         if event_other.selection and event_other.selection.get("rows"):
