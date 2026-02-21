@@ -176,7 +176,7 @@ def get_css():
         }
 
         /* Custom Premium Scrollbar */
-        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
         ::-webkit-scrollbar-track { background: #050505; }
         ::-webkit-scrollbar-thumb { 
             background: linear-gradient(180deg, #333, #D4AF37); 
