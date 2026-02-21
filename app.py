@@ -852,17 +852,13 @@ def render_dashboard_content():
             
             if lang == 'ar':
                 if global_status == 'expired':
-                    r['Status'] = "منتهي"
-                    r['المتبقى'] = abs(days)
+                    r['حالة العقد'] = f"❌ منتهي (منذ {abs(days)} يوم)"
                 elif global_status in ['urgent', 'warning']:
-                    r['Status'] = "متبقى"
-                    r['المتبقى'] = days
+                    r['حالة العقد'] = f"⚠️ عاجل (متبقى {days} يوم)"
                 else: # active
-                    r['Status'] = "ساري"
-                    r['المتبقى'] = days
+                    r['حالة العقد'] = f"✅ ساري (متبقى {days} يوم)"
             else:
-                r['Status'] = status['label_en']
-                r['Remaining'] = abs(days)
+                r['Contract Status'] = f"{status['label_en']} ({abs(days)} Days)"
 
             if global_status == 'urgent' or global_status == 'warning': stats['urgent'].append(r)
             elif global_status == 'expired': stats['expired'].append(r)
@@ -925,9 +921,9 @@ def render_dashboard_content():
         else:
             d = d.sort_values(by='__days_sort', ascending=True)
         
-        # Select columns: Remaining then Status, then the rest (EXCLUDING ANY __ COLS)
-        rem_col = 'المتبقى' if lang == 'ar' else 'Remaining'
-        show_cols = [rem_col, 'Status'] + [c for c in cols if c in d.columns and not str(c).startswith('__')]
+        # Select columns: 'حالة العقد' then the rest (EXCLUDING ANY __ COLS)
+        status_key = 'حالة العقد' if lang == 'ar' else 'Contract Status'
+        show_cols = [status_key] + [c for c in cols if c in d.columns and not str(c).startswith('__')]
         d_final = d[show_cols].copy()
         
         # Rename Columns Mechanism (Safe to prevent duplicates)
@@ -1162,20 +1158,16 @@ def render_search_content():
                     sort_list.append(ds)
                     if lang == 'ar':
                         if gs == 'expired':
-                            status_list.append("منتهي")
-                            rem_list.append(abs(ds))
+                            status_list.append(f"❌ منتهي (منذ {abs(ds)} يوم)")
                         elif gs in ['urgent', 'warning']:
-                            status_list.append("متبقى")
-                            rem_list.append(ds)
+                            status_list.append(f"⚠️ عاجل (متبقى {ds} يوم)")
                         else:
-                            status_list.append("ساري")
-                            rem_list.append(ds)
+                            status_list.append(f"✅ ساري (متبقى {ds} يوم)")
                     else:
-                        status_list.append(s['label_en'])
-                        rem_list.append(abs(ds))
+                        status_list.append(f"{s['label_en']} ({abs(ds)} Days)")
                 
-                res['Status'] = status_list
-                res['المتبقى' if lang == 'ar' else 'Remaining'] = rem_list
+                status_key = 'حالة العقد' if lang == 'ar' else 'Contract Status'
+                res[status_key] = status_list
                 res['__days_sort'] = sort_list
                 # Sort Results
                 res = res.sort_values(by='__days_sort', ascending=True)
@@ -1244,11 +1236,11 @@ def render_search_content():
                 if int_col in res_to_rename.columns:
                     res_to_rename = res_to_rename.drop(columns=[int_col])
             
-            # Reorder columns for Search Table (Remaining then Status)
-            rem_key = 'المتبقى' if lang == 'ar' else 'Remaining'
-            if rem_key in res.columns and "Status" in res.columns:
-                other_cols = [c for c in res.columns if c not in [rem_key, "Status"]]
-                res = res[[rem_key, "Status"] + other_cols]
+            # Reorder columns for Search Table (Status first)
+            status_key = 'حالة العقد' if lang == 'ar' else 'Contract Status'
+            if status_key in res.columns:
+                other_cols = [c for c in res.columns if c != status_key]
+                res = res[[status_key] + other_cols]
 
             res_display = res
             
