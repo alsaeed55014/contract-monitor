@@ -1254,7 +1254,7 @@ def render_search_content():
     has_active_filter = bool(filters)
     
     # Trigger on button click OR when query changes (Enter is pressed)
-    if search_clicked or query:
+    if search_clicked or query or has_active_filter:
         search_loader = show_loading_hourglass() # Custom premium loader
         
         # Debug: Show what filters are being sent
