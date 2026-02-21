@@ -272,7 +272,8 @@ def get_css():
             background: rgba(20, 20, 20, 0.5) !important;
             border-radius: 16px !important;
             border: 1px solid rgba(212, 175, 55, 0.1) !important;
-            padding: 10px !important;
+            padding: 0 !important;
+            margin: 10px 0 !important;
         }
 
         /* Status Column Glows */
