@@ -765,6 +765,9 @@ def dashboard():
         if st.button(t("cv_translator", lang), use_container_width=True):
             st.session_state.page = "translator"
             st.rerun()
+        if st.button(t("customer_requests", lang), use_container_width=True):
+            st.session_state.page = "customer_requests"
+            st.rerun()
         if user.get("role") == "admin":
             if st.button(t("permissions", lang), use_container_width=True):
                 st.session_state.page = "permissions"
@@ -816,6 +819,7 @@ def dashboard():
     if page == "dashboard": render_dashboard_content()
     elif page == "search": render_search_content()
     elif page == "translator": render_translator_content()
+    elif page == "customer_requests": render_customer_requests_content()
     elif page == "permissions": render_permissions_content()
 
 def render_dashboard_content():
@@ -1461,6 +1465,60 @@ def render_permissions_content():
     # Stylized DataFrame
     df_users = pd.DataFrame(table_data)
     st.dataframe(style_df(df_users), use_container_width=True)
+
+def render_customer_requests_content():
+    lang = st.session_state.lang
+    st.markdown('<div class="programmer-signature-neon">By: Alsaeed Alwazzan</div>', unsafe_allow_html=True)
+    st.title(f" {t('customer_requests_title', lang)}")
+    
+    loading_placeholder = show_loading_hourglass()
+    try:
+        # Fetch data using the specific method
+        df = st.session_state.db.fetch_customer_requests()
+    except Exception as e:
+        loading_placeholder.empty()
+        st.error(f"{t('error', lang)}: {e}")
+        if "REPLACE_WITH_CUSTOMER_REQUESTS_SHEET_URL" in str(e) or "URL" in str(e):
+            st.info("⚠️ يرجى تزويد المبرمج برابط ملف جوجل شيت (Spreadsheet) الخاص بتبويب 'الردود' في النموذج لإتمام الربط.")
+        return
+
+    loading_placeholder.empty()
+
+    if df.empty:
+        st.warning(t("no_data", lang))
+        return
+
+    # Similar display logic to the search results
+    res = df.copy()
+    
+    # Rename columns before showing
+    new_names = {}
+    used_names = set()
+    for c in res.columns:
+        new_name = t_col(c, lang)
+        original_new_name = new_name
+        counter = 1
+        while new_name in used_names:
+            counter += 1
+            new_name = f"{original_new_name} ({counter})"
+        used_names.add(new_name)
+        new_names[c] = new_name
+        
+    res.rename(columns=new_names, inplace=True)
+    res = clean_date_display(res)
+    
+    # Hide internal columns
+    res_display = res.copy()
+    for int_col in ["__sheet_row", "__sheet_row_backup"]:
+        if int_col in res_display.columns:
+            res_display = res_display.drop(columns=[int_col])
+            
+    st.dataframe(
+        style_df(res_display), 
+        use_container_width=True,
+        hide_index=True,
+        key="customer_requests_table"
+    )
 
 # 11. Main Entry
 if not st.session_state.user:

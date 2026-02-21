@@ -18,6 +18,7 @@ TRANSLATIONS = {
     "dashboard": {"ar": "الرئيسية", "en": "Dashboard"},
     "smart_search": {"ar": "البحث الذكي", "en": "Smart Search"},
     "cv_translator": {"ar": "ترجمة السير الذاتية", "en": "CV Translator"},
+    "customer_requests": {"ar": "طلبات العملاء", "en": "Customer Requests"},
     "permissions": {"ar": "الصلاحيات", "en": "Permissions"},
     "logout": {"ar": "تسجيل خروج", "en": "Logout"},
     "debug": {"ar": "فحص الأخطاء", "en": "Debug"},
@@ -53,6 +54,7 @@ TRANSLATIONS = {
     "close": {"ar": "إغلاق", "en": "Close"},
 
     # Translator
+    "customer_requests_title": {"ar": "إدارة طلبات العملاء", "en": "Customer Requests Management"},
     "translator_title": {"ar": "ترجمة السير الذاتية", "en": "CV Translator"},
     "translator_desc": {"ar": "ارفع ملف السيرة الذاتية (PDF) ليتم استخراج النص وترجمته للعربية.", "en": "Upload a CV (PDF) to translate it from English to Arabic automatically."},
     "upload_cv": {"ar": "رفع الملف", "en": "Upload CV"},
@@ -157,7 +159,12 @@ TRANSLATIONS = {
         "How did you know us?": {"ar": "كيف عرفت عنا؟", "en": "How did you know us?"},
         "__sheet_row_backup": {"ar": "نسخة المعرف", "en": "ID Backup"},
         "Remaining": {"ar": "المتبقى", "en": "Remaining"},
-        "Status": {"ar": "الحالة (STATUS)", "en": "Status"}
+        "Status": {"ar": "الحالة (STATUS)", "en": "Status"},
+        "Company or institution name | الشركة أو المؤسسة": {"ar": "اسم المنشأة / الشركة", "en": "Company Name"},
+        "Responsible Name | اسم المسؤول": {"ar": "اسم المسؤول", "en": "Responsible Person"},
+        "Mobile number | رقم الموبايل": {"ar": "رقم الجوال", "en": "Mobile Number"},
+        "Specify the required category | ذكر الفئة المطلوبة": {"ar": "الفئة المطلوبة", "en": "Required Category"},
+        "Required nationality | جنسية المطلوبة": {"ar": "الجنسية المطلوبة", "en": "Required Nationality"}
     }
 }
 

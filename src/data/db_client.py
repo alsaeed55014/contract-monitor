@@ -52,41 +52,38 @@ class DBClient:
             st.error(f"Connection Failed: {e}") # Show in UI immediately
             raise e
 
-    def fetch_data(self, force=False):
-        """Fetches data from Google Sheets with caching."""
+    def fetch_data(self, url=None, force=False):
+        """Fetches data from Google Sheets with caching. 'url' defaults to main worker sheet."""
         current_time = time.time()
         
-        # Check if cache exists and has the required tracking column
-        if not force and self._data_cache is not None:
-            if '__sheet_row' in self._data_cache.columns and (current_time - self._last_fetch < self.CACHE_DURATION):
-                print("[DEBUG] Returning valid cached data")
-                return self._data_cache
-            else:
-                print("[DEBUG] Cache missing tracking column or expired. Refreshing...")
-                force = True
+        # Use main sheet if no URL provided
+        if url is None:
+            url = "https://docs.google.com/spreadsheets/d/1u87sScIve_-xT_jDG56EKFMXegzAxOqwVJCh3Irerrw/edit"
+
+        cache_key = f"cache_{hashlib.md5(url.encode()).hexdigest()}"
+        last_fetch_key = f"last_fetch_{hashlib.md5(url.encode()).hexdigest()}"
+
+        # Initialize storage for this specific URL if not exists
+        if not hasattr(self, '_data_caches'): self._data_caches = {}
+        if not hasattr(self, '_last_fetches'): self._last_fetches = {}
+
+        # Check if cache exists
+        if not force and cache_key in self._data_caches:
+            if (current_time - self._last_fetches.get(last_fetch_key, 0) < self.CACHE_DURATION):
+                print(f"[DEBUG] Returning cached data for {url[:30]}...")
+                return self._data_caches[cache_key]
 
         if not self.client:
-            try:
-                self.connect()
-            except Exception as e:
-                raise e
-            
-            if not self.client:
-                 raise Exception("Client failed to initialize even after connect()")
+            self.connect()
 
         try:
-            # Using the URL provided in previous code
-            sheet_url = "https://docs.google.com/spreadsheets/d/1u87sScIve_-xT_jDG56EKFMXegzAxOqwVJCh3Irerrw/edit"
-            sheet = self.client.open_by_url(sheet_url).sheet1
+            sheet = self.client.open_by_url(url).sheet1
             data = sheet.get_all_values()
             
             if not data:
                 return pd.DataFrame()
 
-            # Handle headers normalization
             headers = [str(h).strip() for h in data[0]]
-            
-            # Deduplicate headers
             seen = {}
             clean_headers = []
             for h in headers:
@@ -98,31 +95,32 @@ class DBClient:
                     seen[h] = 0
                     clean_headers.append(h)
 
-            # Create DataFrame
             df = pd.DataFrame(data[1:], columns=clean_headers)
             
-            # Inject hidden sheet row index (1-indexed for gspread, starts at 2 because index 1 is header)
-            # Triple injection to ensure it's not lost in selection/filtering
+            # Inject hidden sheet row index
             row_ids = list(range(2, len(df) + 2))
             if '__sheet_row' not in df.columns:
                 df.insert(0, '__sheet_row', row_ids)
-            df['__sheet_row_backup'] = row_ids # Backup at the end
+            df['__sheet_row_backup'] = row_ids
             
-            self._data_cache = df
-            self._last_fetch = current_time
-            print(f"[DEBUG] Data fetched. Total records: {len(df)}. IDs injected at start and end.")
+            self._data_caches[cache_key] = df
+            self._last_fetches[last_fetch_key] = current_time
             return df
 
         except Exception as e:
             print(f"[ERROR] Error fetching data: {e}")
             raise e
 
-    def find_row_by_data(self, worker_name, phone=""):
+    def fetch_customer_requests(self, force=False):
+        """Specifically fetches the Customer Requests sheet."""
+        url = "https://docs.google.com/spreadsheets/d/1ZlLGXqbFSnKrr2J-PRnxRhxykwrNOgOE6Mb34Zei_FU/edit"
+        return self.fetch_data(url=url, force=force)
+
+    def find_row_by_data(self, worker_name, phone="", url=None):
         """Fallback: Tries to find the row index by matching name and optionally phone."""
-        df = self.fetch_data()
+        df = self.fetch_data(url=url)
         if df.empty: return None
         
-        # Search for exact name match
         name_col = next((c for c in df.columns if "name" in c.lower() or "الاسم" in c), None)
         if not name_col: return None
         
@@ -131,7 +129,6 @@ class DBClient:
         if len(matches) == 1:
             return matches.iloc[0]['__sheet_row']
         
-        # If multiple matches, try phone
         if len(matches) > 1 and phone:
             phone_col = next((c for c in df.columns if "phone" in c.lower() or "جوال" in c), None)
             if phone_col:
@@ -141,29 +138,31 @@ class DBClient:
         
         return None
 
-    def delete_row(self, row_number):
+    def delete_row(self, row_number, url=None):
         """Permanently deletes a row from Google Sheets by its 1-indexed row number."""
+        if url is None:
+            url = "https://docs.google.com/spreadsheets/d/1u87sScIve_-xT_jDG56EKFMXegzAxOqwVJCh3Irerrw/edit"
+
         if not self.client:
             self.connect()
         
         try:
-            sheet_url = "https://docs.google.com/spreadsheets/d/1u87sScIve_-xT_jDG56EKFMXegzAxOqwVJCh3Irerrw/edit"
-            sheet = self.client.open_by_url(sheet_url).sheet1
-            
-            # Perform deletion
+            sheet = self.client.open_by_url(url).sheet1
             sheet.delete_rows(int(row_number))
             
-            # Clear cache to force refresh
-            self._data_cache = None
-            self._last_fetch = 0
-            print(f"[DEBUG] Row {row_number} deleted successfully")
+            # Clear cache for this URL
+            cache_key = f"cache_{hashlib.md5(url.encode()).hexdigest()}"
+            if hasattr(self, '_data_caches') and cache_key in self._data_caches:
+                del self._data_caches[cache_key]
+            
             return True
         except Exception as e:
             print(f"[ERROR] Failed to delete row: {e}")
             return False, str(e)
 
-    def get_headers(self):
+    def get_headers(self, url=None):
         """Returns the list of headers."""
-        if self._data_cache is not None:
-            return list(self._data_cache.columns)
+        cache_key = f"cache_{hashlib.md5(url.encode()).hexdigest()}" if url else "cache_default"
+        if hasattr(self, '_data_caches') and cache_key in self._data_caches:
+            return list(self._data_caches[cache_key].columns)
         return []
