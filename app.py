@@ -176,16 +176,11 @@ def get_css():
         }
 
         /* Custom Premium Scrollbar */
-        ::-webkit-scrollbar { width: 10px; height: 10px; }
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
         ::-webkit-scrollbar-track { background: #050505; }
         ::-webkit-scrollbar-thumb { 
-            background: linear-gradient(180deg, #555, #D4AF37); 
+            background: linear-gradient(180deg, #333, #D4AF37); 
             border-radius: 10px; 
-            border: 2px solid #050505;
-        }
-        ::-webkit-scrollbar-thumb:hover {
-            background: linear-gradient(180deg, #D4AF37, #FFFFFF);
-            box-shadow: 0 0 10px var(--luxury-gold);
         }
 
         /* 2) Layout & Spacing */
@@ -278,12 +273,6 @@ def get_css():
             border-radius: 16px !important;
             border: 1px solid rgba(212, 175, 55, 0.1) !important;
             padding: 10px !important;
-            overflow-x: auto !important;
-        }
-
-        /* Force horizontal scrollbar visibility for tables */
-        [data-testid="stDataFrame"] > div {
-            overflow-x: auto !important;
         }
 
         /* Status Column Glows */
