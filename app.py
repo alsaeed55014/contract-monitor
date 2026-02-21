@@ -1167,19 +1167,19 @@ def render_search_content():
         c1, c2, c3 = st.columns(3)
         
         with c1:
-            use_age = st.checkbox(f"{lbl_enable} {lbl_age}", key="use_age_filter")
+            use_age = st.checkbox(f" {lbl_enable} {lbl_age}", key="use_age_filter")
             if use_age:
                 age_range = st.slider(lbl_age, 18, 60, (20, 45), key="age_slider")
             else: age_range = (18, 60)
 
         with c2:
-            use_contract = st.checkbox(f"{lbl_enable} {lbl_contract}", key="use_contract_filter")
+            use_contract = st.checkbox(f" {lbl_enable} {lbl_contract}", key="use_contract_filter")
             if use_contract:
                 contract_range = st.date_input("Contract Range", (datetime.now().date(), datetime.now().date() + timedelta(days=30)), label_visibility="collapsed", key="contract_range")
             else: contract_range = []
 
         with c3:
-            use_reg = st.checkbox(f"{lbl_enable} {lbl_reg}", key="use_reg_filter")
+            use_reg = st.checkbox(f" {lbl_enable} {lbl_reg}", key="use_reg_filter")
             if use_reg:
                 reg_range = st.date_input("Registration Range", (datetime.now().date().replace(day=1), datetime.now().date()), label_visibility="collapsed", key="reg_range")
             else: reg_range = []
