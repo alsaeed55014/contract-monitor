@@ -1642,23 +1642,47 @@ def render_order_processing_content():
         
         return city_matches + other_matches, city_scores + other_scores, len(city_matches)
 
+    # --- Initialize session state ---
+    if 'op_hidden_clients' not in st.session_state:
+        st.session_state.op_hidden_clients = set()
+    if 'op_hidden_workers' not in st.session_state:
+        st.session_state.op_hidden_workers = set()
+
+    # --- Global Unhide ---
+    if st.session_state.op_hidden_workers:
+        if st.sidebar.button("🔓 " + ("أظهر جميع العمال المخفيين" if lang == 'ar' else "Show all hidden workers")):
+            st.session_state.op_hidden_workers.clear()
+            st.rerun()
+
     # --- Helper: build worker table ---
-    import pandas as pd
-    
     def build_worker_table(worker_list, score_list):
         rows = []
-        for worker, score in zip(worker_list, score_list):
+        filtered_indices = []
+        for i, (worker, score) in enumerate(zip(worker_list, score_list)):
+            # Unique ID for hiding (using name and phone)
+            w_name = str(worker.get(w_name_col, "")) if w_name_col else ""
+            w_phone = str(worker.get(w_phone_col, "")) if w_phone_col else ""
+            worker_uid = hashlib.md5(f"{w_name}{w_phone}".encode()).hexdigest()
+            
+            if worker_uid in st.session_state.op_hidden_workers:
+                continue
+                
             row = {}
             row[t('match_score', lang)] = f"{score}%"
-            if w_name_col: row[t('worker_name', lang)] = str(worker.get(w_name_col, ""))
+            if w_name_col: row[t('worker_name', lang)] = w_name
             if w_nationality_col: row[t('worker_nationality', lang)] = str(worker.get(w_nationality_col, ""))
             if w_gender_col: row[t('worker_gender', lang)] = str(worker.get(w_gender_col, ""))
             if w_job_col: row[t('worker_job', lang)] = str(worker.get(w_job_col, ""))
             if w_city_col: row[t('worker_city', lang)] = str(worker.get(w_city_col, ""))
-            if w_phone_col: row[t('worker_phone', lang)] = str(worker.get(w_phone_col, ""))
+            if w_phone_col: row[t('worker_phone', lang)] = w_phone
             if w_age_col: row[t('worker_age', lang)] = str(worker.get(w_age_col, ""))
+            
+            # Internal key for hiding
+            row["__uid"] = worker_uid
             rows.append(row)
-        return pd.DataFrame(rows)
+            filtered_indices.append(i)
+            
+        return pd.DataFrame(rows), filtered_indices
 
     def info_cell(icon, label_text, value, color="#F4F4F4"):
         st.markdown(f"""
@@ -1668,10 +1692,6 @@ def render_order_processing_content():
                 <span style="color: {color}; font-size: 1.1rem; font-weight: 600;">{icon} {value}</span>
             </div>
         """, unsafe_allow_html=True)
-
-    # --- Initialize session state for toggles ---
-    if 'op_hidden_clients' not in st.session_state:
-        st.session_state.op_hidden_clients = set()
 
     # --- Timestamp column lookup ---
     c_timestamp = find_cust_col(["timestamp"]) or find_cust_col(["الطابع"]) or find_cust_col(["تاريخ"])
@@ -1736,19 +1756,79 @@ def render_order_processing_content():
             if not matches:
                 st.warning("⚠️ " + t('no_matching_workers', lang))
             else:
-                # Same City
-                if city_count > 0:
-                    st.markdown(f"""<div style="color: #D4AF37; font-weight: 700; margin: 10px 5px;">📍 عمال في نفس المدينة ({str(customer_row.get(c_location, ""))}) — {city_count}</div>""", unsafe_allow_html=True)
-                    st.dataframe(build_worker_table(matches[:city_count], scores[:city_count]), use_container_width=True, hide_index=True)
+                city_list = matches[:city_count]
+                other_list = matches[city_count:]
+                city_scores = scores[:city_count]
+                other_scores = scores[city_count:]
+
+                # Same City Table
+                if city_list:
+                    city_df, city_idx_map = build_worker_table(city_list, city_scores)
+                    if not city_df.empty:
+                        st.markdown(f"""<div style="color: #D4AF37; font-weight: 700; margin: 10px 5px;">📍 عمال في نفس المدينة ({str(customer_row.get(c_location, ""))}) — {len(city_df)}</div>""", unsafe_allow_html=True)
+                        
+                        # Use selection
+                        event_city = st.dataframe(
+                            style_df(city_df.drop(columns=["__uid"])),
+                            use_container_width=True,
+                            hide_index=True,
+                            on_select="rerun",
+                            selection_mode="single-row",
+                            key=f"op_city_table_{idx}"
+                        )
+                        
+                        if event_city.selection and event_city.selection.get("rows"):
+                            sel_row_idx = event_city.selection["rows"][0]
+                            original_idx = city_idx_map[sel_row_idx]
+                            worker_row = city_list[original_idx]
+                            worker_uid = city_df.iloc[sel_row_idx]["__uid"]
+                            
+                            # Detail Panel
+                            render_cv_detail_panel(worker_row, sel_row_idx, lang, key_prefix=f"op_city_{idx}")
+                            
+                            # Hide Button
+                            if st.button("🚫 " + ("إخفاء هذا العامل" if lang == 'ar' else "Hide this worker"), 
+                                         key=f"hide_city_{idx}_{worker_uid}"):
+                                st.session_state.op_hidden_workers.add(worker_uid)
+                                st.rerun()
+
+                # Other Cities Table
+                if other_list:
+                    other_df, other_idx_map = build_worker_table(other_list, other_scores)
+                    if not other_df.empty:
+                        st.markdown(f"""<div style="color: #8888FF; font-weight: 700; margin: 10px 5px;">🌐 عمال في مدن أخرى — {len(other_df)}</div>""", unsafe_allow_html=True)
+                        
+                        event_other = st.dataframe(
+                            style_df(other_df.drop(columns=["__uid"])),
+                            use_container_width=True,
+                            hide_index=True,
+                            on_select="rerun",
+                            selection_mode="single-row",
+                            key=f"op_other_table_{idx}"
+                        )
+                        
+                        if event_other.selection and event_other.selection.get("rows"):
+                            sel_row_idx = event_other.selection["rows"][0]
+                            original_idx = other_idx_map[sel_row_idx]
+                            worker_row = other_list[original_idx]
+                            worker_uid = other_df.iloc[sel_row_idx]["__uid"]
+                            
+                            # Detail Panel
+                            render_cv_detail_panel(worker_row, sel_row_idx, lang, key_prefix=f"op_other_{idx}")
+                            
+                            # Hide Button
+                            if st.button("🚫 " + ("إخفاء هذا العامل" if lang == 'ar' else "Hide this worker"), 
+                                         key=f"hide_other_{idx}_{worker_uid}"):
+                                st.session_state.op_hidden_workers.add(worker_uid)
+                                st.rerun()
                 
-                # Other Cities
-                other_count = len(matches) - city_count
-                if other_count > 0:
-                    st.markdown(f"""<div style="color: #8888FF; font-weight: 700; margin: 10px 5px;">🌐 عمال في مدن أخرى — {other_count}</div>""", unsafe_allow_html=True)
-                    st.dataframe(build_worker_table(matches[city_count:], scores[city_count:]), use_container_width=True, hide_index=True)
-            
+                if (not city_list or build_worker_table(city_list, city_scores)[0].empty) and \
+                   (not other_list or build_worker_table(other_list, other_scores)[0].empty):
+                    st.info("تم إخفاء جميع العمال المطابقين لهذا الطلب.")
+
             st.markdown("<div style='height: 40px;'></div>", unsafe_allow_html=True)
             st.divider()
+
 
 
 def render_customer_requests_content():
