@@ -769,6 +769,9 @@ def dashboard():
         if st.button(t("customer_requests", lang), use_container_width=True):
             st.session_state.page = "customer_requests"
             st.rerun()
+        if st.button(t("order_processing", lang), use_container_width=True):
+            st.session_state.page = "order_processing"
+            st.rerun()
         if user.get("role") == "admin":
             if st.button(t("permissions", lang), use_container_width=True):
                 st.session_state.page = "permissions"
@@ -821,6 +824,7 @@ def dashboard():
     elif page == "search": render_search_content()
     elif page == "translator": render_translator_content()
     elif page == "customer_requests": render_customer_requests_content()
+    elif page == "order_processing": render_order_processing_content()
     elif page == "permissions": render_permissions_content()
 
 def render_dashboard_content():
@@ -1466,6 +1470,380 @@ def render_permissions_content():
     # Stylized DataFrame
     df_users = pd.DataFrame(table_data)
     st.dataframe(style_df(df_users), use_container_width=True)
+
+def render_order_processing_content():
+    """Order Processing: Matches Customer Requests with available Workers."""
+    lang = st.session_state.lang
+    st.markdown('<div class="programmer-signature-neon">By: Alsaeed Alwazzan</div>', unsafe_allow_html=True)
+    st.title(f" {t('order_processing_title', lang)}")
+    
+    loading_placeholder = show_loading_hourglass()
+    
+    try:
+        customers_df = st.session_state.db.fetch_customer_requests()
+        workers_df = st.session_state.db.fetch_data()
+    except Exception as e:
+        loading_placeholder.empty()
+        st.error(f"{t('error', lang)}: {e}")
+        return
+    
+    loading_placeholder.empty()
+    
+    if customers_df.empty:
+        st.warning(t("no_data", lang))
+        return
+    
+    if workers_df.empty:
+        st.warning("لا توجد بيانات عمال" if lang == 'ar' else "No worker data available")
+        return
+
+    # --- Customer Column Names (from sheet headers) ---
+    cust_cols = customers_df.columns.tolist()
+    # Indices based on verified headers:
+    # 0: timestamp, 1: company, 2: responsible, 3: mobile, 4: category(gender), 
+    # 5: nationality, 6: location, 7: num_employees, 8: work_nature(job), 
+    # 9: transfer_days, 10: salary, 11: hours, 12: weekly_off, 13: notes
+    
+    def safe_col(df, idx):
+        """Safely get column name by index."""
+        cols = df.columns.tolist()
+        if idx < len(cols): return cols[idx]
+        return None
+    
+    c_company = safe_col(customers_df, 1)
+    c_responsible = safe_col(customers_df, 2)
+    c_mobile = safe_col(customers_df, 3)
+    c_category = safe_col(customers_df, 4)   # Gender: "رجال | Male" / "نساء | Female"
+    c_nationality = safe_col(customers_df, 5) # e.g. "🇳🇵 نيبالي – Nepali, 🇮🇩 إندونيسي – Indonesian"
+    c_location = safe_col(customers_df, 6)    # e.g. "عسير | Asir"
+    c_num_emp = safe_col(customers_df, 7)
+    c_work_nature = safe_col(customers_df, 8) # e.g. "Barista, Tea Boy"
+    c_salary = safe_col(customers_df, 10)
+    
+    # --- Worker Column Names ---
+    w_name_col = next((c for c in workers_df.columns if "full name" in c.lower()), None)
+    w_nationality_col = next((c for c in workers_df.columns if c.strip().lower() == "nationality"), None)
+    w_gender_col = next((c for c in workers_df.columns if c.strip().lower() == "gender"), None)
+    w_job_col = next((c for c in workers_df.columns if "job" in c.lower() and "looking" in c.lower()), None)
+    w_city_col = next((c for c in workers_df.columns if "city" in c.lower() and "saudi" in c.lower()), None)
+    w_phone_col = next((c for c in workers_df.columns if "phone" in c.lower()), None)
+    w_age_col = next((c for c in workers_df.columns if "age" in c.lower()), None)
+
+    def normalize(text):
+        """Normalize text for comparison: lowercase, strip, remove extras."""
+        if not text: return ""
+        return str(text).strip().lower()
+    
+    def match_gender(customer_category, worker_gender):
+        """Check if the gender in customer category matches the worker's gender."""
+        cat = normalize(customer_category)
+        gen = normalize(worker_gender)
+        if not cat or not gen: return True  # If no gender specified, don't filter
+        
+        if "male" in cat or "رجال" in cat:
+            return "male" in gen or "رجل" in gen or "ذكر" in gen
+        elif "female" in cat or "نساء" in cat:
+            return "female" in gen or "أنثى" in gen or "امرأة" in gen
+        return True
+    
+    def match_nationality(customer_nat, worker_nat):
+        """Check if worker's nationality is in the customer's requested nationalities."""
+        c_nat = normalize(customer_nat)
+        w_nat = normalize(worker_nat)
+        if not c_nat or not w_nat: return True
+        
+        # Customer may request multiple nationalities separated by commas
+        requested = [n.strip() for n in c_nat.split(',')]
+        for req in requested:
+            # Check if the worker's nationality name appears in any requested nationality
+            # Handle format like "🇳🇵 نيبالي – Nepali"
+            req_clean = req.lower().strip()
+            if w_nat in req_clean or req_clean in w_nat:
+                return True
+            # Extract English name after " – " or " - "
+            for sep in [' – ', ' - ', '–', '-']:
+                if sep in req:
+                    parts = req.split(sep)
+                    for part in parts:
+                        p = part.strip().lower()
+                        # Remove emoji and extra chars
+                        p = ''.join(c for c in p if not c.startswith('\U0001f1e6'))
+                        p = p.strip()
+                        if p and (p in w_nat or w_nat in p):
+                            return True
+        return False
+    
+    def match_job(customer_job, worker_job):
+        """Check if worker's job matches the customer's required work nature."""
+        c_job = normalize(customer_job)
+        w_job = normalize(worker_job)
+        if not c_job or not w_job: return True
+        
+        # Customer may request multiple jobs separated by commas
+        requested_jobs = [j.strip() for j in c_job.split(',')]
+        for rj in requested_jobs:
+            rj = rj.strip().lower()
+            if rj and (rj in w_job or w_job in rj):
+                return True
+        return False
+    
+    def match_city(customer_location, worker_city):
+        """Check if the worker's city matches the customer's work location."""
+        c_loc = normalize(customer_location)
+        w_city = normalize(worker_city)
+        if not c_loc or not w_city: return True
+        
+        # Location format: "عسير | Asir" - split and check both parts
+        parts = [p.strip().lower() for p in c_loc.replace('|', ',').split(',')]
+        for part in parts:
+            if part and (part in w_city or w_city in part):
+                return True
+        return False
+    
+    def find_matching_workers(customer_row):
+        """Find workers that match the customer's requirements."""
+        matches = []
+        match_scores = []
+        
+        for _, worker in workers_df.iterrows():
+            score = 0
+            total_criteria = 0
+            
+            # Gender match
+            if c_category and w_gender_col:
+                total_criteria += 1
+                if match_gender(str(customer_row.get(c_category, "")), str(worker.get(w_gender_col, ""))):
+                    score += 1
+            
+            # Nationality match
+            if c_nationality and w_nationality_col:
+                total_criteria += 1
+                if match_nationality(str(customer_row.get(c_nationality, "")), str(worker.get(w_nationality_col, ""))):
+                    score += 1
+            
+            # Job match
+            if c_work_nature and w_job_col:
+                total_criteria += 1
+                if match_job(str(customer_row.get(c_work_nature, "")), str(worker.get(w_job_col, ""))):
+                    score += 1
+            
+            # City match
+            if c_location and w_city_col:
+                total_criteria += 1
+                if match_city(str(customer_row.get(c_location, "")), str(worker.get(w_city_col, ""))):
+                    score += 1
+            
+            if total_criteria > 0 and score >= 2:  # At least 2 criteria match
+                pct = int((score / total_criteria) * 100)
+                matches.append(worker)
+                match_scores.append(pct)
+        
+        return matches, match_scores
+
+    # --- Initialize session state for toggles ---
+    if 'op_hidden_clients' not in st.session_state:
+        st.session_state.op_hidden_clients = set()
+    if 'op_hidden_workers' not in st.session_state:
+        st.session_state.op_hidden_workers = set()
+
+    # --- Select Customer ---
+    customer_labels = []
+    for idx, row in customers_df.iterrows():
+        company = str(row.get(c_company, "")) if c_company else ""
+        responsible = str(row.get(c_responsible, "")) if c_responsible else ""
+        label = f"{company} - {responsible}".strip(" -")
+        if not label: label = f"طلب #{idx+1}" if lang == 'ar' else f"Request #{idx+1}"
+        customer_labels.append(label)
+    
+    selected_idx = st.selectbox(
+        t("select_customer", lang), 
+        range(len(customer_labels)),
+        format_func=lambda i: customer_labels[i],
+        key="op_customer_select"
+    )
+    
+    if selected_idx is not None:
+        customer_row = customers_df.iloc[selected_idx]
+        client_key = f"client_{selected_idx}"
+        
+        # --- Client Visibility Toggle ---
+        is_visible = st.checkbox(
+            "✅ " + (t("client_info", lang)),
+            value=(client_key not in st.session_state.op_hidden_clients),
+            key=f"op_vis_{selected_idx}"
+        )
+        
+        if not is_visible:
+            st.session_state.op_hidden_clients.add(client_key)
+            return
+        else:
+            st.session_state.op_hidden_clients.discard(client_key)
+        
+        # --- Client Info Card (Luxury Design) ---
+        company_val = str(customer_row.get(c_company, "")) if c_company else ""
+        responsible_val = str(customer_row.get(c_responsible, "")) if c_responsible else ""
+        mobile_val = str(customer_row.get(c_mobile, "")) if c_mobile else ""
+        location_val = str(customer_row.get(c_location, "")) if c_location else ""
+        category_val = str(customer_row.get(c_category, "")) if c_category else ""
+        nationality_val = str(customer_row.get(c_nationality, "")) if c_nationality else ""
+        work_nature_val = str(customer_row.get(c_work_nature, "")) if c_work_nature else ""
+        num_emp_val = str(customer_row.get(c_num_emp, "")) if c_num_emp else ""
+        salary_val = str(customer_row.get(c_salary, "")) if c_salary else ""
+        
+        st.markdown(f"""
+        <div style="background: linear-gradient(135deg, rgba(20, 20, 20, 0.9), rgba(30, 30, 30, 0.85));
+                    backdrop-filter: blur(20px);
+                    padding: 30px;
+                    border-radius: 24px;
+                    border: 1px solid rgba(212, 175, 55, 0.3);
+                    border-left: 5px solid #D4AF37;
+                    margin: 20px 0;
+                    box-shadow: 0 20px 40px rgba(0,0,0,0.5);">
+            <div style="display: flex; align-items: center; margin-bottom: 20px;">
+                <span style="font-size: 2rem; margin-left: 15px;">🏢</span>
+                <h2 style="color: #D4AF37; margin: 0; font-family: 'Tajawal', sans-serif; 
+                           font-size: 1.6rem; font-weight: 700;">{company_val}</h2>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                <div style="background: rgba(255,255,255,0.03); padding: 12px 18px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.05);">
+                    <span style="color: #888; font-size: 0.8rem;">{t('responsible_name', lang)}</span>
+                    <div style="color: #F4F4F4; font-size: 1.1rem; font-weight: 500; margin-top: 4px;">👤 {responsible_val}</div>
+                </div>
+                <div style="background: rgba(255,255,255,0.03); padding: 12px 18px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.05);">
+                    <span style="color: #888; font-size: 0.8rem;">{t('mobile_number', lang)}</span>
+                    <div style="color: #F4F4F4; font-size: 1.1rem; font-weight: 500; margin-top: 4px;">📱 {mobile_val}</div>
+                </div>
+                <div style="background: rgba(255,255,255,0.03); padding: 12px 18px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.05);">
+                    <span style="color: #888; font-size: 0.8rem;">{t('work_location', lang)}</span>
+                    <div style="color: #F4F4F4; font-size: 1.1rem; font-weight: 500; margin-top: 4px;">📍 {location_val}</div>
+                </div>
+                <div style="background: rgba(255,255,255,0.03); padding: 12px 18px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.05);">
+                    <span style="color: #888; font-size: 0.8rem;">{t('required_category', lang)}</span>
+                    <div style="color: #F4F4F4; font-size: 1.1rem; font-weight: 500; margin-top: 4px;">👥 {category_val}</div>
+                </div>
+                <div style="background: rgba(255,255,255,0.03); padding: 12px 18px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.05);">
+                    <span style="color: #888; font-size: 0.8rem;">{t('required_nationality', lang)}</span>
+                    <div style="color: #F4F4F4; font-size: 1.1rem; font-weight: 500; margin-top: 4px;">🌍 {nationality_val}</div>
+                </div>
+                <div style="background: rgba(255,255,255,0.03); padding: 12px 18px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.05);">
+                    <span style="color: #888; font-size: 0.8rem;">{t('work_nature', lang)}</span>
+                    <div style="color: #F4F4F4; font-size: 1.1rem; font-weight: 500; margin-top: 4px;">💼 {work_nature_val}</div>
+                </div>
+                <div style="background: rgba(255,255,255,0.03); padding: 12px 18px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.05);">
+                    <span style="color: #888; font-size: 0.8rem;">{t('num_employees', lang)}</span>
+                    <div style="color: #D4AF37; font-size: 1.3rem; font-weight: 700; margin-top: 4px;">🔢 {num_emp_val}</div>
+                </div>
+                <div style="background: rgba(255,255,255,0.03); padding: 12px 18px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.05);">
+                    <span style="color: #888; font-size: 0.8rem;">{t('expected_salary', lang)}</span>
+                    <div style="color: #00FF41; font-size: 1.3rem; font-weight: 700; margin-top: 4px;">💰 {salary_val}</div>
+                </div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # --- Find Matching Workers ---
+        with st.spinner("🔍 " + (t("matching_workers", lang)) + "..."):
+            matches, scores = find_matching_workers(customer_row)
+        
+        if not matches:
+            st.warning(f"⚠️ {t('no_matching_workers', lang)}")
+            return
+        
+        # --- Results Header ---
+        st.markdown(f"""
+        <div style="display: flex; align-items: center; justify-content: space-between; 
+                    margin: 25px 0 15px 0; padding: 15px 20px;
+                    background: rgba(0, 255, 65, 0.05); border-radius: 16px;
+                    border: 1px solid rgba(0, 255, 65, 0.15);">
+            <h3 style="color: #00FF41; margin: 0; font-family: 'Tajawal', sans-serif; font-size: 1.3rem;">
+                🔎 {t('matching_workers', lang)}
+            </h3>
+            <span style="background: rgba(0, 255, 65, 0.15); color: #00FF41; 
+                         padding: 6px 16px; border-radius: 20px; font-weight: 700; font-size: 1.1rem;">
+                {len(matches)} {t('total_matches', lang)}
+            </span>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # --- Display Each Matching Worker ---
+        for i, (worker, score) in enumerate(zip(matches, scores)):
+            worker_key = f"w_{selected_idx}_{i}"
+            
+            # Worker visibility toggle
+            is_worker_visible = st.checkbox(
+                f"✅ " + str(worker.get(w_name_col, f"Worker {i+1}") if w_name_col else f"Worker {i+1}"),
+                value=(worker_key not in st.session_state.op_hidden_workers),
+                key=f"op_wvis_{selected_idx}_{i}"
+            )
+            
+            if not is_worker_visible:
+                st.session_state.op_hidden_workers.add(worker_key)
+                continue
+            else:
+                st.session_state.op_hidden_workers.discard(worker_key)
+            
+            # Worker name and details
+            w_name = str(worker.get(w_name_col, "")) if w_name_col else ""
+            w_nat = str(worker.get(w_nationality_col, "")) if w_nationality_col else ""
+            w_gen = str(worker.get(w_gender_col, "")) if w_gender_col else ""
+            w_job = str(worker.get(w_job_col, "")) if w_job_col else ""
+            w_city = str(worker.get(w_city_col, "")) if w_city_col else ""
+            w_phone = str(worker.get(w_phone_col, "")) if w_phone_col else ""
+            w_age = str(worker.get(w_age_col, "")) if w_age_col else ""
+            
+            # Score Color
+            if score >= 75:
+                score_color = "#00FF41"
+                score_bg = "rgba(0, 255, 65, 0.1)"
+            elif score >= 50:
+                score_color = "#FF9100"
+                score_bg = "rgba(255, 145, 0, 0.1)"
+            else:
+                score_color = "#FF3131"
+                score_bg = "rgba(255, 49, 49, 0.1)"
+            
+            st.markdown(f"""
+            <div style="background: rgba(25, 25, 25, 0.8);
+                        backdrop-filter: blur(10px);
+                        padding: 20px;
+                        border-radius: 16px;
+                        border: 1px solid rgba(212, 175, 55, 0.15);
+                        margin: 8px 0;
+                        box-shadow: 0 8px 20px rgba(0,0,0,0.3);
+                        transition: all 0.3s ease;">
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <span style="font-size: 1.5rem;">👷</span>
+                        <span style="color: #D4AF37; font-size: 1.2rem; font-weight: 600; font-family: 'Tajawal', sans-serif;">{w_name}</span>
+                    </div>
+                    <span style="background: {score_bg}; color: {score_color}; 
+                                 padding: 4px 14px; border-radius: 20px; font-weight: 700; font-size: 0.95rem;
+                                 border: 1px solid {score_color}30;">
+                        {score}% {t('match_score', lang)}
+                    </span>
+                </div>
+                <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px;">
+                    <div style="color: #CCC; font-size: 0.9rem;">
+                        <span style="color: #888;">🌍</span> {w_nat}
+                    </div>
+                    <div style="color: #CCC; font-size: 0.9rem;">
+                        <span style="color: #888;">👤</span> {w_gen}
+                    </div>
+                    <div style="color: #CCC; font-size: 0.9rem;">
+                        <span style="color: #888;">💼</span> {w_job}
+                    </div>
+                    <div style="color: #CCC; font-size: 0.9rem;">
+                        <span style="color: #888;">📍</span> {w_city}
+                    </div>
+                    <div style="color: #CCC; font-size: 0.9rem;">
+                        <span style="color: #888;">📱</span> {w_phone}
+                    </div>
+                    <div style="color: #CCC; font-size: 0.9rem;">
+                        <span style="color: #888;">🎂</span> {w_age}
+                    </div>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
 
 def render_customer_requests_content():
     lang = st.session_state.lang
