@@ -310,11 +310,19 @@ def get_css():
             background-color: rgba(255, 255, 255, 0.05) !important;
         }
 
-        /* Signature Neon (Specific Use) */
-        .programmer-signature-neon {
-            font-family: 'Alex Brush', cursive;
-            color: #fff;
-            text-shadow: 0 0 5px #fff, 0 0 15px var(--luxury-gold);
+        /* Signature Neon (Standardized White-Gold) */
+        .programmer-signature-neon, .red-neon-signature {
+            font-family: 'Alex Brush', cursive !important;
+            color: #FFFFFF !important;
+            text-shadow: 0 0 10px rgba(255, 255, 255, 0.8), 
+                         0 0 20px rgba(212, 175, 55, 0.4),
+                         0 0 30px rgba(212, 175, 55, 0.2) !important;
+            font-size: 1.8rem !important;
+            text-align: center !important;
+            display: block !important;
+            width: 100% !important;
+            margin: 0 auto 20px auto !important;
+            letter-spacing: 1px !important;
         }
 
         /* Login Screen Special Centering */
@@ -598,17 +606,17 @@ def login_screen():
     with col2:
         st.markdown('<div class="login-screen-wrapper">', unsafe_allow_html=True)
         
-        # 1. Image at the very top, centered (CSS makes it smaller)
+        # 1. Signature at the ABSOLUTE Top (requested by user)
+        st.markdown('<div class="programmer-signature-neon" style="font-size: 2rem; margin-bottom: 30px;">By: Alsaeed Alwazzan</div>', unsafe_allow_html=True)
+
+        # 2. Image (Centered and slightly smaller)
         if os.path.exists(IMG_PATH):
             st.image(IMG_PATH, width=80) # Explicit width in Streamlit also helps
         
-        # 2. Welcome + Signature (Refined Luxury)
+        # 3. Welcome Message (Refined Luxury)
         st.markdown(f"""
             <div class="welcome-signature-container">
                 <h1 style='margin:0; padding:0; display:inline-block; font-size: 2.2rem;'>{t('welcome_back', lang)}</h1>
-                <div style="width: 100%; text-align: center; margin-top: -10px;">
-                    <span class="programmer-signature-neon" style="font-size: 1.6rem;">By: Alsaeed Alwazzan</span>
-                </div>
             </div>
             """, unsafe_allow_html=True)
             
@@ -752,7 +760,7 @@ def dashboard():
 
 def render_dashboard_content():
     lang = st.session_state.lang
-    st.markdown('<div class="red-neon-signature">By: Alsaeed Alwazzan</div>', unsafe_allow_html=True)
+    st.markdown('<div class="programmer-signature-neon">By: Alsaeed Alwazzan</div>', unsafe_allow_html=True)
     st.title(f" {t('contract_dashboard', lang)}")
     
     # Show loader while fetching data
@@ -932,7 +940,7 @@ def render_search_content():
     lang = st.session_state.lang
     
     # Absolute Top Signature
-    st.markdown('<div class="red-neon-signature">By: Alsaeed Alwazzan</div>', unsafe_allow_html=True)
+    st.markdown('<div class="programmer-signature-neon">By: Alsaeed Alwazzan</div>', unsafe_allow_html=True)
     
     # 1. Glowing Title at the Absolute Top
     title_text = "Smart Search" if lang != 'ar' else "(AI) البحث الذكي"
