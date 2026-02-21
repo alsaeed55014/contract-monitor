@@ -1642,21 +1642,6 @@ def render_order_processing_content():
         
         return city_matches + other_matches, city_scores + other_scores, len(city_matches)
 
-
-    # --- Timestamp column ---
-    c_timestamp = find_cust_col(["timestamp"]) or find_cust_col(["الطابع"]) or find_cust_col(["تاريخ"])
-    if not c_timestamp:
-        # Fallback: first column is usually timestamp
-        first_col = customers_df.columns[0]
-        if first_col != "__sheet_row":
-            c_timestamp = first_col
-        elif len(customers_df.columns) > 1:
-            c_timestamp = customers_df.columns[1]
-
-    # --- Initialize session state for toggles ---
-    if 'op_hidden_clients' not in st.session_state:
-        st.session_state.op_hidden_clients = set()
-
     # --- Helper: build worker table ---
     import pandas as pd
     
@@ -1675,187 +1660,95 @@ def render_order_processing_content():
             rows.append(row)
         return pd.DataFrame(rows)
 
-    # --- Scrollable container ---
-    st.markdown("""
-    <style>
-    .order-scroll-container {
-        max-height: 80vh;
-        overflow-y: auto;
-        padding-right: 8px;
-    }
-    .order-scroll-container::-webkit-scrollbar { width: 6px; }
-    .order-scroll-container::-webkit-scrollbar-track { background: rgba(255,255,255,0.03); border-radius: 10px; }
-    .order-scroll-container::-webkit-scrollbar-thumb { background: rgba(212,175,55,0.4); border-radius: 10px; }
-    .order-scroll-container::-webkit-scrollbar-thumb:hover { background: rgba(212,175,55,0.7); }
-    </style>
-    """, unsafe_allow_html=True)
+    def info_cell(icon, label_text, value, color="#F4F4F4"):
+        st.markdown(f"""
+            <div style="background: rgba(255,255,255,0.04); padding: 12px; border-radius: 10px;
+                        border: 1px solid rgba(255,255,255,0.06); margin: 5px 0; min-height: 80px;">
+                <span style="color: #888; font-size: 0.8rem;">{label_text}</span><br>
+                <span style="color: {color}; font-size: 1.1rem; font-weight: 600;">{icon} {value}</span>
+            </div>
+        """, unsafe_allow_html=True)
 
-    # --- Loop over ALL customers ---
-    for selected_idx in range(len(customers_df)):
-        customer_row = customers_df.iloc[selected_idx]
-        client_key = f"client_{selected_idx}"
-        
-        # --- Client label ---
+    # --- Initialize session state for toggles ---
+    if 'op_hidden_clients' not in st.session_state:
+        st.session_state.op_hidden_clients = set()
+
+    # --- Timestamp column lookup ---
+    c_timestamp = find_cust_col(["timestamp"]) or find_cust_col(["الطابع"]) or find_cust_col(["تاريخ"])
+    if not c_timestamp and len(customers_df.columns) > 0:
+        c_timestamp = customers_df.columns[0]
+
+    # --- Container for all requests ---
+    st.markdown("### 📋 " + t('customer_requests', lang))
+    
+    # Loop over all customers
+    for idx, customer_row in customers_df.iterrows():
         company_val = str(customer_row.get(c_company, "")) if c_company else ""
         responsible_val = str(customer_row.get(c_responsible, "")) if c_responsible else ""
-        label = f"{company_val} - {responsible_val}".strip(" -")
-        if not label:
-            label = f"طلب #{selected_idx+1}" if lang == 'ar' else f"Request #{selected_idx+1}"
+        client_key = f"client_{idx}"
         
-        # --- Timestamp ---
-        timestamp_val = ""
-        if c_timestamp:
-            timestamp_val = str(customer_row.get(c_timestamp, ""))
+        # Display name
+        display_name = f"{company_val} - {responsible_val}".strip(" -")
+        if not display_name: display_name = f"طلب #{idx+1}" if lang == 'ar' else f"Request #{idx+1}"
         
-        # --- Client Visibility Toggle ---
+        # Checkbox to show/hide this specific request
         is_visible = st.checkbox(
-            f"✅ {label}",
+            f"✅ {display_name}", 
             value=(client_key not in st.session_state.op_hidden_clients),
-            key=f"op_vis_{selected_idx}"
+            key=f"op_vis_check_{idx}"
         )
         
         if not is_visible:
             st.session_state.op_hidden_clients.add(client_key)
-            st.markdown("<hr style='border: 1px solid rgba(255,255,255,0.05); margin: 5px 0;'>", unsafe_allow_html=True)
+            st.divider()
             continue
         else:
             st.session_state.op_hidden_clients.discard(client_key)
-        
-        # --- Client Info Card ---
-        mobile_val = str(customer_row.get(c_mobile, "")) if c_mobile else ""
-        location_val = str(customer_row.get(c_location, "")) if c_location else ""
-        category_val = str(customer_row.get(c_category, "")) if c_category else ""
-        nationality_val = str(customer_row.get(c_nationality, "")) if c_nationality else ""
-        work_nature_val = str(customer_row.get(c_work_nature, "")) if c_work_nature else ""
-        num_emp_val = str(customer_row.get(c_num_emp, "")) if c_num_emp else ""
-        salary_val = str(customer_row.get(c_salary, "")) if c_salary else ""
-        
-        # Date badge
-        date_html = ""
-        if timestamp_val:
-            date_label = "📅 " + ("التاريخ" if lang == 'ar' else "Date")
-            date_html = f"""
-                <div style="background: rgba(255,255,255,0.03); padding: 12px 18px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.05);">
-                    <span style="color: #888; font-size: 0.8rem;">{date_label}</span>
-                    <div style="color: #F4F4F4; font-size: 1.1rem; font-weight: 500; margin-top: 4px;">📅 {timestamp_val}</div>
-                </div>"""
-        
-        st.markdown(f"""
-        <div style="background: linear-gradient(135deg, rgba(20, 20, 20, 0.9), rgba(30, 30, 30, 0.85));
-                    backdrop-filter: blur(20px);
-                    padding: 30px;
-                    border-radius: 24px;
-                    border: 1px solid rgba(212, 175, 55, 0.3);
-                    border-left: 5px solid #D4AF37;
-                    margin: 15px 0;
-                    box-shadow: 0 20px 40px rgba(0,0,0,0.5);">
-            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;">
-                <div style="display: flex; align-items: center;">
-                    <span style="font-size: 2rem; margin-left: 15px;">🏢</span>
-                    <h2 style="color: #D4AF37; margin: 0; font-family: 'Tajawal', sans-serif; 
-                               font-size: 1.6rem; font-weight: 700;">{company_val}</h2>
-                </div>
-                <span style="background: rgba(212,175,55,0.12); color: #D4AF37; padding: 4px 14px; 
-                             border-radius: 16px; font-size: 0.85rem; font-weight: 600;">
-                    #{selected_idx + 1}
-                </span>
-            </div>
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
-                {date_html}
-                <div style="background: rgba(255,255,255,0.03); padding: 12px 18px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.05);">
-                    <span style="color: #888; font-size: 0.8rem;">{t('responsible_name', lang)}</span>
-                    <div style="color: #F4F4F4; font-size: 1.1rem; font-weight: 500; margin-top: 4px;">👤 {responsible_val}</div>
-                </div>
-                <div style="background: rgba(255,255,255,0.03); padding: 12px 18px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.05);">
-                    <span style="color: #888; font-size: 0.8rem;">{t('mobile_number', lang)}</span>
-                    <div style="color: #F4F4F4; font-size: 1.1rem; font-weight: 500; margin-top: 4px;">📱 {mobile_val}</div>
-                </div>
-                <div style="background: rgba(255,255,255,0.03); padding: 12px 18px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.05);">
-                    <span style="color: #888; font-size: 0.8rem;">{t('work_location', lang)}</span>
-                    <div style="color: #F4F4F4; font-size: 1.1rem; font-weight: 500; margin-top: 4px;">📍 {location_val}</div>
-                </div>
-                <div style="background: rgba(255,255,255,0.03); padding: 12px 18px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.05);">
-                    <span style="color: #888; font-size: 0.8rem;">{t('required_category', lang)}</span>
-                    <div style="color: #F4F4F4; font-size: 1.1rem; font-weight: 500; margin-top: 4px;">👥 {category_val}</div>
-                </div>
-                <div style="background: rgba(255,255,255,0.03); padding: 12px 18px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.05);">
-                    <span style="color: #888; font-size: 0.8rem;">{t('required_nationality', lang)}</span>
-                    <div style="color: #F4F4F4; font-size: 1.1rem; font-weight: 500; margin-top: 4px;">🌍 {nationality_val}</div>
-                </div>
-                <div style="background: rgba(255,255,255,0.03); padding: 12px 18px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.05);">
-                    <span style="color: #888; font-size: 0.8rem;">{t('work_nature', lang)}</span>
-                    <div style="color: #F4F4F4; font-size: 1.1rem; font-weight: 500; margin-top: 4px;">💼 {work_nature_val}</div>
-                </div>
-                <div style="background: rgba(255,255,255,0.03); padding: 12px 18px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.05);">
-                    <span style="color: #888; font-size: 0.8rem;">{t('num_employees', lang)}</span>
-                    <div style="color: #D4AF37; font-size: 1.3rem; font-weight: 700; margin-top: 4px;">🔢 {num_emp_val}</div>
-                </div>
-                <div style="background: rgba(255,255,255,0.03); padding: 12px 18px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.05);">
-                    <span style="color: #888; font-size: 0.8rem;">{t('expected_salary', lang)}</span>
-                    <div style="color: #00FF41; font-size: 1.3rem; font-weight: 700; margin-top: 4px;">💰 {salary_val}</div>
-                </div>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        # --- Find Matching Workers ---
-        matches, scores, city_count = find_matching_workers(customer_row)
-        
-        if not matches:
-            st.warning("⚠️ " + t('no_matching_workers', lang))
-        else:
-            location_label = location_val
             
-            # Results count
+        # --- Single Customer Section ---
+        with st.container():
+            # Header
             st.markdown(f"""
-            <div style="display: flex; align-items: center; justify-content: space-between; 
-                        margin: 10px 0 8px 0; padding: 10px 16px;
-                        background: rgba(0, 255, 65, 0.05); border-radius: 12px;
-                        border: 1px solid rgba(0, 255, 65, 0.15);">
-                <span style="color: #00FF41; font-family: 'Tajawal', sans-serif; font-size: 1.05rem; font-weight: 600;">
-                    🔎 {t('matching_workers', lang)}
-                </span>
-                <span style="background: rgba(0, 255, 65, 0.15); color: #00FF41; 
-                             padding: 4px 12px; border-radius: 16px; font-weight: 700; font-size: 0.95rem;">
-                    {len(matches)} {t('total_matches', lang)}
-                </span>
-            </div>
+                <div style="background: linear-gradient(90deg, rgba(212,175,55,0.15), transparent); 
+                            padding: 10px 20px; border-radius: 10px; border-left: 5px solid #D4AF37; margin: 15px 0 5px 0;">
+                    <h3 style="color: #D4AF37; margin: 0; font-family: 'Tajawal', sans-serif;">🏢 {company_val} <span style="font-size: 0.8rem; color: #888;">#{idx+1}</span></h3>
+                </div>
             """, unsafe_allow_html=True)
             
-            # City Workers Table
-            if city_count > 0:
-                city_label = "📍 " + ("عمال في نفس المدينة" if lang == 'ar' else "Workers in same city") + f" ({location_label})"
-                st.markdown(f"""
-                <div style="background: rgba(212, 175, 55, 0.08); padding: 8px 14px; border-radius: 10px;
-                            border-left: 4px solid #D4AF37; margin: 8px 0; font-family: 'Tajawal', sans-serif;
-                            color: #D4AF37; font-weight: 600; font-size: 0.95rem;">
-                    {city_label} — {city_count}
-                </div>
-                """, unsafe_allow_html=True)
-                city_df = build_worker_table(matches[:city_count], scores[:city_count])
-                st.dataframe(city_df, use_container_width=True, hide_index=True)
+            # Info Grid
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                if c_timestamp: info_cell("📅", "التاريخ" if lang == 'ar' else "Date", str(customer_row.get(c_timestamp, "")))
+                info_cell("📍", t('work_location', lang), str(customer_row.get(c_location, "")))
+                info_cell("💼", t('work_nature', lang), str(customer_row.get(c_work_nature, "")))
+            with col2:
+                info_cell("👤", t('responsible_name', lang), responsible_val)
+                info_cell("👥", t('required_category', lang), str(customer_row.get(c_category, "")))
+                info_cell("🔢", t('num_employees', lang), str(customer_row.get(c_num_emp, "")), "#D4AF37")
+            with col3:
+                info_cell("📱", t('mobile_number', lang), str(customer_row.get(c_mobile, "")))
+                info_cell("🌍", t('required_nationality', lang), str(customer_row.get(c_nationality, "")))
+                info_cell("💰", t('expected_salary', lang), str(customer_row.get(c_salary, "")), "#00FF41")
+
+            # --- Workers ---
+            matches, scores, city_count = find_matching_workers(customer_row)
             
-            # Other Cities Table
-            other_count = len(matches) - city_count
-            if other_count > 0:
+            if not matches:
+                st.warning("⚠️ " + t('no_matching_workers', lang))
+            else:
+                # Same City
                 if city_count > 0:
-                    other_label = "🌐 " + ("عمال في مدن أخرى" if lang == 'ar' else "Workers in other cities")
-                else:
-                    other_label = "🌐 " + ("عمال مطابقون في مدن مختلفة" if lang == 'ar' else "Matching workers in various cities")
-                st.markdown(f"""
-                <div style="background: rgba(100, 100, 255, 0.06); padding: 8px 14px; border-radius: 10px;
-                            border-left: 4px solid #6464FF; margin: 8px 0; font-family: 'Tajawal', sans-serif;
-                            color: #8888FF; font-weight: 600; font-size: 0.95rem;">
-                    {other_label} — {other_count}
-                </div>
-                """, unsafe_allow_html=True)
-                other_df = build_worker_table(matches[city_count:], scores[city_count:])
-                st.dataframe(other_df, use_container_width=True, hide_index=True)
-        
-        # --- Separator between customers ---
-        st.markdown("""
-        <div style="border-top: 2px solid rgba(212,175,55,0.2); margin: 30px 0;"></div>
-        """, unsafe_allow_html=True)
+                    st.markdown(f"""<div style="color: #D4AF37; font-weight: 700; margin: 10px 5px;">📍 عمال في نفس المدينة ({str(customer_row.get(c_location, ""))}) — {city_count}</div>""", unsafe_allow_html=True)
+                    st.dataframe(build_worker_table(matches[:city_count], scores[:city_count]), use_container_width=True, hide_index=True)
+                
+                # Other Cities
+                other_count = len(matches) - city_count
+                if other_count > 0:
+                    st.markdown(f"""<div style="color: #8888FF; font-weight: 700; margin: 10px 5px;">🌐 عمال في مدن أخرى — {other_count}</div>""", unsafe_allow_html=True)
+                    st.dataframe(build_worker_table(matches[city_count:], scores[city_count:]), use_container_width=True, hide_index=True)
+            
+            st.markdown("<div style='height: 40px;'></div>", unsafe_allow_html=True)
+            st.divider()
 
 
 def render_customer_requests_content():
