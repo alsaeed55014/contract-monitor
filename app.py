@@ -1236,6 +1236,9 @@ def render_search_content():
                 options=list(transfer_options.values()),
                 key="transfer_count_dropdown"
             )
+            # Find the key (English value) from the selected label
+            selected_transfer_key = [k for k, v in transfer_options.items() if v == selected_transfer_label][0]
+        
         # Row 3: Huroob & Outside City Filters
         st.markdown("<br>", unsafe_allow_html=True)
         c3_1, c3_2 = st.columns(2)
