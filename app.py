@@ -270,13 +270,8 @@ def get_css():
         /* 6) Table & Data Presentation */
         [data-testid="stDataFrame"] {
             background: rgba(20, 20, 20, 0.5) !important;
-            border-radius: 16px !important;
             border: 1px solid rgba(212, 175, 55, 0.1) !important;
-            padding: 5px !important;
             margin: 10px 0 !important;
-        }
-        [data-testid="stDataFrame"] > div {
-            border-radius: 12px !important;
         }
 
         /* Status Column Glows */
