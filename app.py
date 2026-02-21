@@ -1479,19 +1479,38 @@ def render_customer_requests_content():
     except Exception as e:
         loading_placeholder.empty()
         import traceback
+        full_err = traceback.format_exc()
         err_msg = str(e)
-        if not err_msg: err_msg = "Unknown Error (Check Traceback)"
+        
+        # Check if it looks like a permission or connection issue
+        is_permission_error = any(kw in err_msg.lower() or kw in full_err.lower() 
+                                for kw in ["403", "permission", "not found", "gspread", "api"])
+
+        if not err_msg:
+            err_msg = "Connection or Permission Error" if is_permission_error else "Technical Error (Details below)"
+            
         st.error(f"{t('error', lang)}: {err_msg}")
         
+        # Show setup instructions for ANY error in this module to be safe
+        st.warning("⚠️ إعدادات الربط غير مكتملة أو الملف غير متاح")
+        st.info("لحل هذه المشكلة، يرجى التأكد من **مشاركة (Share)** ملف الإكسل مع هذا البريد الإلكتروني كـ **Editor**:")
+        st.code("sheet-bot@smooth-league-454322-p2.iam.gserviceaccount.com")
+        
         with st.expander("Show Technical Details | تفاصيل الخطأ التقنية"):
-            st.code(traceback.format_exc())
+            st.code(full_err)
             
         if "REPLACE_WITH_CUSTOMER_REQUESTS_SHEET_URL" in err_msg or "URL" in err_msg:
             st.info("⚠️ يرجى تزويد المبرمج برابط ملف جوجل شيت (Spreadsheet) الخاص بتبويب 'الردود' في النموذج لإتمام الربط.")
-        elif "403" in err_msg or "permission" in err_msg.lower():
-            st.warning("⚠️ يبدو أنك لم تقم بمشاركة الملف مع هذا البريد الإلكتروني:")
-            st.code("sheet-bot@smooth-league-454322-p2.iam.gserviceaccount.com")
-            st.info("يرجى الضغط على زر **Share** داخل ملف الإكسل وإضافة الإيميل كـ **Editor**.")
+        
+        st.markdown("""
+        **خطوات التأكد من الربط:**
+        1. افتح ملف جوجل شيت (الذي سجلت فيه ردود النموذج).
+        2. اضغط على زر **Share** (مشاركة) في الزاوية العلوية.
+        3. انسخ هذا الإيميل: `sheet-bot@smooth-league-454322-p2.iam.gserviceaccount.com`
+        4. أضف الإيميل وتأكد من اختيار **Editor** (محرر).
+        5. اضغط على زر **Send** (إرسال).
+        6. عد هنا وقم بـ **تحديث الصفحة (Refresh)**.
+        """)
         return
 
     loading_placeholder.empty()
