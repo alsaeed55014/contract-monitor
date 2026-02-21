@@ -774,9 +774,13 @@ def render_dashboard_content():
     # Don't rename yet, logic needs English/Original headers
     cols = df.columns.tolist()
     
-    date_col = next((c for c in cols if "contract end" in c.lower() or "انتهاء العقد" in c.lower()), None)
+    # Robust column detection with space normalization
+    def clean_col(c): return " ".join(str(c).lower().split())
+    
+    date_col = next((c for c in cols if any(kw in clean_col(c) for kw in ["contract end", "انتهاء العقد", "contract expiry"])), None)
     if not date_col:
-        st.error(f"Date column not found. Available: {cols}")
+        visible_cols = [c for c in cols if not str(c).startswith('__')]
+        st.error(f"?? Error: Could not find the 'Contract End' column. Please check your spreadsheet headers. Available columns: {visible_cols}")
         return
 
     stats = {'urgent': [], 'expired': [], 'active': []}
@@ -845,7 +849,7 @@ def render_dashboard_content():
             """, unsafe_allow_html=True)
     st.markdown("---")
     
-    cv_col = next((c for c in cols if "cv" in c.lower() or "سيرة" in c.lower()), None)
+    cv_col = next((c for c in cols if any(kw in clean_col(c) for kw in ["cv", "سيرة", "download"])), None)
     
     # Configuration for LinkColumn needs the TRANSLATED column name if we rename it!
     # But Streamlit LinkColumn config keys must match the dataframe columns.
@@ -866,9 +870,9 @@ def render_dashboard_content():
         else:
             d = d.sort_values(by='__days_sort', ascending=True)
         
-        # Select columns: Remaining (المتبقى) then Status, then the rest
+        # Select columns: Remaining then Status, then the rest (EXCLUDING ANY __ COLS)
         rem_col = 'المتبقى' if lang == 'ar' else 'Remaining'
-        show_cols = [rem_col, 'Status'] + [c for c in cols if c in d.columns and c not in ["__sheet_row", "__sheet_row_backup", "__days_sort"]]
+        show_cols = [rem_col, 'Status'] + [c for c in cols if c in d.columns and not str(c).startswith('__')]
         d_final = d[show_cols].copy()
         
         # Rename Columns Mechanism (Safe to prevent duplicates)
@@ -1085,7 +1089,8 @@ def render_search_content():
             # --- CUSTOM STATUS LOGIC FOR SEARCH RESULTS ---
             # Try to find date column in results
             res_cols = res.columns.tolist()
-            date_col_search = next((c for c in res_cols if "contract end" in c.lower() or "انتهاء العقد" in c.lower()), None)
+            def clean_col(c): return " ".join(str(c).lower().split())
+            date_col_search = next((c for c in res_cols if any(kw in clean_col(c) for kw in ["contract end", "انتهاء العقد", "contract expiry"])), None)
             
             if date_col_search:
                 status_list = []
@@ -1135,10 +1140,9 @@ def render_search_content():
             elif query and count_found == total_rows:
                 st.warning("تنبيه: البحث أرجع جميع النتائج. تحقق من تشخيص البحث أعلاه." if lang == 'ar' else "Warning: Search returned all results. Check debug panel above.")
             
-            # Clean up internal diagnostic columns before display
-            for diag_col in ['__matched_age_col', '__matched_contract_col', '__matched_ts_col', '__days_sort', '__matched_work_col']:
-                if diag_col in res.columns:
-                    res = res.drop(columns=[diag_col])
+            # Clean up all internal diagnostic columns starting with __
+            internal_cols = [c for c in res.columns if str(c).startswith('__')]
+            res = res.drop(columns=internal_cols)
         except Exception as e:
             st.error(f"حدث خطأ أثناء البحث: {str(e)}")
             import traceback

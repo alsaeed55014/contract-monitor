@@ -118,6 +118,7 @@ TRANSLATIONS = {
 
     # Column Headers (Exact Matches from User Data)
     "columns": {
+        "__sheet_row": {"ar": "معرف الصف", "en": "Row ID"},
         "طابع زمني": {"ar": "وقت التسجيل", "en": "Timestamp"},
         "Full Name:": {"ar": "الاسم الكامل", "en": "Full Name"},
         "Nationality": {"ar": "الجنسية", "en": "Nationality"},
@@ -148,12 +149,13 @@ TRANSLATIONS = {
         "Are you married and do your children reside with you in Saudi Arabia?": {"ar": "الحالة الاجتماعية وهل العائلة معك؟", "en": "Marital Status & Family"},
         "Iqama ID number": {"ar": "رقم الإقامة", "en": "Iqama ID"},
         "What is the occupation listed on your Iqama": {"ar": "المهنة في الإقامة", "en": "Iqama Profession"},
-        "Iqama valid": {"ar": "هل الإقامة سارية؟", "en": "Iqama Valid"},
+        "your Iqama Valid": {"ar": "هل الإقامة سارية؟", "en": "Iqama Valid"},
         "If the Iqama is valid, how many months are left?": {"ar": "المدة المتبقية في الإقامة", "en": "Iqama Remaining"},
         "If the Iqama expired how many months ago?": {"ar": "مدة انتهاء الإقامة", "en": "Iqama Expired Since"},
         "How many times did you transfer your sponsorship": {"ar": "عدد مرات نقل الكفالة", "en": "Transfer Count"},
         "Download CV": {"ar": "تحميل السيرة الذاتية", "en": "Download CV"},
         "How did you know us?": {"ar": "كيف عرفت عنا؟", "en": "How did you know us?"},
+        "__sheet_row_backup": {"ar": "نسخة المعرف", "en": "ID Backup"},
         "Remaining": {"ar": "المتبقى", "en": "Remaining"},
         "Status": {"ar": "الحالة (STATUS)", "en": "Status"}
     }
