@@ -353,6 +353,45 @@ def style_df(df):
         return df.style.map(lambda _: "color: #4CAF50;")
     return df
 
+def clean_date_display(df):
+    """
+    Finds date-like columns, parses them, and formats them to DATE ONLY (no time).
+    Ensures they are sorted if a primary date column is found.
+    """
+    if not isinstance(df, pd.DataFrame) or df.empty:
+        return df
+        
+    import re
+    from dateutil import parser as dateutil_parser
+    
+    def _parse_to_date_str(val):
+        if val is None or str(val).strip() == '': return ""
+        try:
+            val_str = str(val).strip()
+            # Arabic to Western Numerals
+            a_to_w = str.maketrans('٠١٢٣٤٥٦٧٨٩', '0123456789')
+            val_str = val_str.translate(a_to_w)
+            # Remove Arabic AM/PM
+            clean_s = re.sub(r'[صم]', '', val_str).strip()
+            dt = dateutil_parser.parse(clean_s, dayfirst=False)
+            return dt.strftime('%Y-%m-%d')
+        except:
+            # Fallback to pandas
+            try:
+                dt = pd.to_datetime(val, errors='coerce')
+                if pd.isna(dt): return str(val)
+                return dt.strftime('%Y-%m-%d')
+            except:
+                return str(val)
+
+    date_keywords = ["date", "time", "تاريخ", "طابع", "التسجيل", "expiry", "end", "متى"]
+    for col in df.columns:
+        col_lower = str(col).lower()
+        if any(kw in col_lower for kw in date_keywords):
+            df[col] = df[col].apply(_parse_to_date_str)
+            
+    return df
+
 # 2.5 Hourglass Loader Helper
 def show_loading_hourglass(text=None, container=None):
     if text is None:
@@ -437,11 +476,19 @@ def render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search"):
     Standalone helper to render the professional CV profile card, 
     preview (iframe), and translation logic.
     """
-    worker_name = worker_row.get("Full Name:", "Worker")
+    # Robust name detection (Handles original and translated names)
+    name_keys = ["Full Name:", "الاسم الكامل", "Name", "الاسم"]
+    worker_name = "Worker"
+    for nk in name_keys:
+        if nk in worker_row.index:
+            worker_name = worker_row[nk]
+            break
+            
     # Dynamically find CV column
     cv_col = None
     for c in worker_row.index:
-        if "cv" in str(c).lower() or "سيرة" in str(c).lower():
+        c_clean = str(c).lower()
+        if "cv" in c_clean or "سيرة" in c_clean or "download" in c_clean:
             cv_col = c
             break
     cv_url = worker_row.get(cv_col, "") if cv_col else ""
@@ -898,6 +945,9 @@ def render_dashboard_content():
             
         d_final.rename(columns=new_names, inplace=True)
         
+        # FINAL POLISH: Format all visible dates to be clean (No Time)
+        d_final = clean_date_display(d_final)
+        
         # Recalculate Column Config Key
         final_cfg = {}
         if cv_col and cv_col in new_names:
@@ -1129,6 +1179,17 @@ def render_search_content():
                 res['__days_sort'] = sort_list
                 # Sort Results
                 res = res.sort_values(by='__days_sort', ascending=True)
+            else:
+                # FALLBACK SORT BY TIMESTAMP (REGISTRATION DATE)
+                ts_col = next((c for c in res_cols if any(kw in clean_col(c) for kw in ["timestamp", "طابع", "تاريخ التسجيل"])), None)
+                if ts_col:
+                    try:
+                        # Temporary numeric sort
+                        res['__ts_sort'] = pd.to_datetime(res[ts_col], errors='coerce')
+                        res = res.sort_values(by='__ts_sort', ascending=False)
+                        res = res.drop(columns=['__ts_sort'])
+                    except:
+                        pass
             
             # Show count in UI
             count_found = len(res)
@@ -1169,6 +1230,13 @@ def render_search_content():
                     new_name = f"{original_new_name} ({counter})"
                 used_names.add(new_name)
                 new_names[c] = new_name
+                
+            res.rename(columns=new_names, inplace=True)
+            
+            # FINAL POLISH: Format all visible dates to be clean (No Time)
+            res = clean_date_display(res)
+            
+            # Recalculate Column Config Key
             
             # Hide internal sheet row from display but keep in original 'res' for logic
             res_to_rename = res.copy()
@@ -1178,11 +1246,11 @@ def render_search_content():
             
             # Reorder columns for Search Table (Remaining then Status)
             rem_key = 'المتبقى' if lang == 'ar' else 'Remaining'
-            if rem_key in res_to_rename.columns and "Status" in res_to_rename.columns:
-                other_cols = [c for c in res_to_rename.columns if c not in [rem_key, "Status"]]
-                res_to_rename = res_to_rename[[rem_key, "Status"] + other_cols]
+            if rem_key in res.columns and "Status" in res.columns:
+                other_cols = [c for c in res.columns if c not in [rem_key, "Status"]]
+                res = res[[rem_key, "Status"] + other_cols]
 
-            res_display = res_to_rename.rename(columns=new_names)
+            res_display = res
             
             # --- ROW SELECTION & PROFESSIONAL UI ---
 
