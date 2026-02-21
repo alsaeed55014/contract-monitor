@@ -1478,9 +1478,20 @@ def render_customer_requests_content():
         df = st.session_state.db.fetch_customer_requests()
     except Exception as e:
         loading_placeholder.empty()
-        st.error(f"{t('error', lang)}: {e}")
-        if "REPLACE_WITH_CUSTOMER_REQUESTS_SHEET_URL" in str(e) or "URL" in str(e):
+        import traceback
+        err_msg = str(e)
+        if not err_msg: err_msg = "Unknown Error (Check Traceback)"
+        st.error(f"{t('error', lang)}: {err_msg}")
+        
+        with st.expander("Show Technical Details | تفاصيل الخطأ التقنية"):
+            st.code(traceback.format_exc())
+            
+        if "REPLACE_WITH_CUSTOMER_REQUESTS_SHEET_URL" in err_msg or "URL" in err_msg:
             st.info("⚠️ يرجى تزويد المبرمج برابط ملف جوجل شيت (Spreadsheet) الخاص بتبويب 'الردود' في النموذج لإتمام الربط.")
+        elif "403" in err_msg or "permission" in err_msg.lower():
+            st.warning("⚠️ يبدو أنك لم تقم بمشاركة الملف مع هذا البريد الإلكتروني:")
+            st.code("sheet-bot@smooth-league-454322-p2.iam.gserviceaccount.com")
+            st.info("يرجى الضغط على زر **Share** داخل ملف الإكسل وإضافة الإيميل كـ **Editor**.")
         return
 
     loading_placeholder.empty()
