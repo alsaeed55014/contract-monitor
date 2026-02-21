@@ -1160,7 +1160,6 @@ def render_search_content():
     # Advanced Filters UI
     # Advanced Filters UI
     with st.expander(t("advanced_filters", lang) if t("advanced_filters", lang) != "advanced_filters" else "تصفية متقدمة", expanded=True):
-        st.markdown('<div class="filter-card">', unsafe_allow_html=True)
         
         # Row 1: Date & Range Filters
         st.markdown(f'<div class="premium-filter-label">📅 {t("filter_dates_group", lang)}</div>', unsafe_allow_html=True)
@@ -1213,8 +1212,6 @@ def render_search_content():
             )
             # Find the key (English value) from the selected label
             selected_transfer_key = [k for k, v in transfer_options.items() if v == selected_transfer_label][0]
-
-        st.markdown('</div>', unsafe_allow_html=True)
 
     # 2. Search Input & Button
     st.markdown('<div class="search-container">', unsafe_allow_html=True)
