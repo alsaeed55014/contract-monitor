@@ -473,6 +473,100 @@ def get_css():
             margin-top: 20px;
             font-weight: 700;
         }
+
+        /* --- SEARCH PAGE PREMIUM STYLES --- */
+        .glowing-title {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 2.5rem;
+            text-align: center;
+            color: #fff;
+            text-shadow: 0 0 10px rgba(212, 175, 55, 0.8), 0 0 20px rgba(212, 175, 55, 0.5);
+            margin-bottom: 30px;
+            background: linear-gradient(90deg, transparent, rgba(212, 175, 55, 0.2), transparent);
+            padding: 15px;
+            border-radius: 50px;
+        }
+
+        .filter-card {
+            background: rgba(26, 26, 26, 0.8);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(212, 175, 55, 0.2);
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 25px;
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.8);
+        }
+
+        .search-container {
+            background: linear-gradient(180deg, rgba(20, 20, 20, 1) 0%, rgba(10, 10, 10, 1) 100%);
+            padding: 2rem;
+            border-radius: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        /* Adjusting Selectbox/Inputs for Premium Look */
+        div[data-baseweb="select"] {
+            background-color: #262626 !important;
+            border-radius: 8px !important;
+        }
+        
+        .stTextInput input {
+            background-color: #262626 !important;
+            border: 1px solid rgba(212, 175, 55, 0.3) !important;
+            color: #fff !important;
+        }
+
+        /* Floating Animation for filters */
+        @keyframes float {
+            0% { transform: translateY(0px); }
+            50% { transform: translateY(-5px); }
+            100% { transform: translateY(0px); }
+        }
+        
+        .premium-filter-label {
+            color: #D4AF37;
+            font-weight: 700;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 1.1rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            border-bottom: 1px solid rgba(212, 175, 55, 0.2);
+            padding-bottom: 5px;
+        }
+
+        /* Search Button Premium Primary */
+        button[kind="primary"] {
+            background: linear-gradient(135deg, #D4AF37 0%, #B8860B 100%) !important;
+            color: #000 !important;
+            border: none !important;
+            box-shadow: 0 0 15px rgba(212, 175, 55, 0.4) !important;
+            font-weight: 900 !important;
+            transition: 0.4s all !important;
+        }
+        
+        button[kind="primary"]:hover {
+            box-shadow: 0 0 25px rgba(212, 175, 55, 0.7) !important;
+            transform: scale(1.02) !important;
+        }
+
+        /* Expander Styling */
+        .streamlit-expanderHeader {
+            background-color: rgba(212, 175, 55, 0.05) !important;
+            border: 1px solid rgba(212, 175, 55, 0.1) !important;
+            border-radius: 10px !important;
+            color: #D4AF37 !important;
+            font-weight: bold !important;
+        }
+
+        /* Sidebar Image Centering Fix */
+        [data-testid="stSidebar"] img {
+            border: 3px solid #D4AF37 !important;
+            padding: 5px !important;
+            box-shadow: 0 0 20px rgba(212, 175, 55, 0.3) !important;
+        }
     </style>
     """
 
@@ -1064,85 +1158,99 @@ def render_search_content():
     lbl_enable = "تفعيل" if lang == "ar" else "Enable"
     
     # Advanced Filters UI
-    with st.expander(t("advanced_filters", lang) if t("advanced_filters", lang) != "advanced_filters" else "تصفية متقدمة"):
-        c3, c2, c1 = st.columns(3)
+    with st.expander(t("advanced_filters", lang) if t("advanced_filters", lang) != "advanced_filters" else "تصفية متقدمة", expanded=False):
+        st.markdown('<div class="filter-card">', unsafe_allow_html=True)
         
-        # Registration Date Filter (rightmost in RTL)
+        # Row 1: Date & Range Filters
+        st.markdown(f'<div class="premium-filter-label">📅 {"خيارات التواريخ والنطاقات" if lang == "ar" else "Date & Range Options"}</div>', unsafe_allow_html=True)
+        c1, c2, c3 = st.columns(3)
+        
         with c1:
-            use_reg = st.checkbox(f" {lbl_enable} {lbl_reg}", key="use_reg_filter")
-            if use_reg:
-                st.caption(lbl_reg)
-                today = datetime.now().date()
-                first_of_month = today.replace(day=1)
-                reg_range = st.date_input("Registration Range", (first_of_month, today), label_visibility="collapsed", key="reg_range")
-            else:
-                reg_range = []
-
-        # Contract End Filter
-        with c2:
-            use_contract = st.checkbox(f" {lbl_enable} {lbl_contract}", key="use_contract_filter")
-            if use_contract:
-                st.caption(lbl_contract)
-                today = datetime.now().date()
-                next_month = today + timedelta(days=30)
-                contract_range = st.date_input("Contract Range", (today, next_month), label_visibility="collapsed", key="contract_range")
-            else:
-                contract_range = []
-        
-        # Age Filter (leftmost in RTL)
-        with c3:
             use_age = st.checkbox(f" {lbl_enable} {lbl_age}", key="use_age_filter")
             if use_age:
                 age_range = st.slider(lbl_age, 18, 60, (20, 45), key="age_slider")
-            else:
-                age_range = (18, 60)
+            else: age_range = (18, 60)
 
-        # Second row for new filters
-        st.markdown("---")
-        c2_1, c2_2 = st.columns(2)
+        with c2:
+            use_contract = st.checkbox(f" {lbl_enable} {lbl_contract}", key="use_contract_filter")
+            if use_contract:
+                contract_range = st.date_input("Contract Range", (datetime.now().date(), datetime.now().date() + timedelta(days=30)), label_visibility="collapsed", key="contract_range")
+            else: contract_range = []
+
+        with c3:
+            use_reg = st.checkbox(f" {lbl_enable} {lbl_reg}", key="use_reg_filter")
+            if use_reg:
+                reg_range = st.date_input("Registration Range", (datetime.now().date().replace(day=1), datetime.now().date()), label_visibility="collapsed", key="reg_range")
+            else: reg_range = []
+
+        st.markdown("<br>", unsafe_allow_html=True)
+        st.markdown(f'<div class="premium-filter-label">⚙️ {"تصفية متقدمة إضافية" if lang == "ar" else "Additional Advanced Filters"}</div>', unsafe_allow_html=True)
+        
+        # Row 2: Status & Dropdown Filters
+        c2_1, c2_2, c2_3 = st.columns(3)
+        
         with c2_1:
-            use_expired = st.checkbox("تفعيل تصفية العقود المنتهية" if lang == "ar" else "Enable Expired Contracts Filter", key="use_expired_filter")
+            use_expired = st.checkbox("العقود المنتهية" if lang == "ar" else "Expired Contracts", key="use_expired_filter")
             if use_expired:
-                st.info("سيتم عرض العقود المنتهية فقط وترتيبها من الأقدم للأحدث" if lang == "ar" else "Only expired contracts will be shown, sorted from oldest to newest.")
+                st.caption("⚠️ تفعيل الترتيب التلقائي" if lang == "ar" else "⚠️ Auto-sorting enabled")
         
         with c2_2:
-            use_not_working = st.checkbox("تفعيل تصفية (هل تعمل حالياً: No)" if lang == "ar" else "Enable 'Currently Working: No' Filter", key="use_not_working_filter")
+            use_not_working = st.checkbox("غير موظف" if lang == "ar" else "Not Working (No)", key="use_not_working_filter")
+            
+        with c2_3:
+            transfer_options = {
+                "": "— " + ("الكل" if lang == "ar" else "All") + " —",
+                "First time": "المرة الأولى" if lang == "ar" else "First time",
+                "Second time": "المرة الثانية" if lang == "ar" else "Second time",
+                "The third time": "المرة الثالثة" if lang == "ar" else "The third time",
+                "More than three": "أكثر من ثلاث مرات" if lang == "ar" else "More than three"
+            }
+            selected_transfer_label = st.selectbox(
+                "عدد مرات نقل الكفالة" if lang == "ar" else "Transfer Count",
+                options=list(transfer_options.values()),
+                key="transfer_count_dropdown"
+            )
+            # Find the key (English value) from the selected label
+            selected_transfer_key = [k for k, v in transfer_options.items() if v == selected_transfer_label][0]
 
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    # 2. Search Input & Button
+    st.markdown('<div class="search-container">', unsafe_allow_html=True)
     query = st.text_input(t("smart_search", lang), placeholder=t("search_placeholder", lang), key="search_query_input")
     
-    # 2. Search Button Wrapped in Container for better DOM targeting
-    with st.container():
-        st.markdown('<div id="search-btn-anchor"></div>', unsafe_allow_html=True)
-        search_clicked = st.button(t("search_btn", lang), key="main_search_btn", use_container_width=False)
+    # Search Button Wrapped in Container for better DOM targeting
+    sc1, sc2, sc3 = st.columns([1, 1, 1])
+    with sc2:
+        search_clicked = st.button(t("search_btn", lang), key="main_search_btn", use_container_width=True, type="primary")
+    st.markdown('</div>', unsafe_allow_html=True)
     
     # Gather Filters
     filters = {}
     
-    # 1. Age (only if enabled)
     if use_age:
         filters['age_enabled'] = True
         filters['age_min'] = age_range[0]
         filters['age_max'] = age_range[1]
     
-    # 2. Contract End (only if enabled and valid range)
     if use_contract and len(contract_range) == 2:
         filters['contract_enabled'] = True
         filters['contract_end_start'] = contract_range[0]
         filters['contract_end_end'] = contract_range[1]
         
-    # 3. Registration (only if enabled and valid range)
     if use_reg and len(reg_range) == 2:
         filters['date_enabled'] = True
         filters['date_start'] = reg_range[0]
         filters['date_end'] = reg_range[1]
 
-    # 4. Expired Only
     if use_expired:
         filters['expired_only'] = True
 
-    # 5. Not Working Only
     if use_not_working:
         filters['not_working_only'] = True
+        
+    if selected_transfer_key:
+        filters['transfer_count'] = selected_transfer_key
     
     # Check if any filter is actually active
     has_active_filter = bool(filters)
@@ -1159,6 +1267,7 @@ def render_search_content():
             if filters.get('date_enabled'): active_filter_names.append(f"{lbl_reg}")
             if filters.get('expired_only'): active_filter_names.append("العقود المنتهية" if lang == 'ar' else "Expired Contracts")
             if filters.get('not_working_only'): active_filter_names.append("غير موظف" if lang == 'ar' else "Not Working")
+            if filters.get('transfer_count'): active_filter_names.append("عدد مرات النقل" if lang == 'ar' else "Transfer Count")
             
             if active_filter_names:
                 st.info(f"{'الفلاتر النشطة' if lang == 'ar' else 'Active filters'}: {', '.join(active_filter_names)}")

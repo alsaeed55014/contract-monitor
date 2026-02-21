@@ -245,6 +245,14 @@ class SmartSearchEngine:
                         return v in ['no', 'لا', 'none', 'false']
                     results = results[results[work_col].apply(is_no)]
 
+            # New: Filter by Transfer Count (dropdown)
+            if filters.get('transfer_count'):
+                trans_col = find_col(["How many times did you transfer your sponsorship", "عدد مرات نقل الكفالة", "Transfer Count"])
+                if trans_col:
+                    target_val = filters['transfer_count']
+                    # Use substring or exact match depending on data quality
+                    results = results[results[trans_col].astype(str).str.contains(target_val, case=False, na=False)]
+
             # Filter by Timestamp (Registration Date)
             if filters.get('date_enabled') and 'date_start' in filters and 'date_end' in filters:
                 ts_col = find_col(["طابع زمني", "وقت التسجيل", "تاريخ التسجيل", "Timestamp"])
