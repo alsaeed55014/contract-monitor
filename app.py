@@ -537,8 +537,10 @@ def get_css():
             padding-bottom: 5px;
         }
 
-        /* Search Button Premium Primary (High-End Corporate Look) */
-        button[kind="primary"] {
+        /* Search Button & Language Button Premium (High-End Corporate Look) */
+        button[kind="primary"], 
+        .login-screen-wrapper [data-testid="stForm"] [data-testid="stFormSubmitButton"]:nth-of-type(2) button,
+        section[data-testid="stSidebar"] [data-testid="stButton"] button {
             background: rgba(26, 26, 26, 0.9) !important;
             backdrop-filter: blur(10px) !important;
             color: #D4AF37 !important;
@@ -554,13 +556,22 @@ def get_css():
             min-width: 160px !important;
         }
         
-        button[kind="primary"]:hover {
+        button[kind="primary"]:hover,
+        .login-screen-wrapper [data-testid="stForm"] [data-testid="stFormSubmitButton"]:nth-of-type(2) button:hover,
+        section[data-testid="stSidebar"] [data-testid="stButton"] button:hover {
             background: #D4AF37 !important;
             color: #000 !important;
             border-color: #D4AF37 !important;
             box-shadow: 0 0 25px rgba(212, 175, 55, 0.4) !important;
             transform: scale(1.05) !important;
             letter-spacing: 4px !important;
+        }
+
+        /* Ensure text paragraphs inside these buttons don't override color */
+        .login-screen-wrapper [data-testid="stForm"] [data-testid="stFormSubmitButton"]:nth-of-type(2) button p,
+        section[data-testid="stSidebar"] [data-testid="stButton"] button p {
+            color: inherit !important;
+            font-weight: inherit !important;
         }
 
         /* Expander Styling */
