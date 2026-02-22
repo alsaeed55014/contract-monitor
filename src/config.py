@@ -6,6 +6,7 @@ ASSETS_DIR = os.path.join(BASE_DIR, "image")
 CREDENTIALS_FILE = os.path.join(BASE_DIR, "credentials.json")
 USERS_FILE = os.path.join(BASE_DIR, "users.json")
 IGNORED_FILE = os.path.join(BASE_DIR, "ignored_rows.json")
+BENGALI_DATA_FILE = os.path.join(BASE_DIR, "bengali_data.json")
 
 # Branding
 PROGRAMMER_NAME_AR = "برمجة: السعيد الوزان"

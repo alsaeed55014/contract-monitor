@@ -1,7 +1,6 @@
 import json
 import os
-
-BENGALI_DATA_FILE = "bengali_data.json"
+from src.config import BENGALI_DATA_FILE
 
 class BengaliDataManager:
     def __init__(self):
@@ -11,7 +10,20 @@ class BengaliDataManager:
         if os.path.exists(BENGALI_DATA_FILE):
             try:
                 with open(BENGALI_DATA_FILE, "r", encoding="utf-8") as f:
-                    return json.load(f)
+                    data = json.load(f)
+                    # Ensure all workers have UUIDs
+                    import uuid
+                    if "workers" in data:
+                        changed = False
+                        for w in data["workers"]:
+                            if "worker_uuid" not in w:
+                                w["worker_uuid"] = str(uuid.uuid4())[:8]
+                                changed = True
+                        if changed:
+                            # Save back to normalize
+                            with open(BENGALI_DATA_FILE, "w", encoding="utf-8") as fw:
+                                json.dump(data, fw, ensure_ascii=False, indent=4)
+                    return data
             except Exception:
                 return {"suppliers": [], "employers": [], "workers": []}
         return {"suppliers": [], "employers": [], "workers": []}

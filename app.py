@@ -2386,10 +2386,22 @@ def render_bengali_supply_content():
         st.markdown(f"### {t('search_manage_title', lang)}")
         search_q = st.text_input(t("search_manage_title", lang), placeholder=t("search_placeholder_bengali", lang), label_visibility="collapsed", key="bengali_search_q")
         
+        def normalize_ar(text):
+            if not text: return ""
+            t = str(text).lower().strip()
+            # Basic Arabic Normalization
+            t = t.replace("أ", "ا").replace("إ", "ا").replace("آ", "ا")
+            t = t.replace("ة", "ه").replace("ى", "ي")
+            return t
+
         workers = bm.get_workers()
         if search_q:
-            q = search_q.lower()
-            workers = [w for w in workers if q in w.get("name", "").lower() or q in w.get("supplier", "").lower() or q in w.get("employer", "").lower() or q in w.get("id", "").lower()]
+            q = normalize_ar(search_q)
+            workers = [w for w in workers if 
+                       q in normalize_ar(w.get("name", "")) or 
+                       q in normalize_ar(w.get("supplier", "")) or 
+                       q in normalize_ar(w.get("employer", "")) or 
+                       q in normalize_ar(w.get("id", ""))]
         
         if not workers:
             st.info(t("no_records_found", lang))
