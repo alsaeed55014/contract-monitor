@@ -72,15 +72,12 @@ class AuthManager:
         username = username.lower().strip()
         if username in self.users:
             return False, "User already exists"
-        
         self.users[username] = {
             "password": self.hash_password(password),
             "role": role,
-            "first_name_ar": f_ar,
-            "father_name_ar": fa_ar,
-            "first_name_en": f_en,
-            "father_name_en": fa_en,
-            "permissions": ["read"] if role == "viewer" else ["all"]
+            "first_name_ar": f_ar, "father_name_ar": fa_ar,
+            "first_name_en": f_en, "father_name_en": fa_en,
+            "permissions": ["all"] if role == "admin" else []
         }
         self.save_users()
         return True, "User added successfully"
@@ -140,18 +137,18 @@ class AuthManager:
         return False
 
     def update_profile(self, username, f_ar=None, fa_ar=None, f_en=None, fa_en=None):
-        username = str(username).strip()
-        target = None
-        for u in self.users:
-            if u.lower() == username.lower():
-                target = u
-                break
-        
-        if target:
-            if f_ar is not None: self.users[target]["first_name_ar"] = f_ar
-            if fa_ar is not None: self.users[target]["father_name_ar"] = fa_ar
-            if f_en is not None: self.users[target]["first_name_en"] = f_en
-            if fa_en is not None: self.users[target]["father_name_en"] = fa_en
+        if username in self.users:
+            if f_ar is not None: self.users[username]["first_name_ar"] = f_ar
+            if fa_ar is not None: self.users[username]["father_name_ar"] = fa_ar
+            if f_en is not None: self.users[username]["first_name_en"] = f_en
+            if fa_en is not None: self.users[username]["father_name_en"] = fa_en
+            self.save_users()
+            return True
+        return False
+
+    def update_permissions(self, username, perms_list):
+        if username in self.users:
+            self.users[username]["permissions"] = perms_list
             self.save_users()
             return True
         return False
@@ -974,9 +971,6 @@ def dashboard():
         if st.button(t("dashboard", lang), use_container_width=True):
             st.session_state.page = "dashboard"
             st.rerun()
-        if st.button("🇧🇩 " + t("bengali_supply_title", lang), key="btn_bengali_supply_main", use_container_width=True):
-            st.session_state.page = "bengali_supply"
-            st.rerun()
         if st.button(t("smart_search", lang), use_container_width=True):
             st.session_state.page = "search"
             st.rerun()
@@ -989,6 +983,13 @@ def dashboard():
         if st.button(t("order_processing", lang), use_container_width=True):
             st.session_state.page = "order_processing"
             st.rerun()
+        
+        # Determine Bengali Supply Visibility
+        user_perms = user.get("permissions", [])
+        if "all" in user_perms or "bengali_supply" in user_perms:
+            if st.button("🇧🇩 " + t("bengali_supply_title", lang), key="btn_bengali_supply_main", use_container_width=True):
+                st.session_state.page = "bengali_supply"
+                st.rerun()
         if user.get("role") == "admin":
             if st.button(t("permissions", lang), use_container_width=True):
                 st.session_state.page = "permissions"
@@ -1629,7 +1630,19 @@ def render_permissions_content():
                 
             new_pass = st.text_input(t("new_password", lang), type="password")
             
+            # Additional Permissions Toggle
+            st.markdown(f"**⚙️ {t('permissions', lang)}**")
+            bengali_perm = st.toggle(t("perm_bengali_supply", lang), value="bengali_supply" in current_data.get("permissions", []))
+            
             if st.form_submit_button(t("update_btn", lang)):
+                # Prepare permission list
+                new_perms = current_data.get("permissions", [])
+                if bengali_perm:
+                    if "bengali_supply" not in new_perms: new_perms.append("bengali_supply")
+                else:
+                    if "bengali_supply" in new_perms: new_perms.remove("bengali_supply")
+                
+                st.session_state.auth.update_permissions(selected_user, new_perms)
                 st.session_state.auth.update_role(selected_user, new_role)
                 st.session_state.auth.update_profile(selected_user, new_f_ar, new_fa_ar, new_f_en, new_fa_en)
                 if new_pass:

@@ -163,6 +163,8 @@ TRANSLATIONS = {
     "add_worker_btn": {"ar": "إضافة بيانات العامل", "en": "Add Worker Data"},
     "select_supplier": {"ar": "اختر المورد", "en": "Select Supplier"},
     "select_employer": {"ar": "اختر صاحب العمل", "en": "Select Employer"},
+    "perm_bengali_supply": {"ar": "صلاحية نموذج توريد عمال بنقال", "en": "Bengali Supply Permission"},
+    "search_manage_title": {"ar": "🔍 البحث وإدارة السجلات", "en": "Search & Manage Records"},
     "search_manage_title": {"ar": "🔍 البحث وإدارة السجلات", "en": "Search & Manage Records"},
     "delete_btn": {"ar": "حذف", "en": "Delete"},
     "search_placeholder_bengali": {"ar": "ابحث باسم العامل، المورد، أو العميل...", "en": "Search by worker, supplier, or employer name..."},
