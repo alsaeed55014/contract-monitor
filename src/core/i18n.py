@@ -32,13 +32,13 @@ TRANSLATIONS = {
     "contract_dashboard": {"ar": "لوحة العقود", "en": "Contract Dashboard"},
     "no_data": {"ar": "لا توجد بيانات", "en": "No data found"},
     "urgent_7_days": {"ar": "عاجل (7 أيام)", "en": "Urgent (7 Days)"},
-    "expired": {"ar": "منتهي", "en": "Expired"},
+    "expired": {"ar": "العقود المنتهية", "en": "Expired Contracts"},
     "active": {"ar": "ساري", "en": "Active"},
     "urgent": {"ar": "عاجل", "en": "Urgent"},
     "cv_download": {"ar": "تحميل السيرة الذاتية", "en": "CV Download"},
     "download_pdf": {"ar": "تحميل PDF", "en": "Download PDF"},
     "tabs_urgent": {"ar": " عاجل", "en": " Urgent"},
-    "tabs_expired": {"ar": " منتهي", "en": " Expired"},
+    "tabs_expired": {"ar": " العقود المنتهية", "en": " Expired Contracts"},
     "tabs_active": {"ar": " ساري", "en": " Active"},
 
     # Search

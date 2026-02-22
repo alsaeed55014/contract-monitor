@@ -183,6 +183,16 @@ def get_css():
             direction: rtl; /* Force RTL */
         }
 
+        /* Fix Checkbox Spacing for RTL */
+        div[data-testid="stCheckbox"] label {
+            gap: 12px !important;
+            flex-direction: row-reverse !important;
+        }
+
+        div[data-testid="stCheckbox"] label div[data-testid="stMarkdownContainer"] p {
+            margin: 0 10px 0 0 !important;
+        }
+
         /* Custom Premium Scrollbar */
         ::-webkit-scrollbar { width: 8px; height: 8px; }
         ::-webkit-scrollbar-track { background: #000; }
@@ -1239,7 +1249,7 @@ def render_search_content():
         c2_1, c2_2, c2_3 = st.columns(3)
         
         with c2_1:
-            use_expired = st.checkbox(t("expired", lang) if t("expired", lang) != "expired" else "العقود المنتهية", key="use_expired_filter")
+            use_expired = st.checkbox(t("expired", lang), key="use_expired_filter")
             if use_expired:
                 st.caption("⚠️ " + ("ترتيب من الأقدم" if lang == "ar" else "Sorting Oldest first"))
         
