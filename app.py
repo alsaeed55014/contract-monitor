@@ -1721,15 +1721,25 @@ def render_order_processing_content():
                     other_matches.append(worker)
                     other_scores.append(pct)
         
-        # Sort each group by score descending
+        # Sort each group by: 1. Score (desc), 2. Timestamp (desc)
+        def get_sort_key(score, worker):
+            ts_val = pd.NaT
+            if w_timestamp_col:
+                raw_ts = str(worker.get(w_timestamp_col, ""))
+                clean_ts = raw_ts.replace('م', 'PM').replace('ص', 'AM')
+                ts_val = pd.to_datetime(clean_ts, errors='coerce')
+            return (-score, -ts_val.timestamp() if pd.notnull(ts_val) else 0)
+
         if city_matches:
-            paired = sorted(zip(city_scores, range(len(city_matches)), city_matches), key=lambda x: -x[0])
-            city_scores = [p[0] for p in paired]
-            city_matches = [p[2] for p in paired]
+            # zip(scores, workers) -> sort by get_sort_key
+            items = sorted(zip(city_scores, city_matches), key=lambda x: get_sort_key(x[0], x[1]))
+            city_scores = [it[0] for it in items]
+            city_matches = [it[1] for it in items]
+            
         if other_matches:
-            paired = sorted(zip(other_scores, range(len(other_matches)), other_matches), key=lambda x: -x[0])
-            other_scores = [p[0] for p in paired]
-            other_matches = [p[2] for p in paired]
+            items = sorted(zip(other_scores, other_matches), key=lambda x: get_sort_key(x[0], x[1]))
+            other_scores = [it[0] for it in items]
+            other_matches = [it[1] for it in items]
         
         return city_matches + other_matches, city_scores + other_scores, len(city_matches)
 
@@ -1759,7 +1769,21 @@ def render_order_processing_content():
                 continue
                 
             row = {}
-            if w_timestamp_col: row[t('registration_date', lang)] = str(worker.get(w_timestamp_col, ""))
+            if w_timestamp_col:
+                raw_ts = str(worker.get(w_timestamp_col, ""))
+                d_part, t_part = "", ""
+                pts = raw_ts.split()
+                for p in pts:
+                    if '/' in p or '-' in p: d_part = p
+                    elif ':' in p: t_part = p
+                if 'م' in raw_ts: t_part += " م"
+                elif 'ص' in raw_ts: t_part += " ص"
+                if not d_part and not t_part: d_part = raw_ts
+                
+                date_key = 'تاريخ التسجيل' if lang == 'ar' else 'Reg. Date'
+                time_key = 'وقت التسجيل' if lang == 'ar' else 'Reg. Time'
+                row[date_key] = d_part
+                row[time_key] = t_part
             
             # --- Replacement: Match Score -> Contract Status ---
             if w_contract_end_col:
