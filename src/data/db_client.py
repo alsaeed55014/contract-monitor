@@ -161,6 +161,25 @@ class DBClient:
             print(f"[ERROR] Failed to delete row: {e}")
             return False, str(e)
 
+    def append_row(self, row_data, url):
+        """Appends a new row to the specified Google Sheet."""
+        if not self.client:
+            self.connect()
+        
+        try:
+            sheet = self.client.open_by_url(url).sheet1
+            sheet.append_row(row_data)
+            
+            # Clear cache for this URL
+            cache_key = f"cache_{hashlib.md5(url.encode()).hexdigest()}"
+            if hasattr(self, '_data_caches') and cache_key in self._data_caches:
+                del self._data_caches[cache_key]
+            
+            return True
+        except Exception as e:
+            print(f"[ERROR] Failed to append row: {e}")
+            return False, str(e)
+
     def get_headers(self, url=None):
         """Returns the list of headers."""
         cache_key = f"cache_{hashlib.md5(url.encode()).hexdigest()}" if url else "cache_default"

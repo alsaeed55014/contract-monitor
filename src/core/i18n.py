@@ -142,6 +142,27 @@ TRANSLATIONS = {
     "registration_date": {"ar": "تاريخ التسجيل", "en": "registration date"},
     "no_huroob": {"ar": "بدون بلاغ هروب (No)", "en": "No Huroob"},
     "work_outside_city": {"ar": "يقبل العمل خارج مدينته (Yes)", "en": "Can work outside city"},
+    
+    # Bengali Supply Module
+    "bengali_supply_title": {"ar": "توريد عمال بنقال", "en": "Bengali Worker Supply"},
+    "form_supplier_employer": {"ar": "النموذج الأول: بيانات المورد وصاحب العمل", "en": "Part 1: Supplier & Employer Data"},
+    "form_worker_details": {"ar": "النموذج الثاني: بيانات العامل المختارة", "en": "Part 2: Worker Details Entry"},
+    "supplier_name": {"ar": "اسم المورد", "en": "Supplier Name"},
+    "supplier_phone": {"ar": "رقم هاتف المورد", "en": "Supplier Phone"},
+    "employer_name": {"ar": "اسم صاحب العمل", "en": "Employer Name"},
+    "cafe_name": {"ar": "اسم الكوفي", "en": "Coffee Shop Name"},
+    "employer_mobile": {"ar": "رقم موبايل صاحب العمل", "en": "Employer Mobile"},
+    "city": {"ar": "المدينة", "en": "City"},
+    "worker_passport_iqama": {"ar": "رقم الباسبورد / الإقامة", "en": "Passport / Iqama Number"},
+    "upload_multiple_imgs": {"ar": "ارفق صور متعددة", "en": "Attach Multiple Images"},
+    "notes_files": {"ar": "ملاحظات الصور/الملفات", "en": "File Notes"},
+    "general_notes": {"ar": "ملاحظات عامة", "en": "General Notes"},
+    "save_success": {"ar": "تم الحفظ بنجاح!", "en": "Saved successfully!"},
+    "save_error": {"ar": "حدث خطأ أثناء الحفظ", "en": "An error occurred during save"},
+    "add_supplier_btn": {"ar": "إضافة مورد/صاحب عمل", "en": "Add Supplier/Employer"},
+    "add_worker_btn": {"ar": "إضافة بيانات العامل", "en": "Add Worker Data"},
+    "select_supplier": {"ar": "اختر المورد", "en": "Select Supplier"},
+    "select_employer": {"ar": "اختر صاحب العمل", "en": "Select Employer"},
 
 
 

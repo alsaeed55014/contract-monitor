@@ -16,6 +16,7 @@ if ROOT_DIR not in sys.path:
     sys.path.insert(0, ROOT_DIR)
 
 from src.core.contracts import ContractManager
+from src.data.bengali_manager import BengaliDataManager
 
 # 2. Local Auth Class to prevent Import/Sync Errors
 class AuthManager:
@@ -973,6 +974,9 @@ def dashboard():
         if st.button(t("dashboard", lang), use_container_width=True):
             st.session_state.page = "dashboard"
             st.rerun()
+        if st.button("🇧🇩 " + t("bengali_supply_title", lang), key="btn_bengali_supply_main", use_container_width=True):
+            st.session_state.page = "bengali_supply"
+            st.rerun()
         if st.button(t("smart_search", lang), use_container_width=True):
             st.session_state.page = "search"
             st.rerun()
@@ -1040,10 +1044,11 @@ def dashboard():
     elif page == "customer_requests": render_customer_requests_content()
     elif page == "order_processing": render_order_processing_content()
     elif page == "permissions": render_permissions_content()
+    elif page == "bengali_supply": render_bengali_supply_content()
 
 def render_dashboard_content():
     lang = st.session_state.lang
-    st.markdown('<div class="programmer-signature-neon">By: Alsaeed Alwazzan</div>', unsafe_allow_html=True)
+    st.markdown('<div class="programmer-signature-neon">By: Alsaeed Alwazzan (v2.1)</div>', unsafe_allow_html=True)
     st.title(f" {t('contract_dashboard', lang)}")
     
     # Show loader while fetching data
@@ -2283,6 +2288,99 @@ def render_customer_requests_content():
         hide_index=True,
         key="customer_requests_table"
     )
+
+
+def render_bengali_supply_content():
+    lang = st.session_state.lang
+    bm = BengaliDataManager()
+    
+    st.markdown(f'<div class="luxury-main-title">{t("bengali_supply_title", lang)}</div>', unsafe_allow_html=True)
+    
+    tab1, tab2 = st.tabs([t("form_supplier_employer", lang), t("form_worker_details", lang)])
+    
+    with tab1:
+        st.markdown(f'### 🏗️ {t("form_supplier_employer", lang)}')
+        with st.form("supplier_employer_form", clear_on_submit=True):
+            col1, col2 = st.columns(2)
+            with col1:
+                st.markdown(f"**👤 {t('supplier_name', lang)}**")
+                s_name = st.text_input(t("supplier_name", lang), label_visibility="collapsed")
+                st.markdown(f"**📞 {t('supplier_phone', lang)}**")
+                s_phone = st.text_input(t("supplier_phone", lang), label_visibility="collapsed")
+            with col2:
+                st.markdown(f"**🏢 {t('employer_name', lang)}**")
+                e_name = st.text_input(t("employer_name", lang), label_visibility="collapsed")
+                st.markdown(f"**☕ {t('cafe_name', lang)}**")
+                e_cafe = st.text_input(t("cafe_name", lang), label_visibility="collapsed")
+                st.markdown(f"**📱 {t('employer_mobile', lang)}**")
+                e_mobile = st.text_input(t("employer_mobile", lang), label_visibility="collapsed")
+                st.markdown(f"**📍 {t('city', lang)}**")
+                e_city = st.text_input(t("city", lang), label_visibility="collapsed")
+            
+            if st.form_submit_button(t("add_supplier_btn", lang), use_container_width=True):
+                if s_name and e_name:
+                    bm.add_supplier_employer(
+                        {"name": s_name, "phone": s_phone},
+                        {"name": e_name, "cafe": e_cafe, "mobile": e_mobile, "city": e_city}
+                    )
+                    st.success(t("save_success", lang))
+                    time.sleep(1)
+                    st.rerun()
+                else:
+                    st.error("يرجى إكمال البيانات الأساسية")
+
+    with tab2:
+        st.markdown(f'### 👷 {t("form_worker_details", lang)}')
+        suppliers = bm.get_suppliers()
+        employers = bm.get_employers()
+        
+        s_options = [f"{s['name']} ({s['phone']})" for s in suppliers]
+        e_options = [f"{e['name']} - {e['cafe']} ({e['city']})" for e in employers]
+        
+        with st.form("worker_entry_form", clear_on_submit=True):
+            c1, c2 = st.columns(2)
+            with c1:
+                st.markdown(f"**Name - الاسم**")
+                w_name = st.text_input(t("worker_name", lang), label_visibility="collapsed")
+                st.markdown(f"**Mobile - الجوال**")
+                w_mobile = st.text_input(t("worker_phone", lang), label_visibility="collapsed")
+            with c2:
+                st.markdown(f"**ID/Passport - الهوية أو الجواز**")
+                w_id = st.text_input(t("worker_passport_iqama", lang), label_visibility="collapsed")
+            
+            st.markdown(f"**Select Supplier - المورد**")
+            sel_s = st.selectbox(t("select_supplier", lang), options=s_options, label_visibility="collapsed")
+            
+            st.markdown(f"**Select Employer - صاحب العمل**")
+            sel_e = st.selectbox(t("select_employer", lang), options=e_options, label_visibility="collapsed")
+            
+            st.markdown(f"**Attachments - المرفقات**")
+            uploaded_files = st.file_uploader(t("upload_multiple_imgs", lang), accept_multiple_files=True, type=['png', 'jpg', 'jpeg', 'pdf'], label_visibility="collapsed")
+            
+            st.markdown(f"**Files Notes - ملاحظات المرفقات**")
+            f_notes = st.text_area(t("notes_files", lang), label_visibility="collapsed")
+            
+            st.markdown(f"**General Notes - ملاحظات عامة**")
+            g_notes = st.text_area(t("general_notes", lang), label_visibility="collapsed")
+            
+            if st.form_submit_button(t("add_worker_btn", lang), use_container_width=True):
+                if w_name and (sel_s if s_options else True) and (sel_e if e_options else True):
+                    worker_data = {
+                        "name": w_name,
+                        "mobile": w_mobile,
+                        "id": w_id,
+                        "supplier": sel_s if s_options else "",
+                        "employer": sel_e if e_options else "",
+                        "file_notes": f_notes,
+                        "general_notes": g_notes,
+                        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    }
+                    bm.add_worker(worker_data)
+                    st.success(t("save_success", lang))
+                    time.sleep(1)
+                    st.rerun()
+                else:
+                    st.error("يرجى إكمال بيانات العامل واختيار المورد وصاحب العمل")
 
 # 11. Main Entry
 if not st.session_state.user:
