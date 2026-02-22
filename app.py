@@ -1018,7 +1018,7 @@ def dashboard():
         if lang == 'ar':
             f_name = user.get('first_name_ar', '')
             fa_name = user.get('father_name_ar', '')
-            sub_text = "مرحباً بك في منظومة إدارة العقود"
+            sub_text = "مرحباً بك في برنامج توريد العمالة الفلبينية"
         else:
             f_name = user.get('first_name_en', '')
             fa_name = user.get('father_name_en', '')
