@@ -1,12 +1,3 @@
-fixed_login_code = '''import streamlit as st
-import pandas as pd
-import os
-import sys
-import json
-import hashlib
-import time
-from datetime import datetime, timedelta
-
 import os
 import sys
 ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -831,3 +822,4 @@ def dashboard():
 
 print(fixed_login_code[:3000])
 print("\n... [continued] ...")
+
