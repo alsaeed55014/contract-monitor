@@ -1531,6 +1531,7 @@ def render_order_processing_content():
     w_city_col = next((c for c in workers_df.columns if "city" in c.lower() and "saudi" in c.lower()), None)
     w_phone_col = next((c for c in workers_df.columns if "phone" in c.lower()), None)
     w_age_col = next((c for c in workers_df.columns if "age" in c.lower()), None)
+    w_timestamp_col = next((c for c in workers_df.columns if any(kw in str(c).lower() for kw in ["timestamp", "طابع", "تاريخ التسجيل"])), None)
 
     import re
     
@@ -1721,6 +1722,7 @@ def render_order_processing_content():
             if w_city_col: row[t('worker_city', lang)] = str(worker.get(w_city_col, ""))
             if w_phone_col: row[t('worker_phone', lang)] = w_phone
             if w_age_col: row[t('worker_age', lang)] = str(worker.get(w_age_col, ""))
+            if w_timestamp_col: row[t('registration_date', lang)] = str(worker.get(w_timestamp_col, ""))
             
             # Internal key for hiding
             row["__uid"] = worker_uid
