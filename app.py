@@ -610,13 +610,12 @@ def get_css():
             .banner-subtext { font-size: 0.7rem; }
             .banner-avatar { width: 45px; height: 45px; }
 
-            /* Fix Sidebar Transparency on Mobile */
+            /* Fix Sidebar Appearance on Mobile */
             section[data-testid="stSidebar"] {
                 background-color: #080808 !important;
                 background-image: none !important;
-                opacity: 1 !important;
-                visibility: visible !important;
                 z-index: 999999 !important;
+                box-shadow: 10px 0 30px rgba(0,0,0,0.8) !important;
             }
 
             /* Streamlit Mobile Sidebar Container Fix */
