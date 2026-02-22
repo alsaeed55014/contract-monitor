@@ -183,14 +183,31 @@ def get_css():
             direction: rtl; /* Force RTL */
         }
 
-        /* Fix Checkbox Spacing for RTL */
+        /* Fix Checkbox Spacing for RTL - Icon on Right, Text on Left */
         div[data-testid="stCheckbox"] label {
-            gap: 12px !important;
-            flex-direction: row-reverse !important;
+            display: flex !important;
+            flex-direction: row !important; /* Standard Row + RTL direction = Icon on Right */
+            align-items: center !important;
+            gap: 15px !important;
+            width: 100% !important;
+            justify-content: flex-start !important;
+        }
+
+        /* Ensure the checkbox square is always the first element (right side in RTL) */
+        div[data-testid="stCheckbox"] label div:first-child {
+            order: 1 !important;
+        }
+        
+        div[data-testid="stCheckbox"] label div[data-testid="stMarkdownContainer"] {
+            order: 2 !important;
+            flex-grow: 1 !important;
+            text-align: right !important;
         }
 
         div[data-testid="stCheckbox"] label div[data-testid="stMarkdownContainer"] p {
-            margin: 0 10px 0 0 !important;
+            margin: 0 !important;
+            font-family: 'Cairo', sans-serif !important;
+            font-size: 0.95rem !important;
         }
 
         /* Custom Premium Scrollbar */
