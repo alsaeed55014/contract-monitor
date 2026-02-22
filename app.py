@@ -1,468 +1,587 @@
-# Continuing the fixed code from where it cut off
+.stDataFrame {
+    overflow-x: auto !important;
+}
+.stDataFrame > div {
+    overflow-x: auto !important;
+    min-width: 100%;
+}
+import streamlit as st
+import pandas as pd
+import os
+import sys
+import json
+import hashlib
+import time
+from datetime import datetime, timedelta
 
-continuation = '''            t_col("User", lang): k,
-            t_col("Role", lang): v.get('role', 'viewer')
-        })
-    
-    df_users = pd.DataFrame(table_data)
-    st.dataframe(style_df(df_users), use_container_width=True)
+import os
+import sys
+ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
+if ROOT_DIR not in sys.path:
+    sys.path.insert(0, ROOT_DIR)
 
-def render_order_processing_content():
-    lang = st.session_state.lang
-    st.markdown('<div class="programmer-signature-neon">By: Alsaeed Alwazzan</div>', unsafe_allow_html=True)
-    st.title(f" {t('order_processing_title', lang)}")
-    
-    loading_placeholder = show_loading_hourglass()
-    
-    try:
-        customers_df = st.session_state.db.fetch_customer_requests()
-        workers_df = st.session_state.db.fetch_data()
-    except Exception as e:
-        loading_placeholder.empty()
-        st.error(f"{t('error', lang)}: {e}")
-        return
-    
-    loading_placeholder.empty()
-    
-    if customers_df.empty:
-        st.warning(t("no_data", lang))
-        return
-    
-    if workers_df.empty:
-        st.warning("لا توجد بيانات عمال" if lang == 'ar' else "No worker data available")
-        return
+class AuthManager:
+    def __init__(self, users_file_path):
+        self.users_file = users_file_path
+        self.users = {}
+        self.is_bilingual = True
+        self.load_users()
 
-    def find_cust_col(keywords):
-        for c in customers_df.columns:
-            c_lower = str(c).lower()
-            if all(kw in c_lower for kw in keywords): return c
+    def load_users(self):
+        if os.path.exists(self.users_file):
+            try:
+                with open(self.users_file, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                    self.users = data.get("users", {})
+            except Exception as e:
+                self.load_error = str(e)
+                self.users = {}
+        
+        if "admin" not in self.users:
+            self.users["admin"] = {
+                "password": self.hash_password("266519111"),
+                "role": "admin",
+                "first_name_ar": "السعيد",
+                "father_name_ar": "الوزان",
+                "first_name_en": "Alsaeed",
+                "father_name_en": "Alwazzan",
+                "permissions": ["all"]
+            }
+            self.save_users()
+
+    def save_users(self):
+        try:
+            with open(self.users_file, 'w', encoding='utf-8') as f:
+                json.dump({"users": self.users}, f, ensure_ascii=False, indent=4)
+        except Exception as e:
+            print(f"Error saving users: {e}")
+
+    def hash_password(self, password):
+        return hashlib.sha256(str(password).encode()).hexdigest()
+
+    def authenticate(self, username, password):
+        username = username.lower().strip()
+        if username in self.users:
+            stored_hash = self.users[username].get("password")
+            if stored_hash == self.hash_password(password):
+                return self.users[username]
         return None
-    
-    c_company = find_cust_col(["company"]) or find_cust_col(["شركه"]) or find_cust_col(["مؤسس"])
-    c_responsible = find_cust_col(["responsible"]) or find_cust_col(["مسؤول"])
-    c_mobile = find_cust_col(["mobile"]) or find_cust_col(["موبيل"])
-    c_category = find_cust_col(["category"]) or find_cust_col(["فئ"])
-    c_nationality = find_cust_col(["nationality"]) or find_cust_col(["جنسي"])
-    c_location = find_cust_col(["location"]) or find_cust_col(["موقع"])
-    c_num_emp = find_cust_col(["number of employees"]) or find_cust_col(["عدد"])
-    c_work_nature = find_cust_col(["nature"]) or find_cust_col(["طبيعة"])
-    c_salary = find_cust_col(["salary"]) or find_cust_col(["راتب"])
-    
-    w_name_col = next((c for c in workers_df.columns if "full name" in c.lower()), None)
-    w_nationality_col = next((c for c in workers_df.columns if c.strip().lower() == "nationality"), None)
-    w_gender_col = next((c for c in workers_df.columns if c.strip().lower() == "gender"), None)
-    w_job_col = next((c for c in workers_df.columns if "job" in c.lower() and "looking" in c.lower()), None)
-    w_city_col = next((c for c in workers_df.columns if "city" in c.lower() and "saudi" in c.lower()), None)
-    w_phone_col = next((c for c in workers_df.columns if "phone" in c.lower()), None)
-    w_age_col = next((c for c in workers_df.columns if "age" in c.lower()), None)
 
-    import re
-    
-    def normalize(text):
-        if not text: return ""
-        s = str(text).strip().lower()
-        s = re.sub(r'[^\w\s\-]', ' ', s, flags=re.UNICODE)
-        return ' '.join(s.split()).strip()
-    
-    def match_gender(customer_category, worker_gender):
-        cat = normalize(customer_category)
-        gen = normalize(worker_gender)
-        if not cat or not gen: return True
-        is_male_request = ("رجال" in cat) or (re.search(r'\bmale\b', cat) and "female" not in cat)
-        is_female_request = ("نساء" in cat) or ("female" in cat)
-        if is_male_request:
-            return re.search(r'\bmale\b', gen) is not None and "female" not in gen
-        elif is_female_request:
-            return "female" in gen
-        return True
-    
-    def match_nationality(customer_nat, worker_nat):
-        c_raw = str(customer_nat).strip()
-        w_nat = normalize(worker_nat)
-        if not c_raw or not w_nat: return True
-        parts = [p.strip() for p in c_raw.split(',')]
-        for part in parts:
-            pn = normalize(part)
-            if w_nat in pn or pn in w_nat:
-                return True
-            words = re.split(r'[\s\-–|]+', pn)
-            for word in words:
-                word = word.strip()
-                if len(word) > 2 and (word in w_nat or w_nat in word):
-                    return True
+    def add_user(self, username, password, role="viewer", f_ar="", fa_ar="", f_en="", fa_en=""):
+        username = username.lower().strip()
+        if username in self.users:
+            return False, "User already exists"
+        
+        self.users[username] = {
+            "password": self.hash_password(password),
+            "role": role,
+            "first_name_ar": f_ar,
+            "father_name_ar": fa_ar,
+            "first_name_en": f_en,
+            "father_name_en": fa_en,
+            "permissions": ["read"] if role == "viewer" else ["all"]
+        }
+        self.save_users()
+        return True, "User added successfully"
+
+    def update_password(self, username, new_password):
+        username = str(username).strip()
+        target = None
+        for u in self.users:
+            if u.lower() == username.lower():
+                target = u
+                break
+        
+        if target:
+            self.users[target]["password"] = self.hash_password(new_password)
+            self.save_users()
+            return True
         return False
-    
-    def match_job(customer_job, worker_job):
-        c_job = normalize(customer_job)
-        w_job = normalize(worker_job)
-        if not c_job or not w_job: return True
-        requested_jobs = [j.strip() for j in c_job.split(',')]
-        for rj in requested_jobs:
-            rj = normalize(rj)
-            if rj and len(rj) > 1 and (rj in w_job or w_job in rj):
-                return True
+
+    def delete_user(self, username):
+        if not username:
+            return False, "اسم المستخدم فارغ"
+        
+        target = str(username).strip().lower()
+        if target == "admin":
+            return False, "لا يمكن حذف المدير الرئيسي"
+            
+        user_to_del = None
+        for u in self.users:
+            if u.lower() == target:
+                user_to_del = u
+                break
+        
+        if user_to_del:
+            try:
+                del self.users[user_to_del]
+                self.save_users()
+                return True, "تم الحذف"
+            except Exception as e:
+                return False, f"خطأ أثناء الحذف: {str(e)}"
+        
+        return False, "المستخدم غير موجود في النظام"
+
+    def update_role(self, username, new_role):
+        username = str(username).strip()
+        target = None
+        for u in self.users:
+            if u.lower() == username.lower():
+                target = u
+                break
+        
+        if target:
+            self.users[target]["role"] = new_role
+            self.users[target]["permissions"] = ["read"] if new_role == "viewer" else ["all"]
+            self.save_users()
+            return True
         return False
-    
-    def match_city(customer_location, worker_city):
-        c_loc = normalize(customer_location)
-        w_city_val = normalize(worker_city)
-        if not c_loc or not w_city_val: return True
-        parts = re.split(r'[|,،]+', c_loc)
-        for part in parts:
-            part = part.strip()
-            if part and len(part) > 1 and (part in w_city_val or w_city_val in part):
-                return True
+
+    def update_profile(self, username, f_ar=None, fa_ar=None, f_en=None, fa_en=None):
+        username = str(username).strip()
+        target = None
+        for u in self.users:
+            if u.lower() == username.lower():
+                target = u
+                break
+        
+        if target:
+            if f_ar is not None: self.users[target]["first_name_ar"] = f_ar
+            if fa_ar is not None: self.users[target]["father_name_ar"] = fa_ar
+            if f_en is not None: self.users[target]["first_name_en"] = f_en
+            if fa_en is not None: self.users[target]["father_name_en"] = fa_en
+            self.save_users()
+            return True
         return False
-    
-    def find_matching_workers(customer_row):
-        city_matches, city_scores = [], []
-        other_matches, other_scores = [], []
+
+def get_css():
+    return """
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700&family=Inter:wght@300;400;500;600;700&family=Cinzel:wght@500;700&family=Alex+Brush&display=swap');
         
-        for _, worker in workers_df.iterrows():
-            score = 0
-            total_criteria = 0
-            city_matched = False
-            
-            if c_category and w_gender_col:
-                cv = str(customer_row.get(c_category, ""))
-                wv = str(worker.get(w_gender_col, ""))
-                if cv.strip():
-                    total_criteria += 1
-                    if match_gender(cv, wv): score += 1
-            
-            if c_nationality and w_nationality_col:
-                cv = str(customer_row.get(c_nationality, ""))
-                wv = str(worker.get(w_nationality_col, ""))
-                if cv.strip():
-                    total_criteria += 1
-                    if match_nationality(cv, wv): score += 1
-            
-            if c_work_nature and w_job_col:
-                cv = str(customer_row.get(c_work_nature, ""))
-                wv = str(worker.get(w_job_col, ""))
-                if cv.strip():
-                    total_criteria += 1
-                    if match_job(cv, wv): score += 1
-            
-            if c_location and w_city_col:
-                cv = str(customer_row.get(c_location, ""))
-                wv = str(worker.get(w_city_col, ""))
-                if cv.strip():
-                    total_criteria += 1
-                    if match_city(cv, wv):
-                        score += 1
-                        city_matched = True
-            
-            if total_criteria > 0 and score >= 1:
-                pct = int((score / total_criteria) * 100)
-                if city_matched:
-                    city_matches.append(worker)
-                    city_scores.append(pct)
-                else:
-                    other_matches.append(worker)
-                    other_scores.append(pct)
+        :root {
+            --luxury-gold: #D4AF37;
+            --deep-gold: #B8860B;
+            --glass-bg: rgba(26, 26, 26, 0.85);
+            --solid-dark: #0A0A0A;
+            --accent-green: #00FF41;
+            --text-main: #F4F4F4;
+            --border-glow: rgba(212, 175, 55, 0.3);
+        }
+
+        .stApp {
+            background: radial-gradient(circle at top right, #1A1A1A, #050505);
+            color: var(--text-main);
+            font-family: 'Inter', 'Tajawal', sans-serif;
+        }
+
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #050505; }
+        ::-webkit-scrollbar-thumb { 
+            background: linear-gradient(180deg, #333, #D4AF37); 
+            border-radius: 10px; 
+        }
+
+        .main .block-container {
+            padding-top: 2rem !important;
+            padding-bottom: 5rem !important;
+            max-width: 1400px !important;
+        }
+
+        h1, h2, h3 {
+            font-family: 'Cinzel', serif !important;
+            letter-spacing: 2px !important;
+            text-transform: uppercase !important;
+            background: linear-gradient(to bottom, #FFFFFF 0%, #D4AF37 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-shadow: 2px 4px 10px rgba(0,0,0,0.4);
+            margin-bottom: 1.5rem !important;
+        }
+
+        /* Login Screen - Fixed */
+        .login-wrapper {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 80vh;
+            padding: 20px;
+        }
         
-        if city_matches:
-            paired = sorted(zip(city_scores, range(len(city_matches)), city_matches), key=lambda x: -x[0])
-            city_scores = [p[0] for p in paired]
-            city_matches = [p[2] for p in paired]
-        if other_matches:
-            paired = sorted(zip(other_scores, range(len(other_matches)), other_matches), key=lambda x: -x[0])
-            other_scores = [p[0] for p in paired]
-            other_matches = [p[2] for p in paired]
+        .login-box {
+            width: 100%;
+            max-width: 450px;
+            background: rgba(25, 25, 25, 0.98);
+            border: 2px solid #D4AF37;
+            border-radius: 20px;
+            padding: 40px 35px;
+            box-shadow: 0 25px 80px rgba(0,0,0,0.9), 0 0 30px rgba(212, 175, 55, 0.1);
+        }
         
-        return city_matches + other_matches, city_scores + other_scores, len(city_matches)
-
-    if 'op_hidden_clients' not in st.session_state:
-        st.session_state.op_hidden_clients = set()
-    if 'op_hidden_workers' not in st.session_state:
-        st.session_state.op_hidden_workers = set()
-
-    if st.session_state.op_hidden_workers:
-        if st.sidebar.button("🔓 " + ("أظهر جميع العمال المخفيين" if lang == 'ar' else "Show all hidden workers")):
-            st.session_state.op_hidden_workers.clear()
-            st.rerun()
-
-    def build_worker_table(worker_list, score_list):
-        rows = []
-        filtered_indices = []
-        for i, (worker, score) in enumerate(zip(worker_list, score_list)):
-            w_name = str(worker.get(w_name_col, "")) if w_name_col else ""
-            w_phone = str(worker.get(w_phone_col, "")) if w_phone_col else ""
-            worker_uid = hashlib.md5(f"{w_name}{w_phone}".encode()).hexdigest()
-            
-            if worker_uid in st.session_state.op_hidden_workers:
-                continue
-                
-            row = {}
-            row[t('match_score', lang)] = f"{score}%"
-            if w_name_col: row[t('worker_name', lang)] = w_name
-            if w_nationality_col: row[t('worker_nationality', lang)] = str(worker.get(w_nationality_col, ""))
-            if w_gender_col: row[t('worker_gender', lang)] = str(worker.get(w_gender_col, ""))
-            if w_job_col: row[t('worker_job', lang)] = str(worker.get(w_job_col, ""))
-            if w_city_col: row[t('worker_city', lang)] = str(worker.get(w_city_col, ""))
-            if w_phone_col: row[t('worker_phone', lang)] = w_phone
-            if w_age_col: row[t('worker_age', lang)] = str(worker.get(w_age_col, ""))
-            
-            row["__uid"] = worker_uid
-            rows.append(row)
-            filtered_indices.append(i)
-            
-        return pd.DataFrame(rows), filtered_indices
-
-    def info_cell(icon, label_text, value, color="#F4F4F4"):
-        st.markdown(f"""
-            <div style="background: rgba(255,255,255,0.04); padding: 12px; border-radius: 10px;
-                        border: 1px solid rgba(255,255,255,0.06); margin: 5px 0; min-height: 80px;">
-                <span style="color: #888; font-size: 0.8rem;">{label_text}</span><br>
-                <span style="color: {color}; font-size: 1.1rem; font-weight: 600;">{icon} {value}</span>
-            </div>
-        """, unsafe_allow_html=True)
-
-    c_timestamp = find_cust_col(["timestamp"]) or find_cust_col(["الطابع"]) or find_cust_col(["تاريخ"])
-    if not c_timestamp and len(customers_df.columns) > 0:
-        c_timestamp = customers_df.columns[0]
-
-    st.markdown("### 📋 " + t('customer_requests', lang))
-    
-    for idx, customer_row in customers_df.iterrows():
-        company_val = str(customer_row.get(c_company, "")) if c_company else ""
-        responsible_val = str(customer_row.get(c_responsible, "")) if c_responsible else ""
-        client_key = f"client_{idx}"
+        .login-signature {
+            font-family: 'Alex Brush', cursive;
+            color: #D4AF37;
+            font-size: 1.6rem;
+            text-align: center;
+            margin-bottom: 20px;
+        }
         
-        display_name = f"{company_val} - {responsible_val}".strip(" -")
-        if not display_name: display_name = f"طلب #{idx+1}" if lang == 'ar' else f"Request #{idx+1}"
+        .login-logo {
+            text-align: center;
+            margin-bottom: 25px;
+        }
         
-        is_visible = st.checkbox(
-            f"✅ {display_name}", 
-            value=(client_key not in st.session_state.op_hidden_clients),
-            key=f"op_vis_check_{idx}"
-        )
+        .login-title {
+            text-align: center;
+            margin-bottom: 10px;
+        }
         
-        if not is_visible:
-            st.session_state.op_hidden_clients.add(client_key)
-            st.divider()
-            continue
-        else:
-            st.session_state.op_hidden_clients.discard(client_key)
-            
-        with st.container():
-            st.markdown(f"""
-                <div style="background: linear-gradient(90deg, rgba(212,175,55,0.15), transparent); 
-                            padding: 10px 20px; border-radius: 10px; border-left: 5px solid #D4AF37; margin: 15px 0 5px 0;">
-                    <h3 style="color: #D4AF37; margin: 0; font-family: 'Tajawal', sans-serif;">🏢 {company_val} <span style="font-size: 0.8rem; color: #888;">#{idx+1}</span></h3>
-                </div>
-            """, unsafe_allow_html=True)
-            
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                if c_timestamp: info_cell("📅", "التاريخ" if lang == 'ar' else "Date", str(customer_row.get(c_timestamp, "")))
-                info_cell("📍", t('work_location', lang), str(customer_row.get(c_location, "")))
-                info_cell("💼", t('work_nature', lang), str(customer_row.get(c_work_nature, "")))
-            with col2:
-                info_cell("👤", t('responsible_name', lang), responsible_val)
-                info_cell("👥", t('required_category', lang), str(customer_row.get(c_category, "")))
-                info_cell("🔢", t('num_employees', lang), str(customer_row.get(c_num_emp, "")), "#D4AF37")
-            with col3:
-                info_cell("📱", t('mobile_number', lang), str(customer_row.get(c_mobile, "")))
-                info_cell("🌍", t('required_nationality', lang), str(customer_row.get(c_nationality, "")))
-                info_cell("💰", t('expected_salary', lang), str(customer_row.get(c_salary, "")), "#00FF41")
-
-            matches, scores, city_count = find_matching_workers(customer_row)
-            
-            if not matches:
-                st.warning("⚠️ " + t('no_matching_workers', lang))
-            else:
-                city_list = matches[:city_count]
-                other_list = matches[city_count:]
-                city_scores = scores[:city_count]
-                other_scores = scores[city_count:]
-
-                if city_list:
-                    city_df, city_idx_map = build_worker_table(city_list, city_scores)
-                    if not city_df.empty:
-                        st.markdown(f"""<div style="color: #D4AF37; font-weight: 700; margin: 10px 5px;">📍 عمال في نفس المدينة ({str(customer_row.get(c_location, ""))}) — {len(city_df)}</div>""", unsafe_allow_html=True)
-                        
-                        st.markdown("""
-                            <style>
-                            .stDataFrame {
-                                overflow-x: auto !important;
-                            }
-                            .stDataFrame > div {
-                                overflow-x: auto !important;
-                                min-width: 100%;
-                            }
-                            </style>
-                        """, unsafe_allow_html=True)
-                        
-                        df_city_height = min((len(city_df) + 1) * 35 + 40, 500)
-                        event_city = st.dataframe(
-                            city_df.drop(columns=["__uid"]),
-                            use_container_width=True,
-                            hide_index=True,
-                            on_select="rerun",
-                            selection_mode="single-row",
-                            key=f"op_city_table_{idx}",
-                            height=df_city_height
-                        )
-                        
-                        if event_city.selection and event_city.selection.get("rows"):
-                            sel_row_idx = event_city.selection["rows"][0]
-                            original_idx = city_idx_map[sel_row_idx]
-                            worker_row = city_list[original_idx]
-                            worker_uid = city_df.iloc[sel_row_idx]["__uid"]
-                            
-                            render_cv_detail_panel(worker_row, sel_row_idx, lang, key_prefix=f"op_city_{idx}")
-                            
-                            if st.button("🚫 " + ("إخفاء هذا العامل" if lang == 'ar' else "Hide this worker"), 
-                                         key=f"hide_city_{idx}_{worker_uid}"):
-                                st.session_state.op_hidden_workers.add(worker_uid)
-                                st.rerun()
-
-                if other_list:
-                    other_df, other_idx_map = build_worker_table(other_list, other_scores)
-                    if not other_df.empty:
-                        st.markdown(f"""<div style="color: #8888FF; font-weight: 700; margin: 10px 5px;">🌐 عمال في مدن أخرى — {len(other_df)}</div>""", unsafe_allow_html=True)
-                        
-                        st.markdown("""
-                            <style>
-                            .stDataFrame {
-                                overflow-x: auto !important;
-                            }
-                            .stDataFrame > div {
-                                overflow-x: auto !important;
-                                min-width: 100%;
-                            }
-                            </style>
-                        """, unsafe_allow_html=True)
-                        
-                        df_other_height = min((len(other_df) + 1) * 35 + 40, 500)
-                        event_other = st.dataframe(
-                            other_df.drop(columns=["__uid"]),
-                            use_container_width=True,
-                            hide_index=True,
-                            on_select="rerun",
-                            selection_mode="single-row",
-                            key=f"op_other_table_{idx}",
-                            height=df_other_height
-                        )
-                        
-                        if event_other.selection and event_other.selection.get("rows"):
-                            sel_row_idx = event_other.selection["rows"][0]
-                            original_idx = other_idx_map[sel_row_idx]
-                            worker_row = other_list[original_idx]
-                            worker_uid = other_df.iloc[sel_row_idx]["__uid"]
-                            
-                            render_cv_detail_panel(worker_row, sel_row_idx, lang, key_prefix=f"op_other_{idx}")
-                            
-                            if st.button("🚫 " + ("إخفاء هذا العامل" if lang == 'ar' else "Hide this worker"), 
-                                         key=f"hide_other_{idx}_{worker_uid}"):
-                                st.session_state.op_hidden_workers.add(worker_uid)
-                                st.rerun()
-                
-                if (not city_list or build_worker_table(city_list, city_scores)[0].empty) and \
-                   (not other_list or build_worker_table(other_list, other_scores)[0].empty):
-                    st.info("تم إخفاء جميع العمال المطابقين لهذا الطلب.")
-
-            st.markdown("<div style='height: 40px;'></div>", unsafe_allow_html=True)
-            st.divider()
-
-
-
-def render_customer_requests_content():
-    lang = st.session_state.lang
-    st.markdown('<div class="programmer-signature-neon">By: Alsaeed Alwazzan</div>', unsafe_allow_html=True)
-    st.title(f" {t('customer_requests_title', lang)}")
-    
-    loading_placeholder = show_loading_hourglass()
-    try:
-        df = st.session_state.db.fetch_customer_requests()
-    except Exception as e:
-        loading_placeholder.empty()
-        import traceback
-        full_err = traceback.format_exc()
-        err_msg = str(e)
+        .login-title h1 {
+            font-size: 1.6rem !important;
+            margin: 0 !important;
+        }
         
-        is_permission_error = any(kw in err_msg.lower() or kw in full_err.lower() 
-                                for kw in ["403", "permission", "not found", "gspread", "api"])
+        .login-subtitle {
+            text-align: center;
+            color: #888;
+            font-size: 0.9rem;
+            margin-bottom: 30px;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+        }
 
-        if not err_msg:
-            err_msg = "Connection or Permission Error" if is_permission_error else "Technical Error (Details below)"
-            
-        st.error(f"{t('error', lang)}: {err_msg}")
-        
-        st.warning("⚠️ إعدادات الربط غير مكتملة أو الملف غير متاح")
-        st.info("لحل هذه المشكلة، يرجى التأكد من **مشاركة (Share)** ملف الإكسل مع هذا البريد الإلكتروني كـ **Editor**:")
-        st.code("sheet-bot@smooth-league-454322-p2.iam.gserviceaccount.com")
-        
-        with st.expander("Show Technical Details | تفاصيل الخطأ التقنية"):
-            st.code(full_err)
-            
-        if "REPLACE_WITH_CUSTOMER_REQUESTS_SHEET_URL" in err_msg or "URL" in err_msg:
-            st.info("⚠️ يرجى تزويد المبرمج برابط ملف جوجل شيت (Spreadsheet) الخاص بتبويب 'الردود' في النموذج لإتمام الربط.")
-        
-        st.markdown("""
-        **خطوات التأكد من الربط:**
-        1. افتح ملف جوجل شيت (الذي سجلت فيه ردود النموذج).
-        2. اضغط على زر **Share** (مشاركة) في الزاوية العلوية.
-        3. انسخ هذا الإيميل: `sheet-bot@smooth-league-454322-p2.iam.gserviceaccount.com`
-        4. أضف الإيميل وتأكد من اختيار **Editor** (محرر).
-        5. اضغط على زر **Send** (إرسال).
-        6. عد هنا وقم بـ **تحديث الصفحة (Refresh)**.
-        """)
-        return
+        /* Form Styling */
+        div[data-testid="stForm"] {
+            background: transparent !important;
+            border: none !important;
+            padding: 0 !important;
+            box-shadow: none !important;
+        }
 
-    loading_placeholder.empty()
+        .stTextInput input {
+            background-color: rgba(35, 35, 35, 0.95) !important;
+            border: 2px solid rgba(212, 175, 55, 0.4) !important;
+            border-radius: 12px !important;
+            color: #FFFFFF !important;
+            padding: 14px 18px !important;
+            font-size: 1rem !important;
+            transition: all 0.3s ease !important;
+        }
 
-    if df.empty:
-        st.warning(t("no_data", lang))
-        return
+        .stTextInput input:focus {
+            border-color: #D4AF37 !important;
+            box-shadow: 0 0 0 4px rgba(212, 175, 55, 0.15) !important;
+            background-color: rgba(40, 40, 40, 0.98) !important;
+        }
 
-    res = df.copy()
-    
-    new_names = {}
-    used_names = set()
-    for c in res.columns:
-        new_name = t_col(c, lang)
-        original_new_name = new_name
-        counter = 1
-        while new_name in used_names:
-            counter += 1
-            new_name = f"{original_new_name} ({counter})"
-        used_names.add(new_name)
-        new_names[c] = new_name
-        
-    res.rename(columns=new_names, inplace=True)
-    res = clean_date_display(res)
-    
-    res_display = res.copy()
-    for int_col in ["__sheet_row", "__sheet_row_backup"]:
-        if int_col in res_display.columns:
-            res_display = res_display.drop(columns=[int_col])
-            
-    st.markdown("""
-        <style>
+        .stButton button {
+            background: linear-gradient(135deg, #D4AF37 0%, #B8860B 100%) !important;
+            color: #000 !important;
+            border: none !important;
+            border-radius: 12px !important;
+            padding: 14px 30px !important;
+            font-weight: 700 !important;
+            font-size: 1rem !important;
+            letter-spacing: 1px !important;
+            width: 100% !important;
+            transition: all 0.3s ease !important;
+        }
+
+        .stButton button:hover {
+            transform: translateY(-2px) !important;
+            box-shadow: 0 10px 30px rgba(212, 175, 55, 0.4) !important;
+        }
+
+        .lang-btn {
+            background: transparent !important;
+            border: 2px solid #D4AF37 !important;
+            color: #D4AF37 !important;
+            padding: 10px 20px !important;
+            border-radius: 25px !important;
+            font-weight: 600 !important;
+        }
+
+        /* Table Scrollbar Fix */
         .stDataFrame {
             overflow-x: auto !important;
         }
+        
         .stDataFrame > div {
             overflow-x: auto !important;
             min-width: 100%;
         }
-        </style>
-    """, unsafe_allow_html=True)
+        
+        /* Status Badges */
+        .status-badge {
+            display: inline-block;
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-weight: 600;
+            font-size: 0.85rem;
+            text-align: center;
+        }
+        
+        .status-active {
+            background: rgba(0, 255, 65, 0.2);
+            color: #00FF41;
+            border: 1px solid rgba(0, 255, 65, 0.4);
+        }
+        
+        .status-expired {
+            background: rgba(255, 49, 49, 0.2);
+            color: #FF3131;
+            border: 1px solid rgba(255, 49, 49, 0.4);
+        }
+        
+        .status-urgent {
+            background: rgba(255, 145, 0, 0.2);
+            color: #FF9100;
+            border: 1px solid rgba(255, 145, 0, 0.4);
+        }
+
+        section[data-testid="stSidebar"] {
+            background-color: #080808 !important;
+            border-right: 1px solid rgba(212, 175, 55, 0.15) !important;
+        }
+
+        .programmer-credit {
+            color: #FFFFFF !important;
+            text-shadow: 0 0 10px rgba(255, 255, 255, 0.8), 
+                         0 0 20px rgba(212, 175, 55, 0.4) !important;
+            font-family: 'Tajawal', sans-serif;
+            font-weight: 700;
+            font-size: 1.3rem;
+            text-align: center;
+            margin-top: 10px;
+            line-height: 1.2;
+        }
+        
+        .programmer-credit.en {
+            font-family: 'Cinzel', serif !important;
+            font-size: 1.1rem;
+            letter-spacing: 1px;
+        }
+
+        .streamlit-expanderHeader {
+            background-color: rgba(255, 255, 255, 0.03) !important;
+            border: 1px solid rgba(212, 175, 55, 0.1) !important;
+            border-radius: 16px !important;
+            padding: 1rem !important;
+            font-weight: 600 !important;
+            color: var(--luxury-gold) !important;
+        }
+
+        .metric-container {
+            background: rgba(255, 255, 255, 0.05) !important;
+            border-radius: 16px !important;
+            border: 1px solid rgba(212, 175, 55, 0.1) !important;
+            padding: 1.5rem !important;
+            text-align: center !important;
+        }
+        
+        .metric-value {
+            font-size: 2.5rem !important;
+            font-weight: 700 !important;
+            color: #D4AF37 !important;
+        }
+        
+        .metric-label {
+            color: #888 !important;
+            font-size: 0.9rem !important;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+    </style>
+    """
+            def style_df(df):
+    if isinstance(df, pd.DataFrame):
+        return df.style.map(lambda _: "color: #4CAF50;")
+    return df
+
+def clean_date_display(df):
+    if not isinstance(df, pd.DataFrame) or df.empty:
+        return df
+        
+    import re
+    from dateutil import parser as dateutil_parser
     
-    st.dataframe(
-        style_df(res_display), 
-        use_container_width=True,
-        hide_index=True,
-        key="customer_requests_table"
-    )
+    def _parse_to_date_str(val):
+        if val is None or str(val).strip() == '': return ""
+        try:
+            val_str = str(val).strip()
+            a_to_w = str.maketrans('٠١٢٣٤٥٦٧٨٩', '0123456789')
+            val_str = val_str.translate(a_to_w)
+            clean_s = re.sub(r'[صم]', '', val_str).strip()
+            dt = dateutil_parser.parse(clean_s, dayfirst=False)
+            return dt.strftime('%Y-%m-%d')
+        except:
+            try:
+                dt = pd.to_datetime(val, errors='coerce')
+                if pd.isna(dt): return str(val)
+                return dt.strftime('%Y-%m-%d')
+            except:
+                return str(val)
 
-if not st.session_state.user:
-    login_screen()
-else:
-    dashboard()
-'''
+    date_keywords = ["date", "time", "تاريخ", "طابع", "التسجيل", "expiry", "end", "متى"]
+    for col in df.columns:
+        col_lower = str(col).lower()
+        if any(kw in col_lower for kw in date_keywords):
+            df[col] = df[col].apply(_parse_to_date_str)
+            
+    return df
 
-print(continuation)
+def show_loading_hourglass(text=None, container=None):
+    if text is None:
+        text = "جاري التحميل..." if st.session_state.get('lang') == 'ar' else "Loading..."
+    
+    target = container if container else st.empty()
+    with target:
+        st.markdown(f"""
+            <div style="text-align: center; padding: 40px;">
+                <div style="font-size: 3rem; animation: pulse 1s infinite;">⏳</div>
+                <div style="color: #D4AF37; margin-top: 10px; font-weight: 600;">{text}</div>
+            </div>
+            <style>
+                @keyframes pulse {{
+                    0% {{ opacity: 0.5; }}
+                    50% {{ opacity: 1; }}
+                    100% {{ opacity: 0.5; }}
+                }}
+            </style>
+        """, unsafe_allow_html=True)
+    return target
+
+try:
+    from src.core.search import SmartSearchEngine
+    from src.core.contracts import ContractManager
+    from src.core.translation import TranslationManager
+    from src.data.db_client import DBClient
+    from src.config import USERS_FILE, ASSETS_DIR
+    from src.core.i18n import t, t_col
+except ImportError as e:
+    import os
+    src_exists = os.path.isdir(os.path.join(ROOT_DIR, "src"))
+    st.error(f"Critical Import Error: {e}")
+    if not src_exists:
+        st.warning(f"⚠️ 'src' directory not found in: {ROOT_DIR}")
+    else:
+        st.info(f"💡 'src' found at {ROOT_DIR}. Internal module error.")
+    st.stop()
+
+st.set_page_config(
+    page_title="السعيد الوزان | نظام مراقبة العقود",
+    page_icon="🔐",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
+st.markdown(get_css(), unsafe_allow_html=True)
+
+if 'auth' not in st.session_state or not hasattr(st.session_state.auth, 'v8_marker'):
+    loading = show_loading_hourglass()
+    time.sleep(0.4)
+    st.session_state.auth = AuthManager(USERS_FILE)
+    st.session_state.auth.v8_marker = True
+    st.session_state.db = DBClient()
+    loading.empty()
+
+if hasattr(st.session_state.auth, 'load_error'):
+    st.error(f"⚠️ Error Loading User Database: {st.session_state.auth.load_error}")
+
+if 'db' not in st.session_state or not hasattr(st.session_state.db, 'fetch_customer_requests'):
+    st.session_state.db = DBClient()
+
+if 'user' not in st.session_state:
+    st.session_state.user = None
+if 'lang' not in st.session_state:
+    st.session_state.lang = 'ar' 
+
+IMG_PATH = os.path.join(ASSETS_DIR, "alsaeed.jpg")
+if not os.path.exists(IMG_PATH):
+    IMG_PATH = "alsaeed.jpg"
+
+def toggle_lang():
+    if st.session_state.lang == 'ar': st.session_state.lang = 'en'
+    else: st.session_state.lang = 'ar'
+
+def get_contract_status_badge(status, days, lang):
+    if status == 'expired':
+        if lang == 'ar':
+            return f'<span class="status-badge status-expired">❌ منتهي</span>'
+        else:
+            return f'<span class="status-badge status-expired">Expired</span>'
+    elif status in ['urgent', 'warning']:
+        if lang == 'ar':
+            return f'<span class="status-badge status-urgent">⚠️ عاجل</span>'
+        else:
+            return f'<span class="status-badge status-urgent">Urgent</span>'
+    else:
+        if lang == 'ar':
+            return f'<span class="status-badge status-active">✅ ساري</span>'
+        else:
+            return f'<span class="status-badge status-active">Active</span>'
+
+# شاشة الدخول المُصلحة
+def login_screen():
+    lang = st.session_state.lang
+    
+    # Wrapper للتوسيط
+    st.markdown('<div class="login-wrapper">', unsafe_allow_html=True)
+    st.markdown('<div class="login-box">', unsafe_allow_html=True)
+    
+    # التوقيع
+    st.markdown('<div class="login-signature">By: Alsaeed Alwazzan</div>', unsafe_allow_html=True)
+    
+    # الشعار
+    if os.path.exists(IMG_PATH):
+        st.markdown('<div class="login-logo">', unsafe_allow_html=True)
+        st.image(IMG_PATH, width=90)
+        st.markdown('</div>', unsafe_allow_html=True)
+    
+    # العنوان
+    st.markdown(f'<div class="login-title"><h1>{t("welcome_back", lang)}</h1></div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="login-subtitle">{t("system_title", lang)}</div>', unsafe_allow_html=True)
+    
+    # نموذج الدخول
+    with st.form("login_form"):
+        username = st.text_input(
+            t("username", lang), 
+            placeholder=t("username", lang),
+            label_visibility="collapsed"
+        )
+        password = st.text_input(
+            t("password", lang), 
+            type="password",
+            placeholder=t("password", lang),
+            label_visibility="collapsed"
+        )
+        
+        # زر الدخول
+        submitted = st.form_submit_button(t("login_btn", lang), use_container_width=True)
+        
+        # زر تغيير اللغة
+        lang_clicked = st.form_submit_button(
+            "🌐 " + ("English" if lang == "ar" else "العربية"),
+            use_container_width=False
+        )
+        
+        if lang_clicked:
+            toggle_lang()
+            st.rerun()
+        
+        if submitted:
+            if username and password:
+                with st.spinner(""):
+                    user = st.session_state.auth.authenticate(username, password)
+                    if user:
+                        user['username'] = username
+                        st.session_state.user = user
+                        st.session_state.show_welcome = True
+                        st.rerun()
+                    else:
+                        st.error(t("invalid_creds", lang))
+            else:
+                st.warning("الرجاء إدخال اسم المستخدم وكلمة المرور" if lang == 'ar' else "Please enter credentials")
+    
+    st.markdown('</div>', unsafe_allow_html=True)
+    st.markdown('</div>', unsafe_allow_html=True)
