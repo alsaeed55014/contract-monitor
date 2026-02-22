@@ -2421,19 +2421,38 @@ def render_bengali_supply_content():
             else:
                 st.info(t("no_records_found", lang))
         else:
+            st.success(f"🔍 Found {len(workers)} records - تم العثور على {len(workers)} سجلات")
             for w in sorted(workers, key=lambda x: x.get("timestamp", ""), reverse=True):
                 with st.container(border=True):
-                    c1, c2 = st.columns([4, 1])
-                    with c1:
-                        st.markdown(f"**👷 {w['name']}**")
-                        st.caption(f"📍 {w['employer']} | 📦 {w['supplier']}")
-                        st.caption(f"🆔 {w['id']} | 📅 {w['timestamp']}")
-                    with c2:
-                        if st.button(t("delete_btn", lang), key=f"del_{w['worker_uuid']}", use_container_width=True):
+                    # Header with Worker Name and Delete button
+                    h1, h2 = st.columns([0.85, 0.15])
+                    with h1:
+                        st.markdown(f"### 👷 {w.get('name', 'N/A')}")
+                    with h2:
+                        if st.button("🗑️", key=f"del_{w['worker_uuid']}", help=t("delete_btn", lang)):
                             if bm.delete_worker(w['worker_uuid']):
                                 st.success("Deleted!")
                                 time.sleep(0.5)
                                 st.rerun()
+
+                    # Full Details in Columns
+                    d1, d2, d3 = st.columns(3)
+                    with d1:
+                        st.markdown(f"**👤 Worker - العامل**")
+                        st.write(f"📞 {w.get('mobile', 'N/A')}")
+                        st.write(f"🆔 {w.get('id', 'N/A')}")
+                        st.caption(f"📅 {w.get('timestamp', 'N/A')}")
+                    with d2:
+                        st.markdown(f"**🏢 Employer - صاحب العمل**")
+                        st.info(w.get('employer', 'N/A'))
+                    with d3:
+                        st.markdown(f"**📦 Supplier - المورد**")
+                        st.warning(w.get('supplier', 'N/A'))
+                    
+                    if w.get('file_notes') or w.get('general_notes'):
+                        with st.expander("📝 Notes - ملاحظات"):
+                            if w.get('file_notes'): st.write(f"**Files:** {w['file_notes']}")
+                            if w.get('general_notes'): st.write(f"**General:** {w['general_notes']}")
 
 # 11. Main Entry
 if not st.session_state.user:
