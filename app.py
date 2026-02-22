@@ -163,7 +163,7 @@ def get_css():
     return """
     <style>
         /* Modern 2026 Luxury Executive Design System */
-        @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700&family=Inter:wght@300;400;500;600;700&family=Cinzel:wght@500;700&family=Alex+Brush&family=Cairo:wght@400;600;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700&family=Inter:wght@300;400;500;600;700&family=Cinzel:wght@500;700&family=Alex+Brush&family=Cairo:wght@400;600;700&family=My+Soul&display=swap');
         
         :root {
             --luxury-gold: #D4AF37;
@@ -205,17 +205,23 @@ def get_css():
 
         /* 3) Luxury Typography & Large Title */
         .luxury-main-title {
-            font-family: 'Cinzel', 'Cairo', serif !important;
-            font-size: 2.2rem !important; /* Smaller size for better balance */
+            font-family: 'Fv Free soul', 'My Soul', 'Cairo', sans-serif !important;
+            font-size: 20px !important; /* Specific size requested by user */
             font-weight: 700 !important;
             text-align: center !important;
             background: linear-gradient(to bottom, #FFFFFF 20%, #D4AF37 100%) !important;
             -webkit-background-clip: text !important;
             -webkit-text-fill-color: transparent !important;
             text-shadow: 0 4px 15px rgba(212, 175, 55, 0.4) !important;
-            margin: 0 !important;
+            margin: -10px 0 5px 0 !important; /* Raised even higher */
             padding: 0 !important; 
-            letter-spacing: 2px !important;
+            letter-spacing: 1px !important;
+        }
+
+        .flag-icon {
+            font-size: 20px;
+            vertical-align: middle;
+            margin: 0 5px;
         }
 
         /* 4) Premium Form & Vertical Alignment */
@@ -831,8 +837,8 @@ def render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search", 
 # 11. Logic Functions
 def login_screen():
     lang = st.session_state.lang
-    # Define Bilingual Titles
-    title_text = "برنامج توريد العمالة الآسيوية" if lang == "ar" else "Recruitment of Asian Labor Program"
+    # Define Bilingual Titles with Flag Icons
+    title_text = 'برنامج توريد العمالة الفلبينية <span class="flag-icon">🇸🇦</span> <span class="flag-icon">🇵🇭</span>' if lang == "ar" else 'Philippines Recruitment Program <span class="flag-icon">🇸🇦</span> <span class="flag-icon">🇵🇭</span>'
     
     col1, col2, col3 = st.columns([1.5, 2.2, 1.5]) 
     with col2:
@@ -845,17 +851,22 @@ def login_screen():
             # 2. Horizontal Profile + Welcome Message Row
             ic1, ic2 = st.columns([1.2, 3]) # Adjust alignment for better proportion
             
-            with ic1: # The Branding Column (Image -> EN Name -> AR Name)
+            with ic1: # The Branding Column (Image -> EN/AR Name)
                 if os.path.exists(IMG_PATH):
                     b64 = get_base64_image(IMG_PATH)
                     st.markdown(f'<img src="data:image/jpeg;base64,{b64}" class="profile-img-circular">', unsafe_allow_html=True)
                 
-                st.markdown('<div style="margin-top: 15px;"></div>', unsafe_allow_html=True) # Professional spacing
-                st.markdown('<div class="signature-under-img">Alsaeed Alwazzan</div>', unsafe_allow_html=True)
-                st.markdown('<div class="signature-under-img" style="font-family:\'Tajawal\', sans-serif; font-size: 0.85rem; margin-top: 5px;">برمجة السعيد الوزان</div>', unsafe_allow_html=True)
+                st.markdown('<div style="margin-top: 10px;"></div>', unsafe_allow_html=True)
+                if lang == "ar":
+                    st.markdown('<div class="signature-under-img">Alsaeed Alwazzan</div>', unsafe_allow_html=True)
+                    st.markdown('<div class="signature-under-img" style="font-family:\'Cairo\', sans-serif; font-size: 0.8rem; margin-top: 2px;">برمجة السعيد الوزان</div>', unsafe_allow_html=True)
+                else:
+                    st.markdown('<div class="signature-under-img">Alsaeed Alwazzan</div>', unsafe_allow_html=True)
+                    st.markdown('<div class="signature-under-img" style="font-size: 0.75rem; color:#888;">Lead Programmer</div>', unsafe_allow_html=True)
 
             with ic2: # The Welcome text & Username Field
-                st.markdown(f"<h3 style='margin:15px 0 10px 0; font-size: 1.2rem; text-align:right; color:#D4AF37;'>{t('welcome_back', lang)}</h3>", unsafe_allow_html=True)
+                welcome_text = t('welcome_back', lang)
+                st.markdown(f"<h3 style='margin:5px 0 10px 0; font-family:\"Cairo\", sans-serif; font-size: 1.1rem; text-align:right; color:#D4AF37;'>{welcome_text}</h3>", unsafe_allow_html=True)
                 u = st.text_input(t("username", lang), label_visibility="collapsed", placeholder=t("username", lang))
 
             # 3. Password Field
