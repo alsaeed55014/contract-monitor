@@ -994,6 +994,7 @@ def dashboard():
             if st.button(t("refresh_data_btn", lang), key="force_refresh_db", use_container_width=True):
                 refresh_loader = show_loading_hourglass()
                 st.session_state.db.fetch_data(force=True)
+                st.session_state.db.fetch_customer_requests(force=True)
                 refresh_loader.empty()
                 st.success("تم تحديث البيانات من Google Sheets بنجاح!" if lang == 'ar' else "Data refreshed successfully!")
                 time.sleep(1)
