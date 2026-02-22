@@ -1515,6 +1515,23 @@ def render_order_processing_content():
             if all(kw in c_lower for kw in keywords): return c
         return None
     
+    # --- GLOBAL SORT: Newest Requests First ---
+    ts_sort_col = find_cust_col(["timestamp"]) or find_cust_col(["الطابع"]) or find_cust_col(["تاريخ"])
+    if not ts_sort_col and len(customers_df.columns) > 0:
+        if customers_df.columns[0] == "__sheet_row" and len(customers_df.columns) > 1:
+            ts_sort_col = customers_df.columns[1]
+        else:
+            ts_sort_col = customers_df.columns[0]
+            
+    if ts_sort_col:
+        try:
+            customers_df['__temp_sort'] = pd.to_datetime(customers_df[ts_sort_col], errors='coerce')
+            # Sort newest first
+            customers_df = customers_df.sort_values(by='__temp_sort', ascending=False)
+            customers_df = customers_df.drop(columns=['__temp_sort'])
+        except:
+            pass
+    
     c_company = find_cust_col(["company"]) or find_cust_col(["شركه"]) or find_cust_col(["مؤسس"])
     c_responsible = find_cust_col(["responsible"]) or find_cust_col(["مسؤول"])
     c_mobile = find_cust_col(["mobile"]) or find_cust_col(["موبيل"])
