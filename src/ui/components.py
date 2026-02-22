@@ -11,29 +11,50 @@ class LuxuryButton(tk.Button):
                          relief="flat", 
                          cursor="hand2",
                          width=width,
-                         activebackground=COLORS["text_main"],
+                         activebackground=COLORS["white"],
                          activeforeground=COLORS["black"],
                          bd=0, padx=20, pady=10)
         
         self.bind("<Enter>", self.on_enter)
         self.bind("<Leave>", self.on_leave)
         self.default_bg = bg
+        self.default_fg = fg
 
     def on_enter(self, e):
-        self.config(bg=COLORS["white"])
+        self.config(bg=COLORS["white"], fg=COLORS["black"])
 
     def on_leave(self, e):
-        self.config(bg=self.default_bg)
+        self.config(bg=self.default_bg, fg=self.default_fg)
 
 class ModernEntry(tk.Entry):
-    def __init__(self, master, show=None, justify='left'):
+    def __init__(self, master, show=None, justify='left', placeholder=""):
         super().__init__(master, show=show, justify=justify,
                          font=FONTS["body"],
-                         bg=COLORS["bg_secondary"],
+                         bg="#252525",
                          fg=COLORS["white"],
                          insertbackground=COLORS["accent"],
                          relief="flat",
-                         bd=5)
+                         highlightthickness=1,
+                         highlightbackground="#444",
+                         highlightcolor=COLORS["accent"],
+                         bd=0)
+        
+        self.placeholder = placeholder
+        if placeholder:
+             self.insert(0, placeholder)
+             self.config(fg=COLORS["text_dim"])
+             self.bind("<FocusIn>", self._clear_placeholder)
+             self.bind("<FocusOut>", self._add_placeholder)
+
+    def _clear_placeholder(self, e):
+        if self.get() == self.placeholder:
+            self.delete(0, tk.END)
+            self.config(fg=COLORS["white"])
+
+    def _add_placeholder(self, e):
+        if not self.get():
+            self.insert(0, self.placeholder)
+            self.config(fg=COLORS["text_dim"])
 
 class CVModal:
     def __init__(self, parent, cv_link, title="CV Preview"):
