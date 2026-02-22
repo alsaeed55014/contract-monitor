@@ -1230,7 +1230,7 @@ def dashboard():
             backdrop-filter:blur(16px);
             -webkit-backdrop-filter:blur(16px);
             display:flex; align-items:center; justify-content:center;
-            animation: wFadeIn 5.2s cubic-bezier(.4,0,.2,1) forwards;
+            animation: wFadeIn 3.2s cubic-bezier(.4,0,.2,1) forwards;
             pointer-events:all;
         }}
         #lux-welcome-card {{
@@ -1238,10 +1238,10 @@ def dashboard():
             border:1px solid rgba(212,175,55,0.22);
             border-radius:28px;
             padding:52px 68px;
-            max-width:520px; width:90%;
+            max-width:520px; width:90%; min-width: 290px;
             text-align:center;
             position:relative; overflow:hidden;
-            animation:wSlideUp 5.2s cubic-bezier(.4,0,.2,1) forwards;
+            animation:wSlideUp 3.2s cubic-bezier(.4,0,.2,1) forwards;
             box-shadow:0 40px 120px rgba(0,0,0,0.75), 0 0 60px rgba(212,175,55,0.06);
         }}
         #lux-welcome-card::before {{
@@ -1272,7 +1272,8 @@ def dashboard():
         .wc-sub {{
             font-family:'Cairo','Inter',sans-serif;
             font-size:14px; color:rgba(255,255,255,.45);
-            line-height:1.75; margin-bottom:28px;
+            line-height:1.75; margin-bottom:24px;
+            word-wrap: break-word; overflow-wrap: break-word;
         }}
         .wc-stars {{ display:flex; justify-content:center; gap:7px; }}
         .wc-star {{ color:#D4AF37; font-size:13px; }}
@@ -1299,19 +1300,14 @@ def dashboard():
         </div>
 
         <script>
-        // Auto-remove the overlay from the DOM after animation ends so it never blocks interactions
-        (function() {{
-            var overlay = document.getElementById('lux-welcome');
-            if (overlay) {{
-                setTimeout(function() {{
-                    if (overlay && overlay.parentNode) {{
-                        overlay.style.pointerEvents = 'none';
-                        overlay.style.display = 'none';
-                        overlay.parentNode.removeChild(overlay);
-                    }}
-                }}, 5300);
+        setTimeout(function() {{
+            var el = document.getElementById('lux-welcome');
+            if (el) {{
+                el.style.opacity = '0';
+                el.style.transition = 'opacity 0.6s ease';
+                setTimeout(function() {{ if (el.parentNode) el.parentNode.removeChild(el); }}, 600);
             }}
-        }})();
+        }}, 3000);
         </script>
         """, unsafe_allow_html=True)
 
