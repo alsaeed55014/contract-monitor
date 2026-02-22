@@ -610,15 +610,15 @@ def get_css():
             .banner-subtext { font-size: 0.7rem; }
             .banner-avatar { width: 45px; height: 45px; }
 
-            /* Fix Sidebar Appearance on Mobile */
+            /* Fix Sidebar Appearance on Mobile - Clean edge when closed */
             section[data-testid="stSidebar"] {
                 background-color: #080808 !important;
                 background-image: none !important;
-                z-index: 999999 !important;
-                box-shadow: 10px 0 30px rgba(0,0,0,0.8) !important;
+                z-index: 10 !important; /* Lower z-index to stay below splash but above content */
+                box-shadow: none !important; /* REMOVE shadow so it doesn't peek when closed */
             }
 
-            /* Streamlit Mobile Sidebar Container Fix */
+            /* Streamlit Mobile Sidebar User Content Fix */
             div[data-testid="stSidebarUserContent"] {
                 background-color: #080808 !important;
             }
