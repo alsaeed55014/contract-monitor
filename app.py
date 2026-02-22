@@ -1854,19 +1854,8 @@ def render_order_processing_content():
         display_name = f"{company_val} - {responsible_val}".strip(" -")
         if not display_name: display_name = f"طلب #{idx+1}" if lang == 'ar' else f"Request #{idx+1}"
         
-        # Checkbox to show/hide this specific request
-        is_visible = st.checkbox(
-            f"✅ {display_name}", 
-            value=(client_key not in st.session_state.op_hidden_clients),
-            key=f"op_vis_check_{idx}"
-        )
-        
-        if not is_visible:
-            st.session_state.op_hidden_clients.add(client_key)
-            st.divider()
+        if client_key in st.session_state.op_hidden_clients:
             continue
-        else:
-            st.session_state.op_hidden_clients.discard(client_key)
             
         # --- Single Customer Section ---
         with st.container():
@@ -1996,6 +1985,14 @@ def render_order_processing_content():
                 if (not city_list or build_worker_table(city_list, city_scores)[0].empty) and \
                    (not other_list or build_worker_table(other_list, other_scores)[0].empty):
                     st.info("تم إخفاء جميع العمال المطابقين لهذا الطلب.")
+
+            # --- Hide Request Button ---
+            col_h1, col_h2 = st.columns([1, 4])
+            with col_h1:
+                if st.button("🚫 " + ("إخفاء هذا الطلب" if lang == 'ar' else "Hide this request"), 
+                             key=f"hide_client_btn_{idx}"):
+                    st.session_state.op_hidden_clients.add(client_key)
+                    st.rerun()
 
             st.markdown("<div style='height: 40px;'></div>", unsafe_allow_html=True)
             st.divider()
