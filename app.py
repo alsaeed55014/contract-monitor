@@ -2384,6 +2384,17 @@ def render_bengali_supply_content():
 
     with tab3:
         st.markdown(f"### {t('search_manage_title', lang)}")
+        
+        # Debug info for the user
+        workers_all = bm.get_workers()
+        suppliers_all = bm.get_suppliers()
+        employers_all = bm.get_employers()
+        
+        col_stats1, col_stats2, col_stats3 = st.columns(3)
+        col_stats1.metric("👷 Workers - العمال", len(workers_all))
+        col_stats2.metric("📦 Suppliers - الموردين", len(suppliers_all))
+        col_stats3.metric("🏢 Employers - العملاء", len(employers_all))
+        
         search_q = st.text_input(t("search_manage_title", lang), placeholder=t("search_placeholder_bengali", lang), label_visibility="collapsed", key="bengali_search_q")
         
         def normalize_ar(text):
@@ -2392,9 +2403,10 @@ def render_bengali_supply_content():
             # Basic Arabic Normalization
             t = t.replace("أ", "ا").replace("إ", "ا").replace("آ", "ا")
             t = t.replace("ة", "ه").replace("ى", "ي")
+            t = t.replace("ئ", "ي").replace("ؤ", "و").replace("ء", "")
             return t
 
-        workers = bm.get_workers()
+        workers = workers_all
         if search_q:
             q = normalize_ar(search_q)
             workers = [w for w in workers if 
@@ -2404,7 +2416,10 @@ def render_bengali_supply_content():
                        q in normalize_ar(w.get("id", ""))]
         
         if not workers:
-            st.info(t("no_records_found", lang))
+            if not workers_all:
+                st.warning("⚠️ لا توجد سجلات مضافة حتى الآن. يرجى إضافة بيانات في القسم الأول والثاني.")
+            else:
+                st.info(t("no_records_found", lang))
         else:
             for w in sorted(workers, key=lambda x: x.get("timestamp", ""), reverse=True):
                 with st.container(border=True):
