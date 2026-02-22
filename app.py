@@ -153,6 +153,18 @@ class AuthManager:
             return True
         return False
 
+    def update_avatar(self, username, avatar_b64):
+        """Save a base64-encoded profile photo for the user."""
+        if username in self.users:
+            self.users[username]["avatar"] = avatar_b64
+            self.save_users()
+            return True
+        return False
+
+    def get_avatar(self, username):
+        """Get the base64-encoded profile photo for the user, or None."""
+        return self.users.get(username, {}).get("avatar", None)
+
 def get_base64_image(image_path):
     with open(image_path, "rb") as img_file:
         return base64.b64encode(img_file.read()).decode()
@@ -1001,183 +1013,157 @@ def dashboard():
     user = st.session_state.user
     lang = st.session_state.lang
     
-    # Welcome Message - Premium Luxury Overlay (2026 Style)
+    # Welcome Message - Premium Luxury Overlay (2026 Style, JS auto-remove)
     if st.session_state.get('show_welcome'):
-        # Selection based on UI language
         if lang == 'ar':
             f_name = user.get('first_name_ar', '')
             fa_name = user.get('father_name_ar', '')
             sub_text = "مرحباً بك في منظومة إدارة العقود"
-            btn_text = "ابدأ الآن"
         else:
             f_name = user.get('first_name_en', '')
             fa_name = user.get('father_name_en', '')
             sub_text = "Welcome to the Contract Management System"
-            btn_text = "Get Started"
-            
+
         full_name = f"{f_name} {fa_name}".strip()
         if not full_name: full_name = user.get('username', 'User')
-        
         greeting = "أهلاً،" if lang == 'ar' else "Hello,"
-        
+
+        # Get user avatar if exists
+        username_key = user.get('username', '')
+        avatar_b64 = st.session_state.auth.get_avatar(username_key)
+        if avatar_b64:
+            avatar_html = f'<img src="data:image/png;base64,{avatar_b64}" style="width:80px;height:80px;border-radius:50%;object-fit:cover;border:2px solid #D4AF37;" />'
+        else:
+            avatar_html = '<div style="width:80px;height:80px;border-radius:50%;background:linear-gradient(135deg,#D4AF37,#8B7520);display:flex;align-items:center;justify-content:center;font-size:36px;">👤</div>'
+
         st.markdown(f"""
         <style>
-        @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700&family=Inter:wght@300;400;600;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;700&family=Inter:wght@300;400;700&display=swap');
 
-        @keyframes welcomeFadeIn {{
-            0%   {{ opacity: 0; }}
-            10%  {{ opacity: 1; }}
-            80%  {{ opacity: 1; }}
-            100% {{ opacity: 0; }}
+        @keyframes wFadeIn {{
+            0%   {{ opacity:0; }}
+            12%  {{ opacity:1; }}
+            78%  {{ opacity:1; }}
+            100% {{ opacity:0; pointer-events:none; }}
         }}
-        @keyframes welcomeSlideUp {{
-            0%   {{ transform: translateY(40px) scale(0.96); opacity: 0; }}
-            15%  {{ transform: translateY(0px)  scale(1);    opacity: 1; }}
-            85%  {{ transform: translateY(0px)  scale(1);    opacity: 1; }}
-            100% {{ transform: translateY(-20px) scale(0.98); opacity: 0; }}
+        @keyframes wSlideUp {{
+            0%   {{ transform:translateY(40px) scale(0.95); opacity:0; }}
+            12%  {{ transform:translateY(0)    scale(1);    opacity:1; }}
+            78%  {{ transform:translateY(0)    scale(1);    opacity:1; }}
+            100% {{ transform:translateY(-16px) scale(0.97); opacity:0; }}
         }}
-        @keyframes shimmer {{
-            0%   {{ background-position: -400% center; }}
+        @keyframes wShimmer {{
+            0%   {{ background-position:-400% center; }}
             100% {{ background-position: 400% center; }}
         }}
-        @keyframes ringPulse {{
-            0%   {{ box-shadow: 0 0 0 0 rgba(212,175,55,0.5); }}
-            70%  {{ box-shadow: 0 0 0 22px rgba(212,175,55,0); }}
-            100% {{ box-shadow: 0 0 0 0 rgba(212,175,55,0); }}
+        @keyframes wRing {{
+            0%   {{ box-shadow:0 0 0 0 rgba(212,175,55,0.55); }}
+            70%  {{ box-shadow:0 0 0 22px rgba(212,175,55,0); }}
+            100% {{ box-shadow:0 0 0 0 rgba(212,175,55,0); }}
         }}
-        @keyframes starTwinkle {{
-            0%, 100% {{ opacity:0.3; transform:scale(0.8); }}
-            50%       {{ opacity:1;   transform:scale(1.2); }}
+        @keyframes wStar {{
+            0%,100% {{ opacity:.3; transform:scale(.8); }}
+            50%     {{ opacity:1;  transform:scale(1.2); }}
         }}
-        
-        #luxury-welcome-overlay {{
-            position: fixed;
-            inset: 0;
-            z-index: 999999999;
-            background: rgba(5, 8, 18, 0.88);
-            backdrop-filter: blur(14px);
-            -webkit-backdrop-filter: blur(14px);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            animation: welcomeFadeIn 5.5s ease forwards;
-            pointer-events: all;
+        @keyframes wLineScan {{
+            0%   {{ left:-100%; }}
+            100% {{ left: 100%; }}
         }}
-        
-        .welcome-card {{
-            background: linear-gradient(145deg, #0e1221, #0a0f1e, #101528);
-            border: 1px solid rgba(212,175,55,0.25);
-            border-radius: 28px;
-            padding: 56px 72px;
-            max-width: 560px;
-            width: 90%;
-            text-align: center;
-            position: relative;
-            overflow: hidden;
-            animation: welcomeSlideUp 5.5s ease forwards;
-            box-shadow: 0 40px 100px rgba(0,0,0,0.7), 0 0 80px rgba(212,175,55,0.07);
+
+        #lux-welcome {{
+            position: fixed; inset:0;
+            z-index:2147483647;
+            background:rgba(4,7,16,0.87);
+            backdrop-filter:blur(16px);
+            -webkit-backdrop-filter:blur(16px);
+            display:flex; align-items:center; justify-content:center;
+            animation: wFadeIn 5.2s cubic-bezier(.4,0,.2,1) forwards;
+            pointer-events:all;
         }}
-        
-        .welcome-card::before {{
-            content: '';
-            position: absolute;
-            top: 0; left: -100%;
-            width: 300%;
-            height: 1px;
-            background: linear-gradient(90deg, transparent, rgba(212,175,55,0.6), transparent);
-            animation: shimmer 3s linear infinite;
+        #lux-welcome-card {{
+            background:linear-gradient(160deg,#0d1220,#090e1d,#0e1428);
+            border:1px solid rgba(212,175,55,0.22);
+            border-radius:28px;
+            padding:52px 68px;
+            max-width:520px; width:90%;
+            text-align:center;
+            position:relative; overflow:hidden;
+            animation:wSlideUp 5.2s cubic-bezier(.4,0,.2,1) forwards;
+            box-shadow:0 40px 120px rgba(0,0,0,0.75), 0 0 60px rgba(212,175,55,0.06);
         }}
-        
-        .welcome-avatar {{
-            width: 80px;
-            height: 80px;
-            border-radius: 50%;
-            background: linear-gradient(135deg, #D4AF37, #8B7520, #D4AF37);
-            margin: 0 auto 24px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 36px;
-            animation: ringPulse 2s infinite;
+        #lux-welcome-card::before {{
+            content:'';
+            position:absolute; top:0; left:-100%; height:1px; width:60%;
+            background:linear-gradient(90deg,transparent,rgba(212,175,55,.7),transparent);
+            animation:wLineScan 2.4s linear infinite;
         }}
-        
-        .welcome-greeting {{
-            font-family: 'Cairo', 'Inter', sans-serif;
-            font-size: 15px;
-            font-weight: 400;
-            color: rgba(212,175,55,0.7);
-            letter-spacing: 3px;
-            text-transform: uppercase;
-            margin-bottom: 8px;
+        .wc-avatar {{ margin:0 auto 22px; animation:wRing 2s ease-in-out infinite; width:fit-content; }}
+        .wc-greet {{
+            font-family:'Cairo','Inter',sans-serif;
+            font-size:13px; letter-spacing:4px; text-transform:uppercase;
+            color:rgba(212,175,55,.65); margin-bottom:6px;
         }}
-        
-        .welcome-name {{
-            font-family: 'Cairo', 'Inter', sans-serif;
-            font-size: 38px;
-            font-weight: 700;
-            background: linear-gradient(135deg, #fff 0%, #D4AF37 50%, #fff 100%);
-            background-size: 200% auto;
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-            animation: shimmer 3s linear infinite;
-            margin-bottom: 14px;
-            line-height: 1.2;
+        .wc-name {{
+            font-family:'Cairo','Inter',sans-serif;
+            font-size:36px; font-weight:700;
+            background:linear-gradient(135deg,#fff 0%,#D4AF37 50%,#fff 100%);
+            background-size:200% auto;
+            -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text;
+            animation:wShimmer 3s linear infinite;
+            line-height:1.25; margin-bottom:12px;
         }}
-        
-        .welcome-divider {{
-            width: 60px;
-            height: 2px;
-            background: linear-gradient(90deg, transparent, #D4AF37, transparent);
-            margin: 20px auto;
-            border-radius: 2px;
+        .wc-div {{
+            width:50px; height:2px; margin:18px auto;
+            background:linear-gradient(90deg,transparent,#D4AF37,transparent); border-radius:2px;
         }}
-        
-        .welcome-sub {{
-            font-family: 'Cairo', 'Inter', sans-serif;
-            font-size: 15px;
-            color: rgba(255,255,255,0.5);
-            letter-spacing: 0.5px;
-            margin-bottom: 32px;
-            line-height: 1.7;
+        .wc-sub {{
+            font-family:'Cairo','Inter',sans-serif;
+            font-size:14px; color:rgba(255,255,255,.45);
+            line-height:1.75; margin-bottom:28px;
         }}
-        
-        .welcome-stars {{
-            display: flex;
-            justify-content: center;
-            gap: 6px;
-            margin-top: 18px;
-        }}
-        .welcome-star {{
-            color: #D4AF37;
-            font-size: 14px;
-        }}
-        .welcome-star:nth-child(1) {{ animation: starTwinkle 1.5s ease infinite 0.0s; }}
-        .welcome-star:nth-child(2) {{ animation: starTwinkle 1.5s ease infinite 0.3s; }}
-        .welcome-star:nth-child(3) {{ animation: starTwinkle 1.5s ease infinite 0.6s; }}
-        .welcome-star:nth-child(4) {{ animation: starTwinkle 1.5s ease infinite 0.9s; }}
-        .welcome-star:nth-child(5) {{ animation: starTwinkle 1.5s ease infinite 1.2s; }}
+        .wc-stars {{ display:flex; justify-content:center; gap:7px; }}
+        .wc-star {{ color:#D4AF37; font-size:13px; }}
+        .wc-star:nth-child(1){{animation:wStar 1.6s ease infinite .0s;}}
+        .wc-star:nth-child(2){{animation:wStar 1.6s ease infinite .3s;}}
+        .wc-star:nth-child(3){{animation:wStar 1.6s ease infinite .6s;}}
+        .wc-star:nth-child(4){{animation:wStar 1.6s ease infinite .9s;}}
+        .wc-star:nth-child(5){{animation:wStar 1.6s ease infinite 1.2s;}}
         </style>
 
-        <div id="luxury-welcome-overlay">
-            <div class="welcome-card">
-                <div class="welcome-avatar">👤</div>
-                <div class="welcome-greeting">{greeting}</div>
-                <div class="welcome-name">{full_name}</div>
-                <div class="welcome-divider"></div>
-                <div class="welcome-sub">{sub_text}</div>
-                <div class="welcome-stars">
-                    <span class="welcome-star">★</span>
-                    <span class="welcome-star">★</span>
-                    <span class="welcome-star">★</span>
-                    <span class="welcome-star">★</span>
-                    <span class="welcome-star">★</span>
-                </div>
+        <div id="lux-welcome">
+          <div id="lux-welcome-card">
+            <div class="wc-avatar">{avatar_html}</div>
+            <div class="wc-greet">{greeting}</div>
+            <div class="wc-name">{full_name}</div>
+            <div class="wc-div"></div>
+            <div class="wc-sub">{sub_text}</div>
+            <div class="wc-stars">
+              <span class="wc-star">★</span><span class="wc-star">★</span>
+              <span class="wc-star">★</span><span class="wc-star">★</span>
+              <span class="wc-star">★</span>
             </div>
+          </div>
         </div>
+
+        <script>
+        // Auto-remove the overlay from the DOM after animation ends so it never blocks interactions
+        (function() {{
+            var overlay = document.getElementById('lux-welcome');
+            if (overlay) {{
+                setTimeout(function() {{
+                    if (overlay && overlay.parentNode) {{
+                        overlay.style.pointerEvents = 'none';
+                        overlay.style.display = 'none';
+                        overlay.parentNode.removeChild(overlay);
+                    }}
+                }}, 5300);
+            }}
+        }})();
+        </script>
         """, unsafe_allow_html=True)
-        
+
         del st.session_state.show_welcome
+
 
     with st.sidebar:
         # Use columns to force horizontal centering for the image block
@@ -1893,7 +1879,33 @@ def render_permissions_content():
                 st.session_state.permissions_success = t("update_success", lang)
                 st.rerun()
 
-        # Delete User Section
+        # Profile Photo Upload Section
+        st.markdown("---")
+        st.markdown(f"**🖼️ {'صورة الملف الشخصي' if lang == 'ar' else 'Profile Photo'}**")
+        
+        # Show current avatar
+        current_avatar = st.session_state.auth.get_avatar(selected_user)
+        av_col1, av_col2 = st.columns([1, 3])
+        with av_col1:
+            if current_avatar:
+                st.markdown(f'<img src="data:image/png;base64,{current_avatar}" style="width:80px;height:80px;border-radius:50%;object-fit:cover;border:2px solid #D4AF37;" />', unsafe_allow_html=True)
+            else:
+                st.markdown('<div style="width:80px;height:80px;border-radius:50%;background:linear-gradient(135deg,#D4AF37,#8B7520);display:flex;align-items:center;justify-content:center;font-size:36px;">👤</div>', unsafe_allow_html=True)
+        with av_col2:
+            uploaded_photo = st.file_uploader(
+                "رفع صورة (PNG/JPG)" if lang == 'ar' else "Upload Photo (PNG/JPG)", 
+                type=["png","jpg","jpeg"],
+                key=f"avatar_upload_{selected_user}",
+                label_visibility="collapsed"
+            )
+            if uploaded_photo:
+                avatar_bytes = uploaded_photo.read()
+                avatar_b64 = base64.b64encode(avatar_bytes).decode()
+                if st.button("💾 " + ("حفظ الصورة" if lang == 'ar' else "Save Photo"), key="save_avatar_btn"):
+                    st.session_state.auth.update_avatar(selected_user, avatar_b64)
+                    show_toast("✅ " + ("تم حفظ الصورة بنجاح" if lang == 'ar' else "Photo saved successfully!"), "success")
+                    st.rerun()
+
         if selected_user != "admin":
             st.markdown("""
                 <style>
