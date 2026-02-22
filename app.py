@@ -492,7 +492,7 @@ def toggle_lang():
 
 
 # 11. CV Detail Panel Helper
-def render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search"):
+def render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search", worker_uid=None):
     """
     Standalone helper to render the professional CV profile card, 
     preview (iframe), and translation logic.
@@ -618,32 +618,45 @@ def render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search"):
         else:
             st.warning("⚠️ ميزة الحذف الذكي تتطلب تحديث ملف `src/data/db_client.py`. يرجى رفعه لتجنب الأخطاء.")
 
-    if sheet_row:
-        with st.popover(f"🗑️ {t('delete_btn', lang)}", use_container_width=True):
-            st.warning(t("confirm_delete_msg", lang))
-            if st.button(t("confirm_btn", lang), type="primary", use_container_width=True, key=f"del_confirm_{key_prefix}_{selected_idx}"):
-                with st.spinner("⏳ جارٍ الحذف النهائي..."):
-                    success = st.session_state.db.delete_row(sheet_row)
-                    if success == True:
-                        st.success(t("delete_success", lang))
-                        time.sleep(1)
-                        if f"last_scroll_{key_prefix}" in st.session_state: del st.session_state[f"last_scroll_{key_prefix}"]
-                        st.rerun()
-                    else:
-                        st.error(f"{t('delete_error', lang)}: {success}")
+    is_op_mode = str(key_prefix).startswith("op_")
+    
+    if is_op_mode:
+        # For Order Processing: Replace Delete with Hide
+        if worker_uid:
+            if st.button("🚫 " + ("إخفاء هذا العامل" if lang == 'ar' else "Hide this worker"), 
+                         use_container_width=True, key=f"hide_worker_{key_prefix}_{selected_idx}"):
+                st.session_state.op_hidden_workers.add(worker_uid)
+                st.rerun()
+        else:
+            st.info("⚠️ الحذف غير متاح في هذا النموذج.")
     else:
-        # Final Error UI with reset options
-        st.error(f"⚠️ {t('delete_error', lang)} (ID Missing)")
-        c1, c2 = st.columns(2)
-        with c1:
-            if st.button(t("fix_ids", lang), key=f"fix_id_{key_prefix}_{selected_idx}", use_container_width=True):
-                st.session_state.db.fetch_data(force=True); st.rerun()
-        with c2:
-            if st.button(t("deep_reset", lang), key=f"reset_all_{key_prefix}_{selected_idx}", use_container_width=True):
-                # Clear all tab data and cache
-                for k in list(st.session_state.keys()):
-                    if k.startswith("dash_table_") or k.startswith("last_scroll_"): del st.session_state[k]
-                st.session_state.db.fetch_data(force=True); st.rerun()
+        # Original Deletion Logic for Search/Contract Board
+        if sheet_row:
+            with st.popover(f"🗑️ {t('delete_btn', lang)}", use_container_width=True):
+                st.warning(t("confirm_delete_msg", lang))
+                if st.button(t("confirm_btn", lang), type="primary", use_container_width=True, key=f"del_confirm_{key_prefix}_{selected_idx}"):
+                    with st.spinner("⏳ جارٍ الحذف النهائي..."):
+                        success = st.session_state.db.delete_row(sheet_row)
+                        if success == True:
+                            st.success(t("delete_success", lang))
+                            time.sleep(1)
+                            if f"last_scroll_{key_prefix}" in st.session_state: del st.session_state[f"last_scroll_{key_prefix}"]
+                            st.rerun()
+                        else:
+                            st.error(f"{t('delete_error', lang)}: {success}")
+        else:
+            # Final Error UI with reset options
+            st.error(f"⚠️ {t('delete_error', lang)} (ID Missing)")
+            c1, c2 = st.columns(2)
+            with c1:
+                if st.button(t("fix_ids", lang), key=f"fix_id_{key_prefix}_{selected_idx}", use_container_width=True):
+                    st.session_state.db.fetch_data(force=True); st.rerun()
+            with c2:
+                if st.button(t("deep_reset", lang), key=f"reset_all_{key_prefix}_{selected_idx}", use_container_width=True):
+                    # Clear all tab data and cache
+                    for k in list(st.session_state.keys()):
+                        if k.startswith("dash_table_") or k.startswith("last_scroll_"): del st.session_state[k]
+                    st.session_state.db.fetch_data(force=True); st.rerun()
 
     trans_key = f"trans_{key_prefix}_{selected_idx}"
     if trans_key in st.session_state:
@@ -1942,13 +1955,7 @@ def render_order_processing_content():
                             worker_uid = city_df.iloc[sel_row_idx]["__uid"]
                             
                             # Detail Panel
-                            render_cv_detail_panel(worker_row, sel_row_idx, lang, key_prefix=f"op_city_{idx}")
-                            
-                            # Hide Button
-                            if st.button("🚫 " + ("إخفاء هذا العامل" if lang == 'ar' else "Hide this worker"), 
-                                         key=f"hide_city_{idx}_{worker_uid}"):
-                                st.session_state.op_hidden_workers.add(worker_uid)
-                                st.rerun()
+                            render_cv_detail_panel(worker_row, sel_row_idx, lang, key_prefix=f"op_city_{idx}", worker_uid=worker_uid)
 
                 # Other Cities Table
                 if other_list:
@@ -1974,13 +1981,7 @@ def render_order_processing_content():
                             worker_uid = other_df.iloc[sel_row_idx]["__uid"]
                             
                             # Detail Panel
-                            render_cv_detail_panel(worker_row, sel_row_idx, lang, key_prefix=f"op_other_{idx}")
-                            
-                            # Hide Button
-                            if st.button("🚫 " + ("إخفاء هذا العامل" if lang == 'ar' else "Hide this worker"), 
-                                         key=f"hide_other_{idx}_{worker_uid}"):
-                                st.session_state.op_hidden_workers.add(worker_uid)
-                                st.rerun()
+                            render_cv_detail_panel(worker_row, sel_row_idx, lang, key_prefix=f"op_other_{idx}", worker_uid=worker_uid)
                 
                 if (not city_list or build_worker_table(city_list, city_scores)[0].empty) and \
                    (not other_list or build_worker_table(other_list, other_scores)[0].empty):
