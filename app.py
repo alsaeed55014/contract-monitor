@@ -14,6 +14,8 @@ ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
 if ROOT_DIR not in sys.path:
     sys.path.insert(0, ROOT_DIR)
 
+from src.core.contracts import ContractManager
+
 # 2. Local Auth Class to prevent Import/Sync Errors
 class AuthManager:
     def __init__(self, users_file_path):
@@ -1532,6 +1534,7 @@ def render_order_processing_content():
     w_phone_col = next((c for c in workers_df.columns if "phone" in c.lower()), None)
     w_age_col = next((c for c in workers_df.columns if "age" in c.lower()), None)
     w_timestamp_col = next((c for c in workers_df.columns if any(kw in str(c).lower() for kw in ["timestamp", "طابع", "تاريخ التسجيل"])), None)
+    w_contract_end_col = next((c for c in workers_df.columns if any(kw in str(c).lower() for kw in ["contract end", "انتهاء العقد"])), None)
 
     import re
     
@@ -1715,7 +1718,28 @@ def render_order_processing_content():
                 
             row = {}
             if w_timestamp_col: row[t('registration_date', lang)] = str(worker.get(w_timestamp_col, ""))
-            row[t('match_score', lang)] = f"{score}%"
+            
+            # --- Replacement: Match Score -> Contract Status ---
+            if w_contract_end_col:
+                s = ContractManager.calculate_status(worker.get(w_contract_end_col))
+                gs = s['status']
+                ds = s.get('days', 0)
+                if ds is None: ds = 9999
+                
+                status_text = ""
+                if lang == 'ar':
+                    if gs == 'expired':
+                        status_text = f"❌ منتهي (منذ {abs(ds)} يوم)"
+                    elif gs in ['urgent', 'warning']:
+                        status_text = f"⚠️ عاجل (متبقى {ds} يوم)"
+                    else:
+                        status_text = f"✅ ساري (متبقى {ds} يوم)"
+                else:
+                    status_text = f"{s['label_en']} ({abs(ds)} Days)"
+                
+                status_key = 'حالة العقد' if lang == 'ar' else 'Contract Status'
+                row[status_key] = status_text
+            
             if w_name_col: row[t('worker_name', lang)] = w_name
             if w_nationality_col: row[t('worker_nationality', lang)] = str(worker.get(w_nationality_col, ""))
             if w_gender_col: row[t('worker_gender', lang)] = str(worker.get(w_gender_col, ""))
