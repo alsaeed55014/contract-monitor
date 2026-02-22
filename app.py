@@ -1017,9 +1017,9 @@ def login_screen():
     
     # Define Bilingual Titles with Flag Icons
     if lang == "ar":
-        title_text = f'برنامج توريد العمالة الفلبينية {sa_icon} {ph_icon}'
+        title_text = f'برنامج توريد العمالة الفلبينية {ph_icon} {sa_icon}'
     else:
-        title_text = f'Philippines Recruitment Program {sa_icon} {ph_icon}'
+        title_text = f'Philippines Recruitment Program {ph_icon} {sa_icon}'
     
     col1, col2, col3 = st.columns([1.5, 2.2, 1.5]) 
     with col2:
