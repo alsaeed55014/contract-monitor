@@ -590,6 +590,47 @@ def get_css():
             color: rgba(212, 175, 55, 0.8);
             margin-top: -5px;
         }
+
+        /* 11) Mobile Responsive Overrides */
+        @media (max-width: 768px) {
+            .main .block-container {
+                padding: 1rem !important;
+                padding-top: 5rem !important; /* Space for the floating banner on mobile */
+            }
+
+            .persistent-top-banner {
+                margin: 0 !important;
+                padding: 0.8rem 1rem !important;
+                position: fixed !important; /* Fixed at top for mobile */
+                width: 100%;
+                left: 0;
+            }
+
+            .banner-welcome-msg { font-size: 0.95rem; }
+            .banner-subtext { font-size: 0.7rem; }
+            .banner-avatar { width: 45px; height: 45px; }
+
+            /* Fix Sidebar Transparency on Mobile */
+            section[data-testid="stSidebar"] {
+                background-color: #080808 !important;
+                background-image: none !important;
+                opacity: 1 !important;
+                visibility: visible !important;
+                z-index: 999999 !important;
+            }
+
+            /* Streamlit Mobile Sidebar Container Fix */
+            div[data-testid="stSidebarUserContent"] {
+                background-color: #080808 !important;
+            }
+
+            /* Ensure hamburger menu is above all */
+            button[kind="header"] {
+                z-index: 1000001 !important;
+                background-color: rgba(212, 175, 55, 0.1) !important;
+                border-radius: 50% !important;
+            }
+        }
     </style>
     """
 
