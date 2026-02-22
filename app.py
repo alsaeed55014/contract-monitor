@@ -172,47 +172,74 @@ def get_css():
 
         /* 1) Global Aesthetics & Scrollbar */
         .stApp {
-            background: radial-gradient(circle at top right, #1A1A1A, #050505);
+            background: radial-gradient(circle at top right, #001F3F, #000000) !important;
             color: var(--text-main);
             font-family: 'Inter', 'Tajawal', sans-serif;
+            direction: rtl; /* Force RTL */
         }
 
         /* Custom Premium Scrollbar */
         ::-webkit-scrollbar { width: 8px; height: 8px; }
-        ::-webkit-scrollbar-track { background: #050505; }
+        ::-webkit-scrollbar-track { background: #000; }
         ::-webkit-scrollbar-thumb { 
-            background: linear-gradient(180deg, #333, #D4AF37); 
+            background: linear-gradient(180deg, #111, #D4AF37); 
             border-radius: 10px; 
         }
 
-        /* 2) Layout & Spacing */
+        /* 2) Layout & Spacing - CRITICAL FIX FOR TOP SPACE */
         .main .block-container {
-            padding-top: 3rem !important;
-            padding-bottom: 5rem !important;
-            max-width: 1400px !important;
+            padding-top: 0rem !important;
+            padding-bottom: 2rem !important;
+            max-width: 1200px !important;
         }
 
-        /* 3) Luxury Typography */
-        h1, h2, h3 {
+        header[data-testid="stHeader"] {
+            background: transparent !important;
+            height: 0 !important;
+        }
+
+        /* 3) Luxury Typography & Large Title */
+        .luxury-main-title {
             font-family: 'Cinzel', serif !important;
-            letter-spacing: 2px !important;
-            text-transform: uppercase !important;
-            background: linear-gradient(to bottom, #FFFFFF 0%, #D4AF37 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            text-shadow: 2px 4px 10px rgba(0,0,0,0.4);
-            margin-bottom: 1.5rem !important;
+            font-size: 3.5rem !important;
+            font-weight: 700 !important;
+            text-align: center !important;
+            background: linear-gradient(to bottom, #FFFFFF 20%, #D4AF37 100%) !important;
+            -webkit-background-clip: text !important;
+            -webkit-text-fill-color: transparent !important;
+            text-shadow: 0 4px 15px rgba(212, 175, 55, 0.4) !important;
+            margin: 0 !important;
+            padding: 10px 0 !important;
+            letter-spacing: 3px !important;
         }
 
-        /* 4) Premium Form & Input Styling (The 2026 Look) */
+        /* 4) Premium Form & Vertical Alignment */
         div[data-testid="stForm"] {
-            background: var(--glass-bg) !important;
-            backdrop-filter: blur(20px) !important;
-            border: 1px solid var(--border-glow) !important;
+            background: rgba(10, 10, 10, 0.5) !important;
+            backdrop-filter: blur(15px) !important;
+            border: 1px solid rgba(212, 175, 55, 0.2) !important;
             border-radius: 20px !important;
-            padding: 1.5rem !important; /* Reduced padding */
-            box-shadow: 0 15px 35px -5px rgba(0, 0, 0, 0.7) !important;
-            transition: transform 0.3s ease;
+            padding: 1.5rem !important;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.8) !important;
+        }
+
+        /* Profile Image Alignment Wrapper */
+        .profile-row-container {
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            gap: 15px;
+            width: 100%;
+            margin-bottom: 10px;
+        }
+
+        .profile-img-circular {
+            width: 70px;
+            height: 70px;
+            border-radius: 50%;
+            border: 2px solid var(--luxury-gold);
+            box-shadow: 0 0 15px rgba(212, 175, 55, 0.3);
+            object-fit: cover;
         }
 
         /* Generic Inputs Styling */
@@ -335,9 +362,18 @@ def get_css():
             letter-spacing: 1px !important;
         }
 
+        /* Signature Under Image */
+        .signature-under-img {
+            font-family: 'Alex Brush', cursive !important;
+            color: #AAA !important;
+            font-size: 0.9rem !important;
+            margin-top: -5px;
+            text-align: center;
+        }
+
         /* Login Screen Special Centering */
         .login-screen-wrapper {
-            margin-top: 2vh !important; /* Significantly reduced margin */
+            margin-top: 0vh !important;
             text-align: center;
         }
         
@@ -789,30 +825,31 @@ def render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search", 
 # 11. Logic Functions
 def login_screen():
     lang = st.session_state.lang
-    col1, col2, col3 = st.columns([1, 2, 1])
+    col1, col2, col3 = st.columns([1, 2.5, 1])
     with col2:
+        # 1. Giant Luxury Title at Absolute Top
+        st.markdown('<div class="luxury-main-title">نظام مراقبة العقود</div>', unsafe_allow_html=True)
+        
         st.markdown('<div class="login-screen-wrapper">', unsafe_allow_html=True)
         
-        # 1. Signature at the Top
-        st.markdown('<div class="programmer-signature-neon" style="margin-bottom: 10px;">By: Alsaeed Alwazzan</div>', unsafe_allow_html=True)
-
-        # 2. Image (Compact)
-        if os.path.exists(IMG_PATH):
-            st.image(IMG_PATH, width=65) # Smaller avatar
-        
-        # 3. Welcome Message (Compact Luxury)
-        st.markdown(f"""
-            <div style='text-align:center; margin: 10px 0;'>
-                <h2 style='margin:0; padding:0; font-size: 1.6rem; color: #D4AF37;'>{t('welcome_back', lang)}</h2>
-                <p style='color:#777; font-size: 0.8rem; letter-spacing:1px; margin-top:5px;'>{t('system_title', lang)}</p>
-            </div>
-            """, unsafe_allow_html=True)
-        
-        # 3. Form (Styled via CSS in get_css)
         with st.form("login"):
-            u = st.text_input(t("username", lang), label_visibility="collapsed", placeholder=t("username", lang))
+            # 2. Horizontal Profile + Username Row
+            ic1, ic2 = st.columns([1, 3])
+            
+            with ic1: # The Profile Image Container (Right side in Arabic)
+                if os.path.exists(IMG_PATH):
+                    st.markdown(f'<img src="data:image/jpeg;base64,{get_base64_image(IMG_PATH)}" class="profile-img-circular">', unsafe_allow_html=True)
+                st.markdown('<div class="signature-under-img">By: Alsaeed Alwazzan</div>', unsafe_allow_html=True)
+
+            with ic2: # The Username Field
+                st.markdown("<div style='margin-bottom: 15px;'></div>", unsafe_allow_html=True) # Small gap
+                st.markdown(f"<h3 style='margin:0; font-size: 1.1rem; text-align:right; color:#D4AF37;'>{t('welcome_back', lang)}</h3>", unsafe_allow_html=True)
+                u = st.text_input(t("username", lang), label_visibility="collapsed", placeholder=t("username", lang))
+
+            # 3. Password Field
             p = st.text_input(t("password", lang), type="password", label_visibility="collapsed", placeholder=t("password", lang))
             
+            # 4. Login Button (Full Width Luxury)
             if st.form_submit_button(t("login_btn", lang), use_container_width=True):
                 login_loader = show_loading_hourglass()
                 p_norm = p.strip()
@@ -825,17 +862,8 @@ def login_screen():
                     st.rerun()
                 else:
                     st.error(t("invalid_creds", lang))
-                    if u.lower() == "admin" and p_norm == "admin123":
-                        st.info("💡 Try using your new password instead of the old default.")
 
-            # Language Toggle (Compact Link style instead of big button inside form)
-            st.markdown(f"""
-                <div style='text-align: center; margin-top: 15px;'>
-                    <p style='color: #555; font-size: 0.8rem;'>
-                        {"Switch Language" if lang == "ar" else "التبديل للعربية"}
-                    </p>
-                </div>
-                """, unsafe_allow_html=True)
+            # 5. Language Toggle (Underneath)
             if st.form_submit_button("En" if lang == "ar" else "عربي", use_container_width=True):
                 toggle_lang()
                 st.rerun()
