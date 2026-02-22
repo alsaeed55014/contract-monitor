@@ -1769,7 +1769,11 @@ def render_order_processing_content():
     # --- Timestamp column lookup ---
     c_timestamp = find_cust_col(["timestamp"]) or find_cust_col(["الطابع"]) or find_cust_col(["تاريخ"])
     if not c_timestamp and len(customers_df.columns) > 0:
-        c_timestamp = customers_df.columns[0]
+        # Avoid using __sheet_row as the timestamp
+        if customers_df.columns[0] == "__sheet_row" and len(customers_df.columns) > 1:
+            c_timestamp = customers_df.columns[1]
+        else:
+            c_timestamp = customers_df.columns[0]
 
     # --- Container for all requests ---
     st.markdown("### 📋 " + t('customer_requests', lang))
