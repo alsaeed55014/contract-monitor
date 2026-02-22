@@ -6,6 +6,7 @@ import json
 import hashlib
 import time
 from datetime import datetime, timedelta
+import base64
 
 # 1. Ensure project root is in path (Robust Injection)
 import os
@@ -153,6 +154,10 @@ class AuthManager:
             self.save_users()
             return True
         return False
+
+def get_base64_image(image_path):
+    with open(image_path, "rb") as img_file:
+        return base64.b64encode(img_file.read()).decode()
 
 def get_css():
     return """
@@ -825,7 +830,7 @@ def render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search", 
 # 11. Logic Functions
 def login_screen():
     lang = st.session_state.lang
-    col1, col2, col3 = st.columns([1, 2.5, 1])
+    col1, col2, col3 = st.columns([1, 2.8, 1]) # Slightly wider for horizontal layout
     with col2:
         # 1. Giant Luxury Title at Absolute Top
         st.markdown('<div class="luxury-main-title">نظام مراقبة العقود</div>', unsafe_allow_html=True)
@@ -833,24 +838,27 @@ def login_screen():
         st.markdown('<div class="login-screen-wrapper">', unsafe_allow_html=True)
         
         with st.form("login"):
-            # 2. Horizontal Profile + Username Row
+            # 2. Horizontal Profile + Welcome Message Row
             ic1, ic2 = st.columns([1, 3])
             
             with ic1: # The Profile Image Container (Right side in Arabic)
                 if os.path.exists(IMG_PATH):
-                    st.markdown(f'<img src="data:image/jpeg;base64,{get_base64_image(IMG_PATH)}" class="profile-img-circular">', unsafe_allow_html=True)
+                    b64 = get_base64_image(IMG_PATH)
+                    st.markdown(f'<img src="data:image/jpeg;base64,{b64}" class="profile-img-circular">', unsafe_allow_html=True)
                 st.markdown('<div class="signature-under-img">By: Alsaeed Alwazzan</div>', unsafe_allow_html=True)
 
-            with ic2: # The Username Field
-                st.markdown("<div style='margin-bottom: 15px;'></div>", unsafe_allow_html=True) # Small gap
-                st.markdown(f"<h3 style='margin:0; font-size: 1.1rem; text-align:right; color:#D4AF37;'>{t('welcome_back', lang)}</h3>", unsafe_allow_html=True)
+            with ic2: # The Welcome text & Username Field
+                st.markdown(f"<h3 style='margin:10px 0 5px 0; font-size: 1.3rem; text-align:right; color:#D4AF37;'>{t('welcome_back', lang)}</h3>", unsafe_allow_html=True)
                 u = st.text_input(t("username", lang), label_visibility="collapsed", placeholder=t("username", lang))
 
             # 3. Password Field
             p = st.text_input(t("password", lang), type="password", label_visibility="collapsed", placeholder=t("password", lang))
             
-            # 4. Login Button (Full Width Luxury)
-            if st.form_submit_button(t("login_btn", lang), use_container_width=True):
+            # 4. Buttons (Login and Language)
+            submit = st.form_submit_button(t("login_btn", lang), use_container_width=True)
+            lang_toggle = st.form_submit_button("En" if lang == "ar" else "عربي", use_container_width=True)
+
+            if submit:
                 login_loader = show_loading_hourglass()
                 p_norm = p.strip()
                 user = st.session_state.auth.authenticate(u, p_norm)
@@ -863,8 +871,7 @@ def login_screen():
                 else:
                     st.error(t("invalid_creds", lang))
 
-            # 5. Language Toggle (Underneath)
-            if st.form_submit_button("En" if lang == "ar" else "عربي", use_container_width=True):
+            if lang_toggle:
                 toggle_lang()
                 st.rerun()
         
