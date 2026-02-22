@@ -571,6 +571,59 @@ def clean_date_display(df):
             
     return df
 
+# 2.4 Global Toast / Overlay Notification Helper
+def show_toast(message, typ="success", duration=4):
+    """
+    Shows a floating, fixed-position toast notification overlay.
+    typ: 'success', 'error', 'info', 'warning'
+    """
+    colors = {
+        "success": {"bg": "rgba(0,120,60,0.92)", "border": "#00e676", "icon": "✅"},
+        "error":   {"bg": "rgba(140,0,0,0.92)",  "border": "#ff1744", "icon": "❌"},
+        "warning": {"bg": "rgba(140,90,0,0.92)", "border": "#D4AF37", "icon": "⚠️"},
+        "info":    {"bg": "rgba(0,60,120,0.92)", "border": "#40c4ff", "icon": "ℹ️"},
+    }
+    c = colors.get(typ, colors["info"])
+    toast_html = f"""
+    <style>
+    @keyframes toastIn {{
+        0%  {{ opacity:0; transform: translateY(-30px) scale(0.95); }}
+        15% {{ opacity:1; transform: translateY(0)    scale(1);    }}
+        85% {{ opacity:1; transform: translateY(0)    scale(1);    }}
+        100%{{ opacity:0; transform: translateY(-20px) scale(0.95); }}
+    }}
+    #toast-overlay-msg {{
+        position: fixed;
+        top: 28px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 99999999;
+        background: {c["bg"]};
+        border: 1.5px solid {c["border"]};
+        border-radius: 14px;
+        padding: 16px 36px;
+        font-family: 'Cairo', sans-serif;
+        font-size: 17px;
+        color: #fff;
+        box-shadow: 0 8px 40px rgba(0,0,0,0.55), 0 0 20px {c["border"]}44;
+        backdrop-filter: blur(8px);
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        pointer-events: none;
+        animation: toastIn {duration}s ease forwards;
+        min-width: 220px;
+        text-align: center;
+        justify-content: center;
+    }}
+    </style>
+    <div id="toast-overlay-msg">
+        <span style="font-size:22px">{c["icon"]}</span>
+        <span>{message}</span>
+    </div>
+    """
+    st.markdown(toast_html, unsafe_allow_html=True)
+
 # 2.5 Hourglass Loader Helper
 def show_loading_hourglass(text=None, container=None):
     if text is None:
@@ -578,10 +631,26 @@ def show_loading_hourglass(text=None, container=None):
     
     target = container if container else st.empty()
     with target:
-        # Modern 2026 Hourglass SVG Logic
+        # Full-Screen Overlay Hourglass - Transparent background, centered, above all content
         st.markdown(f"""
-            <div class="loader-wrapper">
-                <svg class="modern-hourglass-svg" viewBox="0 0 100 100">
+            <div id="hourglass-overlay" style="
+                position: fixed;
+                top: 0; left: 0;
+                width: 100vw; height: 100vh;
+                background: rgba(0, 0, 0, 0.45);
+                backdrop-filter: blur(3px);
+                -webkit-backdrop-filter: blur(3px);
+                z-index: 999999;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                pointer-events: all;
+            ">
+                <svg class="modern-hourglass-svg" viewBox="0 0 100 100" style="
+                    width: 100px; height: 100px;
+                    filter: drop-shadow(0 0 18px rgba(212, 175, 55, 0.8));
+                ">
                     <!-- Glass Structure -->
                     <path class="glass" d="M30,20 L70,20 L50,50 L70,80 L30,80 L50,50 Z" />
                     <!-- Sand Top -->
@@ -591,6 +660,14 @@ def show_loading_hourglass(text=None, container=None):
                     <!-- Sand Drip -->
                     <rect class="sand-drip" x="49.5" y="50" width="1" height="30" />
                 </svg>
+                <p style="
+                    color: #D4AF37;
+                    font-size: 16px;
+                    margin-top: 20px;
+                    font-family: 'Cairo', sans-serif;
+                    letter-spacing: 2px;
+                    text-shadow: 0 0 10px rgba(212, 175, 55, 0.5);
+                ">{text}</p>
             </div>
         """, unsafe_allow_html=True)
     return target
@@ -938,8 +1015,7 @@ def dashboard():
         if not full_name: full_name = user.get('username', 'User')
         
         msg = t("welcome_person", lang).format(name=full_name)
-        st.success(f"💖 {msg}") # Prominent success banner
-        st.toast(msg, icon="🎉")
+        show_toast(f"💖 {msg}", "success", 5)
         del st.session_state.show_welcome
 
     with st.sidebar:
@@ -1001,7 +1077,7 @@ def dashboard():
                 st.session_state.db.fetch_data(force=True)
                 st.session_state.db.fetch_customer_requests(force=True)
                 refresh_loader.empty()
-                st.success("تم تحديث البيانات من Google Sheets بنجاح!" if lang == 'ar' else "Data refreshed successfully!")
+                show_toast("تم تحديث البيانات من Google Sheets بنجاح! ✅" if lang == 'ar' else "Data refreshed successfully! ✅", "success")
                 time.sleep(1)
                 st.rerun()
         
@@ -1578,7 +1654,7 @@ def render_permissions_content():
     
     # Persistent Success Message after Rerun
     if st.session_state.get('permissions_success'):
-        st.success(st.session_state.permissions_success)
+        show_toast(st.session_state.permissions_success, "success")
         del st.session_state.permissions_success
 
     with st.expander(t("add_user", lang), expanded=False):
@@ -1601,7 +1677,7 @@ def render_permissions_content():
                 if s: 
                     st.session_state.permissions_success = t("user_added", lang)
                     st.rerun()
-                else: st.error(m)
+                else: show_toast(m, "error")
 
     st.subheader(t("users_list", lang))
     
@@ -1690,10 +1766,10 @@ def render_permissions_content():
                             success, message = res, ("تم الحذف" if res else "فشل الحذف")
                             
                         if success:
-                            st.session_state.permissions_success = "تم الحذف"
+                            st.session_state.permissions_success = "تم الحذف بنجاح"
                             st.rerun()
                         else:
-                            st.error(f"خطأ: {message}")
+                            show_toast(f"خطأ: {message}", "error")
     
     # Translate table keys for Users Table
     table_data = []
@@ -2309,6 +2385,12 @@ def render_bengali_supply_content():
     
     st.markdown(f'<div class="luxury-main-title">{t("bengali_supply_title", lang)}</div>', unsafe_allow_html=True)
     
+    # Show queued overlay messages (after rerun)
+    if st.session_state.get('bengali_msg'):
+        msg_type, msg_text = st.session_state.bengali_msg
+        show_toast(msg_text, msg_type)
+        del st.session_state.bengali_msg
+    
     tab1, tab2, tab3 = st.tabs([t("form_supplier_employer", lang), t("form_worker_details", lang), t("search_manage_title", lang)])
     
     with tab1:
@@ -2336,11 +2418,10 @@ def render_bengali_supply_content():
                         {"name": s_name, "phone": s_phone},
                         {"name": e_name, "cafe": e_cafe, "mobile": e_mobile, "city": e_city}
                     )
-                    st.success(t("save_success", lang))
-                    time.sleep(1)
+                    st.session_state.bengali_msg = ("success", t("save_success", lang))
                     st.rerun()
                 else:
-                    st.error("يرجى إكمال البيانات الأساسية")
+                    show_toast("يرجى إكمال البيانات الأساسية", "error")
 
     with tab2:
         st.markdown(f'### 👷 {t("form_worker_details", lang)}')
@@ -2389,11 +2470,10 @@ def render_bengali_supply_content():
                         "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                     }
                     bm.add_worker(worker_data)
-                    st.success(t("save_success", lang))
-                    time.sleep(1)
+                    st.session_state.bengali_msg = ("success", t("save_success", lang))
                     st.rerun()
                 else:
-                    st.error("يرجى إكمال بيانات العامل واختيار المورد وصاحب العمل")
+                    show_toast("يرجى إكمال بيانات العامل واختيار المورد وصاحب العمل", "error")
 
     with tab3:
         st.markdown(f"### {t('search_manage_title', lang)}")
@@ -2444,7 +2524,7 @@ def render_bengali_supply_content():
                     with h2:
                         if st.button("🗑️", key=f"del_{w['worker_uuid']}", help=t("delete_btn", lang)):
                             if bm.delete_worker(w['worker_uuid']):
-                                st.success("Deleted!")
+                                show_toast("تم حذف السجل بنجاح", "success")
                                 time.sleep(0.5)
                                 st.rerun()
 
