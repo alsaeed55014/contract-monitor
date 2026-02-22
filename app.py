@@ -1740,13 +1740,15 @@ def render_order_processing_content():
                 status_key = 'حالة العقد' if lang == 'ar' else 'Contract Status'
                 row[status_key] = status_text
             
-            if w_name_col: row[t('worker_name', lang)] = w_name
-            if w_nationality_col: row[t('worker_nationality', lang)] = str(worker.get(w_nationality_col, ""))
-            if w_gender_col: row[t('worker_gender', lang)] = str(worker.get(w_gender_col, ""))
-            if w_job_col: row[t('worker_job', lang)] = str(worker.get(w_job_col, ""))
-            if w_city_col: row[t('worker_city', lang)] = str(worker.get(w_city_col, ""))
-            if w_phone_col: row[t('worker_phone', lang)] = w_phone
-            if w_age_col: row[t('worker_age', lang)] = str(worker.get(w_age_col, ""))
+            # --- Dynamic Fields (All others from the worker database) ---
+            priority_cols = [w_timestamp_col, w_contract_end_col]
+            for col in worker.index:
+                # Skip internal columns and priority columns already handled
+                if str(col).startswith('__') or col in priority_cols:
+                    continue
+                
+                translated_header = t_col(col, lang)
+                row[translated_header] = str(worker.get(col, ""))
             
             # Internal key for hiding
             row["__uid"] = worker_uid
