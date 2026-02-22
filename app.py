@@ -162,299 +162,153 @@ def get_base64_image(image_path):
 def get_css():
     return """
     <style>
-        /* Modern 2026 Luxury Executive Design System */
+        /* Modern 2026 Luxury executive Design System - User Template Version */
         @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700&family=Inter:wght@300;400;500;600;700&family=Cinzel:wght@500;700&family=Alex+Brush&display=swap');
         
         :root {
             --luxury-gold: #D4AF37;
             --deep-gold: #B8860B;
-            --glass-bg: rgba(26, 26, 26, 0.7);
-            --solid-dark: #0A0A0A;
+            --glass-bg: rgba(0,0,0,0.35);
+            --solid-dark: #000814;
             --accent-green: #00FF41;
             --text-main: #F4F4F4;
-            --border-glow: rgba(212, 175, 55, 0.3);
+            --border-glow: rgba(212, 175, 55, 0.4);
         }
 
-        /* 1) Global Aesthetics & Scrollbar */
+        /* 1) Global Aesthetics */
         .stApp {
-            background: radial-gradient(circle at top right, #001F3F, #000000) !important;
+            background: linear-gradient(135deg, #000814, #001d3d) !important;
             color: var(--text-main);
             font-family: 'Inter', 'Tajawal', sans-serif;
-            direction: rtl; /* Force RTL */
+            direction: rtl;
         }
+
+        .main .block-container {
+            padding-top: 1.5rem !important;
+            padding-bottom: 1rem !important;
+            max-width: 1200px !important;
+        }
+
+        header[data-testid="stHeader"] { background: transparent !important; height: 0 !important; }
+
+        /* 2) Centered Login Box (User Template) */
+        .login-box {
+            max-width: 500px;
+            margin: auto;
+            padding: 30px 30px 25px 30px;
+            border-radius: 20px;
+            border: 1px solid var(--border-glow);
+            background: var(--glass-bg);
+            box-shadow: 0 0 40px rgba(212,175,55,0.15);
+            text-align: center;
+        }
+
+        /* 3) Main Title Styling */
+        .main-title {
+            font-family: 'Tajawal', sans-serif !important;
+            font-size: 42px !important;
+            font-weight: bold;
+            background: linear-gradient(to right, #d4af37, #f5e6a8);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-shadow: 0px 0px 18px rgba(212,175,55,0.4);
+            margin-bottom: 20px;
+            line-height: 1.2;
+        }
+
+        /* 4) Profile Image */
+        .profile-img {
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            border: 3px solid #d4af37;
+            box-shadow: 0 0 25px rgba(212,175,55,0.5);
+            margin: 0 auto 10px auto;
+            display: block;
+            object-fit: cover;
+        }
+
+        .under-text {
+            color: #d4af37;
+            font-size: 16px;
+            margin-bottom: 25px;
+            text-align: center;
+        }
+
+        /* 5) Input Field Customization */
+        div[data-baseweb="input"] > div {
+            background-color: rgba(255,255,255,0.08) !important;
+            border-radius: 10px !important;
+            border: 1px solid rgba(212,175,55,0.3) !important;
+            padding: 4px !important;
+        }
+        .stTextInput input { color: white !important; text-align: center !important; }
+
+        /* 6) Action Buttons (Luxury) */
+        .stButton > button {
+            width: 80% !important;
+            margin: 10px auto !important;
+            display: block !important;
+            background: linear-gradient(to right, #1a1a1a, #2a2a2a) !important;
+            color: #d4af37 !important;
+            border: 1px solid #d4af37 !important;
+            border-radius: 12px !important;
+            padding: 10px !important;
+            font-size: 18px !important;
+            font-weight: bold !important;
+            transition: 0.3s !important;
+            text-transform: uppercase;
+        }
+
+        .stButton > button:hover {
+            background: #d4af37 !important;
+            color: black !important;
+            box-shadow: 0 0 15px rgba(212,175,55,0.4) !important;
+            transform: translateY(-2px);
+        }
+
+        /* Language Button Specifics */
+        .lang-btn-wrapper .stButton > button {
+            width: 60% !important;
+            background: transparent !important;
+            border: 1px solid rgba(212,175,55,0.4) !important;
+            font-size: 14px !important;
+            margin-top: 5px !important;
+        }
+
+        /* English version specific font */
+        .programmer-credit.en { font-family: 'Cinzel', serif !important; font-size: 1.1rem; letter-spacing: 1px; }
+
+        /* Signature Under Image */
+        .signature-under-img { font-family: 'Alex Brush', cursive !important; color: #AAA !important; font-size: 0.9rem !important; margin-top: -5px; text-align: center; }
 
         /* Custom Premium Scrollbar */
         ::-webkit-scrollbar { width: 8px; height: 8px; }
         ::-webkit-scrollbar-track { background: #000; }
-        ::-webkit-scrollbar-thumb { 
-            background: linear-gradient(180deg, #111, #D4AF37); 
-            border-radius: 10px; 
-        }
+        ::-webkit-scrollbar-thumb { background: linear-gradient(180deg, #111, #D4AF37); border-radius: 10px; }
 
-        /* 2) Layout & Spacing - CRITICAL FIX FOR TOP SPACE */
-        .main .block-container {
-            padding-top: 0rem !important;
-            padding-bottom: 2rem !important;
-            max-width: 1200px !important;
-        }
-
-        header[data-testid="stHeader"] {
-            background: transparent !important;
-            height: 0 !important;
-        }
-
-        /* 3) Luxury Typography & Large Title */
-        .luxury-main-title {
-            font-family: 'Cinzel', serif !important;
-            font-size: 3.5rem !important;
-            font-weight: 700 !important;
-            text-align: center !important;
-            background: linear-gradient(to bottom, #FFFFFF 20%, #D4AF37 100%) !important;
-            -webkit-background-clip: text !important;
-            -webkit-text-fill-color: transparent !important;
-            text-shadow: 0 4px 15px rgba(212, 175, 55, 0.4) !important;
-            margin: 0 !important;
-            padding: 10px 0 !important;
-            letter-spacing: 3px !important;
-        }
-
-        /* 4) Premium Form & Vertical Alignment */
-        div[data-testid="stForm"] {
-            background: rgba(10, 10, 10, 0.5) !important;
-            backdrop-filter: blur(15px) !important;
-            border: 1px solid rgba(212, 175, 55, 0.2) !important;
-            border-radius: 20px !important;
-            padding: 1.5rem !important;
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.8) !important;
-        }
-
-        /* Profile Image Alignment Wrapper */
-        .profile-row-container {
-            display: flex;
-            align-items: center;
-            justify-content: flex-end;
-            gap: 15px;
-            width: 100%;
-            margin-bottom: 10px;
-        }
-
-        .profile-img-circular {
-            width: 70px;
-            height: 70px;
-            border-radius: 50%;
-            border: 2px solid var(--luxury-gold);
-            box-shadow: 0 0 15px rgba(212, 175, 55, 0.3);
-            object-fit: cover;
-        }
-
-        /* Generic Inputs Styling */
+        /* Generic Inputs Styling for rest of app */
         .stTextInput input, .stTextArea textarea, div[data-baseweb="select"] {
             background-color: rgba(40, 40, 40, 0.6) !important;
             border: 1px solid rgba(255, 255, 255, 0.1) !important;
             border-radius: 12px !important;
             color: #FFFFFF !important;
-            padding: 12px 16px !important;
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
-            box-shadow: inset 0 2px 4px 0 rgba(0, 0, 0, 0.06) !important;
-        }
-
-        .stTextInput input:focus, div[data-baseweb="select"]:focus-within {
-            border-color: var(--luxury-gold) !important;
-            box-shadow: 0 0 0 3px rgba(212, 175, 55, 0.2) !important;
-            background-color: rgba(50, 50, 50, 0.8) !important;
-        }
-
-        /* Slider Styling */
-        div[data-testid="stSlider"] [data-testid="stThumb"] {
-            background-color: var(--luxury-gold) !important;
-            border: 2px solid #FFFFFF !important;
-        }
-        div[data-testid="stSlider"] [data-testid="stTrack"] > div {
-            background: linear-gradient(90deg, #333, #D4AF37) !important;
-        }
-
-        /* 5) Universal Luxury Button Style */
-        .stButton button, div[data-testid="stFormSubmitButton"] button {
-            background: linear-gradient(135deg, #1A1A1A 0%, #262626 100%) !important;
-            color: var(--luxury-gold) !important;
-            border: 1px solid var(--border-glow) !important;
-            border-radius: 12px !important;
-            padding: 0.75rem 2rem !important;
-            font-weight: 600 !important;
-            letter-spacing: 1.5px !important;
-            text-transform: uppercase !important;
-            transition: all 0.4s cubic-bezier(0.165, 0.84, 0.44, 1) !important;
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5) !important;
-        }
-
-        .stButton button:hover, div[data-testid="stFormSubmitButton"] button:hover {
-            background: var(--luxury-gold) !important;
-            color: #000 !important;
-            border-color: var(--luxury-gold) !important;
-            box-shadow: 0 0 25px rgba(212, 175, 55, 0.5) !important;
-            transform: translateY(-3px) scale(1.02) !important;
-        }
-
-        /* Primary Search Variation */
-        button[kind="primary"] {
-            background: linear-gradient(135deg, #111, #222) !important;
-            border: 1px solid var(--luxury-gold) !important;
-        }
-
-        /* 6) Table & Data Presentation */
-        [data-testid="stDataFrame"] {
-            background: rgba(20, 20, 20, 0.5) !important;
-            border: 1px solid rgba(212, 175, 55, 0.1) !important;
-            margin: 10px 0 !important;
-        }
-
-        /* Status Column Glows */
-        .glow-green { color: var(--accent-green) !important; text-shadow: 0 0 10px var(--accent-green); }
-        .glow-red { color: #FF3131 !important; text-shadow: 0 0 10px #FF3131; }
-        .glow-orange { color: #FF9100 !important; text-shadow: 0 0 10px #FF9100; }
-
-        /* 7) Sidebar Professionalism */
-        section[data-testid="stSidebar"] {
-            background-color: #080808 !important;
-            border-right: 1px solid rgba(212, 175, 55, 0.15) !important;
-        }
-
-        .programmer-credit {
-            color: #FFFFFF !important;
-            text-shadow: 0 0 10px rgba(255, 255, 255, 0.8), 
-                         0 0 20px rgba(212, 175, 55, 0.4) !important;
-            font-family: 'Tajawal', sans-serif;
-            font-weight: 700;
-            font-size: 1.3rem;
-            text-align: center;
-            margin-top: 10px;
-            line-height: 1.2;
-        }
-        
-        /* English version specific font */
-        .programmer-credit.en {
-            font-family: 'Cinzel', serif !important;
-            font-size: 1.1rem;
-            letter-spacing: 1px;
-        }
-
-        /* 8) Expander Luxury (Filters) */
-        .streamlit-expanderHeader {
-            background-color: rgba(255, 255, 255, 0.03) !important;
-            border: 1px solid rgba(212, 175, 55, 0.1) !important;
-            border-radius: 16px !important;
-            padding: 1rem !important;
-            font-weight: 600 !important;
-            color: var(--luxury-gold) !important;
-            transition: all 0.3s ease;
-        }
-        .streamlit-expanderHeader:hover {
-            border-color: var(--luxury-gold) !important;
-            background-color: rgba(255, 255, 255, 0.05) !important;
-        }
-
-        /* Signature Neon (Standardized White-Gold) */
-        .programmer-signature-neon, .red-neon-signature {
-            font-family: 'Alex Brush', cursive !important;
-            color: #FFFFFF !important;
-            text-shadow: 0 0 10px rgba(255, 255, 255, 0.8), 
-                         0 0 20px rgba(212, 175, 55, 0.4) !important;
-            font-size: 1.4rem !important; /* Smaller signature */
-            text-align: center !important;
-            display: block !important;
-            width: 100% !important;
-            margin: 0 auto 10px auto !important;
-            letter-spacing: 1px !important;
-        }
-
-        /* Signature Under Image */
-        .signature-under-img {
-            font-family: 'Alex Brush', cursive !important;
-            color: #AAA !important;
-            font-size: 0.9rem !important;
-            margin-top: -5px;
-            text-align: center;
-        }
-
-        /* Login Screen Special Centering */
-        .login-screen-wrapper {
-            margin-top: 0vh !important;
-            text-align: center;
         }
         
         /* Metric Styling */
-        .metric-container {
-            background: rgba(255, 255, 255, 0.02) !important;
-            border-radius: 20px !important;
-            border: 1px solid rgba(212, 175, 55, 0.05) !important;
-            padding: 1.5rem !important;
-            transition: transform 0.3s ease !important;
-        }
+        .metric-container { background: rgba(255, 255, 255, 0.02) !important; border-radius: 20px !important; border: 1px solid rgba(212, 175, 55, 0.05) !important; padding: 1.5rem !important; transition: transform 0.3s ease !important; }
         .metric-container:hover { transform: scale(1.05); }
 
         /* 9) Modern 2026 Premium Loader */
-        .loader-wrapper {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            padding: 50px;
-            background: rgba(10, 10, 10, 0.4);
-            backdrop-filter: blur(15px);
-            border-radius: 40px;
-            border: 1px solid rgba(212, 175, 55, 0.15);
-            box-shadow: 0 20px 40px rgba(0,0,0,0.6), inset 0 0 20px rgba(212, 175, 55, 0.05);
-            margin: 40px auto;
-            width: fit-content;
-            animation: loader-entrance 0.8s ease-out;
-        }
-
-        @keyframes loader-entrance {
-            from { opacity: 0; transform: scale(0.9) translateY(20px); }
-            to { opacity: 1; transform: scale(1) translateY(0); }
-        }
-
-        .modern-hourglass-svg {
-            width: 100px;
-            height: 100px;
-            filter: drop-shadow(0 0 15px rgba(212, 175, 55, 0.6));
-            animation: hourglass-rotate 2.5s linear infinite;
-        }
-
-        @keyframes hourglass-rotate {
-            from { transform: rotate(0deg); }
-            to { transform: rotate(360deg); }
-        }
-
-        .modern-hourglass-svg .glass {
-            fill: none;
-            stroke: var(--luxury-gold);
-            stroke-width: 2.5;
-            stroke-linejoin: round;
-        }
-
-        .modern-hourglass-svg .sand {
-            fill: var(--luxury-gold);
-            opacity: 0.9;
-        }
-
-        .modern-hourglass-svg .sand-top {
-            animation: sand-sink 2.5s linear infinite;
-        }
-
-        .modern-hourglass-svg .sand-bottom {
-            animation: sand-fill 2.5s linear infinite;
-        }
-
-        .modern-hourglass-svg .sand-drip {
-            fill: var(--luxury-gold);
-            animation: sand-drip 2.5s linear infinite;
-        }
-
-        @keyframes hourglass-flip {
-            0%, 85% { transform: rotate(0deg); }
-            95%, 100% { transform: rotate(180deg); }
-        }
+        .loader-wrapper { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 50px; background: rgba(10, 10, 10, 0.4); backdrop-filter: blur(15px); border-radius: 40px; border: 1px solid rgba(212, 175, 55, 0.15); box-shadow: 0 20px 40px rgba(0,0,0,0.6), inset 0 0 20px rgba(212, 175, 55, 0.05); margin: 40px auto; width: fit-content; animation: loader-entrance 0.8s ease-out; }
+        @keyframes loader-entrance { from { opacity: 0; transform: scale(0.9) translateY(20px); } to { opacity: 1; transform: scale(1) translateY(0); } }
+        .modern-hourglass-svg { width: 100px; height: 100px; filter: drop-shadow(0 0 15px rgba(212, 175, 55, 0.6)); animation: hourglass-rotate 2.5s linear infinite; }
+        @keyframes hourglass-rotate { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        .modern-hourglass-svg .glass { fill: none; stroke: var(--luxury-gold); stroke-width: 2.5; stroke-linejoin: round; }
+        .modern-hourglass-svg .sand { fill: var(--luxury-gold); opacity: 0.9; }
+        .modern-hourglass-svg .sand-top { animation: sand-sink 2.5s linear infinite; }
+        .modern-hourglass-svg .sand-bottom { animation: sand-fill 2.5s linear infinite; }
+        .modern-hourglass-svg .sand-drip { fill: var(--luxury-gold); animation: sand-drip 2.5s linear infinite; }
 
         @keyframes sand-sink {
             0% { clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%); }
@@ -830,52 +684,52 @@ def render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search", 
 # 11. Logic Functions
 def login_screen():
     lang = st.session_state.lang
-    col1, col2, col3 = st.columns([1, 2.8, 1]) # Slightly wider for horizontal layout
-    with col2:
-        # 1. Giant Luxury Title at Absolute Top
-        st.markdown('<div class="luxury-main-title">نظام مراقبة العقود</div>', unsafe_allow_html=True)
+    
+    # 1. Main Login Container (Centered Box)
+    st.markdown('<div class="login-box">', unsafe_allow_html=True)
+    
+    # 2. Main Title (Neon Gold)
+    system_title = "نظام مراقبة العقود - توريد العمالة الآسيوية" if lang == 'ar' else "Contract System - Asian Recruitment"
+    st.markdown(f'<div class="main-title">{system_title}</div>', unsafe_allow_html=True)
+
+    # 3. Profile Image (Circular & Styled)
+    if os.path.exists(IMG_PATH):
+        b64 = get_base64_image(IMG_PATH)
+        st.markdown(f'<img src="data:image/jpeg;base64,{b64}" class="profile-img">', unsafe_allow_html=True)
+    
+    # 4. Welcome Text
+    st.markdown(f'<div class="under-text">{t("welcome_back", lang)}</div>', unsafe_allow_html=True)
+
+    # 5. Form Structure
+    with st.form("login_form"):
+        u = st.text_input(t("username", lang), label_visibility="collapsed", placeholder=t("username", lang))
+        p = st.text_input(t("password", lang), type="password", label_visibility="collapsed", placeholder=t("password", lang))
         
-        st.markdown('<div class="login-screen-wrapper">', unsafe_allow_html=True)
+        # 6. Action Buttons
+        submit = st.form_submit_button(t("login_btn", lang), use_container_width=True)
         
-        with st.form("login"):
-            # 2. Horizontal Profile + Welcome Message Row
-            ic1, ic2 = st.columns([1, 3])
-            
-            with ic1: # The Profile Image Container (Right side in Arabic)
-                if os.path.exists(IMG_PATH):
-                    b64 = get_base64_image(IMG_PATH)
-                    st.markdown(f'<img src="data:image/jpeg;base64,{b64}" class="profile-img-circular">', unsafe_allow_html=True)
-                st.markdown('<div class="signature-under-img">By: Alsaeed Alwazzan</div>', unsafe_allow_html=True)
-
-            with ic2: # The Welcome text & Username Field
-                st.markdown(f"<h3 style='margin:10px 0 5px 0; font-size: 1.3rem; text-align:right; color:#D4AF37;'>{t('welcome_back', lang)}</h3>", unsafe_allow_html=True)
-                u = st.text_input(t("username", lang), label_visibility="collapsed", placeholder=t("username", lang))
-
-            # 3. Password Field
-            p = st.text_input(t("password", lang), type="password", label_visibility="collapsed", placeholder=t("password", lang))
-            
-            # 4. Buttons (Login and Language)
-            submit = st.form_submit_button(t("login_btn", lang), use_container_width=True)
-            lang_toggle = st.form_submit_button("En" if lang == "ar" else "عربي", use_container_width=True)
-
-            if submit:
-                login_loader = show_loading_hourglass()
-                p_norm = p.strip()
-                user = st.session_state.auth.authenticate(u, p_norm)
-                login_loader.empty()
-                if user:
-                    user['username'] = u
-                    st.session_state.user = user
-                    st.session_state.show_welcome = True
-                    st.rerun()
-                else:
-                    st.error(t("invalid_creds", lang))
-
-            if lang_toggle:
-                toggle_lang()
-                st.rerun()
-        
+        st.markdown('<div class="lang-btn-wrapper">', unsafe_allow_html=True)
+        lang_toggle = st.form_submit_button("EN" if lang == "ar" else "عربي", use_container_width=True)
         st.markdown('</div>', unsafe_allow_html=True)
+
+        if submit:
+            login_loader = show_loading_hourglass()
+            p_norm = p.strip()
+            user = st.session_state.auth.authenticate(u, p_norm)
+            login_loader.empty()
+            if user:
+                user['username'] = u
+                st.session_state.user = user
+                st.session_state.show_welcome = True
+                st.rerun()
+            else:
+                st.error(t("invalid_creds", lang))
+
+        if lang_toggle:
+            toggle_lang()
+            st.rerun()
+
+    st.markdown('</div>', unsafe_allow_html=True)
 
 def dashboard():
     user = st.session_state.user
