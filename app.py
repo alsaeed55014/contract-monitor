@@ -1714,6 +1714,7 @@ def render_order_processing_content():
                 continue
                 
             row = {}
+            if w_timestamp_col: row[t('registration_date', lang)] = str(worker.get(w_timestamp_col, ""))
             row[t('match_score', lang)] = f"{score}%"
             if w_name_col: row[t('worker_name', lang)] = w_name
             if w_nationality_col: row[t('worker_nationality', lang)] = str(worker.get(w_nationality_col, ""))
@@ -1722,7 +1723,6 @@ def render_order_processing_content():
             if w_city_col: row[t('worker_city', lang)] = str(worker.get(w_city_col, ""))
             if w_phone_col: row[t('worker_phone', lang)] = w_phone
             if w_age_col: row[t('worker_age', lang)] = str(worker.get(w_age_col, ""))
-            if w_timestamp_col: row[t('registration_date', lang)] = str(worker.get(w_timestamp_col, ""))
             
             # Internal key for hiding
             row["__uid"] = worker_uid
