@@ -1001,21 +1001,182 @@ def dashboard():
     user = st.session_state.user
     lang = st.session_state.lang
     
-    # Welcome Message - Prominent and High Visibility
+    # Welcome Message - Premium Luxury Overlay (2026 Style)
     if st.session_state.get('show_welcome'):
         # Selection based on UI language
         if lang == 'ar':
             f_name = user.get('first_name_ar', '')
             fa_name = user.get('father_name_ar', '')
+            sub_text = "مرحباً بك في منظومة إدارة العقود"
+            btn_text = "ابدأ الآن"
         else:
             f_name = user.get('first_name_en', '')
             fa_name = user.get('father_name_en', '')
+            sub_text = "Welcome to the Contract Management System"
+            btn_text = "Get Started"
             
         full_name = f"{f_name} {fa_name}".strip()
         if not full_name: full_name = user.get('username', 'User')
         
-        msg = t("welcome_person", lang).format(name=full_name)
-        show_toast(f"💖 {msg}", "success", 5)
+        greeting = "أهلاً،" if lang == 'ar' else "Hello,"
+        
+        st.markdown(f"""
+        <style>
+        @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700&family=Inter:wght@300;400;600;700&display=swap');
+
+        @keyframes welcomeFadeIn {{
+            0%   {{ opacity: 0; }}
+            10%  {{ opacity: 1; }}
+            80%  {{ opacity: 1; }}
+            100% {{ opacity: 0; }}
+        }}
+        @keyframes welcomeSlideUp {{
+            0%   {{ transform: translateY(40px) scale(0.96); opacity: 0; }}
+            15%  {{ transform: translateY(0px)  scale(1);    opacity: 1; }}
+            85%  {{ transform: translateY(0px)  scale(1);    opacity: 1; }}
+            100% {{ transform: translateY(-20px) scale(0.98); opacity: 0; }}
+        }}
+        @keyframes shimmer {{
+            0%   {{ background-position: -400% center; }}
+            100% {{ background-position: 400% center; }}
+        }}
+        @keyframes ringPulse {{
+            0%   {{ box-shadow: 0 0 0 0 rgba(212,175,55,0.5); }}
+            70%  {{ box-shadow: 0 0 0 22px rgba(212,175,55,0); }}
+            100% {{ box-shadow: 0 0 0 0 rgba(212,175,55,0); }}
+        }}
+        @keyframes starTwinkle {{
+            0%, 100% {{ opacity:0.3; transform:scale(0.8); }}
+            50%       {{ opacity:1;   transform:scale(1.2); }}
+        }}
+        
+        #luxury-welcome-overlay {{
+            position: fixed;
+            inset: 0;
+            z-index: 999999999;
+            background: rgba(5, 8, 18, 0.88);
+            backdrop-filter: blur(14px);
+            -webkit-backdrop-filter: blur(14px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            animation: welcomeFadeIn 5.5s ease forwards;
+            pointer-events: all;
+        }}
+        
+        .welcome-card {{
+            background: linear-gradient(145deg, #0e1221, #0a0f1e, #101528);
+            border: 1px solid rgba(212,175,55,0.25);
+            border-radius: 28px;
+            padding: 56px 72px;
+            max-width: 560px;
+            width: 90%;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+            animation: welcomeSlideUp 5.5s ease forwards;
+            box-shadow: 0 40px 100px rgba(0,0,0,0.7), 0 0 80px rgba(212,175,55,0.07);
+        }}
+        
+        .welcome-card::before {{
+            content: '';
+            position: absolute;
+            top: 0; left: -100%;
+            width: 300%;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, rgba(212,175,55,0.6), transparent);
+            animation: shimmer 3s linear infinite;
+        }}
+        
+        .welcome-avatar {{
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #D4AF37, #8B7520, #D4AF37);
+            margin: 0 auto 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 36px;
+            animation: ringPulse 2s infinite;
+        }}
+        
+        .welcome-greeting {{
+            font-family: 'Cairo', 'Inter', sans-serif;
+            font-size: 15px;
+            font-weight: 400;
+            color: rgba(212,175,55,0.7);
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            margin-bottom: 8px;
+        }}
+        
+        .welcome-name {{
+            font-family: 'Cairo', 'Inter', sans-serif;
+            font-size: 38px;
+            font-weight: 700;
+            background: linear-gradient(135deg, #fff 0%, #D4AF37 50%, #fff 100%);
+            background-size: 200% auto;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            animation: shimmer 3s linear infinite;
+            margin-bottom: 14px;
+            line-height: 1.2;
+        }}
+        
+        .welcome-divider {{
+            width: 60px;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, #D4AF37, transparent);
+            margin: 20px auto;
+            border-radius: 2px;
+        }}
+        
+        .welcome-sub {{
+            font-family: 'Cairo', 'Inter', sans-serif;
+            font-size: 15px;
+            color: rgba(255,255,255,0.5);
+            letter-spacing: 0.5px;
+            margin-bottom: 32px;
+            line-height: 1.7;
+        }}
+        
+        .welcome-stars {{
+            display: flex;
+            justify-content: center;
+            gap: 6px;
+            margin-top: 18px;
+        }}
+        .welcome-star {{
+            color: #D4AF37;
+            font-size: 14px;
+        }}
+        .welcome-star:nth-child(1) {{ animation: starTwinkle 1.5s ease infinite 0.0s; }}
+        .welcome-star:nth-child(2) {{ animation: starTwinkle 1.5s ease infinite 0.3s; }}
+        .welcome-star:nth-child(3) {{ animation: starTwinkle 1.5s ease infinite 0.6s; }}
+        .welcome-star:nth-child(4) {{ animation: starTwinkle 1.5s ease infinite 0.9s; }}
+        .welcome-star:nth-child(5) {{ animation: starTwinkle 1.5s ease infinite 1.2s; }}
+        </style>
+
+        <div id="luxury-welcome-overlay">
+            <div class="welcome-card">
+                <div class="welcome-avatar">👤</div>
+                <div class="welcome-greeting">{greeting}</div>
+                <div class="welcome-name">{full_name}</div>
+                <div class="welcome-divider"></div>
+                <div class="welcome-sub">{sub_text}</div>
+                <div class="welcome-stars">
+                    <span class="welcome-star">★</span>
+                    <span class="welcome-star">★</span>
+                    <span class="welcome-star">★</span>
+                    <span class="welcome-star">★</span>
+                    <span class="welcome-star">★</span>
+                </div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+        
         del st.session_state.show_welcome
 
     with st.sidebar:
