@@ -2296,7 +2296,7 @@ def render_bengali_supply_content():
     
     st.markdown(f'<div class="luxury-main-title">{t("bengali_supply_title", lang)}</div>', unsafe_allow_html=True)
     
-    tab1, tab2 = st.tabs([t("form_supplier_employer", lang), t("form_worker_details", lang)])
+    tab1, tab2, tab3 = st.tabs([t("form_supplier_employer", lang), t("form_worker_details", lang), t("search_manage_title", lang)])
     
     with tab1:
         st.markdown(f'### 🏗️ {t("form_supplier_employer", lang)}')
@@ -2337,80 +2337,76 @@ def render_bengali_supply_content():
         s_options = [f"{s['name']} ({s['phone']})" for s in suppliers]
         e_options = [f"{e['name']} - {e['cafe']} ({e['city']})" for e in employers]
         
-        col_form, col_manage = st.columns([1, 1])
-        
-        with col_form:
-            st.markdown(f"#### 📝 {t('add_worker_btn', lang)}")
-            with st.form("worker_entry_form", clear_on_submit=True):
-                c1, c2 = st.columns(2)
-                with c1:
-                    st.markdown(f"**Name - الاسم**")
-                    w_name = st.text_input(t("worker_name", lang), label_visibility="collapsed", key="w_name_in")
-                    st.markdown(f"**Mobile - الجوال**")
-                    w_mobile = st.text_input(t("worker_phone", lang), label_visibility="collapsed", key="w_mob_in")
-                with c2:
-                    st.markdown(f"**ID/Passport - الهوية أو الجواز**")
-                    w_id = st.text_input(t("worker_passport_iqama", lang), label_visibility="collapsed", key="w_id_in")
-                
-                st.markdown(f"**Select Supplier - المورد**")
-                sel_s = st.selectbox(t("select_supplier", lang), options=s_options, label_visibility="collapsed", key="w_s_sel")
-                
-                st.markdown(f"**Select Employer - صاحب العمل**")
-                sel_e = st.selectbox(t("select_employer", lang), options=e_options, label_visibility="collapsed", key="w_e_sel")
-                
-                st.markdown(f"**Attachments - المرفقات**")
-                uploaded_files = st.file_uploader(t("upload_multiple_imgs", lang), accept_multiple_files=True, type=['png', 'jpg', 'jpeg', 'pdf'], label_visibility="collapsed", key="w_files")
-                
-                st.markdown(f"**Files Notes - ملاحظات المرفقات**")
-                f_notes = st.text_area(t("notes_files", lang), label_visibility="collapsed", key="w_f_notes")
-                
-                st.markdown(f"**General Notes - ملاحظات عامة**")
-                g_notes = st.text_area(t("general_notes", lang), label_visibility="collapsed", key="w_g_notes")
-                
-                if st.form_submit_button(t("add_worker_btn", lang), use_container_width=True):
-                    if w_name and (sel_s if s_options else True) and (sel_e if e_options else True):
-                        worker_data = {
-                            "name": w_name,
-                            "mobile": w_mobile,
-                            "id": w_id,
-                            "supplier": sel_s if s_options else "",
-                            "employer": sel_e if e_options else "",
-                            "file_notes": f_notes,
-                            "general_notes": g_notes,
-                            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                        }
-                        bm.add_worker(worker_data)
-                        st.success(t("save_success", lang))
-                        time.sleep(1)
-                        st.rerun()
-                    else:
-                        st.error("يرجى إكمال بيانات العامل واختيار المورد وصاحب العمل")
+        with st.form("worker_entry_form", clear_on_submit=True):
+            c1, c2 = st.columns(2)
+            with c1:
+                st.markdown(f"**Name - الاسم**")
+                w_name = st.text_input(t("worker_name", lang), label_visibility="collapsed", key="w_name_in")
+                st.markdown(f"**Mobile - الجوال**")
+                w_mobile = st.text_input(t("worker_phone", lang), label_visibility="collapsed", key="w_mob_in")
+            with c2:
+                st.markdown(f"**ID/Passport - الهوية أو الجواز**")
+                w_id = st.text_input(t("worker_passport_iqama", lang), label_visibility="collapsed", key="w_id_in")
+            
+            st.markdown(f"**Select Supplier - المورد**")
+            sel_s = st.selectbox(t("select_supplier", lang), options=s_options, label_visibility="collapsed", key="w_s_sel")
+            
+            st.markdown(f"**Select Employer - صاحب العمل**")
+            sel_e = st.selectbox(t("select_employer", lang), options=e_options, label_visibility="collapsed", key="w_e_sel")
+            
+            st.markdown(f"**Attachments - المرفقات**")
+            uploaded_files = st.file_uploader(t("upload_multiple_imgs", lang), accept_multiple_files=True, type=['png', 'jpg', 'jpeg', 'pdf'], label_visibility="collapsed", key="w_files")
+            
+            st.markdown(f"**Files Notes - ملاحظات المرفقات**")
+            f_notes = st.text_area(t("notes_files", lang), label_visibility="collapsed", key="w_f_notes")
+            
+            st.markdown(f"**General Notes - ملاحظات عامة**")
+            g_notes = st.text_area(t("general_notes", lang), label_visibility="collapsed", key="w_g_notes")
+            
+            if st.form_submit_button(t("add_worker_btn", lang), use_container_width=True):
+                if w_name and (sel_s if s_options else True) and (sel_e if e_options else True):
+                    worker_data = {
+                        "name": w_name,
+                        "mobile": w_mobile,
+                        "id": w_id,
+                        "supplier": sel_s if s_options else "",
+                        "employer": sel_e if e_options else "",
+                        "file_notes": f_notes,
+                        "general_notes": g_notes,
+                        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    }
+                    bm.add_worker(worker_data)
+                    st.success(t("save_success", lang))
+                    time.sleep(1)
+                    st.rerun()
+                else:
+                    st.error("يرجى إكمال بيانات العامل واختيار المورد وصاحب العمل")
 
-        with col_manage:
-            st.markdown(f"#### {t('search_manage_title', lang)}")
-            search_q = st.text_input(t("search_manage_title", lang), placeholder=t("search_placeholder_bengali", lang), label_visibility="collapsed", key="bengali_search_q")
-            
-            workers = bm.get_workers()
-            if search_q:
-                q = search_q.lower()
-                workers = [w for w in workers if q in w.get("name", "").lower() or q in w.get("supplier", "").lower() or q in w.get("employer", "").lower() or q in w.get("id", "").lower()]
-            
-            if not workers:
-                st.info(t("no_records_found", lang))
-            else:
-                for w in sorted(workers, key=lambda x: x.get("timestamp", ""), reverse=True):
-                    with st.container(border=True):
-                        c1, c2 = st.columns([4, 1])
-                        with c1:
-                            st.markdown(f"**👷 {w['name']}**")
-                            st.caption(f"📍 {w['employer']} | 📦 {w['supplier']}")
-                            st.caption(f"🆔 {w['id']} | 📅 {w['timestamp']}")
-                        with c2:
-                            if st.button(t("delete_btn", lang), key=f"del_{w['worker_uuid']}", use_container_width=True):
-                                if bm.delete_worker(w['worker_uuid']):
-                                    st.success("Deleted!")
-                                    time.sleep(0.5)
-                                    st.rerun()
+    with tab3:
+        st.markdown(f"### {t('search_manage_title', lang)}")
+        search_q = st.text_input(t("search_manage_title", lang), placeholder=t("search_placeholder_bengali", lang), label_visibility="collapsed", key="bengali_search_q")
+        
+        workers = bm.get_workers()
+        if search_q:
+            q = search_q.lower()
+            workers = [w for w in workers if q in w.get("name", "").lower() or q in w.get("supplier", "").lower() or q in w.get("employer", "").lower() or q in w.get("id", "").lower()]
+        
+        if not workers:
+            st.info(t("no_records_found", lang))
+        else:
+            for w in sorted(workers, key=lambda x: x.get("timestamp", ""), reverse=True):
+                with st.container(border=True):
+                    c1, c2 = st.columns([4, 1])
+                    with c1:
+                        st.markdown(f"**👷 {w['name']}**")
+                        st.caption(f"📍 {w['employer']} | 📦 {w['supplier']}")
+                        st.caption(f"🆔 {w['id']} | 📅 {w['timestamp']}")
+                    with c2:
+                        if st.button(t("delete_btn", lang), key=f"del_{w['worker_uuid']}", use_container_width=True):
+                            if bm.delete_worker(w['worker_uuid']):
+                                st.success("Deleted!")
+                                time.sleep(0.5)
+                                st.rerun()
 
 # 11. Main Entry
 if not st.session_state.user:
