@@ -351,6 +351,97 @@ def get_css():
             transition: transform 0.3s ease !important;
         }
         .metric-container:hover { transform: scale(1.05); }
+
+        /* 9) Modern 2026 Premium Loader */
+        .loader-wrapper {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 50px;
+            background: rgba(10, 10, 10, 0.4);
+            backdrop-filter: blur(15px);
+            border-radius: 40px;
+            border: 1px solid rgba(212, 175, 55, 0.15);
+            box-shadow: 0 20px 40px rgba(0,0,0,0.6), inset 0 0 20px rgba(212, 175, 55, 0.05);
+            margin: 40px auto;
+            width: fit-content;
+            animation: loader-entrance 0.8s ease-out;
+        }
+
+        @keyframes loader-entrance {
+            from { opacity: 0; transform: scale(0.9) translateY(20px); }
+            to { opacity: 1; transform: scale(1) translateY(0); }
+        }
+
+        .modern-hourglass-svg {
+            width: 100px;
+            height: 100px;
+            filter: drop-shadow(0 0 15px rgba(212, 175, 55, 0.6));
+            animation: hourglass-flip 2.5s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite;
+        }
+
+        .modern-hourglass-svg .glass {
+            fill: none;
+            stroke: var(--luxury-gold);
+            stroke-width: 2.5;
+            stroke-linejoin: round;
+        }
+
+        .modern-hourglass-svg .sand {
+            fill: var(--luxury-gold);
+            opacity: 0.9;
+        }
+
+        .modern-hourglass-svg .sand-top {
+            animation: sand-sink 2.5s linear infinite;
+        }
+
+        .modern-hourglass-svg .sand-bottom {
+            animation: sand-fill 2.5s linear infinite;
+        }
+
+        .modern-hourglass-svg .sand-drip {
+            fill: var(--luxury-gold);
+            animation: sand-drip 2.5s linear infinite;
+        }
+
+        @keyframes hourglass-flip {
+            0%, 85% { transform: rotate(0deg); }
+            95%, 100% { transform: rotate(180deg); }
+        }
+
+        @keyframes sand-sink {
+            0% { clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%); }
+            85%, 100% { clip-path: polygon(0 100%, 100% 100%, 100% 100%, 0 100%); }
+        }
+
+        @keyframes sand-fill {
+            0% { clip-path: polygon(0 100%, 100% 100%, 100% 100%, 0 100%); }
+            85%, 100% { clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%); }
+        }
+
+        @keyframes sand-drip {
+            0%, 5% { opacity: 0; height: 0; }
+            10%, 80% { opacity: 1; height: 30px; }
+            85%, 100% { opacity: 0; height: 0; }
+        }
+
+        .loading-text-glow {
+            margin-top: 30px;
+            font-family: 'Cinzel', serif !important;
+            color: var(--luxury-gold) !important;
+            font-size: 1.2rem !important;
+            letter-spacing: 5px !important;
+            text-transform: uppercase !important;
+            text-align: center;
+            animation: text-pulse-glow 2s ease-in-out infinite alternate;
+        }
+
+        @keyframes text-pulse-glow {
+            from { opacity: 0.6; text-shadow: 0 0 10px rgba(212, 175, 55, 0.2); }
+            to { opacity: 1; text-shadow: 0 0 25px rgba(212, 175, 55, 0.8), 0 0 15px rgba(212, 175, 55, 0.4); }
+        }
     </style>
     """
 
@@ -410,10 +501,20 @@ def show_loading_hourglass(text=None, container=None):
     
     target = container if container else st.empty()
     with target:
+        # Modern 2026 Hourglass SVG Logic
         st.markdown(f"""
             <div class="loader-wrapper">
-                <div class="hourglass"></div>
-                <div class="loading-text">{text}</div>
+                <svg class="modern-hourglass-svg" viewBox="0 0 100 100">
+                    <!-- Glass Structure -->
+                    <path class="glass" d="M30,20 L70,20 L50,50 L70,80 L30,80 L50,50 Z" />
+                    <!-- Sand Top -->
+                    <path class="sand sand-top" d="M30,20 L70,20 L50,50 Z" />
+                    <!-- Sand Bottom -->
+                    <path class="sand sand-bottom" d="M50,50 L70,80 L30,80 Z" />
+                    <!-- Sand Drip -->
+                    <rect class="sand-drip" x="49.5" y="50" width="1" height="30" />
+                </svg>
+                <div class="loading-text-glow">{text}</div>
             </div>
         """, unsafe_allow_html=True)
     return target

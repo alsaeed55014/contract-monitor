@@ -220,7 +220,8 @@ class TranslationManager:
         clean_query = query.lower().strip()
         ignore_words = ["جميع", "كل", "دول", "دولة", "قارة", "قاره"]
 
-        words = clean_query.split()
+        # Split by spaces and common separators like commas
+        words = re.split(r'[\s,،/\\|]+', clean_query)
         bundle_list = []
 
         for word in words:
