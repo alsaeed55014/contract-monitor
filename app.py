@@ -378,7 +378,12 @@ def get_css():
             width: 100px;
             height: 100px;
             filter: drop-shadow(0 0 15px rgba(212, 175, 55, 0.6));
-            animation: hourglass-flip 2.5s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite;
+            animation: hourglass-rotate 2.5s linear infinite;
+        }
+
+        @keyframes hourglass-rotate {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
         }
 
         .modern-hourglass-svg .glass {
@@ -514,7 +519,6 @@ def show_loading_hourglass(text=None, container=None):
                     <!-- Sand Drip -->
                     <rect class="sand-drip" x="49.5" y="50" width="1" height="30" />
                 </svg>
-                <div class="loading-text-glow">{text}</div>
             </div>
         """, unsafe_allow_html=True)
     return target
@@ -1609,6 +1613,7 @@ def render_order_processing_content():
     st.title(f" {t('order_processing_title', lang)}")
     
     loading_placeholder = show_loading_hourglass()
+    start_op_time = time.time()
     
     try:
         customers_df = st.session_state.db.fetch_customer_requests()
@@ -1618,6 +1623,11 @@ def render_order_processing_content():
         st.error(f"{t('error', lang)}: {e}")
         return
     
+    # Ensure at least 0.6s of visibility for the premium rotating feel
+    elapsed = time.time() - start_op_time
+    if elapsed < 0.6:
+        time.sleep(0.6 - elapsed)
+        
     loading_placeholder.empty()
     
     if customers_df.empty:
