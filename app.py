@@ -1524,10 +1524,26 @@ def render_order_processing_content():
             ts_sort_col = customers_df.columns[0]
             
     if ts_sort_col:
+        def robust_parse_date(val):
+            if pd.isna(val) or val == "": return pd.NaT
+            s = str(val).strip()
+            # 1. Translate Arabic numerals to Western
+            ar_nums = "٠١٢٣٤٥٦٧٨٩"
+            en_nums = "0123456789"
+            for a, e in zip(ar_nums, en_nums):
+                s = s.replace(a, e)
+            
+            # 2. Try standard parsing
+            try:
+                return pd.to_datetime(s, errors='coerce')
+            except:
+                return pd.NaT
+
         try:
-            customers_df['__temp_sort'] = pd.to_datetime(customers_df[ts_sort_col], errors='coerce')
+            customers_df['__temp_sort'] = customers_df[ts_sort_col].apply(robust_parse_date)
             # Sort newest first
             customers_df = customers_df.sort_values(by='__temp_sort', ascending=False)
+            # Cleanup
             customers_df = customers_df.drop(columns=['__temp_sort'])
         except:
             pass
