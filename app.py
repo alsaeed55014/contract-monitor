@@ -1,11 +1,4 @@
-.stDataFrame {
-    overflow-x: auto !important;
-}
-.stDataFrame > div {
-    overflow-x: auto !important;
-    min-width: 100%;
-}
-import streamlit as st
+fixed_login_code = '''import streamlit as st
 import pandas as pd
 import os
 import sys
@@ -199,46 +192,25 @@ def get_css():
             margin-bottom: 1.5rem !important;
         }
 
-        /* Login Screen - Fixed */
-        .login-wrapper {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 80vh;
-            padding: 20px;
-        }
-        
-        .login-box {
-            width: 100%;
-            max-width: 450px;
-            background: rgba(25, 25, 25, 0.98);
-            border: 2px solid #D4AF37;
-            border-radius: 20px;
-            padding: 40px 35px;
-            box-shadow: 0 25px 80px rgba(0,0,0,0.9), 0 0 30px rgba(212, 175, 55, 0.1);
-        }
-        
-        .login-signature {
-            font-family: 'Alex Brush', cursive;
-            color: #D4AF37;
-            font-size: 1.6rem;
-            text-align: center;
-            margin-bottom: 20px;
-        }
-        
-        .login-logo {
-            text-align: center;
-            margin-bottom: 25px;
+        /* Login Screen Fixes */
+        .login-container {
+            max-width: 450px !important;
+            margin: 0 auto !important;
+            padding: 40px 30px !important;
+            background: rgba(20, 20, 20, 0.9) !important;
+            border-radius: 20px !important;
+            border: 1px solid rgba(212, 175, 55, 0.3) !important;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.8) !important;
         }
         
         .login-title {
-            text-align: center;
-            margin-bottom: 10px;
+            text-align: center !important;
+            margin-bottom: 30px !important;
         }
         
         .login-title h1 {
-            font-size: 1.6rem !important;
-            margin: 0 !important;
+            font-size: 1.8rem !important;
+            margin-bottom: 10px !important;
         }
         
         .login-subtitle {
@@ -246,11 +218,9 @@ def get_css():
             color: #888;
             font-size: 0.9rem;
             margin-bottom: 30px;
-            letter-spacing: 2px;
-            text-transform: uppercase;
+            letter-spacing: 1px;
         }
 
-        /* Form Styling */
         div[data-testid="stForm"] {
             background: transparent !important;
             border: none !important;
@@ -259,27 +229,25 @@ def get_css():
         }
 
         .stTextInput input {
-            background-color: rgba(35, 35, 35, 0.95) !important;
-            border: 2px solid rgba(212, 175, 55, 0.4) !important;
-            border-radius: 12px !important;
+            background-color: rgba(40, 40, 40, 0.8) !important;
+            border: 1px solid rgba(212, 175, 55, 0.3) !important;
+            border-radius: 10px !important;
             color: #FFFFFF !important;
-            padding: 14px 18px !important;
+            padding: 12px 16px !important;
             font-size: 1rem !important;
-            transition: all 0.3s ease !important;
         }
 
         .stTextInput input:focus {
-            border-color: #D4AF37 !important;
-            box-shadow: 0 0 0 4px rgba(212, 175, 55, 0.15) !important;
-            background-color: rgba(40, 40, 40, 0.98) !important;
+            border-color: var(--luxury-gold) !important;
+            box-shadow: 0 0 0 3px rgba(212, 175, 55, 0.2) !important;
         }
 
         .stButton button {
             background: linear-gradient(135deg, #D4AF37 0%, #B8860B 100%) !important;
             color: #000 !important;
             border: none !important;
-            border-radius: 12px !important;
-            padding: 14px 30px !important;
+            border-radius: 10px !important;
+            padding: 12px 30px !important;
             font-weight: 700 !important;
             font-size: 1rem !important;
             letter-spacing: 1px !important;
@@ -292,13 +260,26 @@ def get_css():
             box-shadow: 0 10px 30px rgba(212, 175, 55, 0.4) !important;
         }
 
-        .lang-btn {
+        .lang-toggle-btn {
             background: transparent !important;
-            border: 2px solid #D4AF37 !important;
+            border: 1px solid rgba(212, 175, 55, 0.5) !important;
             color: #D4AF37 !important;
-            padding: 10px 20px !important;
-            border-radius: 25px !important;
+            padding: 8px 20px !important;
+            border-radius: 20px !important;
             font-weight: 600 !important;
+        }
+
+        .programmer-signature {
+            font-family: 'Alex Brush', cursive !important;
+            color: #D4AF37 !important;
+            font-size: 1.5rem !important;
+            text-align: center !important;
+            margin-bottom: 20px !important;
+        }
+
+        .logo-container {
+            text-align: center !important;
+            margin-bottom: 20px !important;
         }
 
         /* Table Scrollbar Fix */
@@ -393,7 +374,8 @@ def get_css():
         }
     </style>
     """
-            def style_df(df):
+
+def style_df(df):
     if isinstance(df, pd.DataFrame):
         return df.style.map(lambda _: "color: #4CAF50;")
     return df
@@ -439,7 +421,7 @@ def show_loading_hourglass(text=None, container=None):
         st.markdown(f"""
             <div style="text-align: center; padding: 40px;">
                 <div style="font-size: 3rem; animation: pulse 1s infinite;">⏳</div>
-                <div style="color: #D4AF37; margin-top: 10px; font-weight: 600;">{text}</div>
+                <div style="color: #D4AF37; margin-top: 10px;">{text}</div>
             </div>
             <style>
                 @keyframes pulse {{
@@ -521,67 +503,331 @@ def get_contract_status_badge(status, days, lang):
         else:
             return f'<span class="status-badge status-active">Active</span>'
 
-# شاشة الدخول المُصلحة
 def login_screen():
     lang = st.session_state.lang
     
-    # Wrapper للتوسيط
-    st.markdown('<div class="login-wrapper">', unsafe_allow_html=True)
-    st.markdown('<div class="login-box">', unsafe_allow_html=True)
+    # Center the login form
+    col1, col2, col3 = st.columns([1, 2, 1])
     
-    # التوقيع
-    st.markdown('<div class="login-signature">By: Alsaeed Alwazzan</div>', unsafe_allow_html=True)
-    
-    # الشعار
-    if os.path.exists(IMG_PATH):
-        st.markdown('<div class="login-logo">', unsafe_allow_html=True)
-        st.image(IMG_PATH, width=90)
+    with col2:
+        st.markdown('<div class="login-container">', unsafe_allow_html=True)
+        
+        # Signature
+        st.markdown('<div class="programmer-signature">By: Alsaeed Alwazzan</div>', unsafe_allow_html=True)
+        
+        # Logo
+        if os.path.exists(IMG_PATH):
+            st.markdown('<div class="logo-container">', unsafe_allow_html=True)
+            st.image(IMG_PATH, width=100)
+            st.markdown('</div>', unsafe_allow_html=True)
+        
+        # Title
+        st.markdown(f'''
+            <div class="login-title">
+                <h1>{t("welcome_back", lang)}</h1>
+            </div>
+            <div class="login-subtitle">{t("system_title", lang)}</div>
+        ''', unsafe_allow_html=True)
+        
+        # Login Form
+        with st.form("login_form", clear_on_submit=False):
+            username = st.text_input(
+                t("username", lang), 
+                placeholder=t("username", lang),
+                label_visibility="collapsed"
+            )
+            password = st.text_input(
+                t("password", lang), 
+                type="password",
+                placeholder=t("password", lang),
+                label_visibility="collapsed"
+            )
+            
+            col_btn1, col_btn2 = st.columns([3, 1])
+            
+            with col_btn1:
+                submitted = st.form_submit_button(
+                    t("login_btn", lang),
+                    use_container_width=True
+                )
+            
+            with col_btn2:
+                lang_btn = st.form_submit_button(
+                    "EN" if lang == "ar" else "عربي",
+                    use_container_width=True
+                )
+                if lang_btn:
+                    toggle_lang()
+                    st.rerun()
+            
+            if submitted:
+                if username and password:
+                    with st.spinner(""):
+                        user = st.session_state.auth.authenticate(username, password)
+                        if user:
+                            user['username'] = username
+                            st.session_state.user = user
+                            st.session_state.show_welcome = True
+                            st.rerun()
+                        else:
+                            st.error(t("invalid_creds", lang))
+                else:
+                    st.warning("الرجاء إدخال اسم المستخدم وكلمة المرور" if lang == 'ar' else "Please enter username and password")
+        
         st.markdown('</div>', unsafe_allow_html=True)
+
+def render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search"):
+    name_keys = ["Full Name:", "الاسم الكامل", "Name", "الاسم"]
+    worker_name = "Worker"
+    for nk in name_keys:
+        if nk in worker_row.index:
+            worker_name = worker_row[nk]
+            break
+            
+    cv_col = None
+    for c in worker_row.index:
+        c_clean = str(c).lower()
+        if "cv" in c_clean or "سيرة" in c_clean or "download" in c_clean:
+            cv_col = c
+            break
+    cv_url = worker_row.get(cv_col, "") if cv_col else ""
     
-    # العنوان
-    st.markdown(f'<div class="login-title"><h1>{t("welcome_back", lang)}</h1></div>', unsafe_allow_html=True)
-    st.markdown(f'<div class="login-subtitle">{t("system_title", lang)}</div>', unsafe_allow_html=True)
+    scroll_key = f"last_scroll_{key_prefix}"
+    if scroll_key not in st.session_state or st.session_state[scroll_key] != selected_idx:
+        st.session_state[scroll_key] = selected_idx
+        st.components.v1.html(
+            f"""
+            <script>
+                setTimeout(function() {{
+                    var el = window.parent.document.getElementById('cv-anchor-{key_prefix}');
+                    if (el) el.scrollIntoView({{behavior: 'smooth'}});
+                }}, 300);
+            </script>
+            """,
+            height=0
+        )
+
+    st.markdown(f"<div id='cv-anchor-{key_prefix}'></div>", unsafe_allow_html=True)
+    st.markdown(f"""
+    <div style="background: rgba(20, 20, 20, 0.85); 
+                backdrop-filter: blur(15px);
+                padding: 30px; 
+                border-radius: 20px; 
+                border-left: 5px solid #D4AF37; 
+                border-bottom: 1px solid rgba(212, 175, 55, 0.2);
+                margin: 25px 0;
+                box-shadow: 0 15px 35px rgba(0,0,0,0.4);">
+        <h2 style="color: #D4AF37; 
+                   margin: 0; 
+                   font-family: 'Cinzel', serif; 
+                   letter-spacing: 2px;
+                   text-transform: uppercase;
+                   font-size: 1.8rem;">
+            👤 {worker_name}
+        </h2>
+    </div>
+    """, unsafe_allow_html=True)
     
-    # نموذج الدخول
-    with st.form("login_form"):
-        username = st.text_input(
-            t("username", lang), 
-            placeholder=t("username", lang),
-            label_visibility="collapsed"
-        )
-        password = st.text_input(
-            t("password", lang), 
-            type="password",
-            placeholder=t("password", lang),
-            label_visibility="collapsed"
-        )
+    col_a, col_b = st.columns([1, 1])
+    with col_a:
+        if st.button(f"✨ {t('translate_cv_btn', lang)}", use_container_width=True, type="primary", key=f"btn_trans_{key_prefix}_{selected_idx}"):
+            if cv_url and str(cv_url).startswith("http"):
+                with st.spinner(t("extracting", lang)):
+                    try:
+                        import requests
+                        file_id = None
+                        if "drive.google.com" in cv_url:
+                            if "id=" in cv_url: file_id = cv_url.split("id=")[1].split("&")[0]
+                            elif "/d/" in cv_url: file_id = cv_url.split("/d/")[1].split("/")[0]
+
+                        if file_id:
+                            session = requests.Session()
+                            session.headers.update({"User-Agent": "Mozilla/5.0"})
+                            
+                            dl_url = f"https://docs.google.com/uc?export=download&id={file_id}"
+                            resp = session.get(dl_url, stream=True, timeout=15)
+                            
+                            token = None
+                            for k, v in resp.cookies.items():
+                                if k.startswith('download_warning'): token = v; break
+                            if token:
+                                dl_url = f"https://docs.google.com/uc?export=download&confirm={token}&id={file_id}"
+                                resp = session.get(dl_url, stream=True, timeout=15)
+                                
+                            if resp.status_code >= 500:
+                                resp = requests.get(cv_url, timeout=15)
+                                
+                            pdf_content = resp.content
+                        else:
+                            resp = requests.get(cv_url, timeout=15)
+                            pdf_content = resp.content
+
+                        if resp.status_code == 200:
+                            if not pdf_content.startswith(b"%PDF"):
+                                st.error("⚠️ الملف ليس PDF صالح")
+                            else:
+                                tm = TranslationManager()
+                                text = tm.extract_text_from_pdf(pdf_content)
+                                if text.startswith("Error"): st.error(text)
+                                else:
+                                    trans = tm.translate_full_text(text)
+                                    st.session_state[f"trans_{key_prefix}_{selected_idx}"] = {"orig": text, "trans": trans}
+                        else:
+                            st.error(f"خطأ في الوصول للملف: HTTP {resp.status_code}")
+                    except Exception as e: st.error(f"Error: {str(e)}")
+            else: st.warning("رابط السيرة الذاتية غير موجود")
+
+    sheet_row = worker_row.get('__sheet_row')
+    if not sheet_row: sheet_row = worker_row.get('__sheet_row_backup')
+    
+    if not sheet_row:
+        if hasattr(st.session_state.db, "find_row_by_data"):
+            with st.spinner("⏳ محاولة البحث..."):
+                sheet_row = st.session_state.db.find_row_by_data(worker_name)
+
+    if sheet_row:
+        with st.popover(f"🗑️ {t('delete_btn', lang)}", use_container_width=True):
+            st.warning(t("confirm_delete_msg", lang))
+            if st.button(t("confirm_btn", lang), type="primary", use_container_width=True, key=f"del_confirm_{key_prefix}_{selected_idx}"):
+                with st.spinner("⏳ جارٍ الحذف..."):
+                    success = st.session_state.db.delete_row(sheet_row)
+                    if success == True:
+                        st.success(t("delete_success", lang))
+                        time.sleep(1)
+                        if f"last_scroll_{key_prefix}" in st.session_state: del st.session_state[f"last_scroll_{key_prefix}"]
+                        st.rerun()
+                    else:
+                        st.error(f"{t('delete_error', lang)}: {success}")
+    else:
+        st.error(f"⚠️ {t('delete_error', lang)} (ID Missing)")
+
+    trans_key = f"trans_{key_prefix}_{selected_idx}"
+    if trans_key in st.session_state:
+        t_data = st.session_state[trans_key]
+        c1, c2 = st.columns(2)
+        with c1:
+            st.caption("English (Original)")
+            st.text_area("Orig", t_data["orig"], height=300, key=f"orig_area_{key_prefix}_{selected_idx}")
+        with c2:
+            st.caption("العربية (المترجمة)")
+            st.text_area("Trans", t_data["trans"], height=300, key=f"trans_area_{key_prefix}_{selected_idx}")
+    
+    st.markdown(f"#### 🔎 {t('preview_cv', lang)}")
+    if cv_url and str(cv_url).startswith("http"):
+        preview_url = cv_url
+        if "drive.google.com" in cv_url:
+            f_id = None
+            if "id=" in cv_url: f_id = cv_url.split("id=")[1].split("&")[0]
+            elif "/d/" in cv_url: f_id = cv_url.split("/d/")[1].split("/")[0]
+            if f_id: preview_url = f"https://drive.google.com/file/d/{f_id}/preview"
+        st.components.v1.iframe(preview_url, height=600, scrolling=True)
+    else: st.info("لا يتوفر رابط معاينة")
+
+def dashboard():
+    user = st.session_state.user
+    lang = st.session_state.lang
+    
+    if st.session_state.get('show_welcome'):
+        if lang == 'ar':
+            f_name = user.get('first_name_ar', '')
+            fa_name = user.get('father_name_ar', '')
+        else:
+            f_name = user.get('first_name_en', '')
+            fa_name = user.get('father_name_en', '')
+            
+        full_name = f"{f_name} {fa_name}".strip()
+        if not full_name: full_name = user.get('username', 'User')
         
-        # زر الدخول
-        submitted = st.form_submit_button(t("login_btn", lang), use_container_width=True)
+        msg = t("welcome_person", lang).format(name=full_name)
+        st.success(f"💖 {msg}")
+        st.toast(msg, icon="🎉")
+        del st.session_state.show_welcome
+
+    with st.sidebar:
+        sc1, sc2, sc3 = st.columns([1, 2, 1])
+        with sc2:
+            if os.path.exists(IMG_PATH):
+                st.image(IMG_PATH, use_container_width=True)
         
-        # زر تغيير اللغة
-        lang_clicked = st.form_submit_button(
-            "🌐 " + ("English" if lang == "ar" else "العربية"),
-            use_container_width=False
-        )
+        credit_class = "programmer-credit en" if lang == "en" else "programmer-credit"
+        line1 = "برمجة" if lang == "ar" else "By:"
+        line2 = "السعيد الوزان" if lang == "ar" else "Alsaeed Alwazzan"
+        st.markdown(f'<div class="{credit_class}">{line1}<br>{line2}</div>', unsafe_allow_html=True)
         
-        if lang_clicked:
+        st.markdown("<div style='margin-bottom: 20px;'></div>", unsafe_allow_html=True)
+        
+        if st.button("🌐 " + ("English" if lang == "ar" else "العربية"), key="lang_btn_dashboard", use_container_width=True):
             toggle_lang()
             st.rerun()
         
-        if submitted:
-            if username and password:
-                with st.spinner(""):
-                    user = st.session_state.auth.authenticate(username, password)
-                    if user:
-                        user['username'] = username
-                        st.session_state.user = user
-                        st.session_state.show_welcome = True
-                        st.rerun()
-                    else:
-                        st.error(t("invalid_creds", lang))
-            else:
-                st.warning("الرجاء إدخال اسم المستخدم وكلمة المرور" if lang == 'ar' else "Please enter credentials")
+        st.markdown("<div style='margin-bottom: 30px;'></div>", unsafe_allow_html=True)
+
+        if st.button("📊 " + t("dashboard", lang), use_container_width=True):
+            st.session_state.page = "dashboard"
+            st.rerun()
+        if st.button("🔍 " + t("smart_search", lang), use_container_width=True):
+            st.session_state.page = "search"
+            st.rerun()
+        if st.button("📝 " + t("cv_translator", lang), use_container_width=True):
+            st.session_state.page = "translator"
+            st.rerun()
+        if st.button("📋 " + t("customer_requests", lang), use_container_width=True):
+            st.session_state.page = "customer_requests"
+            st.rerun()
+        if st.button("⚙️ " + t("order_processing", lang), use_container_width=True):
+            st.session_state.page = "order_processing"
+            st.rerun()
+        if user.get("role") == "admin":
+            if st.button("🔐 " + t("permissions", lang), use_container_width=True):
+                st.session_state.page = "permissions"
+                st.rerun()
+            
+            if st.button("🔄 " + t("refresh_data_btn", lang), key="force_refresh_db", use_container_width=True):
+                refresh_loader = show_loading_hourglass()
+                st.session_state.db.fetch_data(force=True)
+                refresh_loader.empty()
+                st.success("تم التحديث!" if lang == 'ar' else "Updated!")
+                time.sleep(1)
+                st.rerun()
+        
+        st.markdown("<div style='margin: 15px 0;'></div>", unsafe_allow_html=True)
+        
+        if st.button("🚪 " + t("logout", lang), type="primary", use_container_width=True):
+            st.session_state.user = None
+            st.rerun()
+        
+        st.sidebar.divider()
+        with st.sidebar.expander(t("deep_reset", lang)):
+            st.caption(t("deep_reset_desc", lang))
+            if st.button(t("deep_reset", lang), key="sidebar_deep_reset", use_container_width=True):
+                for k in list(st.session_state.keys()):
+                    if any(k.startswith(prefix) for prefix in ["dash_table_", "last_scroll_", "trans_", "search_results"]):
+                        del st.session_state[k]
+                st.session_state.db.fetch_data(force=True)
+                st.success("تم التنظيف!")
+                time.sleep(1)
+                st.rerun()
+
+    if user.get("role") == "admin":
+        with st.sidebar.expander(t("debug", lang)):
+            if st.button(t("test_db", lang)):
+                try:
+                    st.session_state.db.connect()
+                    d = st.session_state.db.fetch_data(force=True)
+                    st.write(f"Rows: {len(d)}")
+                    if not d.empty: st.write(d.columns.tolist())
+                except Exception as e:
+                    st.error(f"Err: {e}")
+
+    page = st.session_state.get('page', 'dashboard')
     
-    st.markdown('</div>', unsafe_allow_html=True)
-    st.markdown('</div>', unsafe_allow_html=True)
+    if page == "dashboard": render_dashboard_content()
+    elif page == "search": render_search_content()
+    elif page == "translator": render_translator_content()
+    elif page == "customer_requests": render_customer_requests_content()
+    elif page == "order_processing": render_order_processing_content()
+    elif page == "permissions": render_permissions_content()
+'''
+
+print(fixed_login_code[:3000])
+print("\n... [continued] ...")
