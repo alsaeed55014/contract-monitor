@@ -214,7 +214,7 @@ def get_css():
             -webkit-text-fill-color: transparent !important;
             text-shadow: 0 4px 15px rgba(212, 175, 55, 0.4) !important;
             margin: 0 !important;
-            padding: 10px 0 !important;
+            padding: 0 !important; /* Zero padding at top of title */
             letter-spacing: 3px !important;
         }
 
@@ -831,12 +831,12 @@ def render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search", 
 # 11. Logic Functions
 def login_screen():
     lang = st.session_state.lang
-    col1, col2, col3 = st.columns([1.5, 2.2, 1.5]) # Narrower center column for compact fields
+    col1, col2, col3 = st.columns([1.5, 2.2, 1.5]) 
     with col2:
         # 1. Giant Luxury Title at Absolute Top
-        st.markdown('<div class="luxury-main-title">برنامج توريد العمالة الاسيويه</div>', unsafe_allow_html=True)
+        st.markdown('<div class="luxury-main-title">برنامج توريد العمالة الآسيوية</div>', unsafe_allow_html=True)
         
-        st.markdown('<div class="login-screen-wrapper">', unsafe_allow_html=True)
+        st.markdown('<div class="login-screen-wrapper" style="margin-top: -10px !important;">', unsafe_allow_html=True)
         
         with st.form("login"):
             # 2. Horizontal Profile + Welcome Message Row
