@@ -463,6 +463,15 @@ if hasattr(st.session_state.auth, 'load_error'):
 if 'db' not in st.session_state or not hasattr(st.session_state.db, 'fetch_customer_requests'):
     st.session_state.db = DBClient()
 
+# Initialize TranslationManager if not already in session state
+if 'tm' not in st.session_state:
+    try:
+        from src.core.translation import TranslationManager
+        st.session_state.tm = TranslationManager()
+    except Exception as e:
+        print(f"[ERROR] Failed to init TranslationManager: {e}")
+        st.session_state.tm = None
+
 # 7. Session State Defaults
 if 'user' not in st.session_state:
     st.session_state.user = None
@@ -1547,38 +1556,74 @@ def render_order_processing_content():
         c_raw = str(customer_nat).strip()
         w_nat = normalize(worker_nat)
         if not c_raw or not w_nat: return True
-        parts = [p.strip() for p in c_raw.split(',')]
-        for part in parts:
-            pn = normalize(part)
-            if w_nat in pn or pn in w_nat:
+        
+        # Get all synonyms/translations for the customer request
+        tm = st.session_state.get('tm')
+        search_terms = {normalize(c_raw)}
+        if tm:
+            bundles = tm.analyze_query(c_raw)
+            for b in bundles:
+                for s in b:
+                    search_terms.add(normalize(s))
+        
+        for term in search_terms:
+            if not term: continue
+            if term in w_nat or w_nat in term:
                 return True
-            words = re.split(r'[\s\-–|]+', pn)
-            for word in words:
-                word = word.strip()
-                if len(word) > 2 and (word in w_nat or w_nat in word):
+            # Split by common separators if the term contains multiple words/options
+            parts = re.split(r'[\s|,،\-–]+', term)
+            for p in parts:
+                p = p.strip()
+                if len(p) > 2 and (p in w_nat or w_nat in p):
                     return True
         return False
     
     def match_job(customer_job, worker_job):
-        c_job = normalize(customer_job)
+        c_job = str(customer_job).strip()
         w_job = normalize(worker_job)
         if not c_job or not w_job: return True
-        requested_jobs = [j.strip() for j in c_job.split(',')]
-        for rj in requested_jobs:
-            rj = normalize(rj)
-            if rj and len(rj) > 1 and (rj in w_job or w_job in rj):
+        
+        tm = st.session_state.get('tm')
+        search_terms = {normalize(c_job)}
+        if tm:
+            bundles = tm.analyze_query(c_job)
+            for b in bundles:
+                for s in b:
+                    search_terms.add(normalize(s))
+                    
+        for term in search_terms:
+            if not term: continue
+            if term in w_job or w_job in term:
                 return True
+            parts = re.split(r'[\s|,،\-–]+', term)
+            for p in parts:
+                p = p.strip()
+                if len(p) > 1 and (p in w_job or w_job in p):
+                    return True
         return False
     
     def match_city(customer_location, worker_city):
-        c_loc = normalize(customer_location)
+        c_loc = str(customer_location).strip()
         w_city_val = normalize(worker_city)
         if not c_loc or not w_city_val: return True
-        parts = re.split(r'[|,،]+', c_loc)
-        for part in parts:
-            part = part.strip()
-            if part and len(part) > 1 and (part in w_city_val or w_city_val in part):
+        
+        tm = st.session_state.get('tm')
+        search_terms = {normalize(c_loc)}
+        if tm:
+            bundles = tm.analyze_query(c_loc)
+            for b in bundles:
+                for s in b:
+                    search_terms.add(normalize(s))
+                    
+        for term in search_terms:
+            if not term: continue
+            if term in w_city_val or w_city_val in term:
                 return True
+            parts = re.split(r'[\s|,،\-–]+', term)
+            for p in parts:
+                p = p.strip()
+                if len(p) > 1 and (p in w_city_val or w_city_val in p):
+                    return True
         return False
     
     def find_matching_workers(customer_row):
