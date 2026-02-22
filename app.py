@@ -1437,9 +1437,9 @@ def render_search_content():
             elif query and count_found == total_rows:
                 st.warning("تنبيه: البحث أرجع جميع النتائج. تحقق من تشخيص البحث أعلاه." if lang == 'ar' else "Warning: Search returned all results. Check debug panel above.")
             
-            # Clean up all internal diagnostic columns starting with __
-            internal_cols = [c for c in res.columns if str(c).startswith('__')]
-            res = res.drop(columns=internal_cols)
+            # Preserve internal diagnostic columns for logic (dropping them here was causing the ID Missing error)
+            # internal_cols = [c for c in res.columns if str(c).startswith('__')]
+            # res = res.drop(columns=internal_cols)
         except Exception as e:
             st.error(f"حدث خطأ أثناء البحث: {str(e)}")
             import traceback
@@ -1450,6 +1450,7 @@ def render_search_content():
             new_names = {}
             used_names = set()
             for c in res.columns:
+                if str(c).startswith('__'): continue
                 new_name = t_col(c, lang)
                 original_new_name = new_name
                 counter = 1
@@ -1466,19 +1467,17 @@ def render_search_content():
             
             # Recalculate Column Config Key
             
-            # Hide internal sheet row from display but keep in original 'res' for logic
-            res_to_rename = res.copy()
-            for int_col in ["__sheet_row", "__sheet_row_backup"]:
-                if int_col in res_to_rename.columns:
-                    res_to_rename = res_to_rename.drop(columns=[int_col])
-            
             # Reorder columns for Search Table (Status first)
             status_key = 'حالة العقد' if lang == 'ar' else 'Contract Status'
             if status_key in res.columns:
                 other_cols = [c for c in res.columns if c != status_key]
                 res = res[[status_key] + other_cols]
 
-            res_display = res
+            # Hide internal sheet row from display but keep in original 'res' for logic
+            res_display = res.copy()
+            for int_col in ["__sheet_row", "__sheet_row_backup"]:
+                if int_col in res_display.columns:
+                    res_display = res_display.drop(columns=[int_col])
             
             # --- ROW SELECTION & PROFESSIONAL UI ---
 
