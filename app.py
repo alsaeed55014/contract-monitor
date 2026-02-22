@@ -1575,10 +1575,15 @@ def render_order_processing_content():
     
     def match_nationality(customer_nat, worker_nat):
         c_raw = str(customer_nat).strip()
-        w_nat = normalize(worker_nat)
-        if not c_raw or not w_nat: return True
+        w_raw = str(worker_nat).strip()
+        if not c_raw or not w_raw: return True
+
+        # 1. Clean worker nationality parts
+        # Remove common emojis and split by separators
+        w_clean = re.sub(r'[^\w\s\-–|/]', ' ', w_raw) # Keep alphanumeric and common separators
+        w_parts = [normalize(p) for p in re.split(r'[\-–|/]', w_clean) if p.strip()]
         
-        # Get all synonyms/translations for the customer request
+        # 2. Get search terms from customer request
         tm = st.session_state.get('tm')
         search_terms = {normalize(c_raw)}
         if tm:
@@ -1586,16 +1591,14 @@ def render_order_processing_content():
             for b in bundles:
                 for s in b:
                     search_terms.add(normalize(s))
-        
+
+        # 3. Precise Matching: Does any search term match any worker nationality part?
         for term in search_terms:
             if not term: continue
-            if term in w_nat or w_nat in term:
-                return True
-            # Split by common separators if the term contains multiple words/options
-            parts = re.split(r'[\s|,،\-–]+', term)
-            for p in parts:
-                p = p.strip()
-                if len(p) > 2 and (p in w_nat or w_nat in p):
+            for wp in w_parts:
+                if not wp: continue
+                # Exact or high-confidence match
+                if term == wp or (len(term) > 3 and (term in wp or wp in term)):
                     return True
         return False
     
