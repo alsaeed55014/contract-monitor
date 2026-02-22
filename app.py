@@ -626,12 +626,12 @@ st.set_page_config(
 st.markdown(get_css(), unsafe_allow_html=True)
 
 # 6. Initialize Core (With Force Re-init for Updates)
-if 'auth' not in st.session_state or not hasattr(st.session_state.auth, 'v8_marker'):
+if 'auth' not in st.session_state or not hasattr(st.session_state.auth, 'v9_marker'):
     # Show a brief initial loader for a premium feel
     loading = show_loading_hourglass()
     time.sleep(0.4)
     st.session_state.auth = AuthManager(USERS_FILE)
-    st.session_state.auth.v8_marker = True # Marker to ensure object picks up new methods
+    st.session_state.auth.v9_marker = True # Marker to ensure object picks up new methods (update_permissions)
     st.session_state.db = DBClient() # Force DB re-init as well
     loading.empty()
 
