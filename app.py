@@ -1578,26 +1578,38 @@ def render_order_processing_content():
         w_raw = str(worker_nat).strip()
         if not c_raw or not w_raw: return True
 
-        # 1. Clean worker nationality parts
-        # Remove common emojis and split by separators
-        w_clean = re.sub(r'[^\w\s\-–|/]', ' ', w_raw) # Keep alphanumeric and common separators
-        w_parts = [normalize(p) for p in re.split(r'[\-–|/]', w_clean) if p.strip()]
-        
-        # 2. Get search terms from customer request
-        tm = st.session_state.get('tm')
-        search_terms = {normalize(c_raw)}
-        if tm:
-            bundles = tm.analyze_query(c_raw)
-            for b in bundles:
-                for s in b:
-                    search_terms.add(normalize(s))
+        # Helper to clean and split a string by common separators and remove emojis
+        def get_clean_parts(text):
+            # Remove emojis (common flags, etc.)
+            clean = re.sub(r'[^\w\s\-–|/]', ' ', text)
+            # Split by separators
+            parts = [p.strip() for p in re.split(r'[\-–|/]', clean) if p.strip()]
+            return parts
 
-        # 3. Precise Matching: Does any search term match any worker nationality part?
-        for term in search_terms:
+        # 1. Extract Master Search Terms from Customer Request
+        c_parts = get_clean_parts(c_raw)
+        master_search_terms = set()
+        tm = st.session_state.get('tm')
+
+        for cp in c_parts:
+            # Add normalized part
+            master_search_terms.add(normalize(cp))
+            # Add translations if available
+            if tm:
+                bundles = tm.analyze_query(cp)
+                for b in bundles:
+                    for s in b:
+                        master_search_terms.add(normalize(s))
+
+        # 2. Extract Worker Nationality Parts
+        w_parts = [normalize(wp) for wp in get_clean_parts(w_raw)]
+        
+        # 3. Precise Matching
+        for term in master_search_terms:
             if not term: continue
             for wp in w_parts:
                 if not wp: continue
-                # Exact or high-confidence match
+                # Strict or high-confidence match
                 if term == wp or (len(term) > 3 and (term in wp or wp in term)):
                     return True
         return False
