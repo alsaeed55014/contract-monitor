@@ -163,6 +163,10 @@ TRANSLATIONS = {
     "add_worker_btn": {"ar": "إضافة بيانات العامل", "en": "Add Worker Data"},
     "select_supplier": {"ar": "اختر المورد", "en": "Select Supplier"},
     "select_employer": {"ar": "اختر صاحب العمل", "en": "Select Employer"},
+    "search_manage_title": {"ar": "🔍 البحث وإدارة السجلات", "en": "Search & Manage Records"},
+    "delete_btn": {"ar": "حذف", "en": "Delete"},
+    "search_placeholder_bengali": {"ar": "ابحث باسم العامل، المورد، أو العميل...", "en": "Search by worker, supplier, or employer name..."},
+    "no_records_found": {"ar": "لم يتم العثور على سجلات", "en": "No records found"},
 
 
 

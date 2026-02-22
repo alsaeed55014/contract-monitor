@@ -40,9 +40,26 @@ class BengaliDataManager:
         return True
 
     def add_worker(self, worker_data):
+        import uuid
+        if "id" not in worker_data or not worker_data["id"]:
+            worker_data["worker_uuid"] = str(uuid.uuid4())[:8]
+        else:
+            worker_data["worker_uuid"] = str(uuid.uuid4())[:8]
+            
         self.data["workers"].append(worker_data)
         self.save_data()
         return True
+
+    def get_workers(self):
+        return self.data.get("workers", [])
+
+    def delete_worker(self, worker_uuid):
+        initial_count = len(self.data["workers"])
+        self.data["workers"] = [w for w in self.data["workers"] if w.get("worker_uuid") != worker_uuid]
+        if len(self.data["workers"]) < initial_count:
+            self.save_data()
+            return True
+        return False
 
     def get_suppliers(self):
         return self.data["suppliers"]
