@@ -209,9 +209,9 @@ def get_css():
             background: var(--glass-bg) !important;
             backdrop-filter: blur(20px) !important;
             border: 1px solid var(--border-glow) !important;
-            border-radius: 24px !important;
-            padding: 2.5rem !important;
-            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7) !important;
+            border-radius: 20px !important;
+            padding: 1.5rem !important; /* Reduced padding */
+            box-shadow: 0 15px 35px -5px rgba(0, 0, 0, 0.7) !important;
             transition: transform 0.3s ease;
         }
 
@@ -326,19 +326,18 @@ def get_css():
             font-family: 'Alex Brush', cursive !important;
             color: #FFFFFF !important;
             text-shadow: 0 0 10px rgba(255, 255, 255, 0.8), 
-                         0 0 20px rgba(212, 175, 55, 0.4),
-                         0 0 30px rgba(212, 175, 55, 0.2) !important;
-            font-size: 1.8rem !important;
+                         0 0 20px rgba(212, 175, 55, 0.4) !important;
+            font-size: 1.4rem !important; /* Smaller signature */
             text-align: center !important;
             display: block !important;
             width: 100% !important;
-            margin: 0 auto 20px auto !important;
+            margin: 0 auto 10px auto !important;
             letter-spacing: 1px !important;
         }
 
         /* Login Screen Special Centering */
         .login-screen-wrapper {
-            margin-top: 5vh;
+            margin-top: 2vh !important; /* Significantly reduced margin */
             text-align: center;
         }
         
@@ -794,21 +793,20 @@ def login_screen():
     with col2:
         st.markdown('<div class="login-screen-wrapper">', unsafe_allow_html=True)
         
-        # 1. Signature at the ABSOLUTE Top (requested by user)
-        st.markdown('<div class="programmer-signature-neon" style="font-size: 2rem; margin-bottom: 30px;">By: Alsaeed Alwazzan</div>', unsafe_allow_html=True)
+        # 1. Signature at the Top
+        st.markdown('<div class="programmer-signature-neon" style="margin-bottom: 10px;">By: Alsaeed Alwazzan</div>', unsafe_allow_html=True)
 
-        # 2. Image (Centered and slightly smaller)
+        # 2. Image (Compact)
         if os.path.exists(IMG_PATH):
-            st.image(IMG_PATH, width=80) # Explicit width in Streamlit also helps
+            st.image(IMG_PATH, width=65) # Smaller avatar
         
-        # 3. Welcome Message (Refined Luxury)
+        # 3. Welcome Message (Compact Luxury)
         st.markdown(f"""
-            <div class="welcome-signature-container">
-                <h1 style='margin:0; padding:0; display:inline-block; font-size: 2.2rem;'>{t('welcome_back', lang)}</h1>
+            <div style='text-align:center; margin: 10px 0;'>
+                <h2 style='margin:0; padding:0; font-size: 1.6rem; color: #D4AF37;'>{t('welcome_back', lang)}</h2>
+                <p style='color:#777; font-size: 0.8rem; letter-spacing:1px; margin-top:5px;'>{t('system_title', lang)}</p>
             </div>
             """, unsafe_allow_html=True)
-            
-        st.markdown(f"<p style='text-align:center; color:#AAA; letter-spacing:2px; font-weight:300; margin-bottom:35px; text-transform: uppercase;'>{t('system_title', lang)}</p>", unsafe_allow_html=True)
         
         # 3. Form (Styled via CSS in get_css)
         with st.form("login"):
@@ -830,12 +828,17 @@ def login_screen():
                     if u.lower() == "admin" and p_norm == "admin123":
                         st.info("💡 Try using your new password instead of the old default.")
 
-            # Language Toggle Wrapper
-            st.markdown('<div class="lang-toggle-wrapper">', unsafe_allow_html=True)
+            # Language Toggle (Compact Link style instead of big button inside form)
+            st.markdown(f"""
+                <div style='text-align: center; margin-top: 15px;'>
+                    <p style='color: #555; font-size: 0.8rem;'>
+                        {"Switch Language" if lang == "ar" else "التبديل للعربية"}
+                    </p>
+                </div>
+                """, unsafe_allow_html=True)
             if st.form_submit_button("En" if lang == "ar" else "عربي", use_container_width=True):
                 toggle_lang()
                 st.rerun()
-            st.markdown('</div>', unsafe_allow_html=True)
         
         st.markdown('</div>', unsafe_allow_html=True)
 
