@@ -163,7 +163,7 @@ def get_css():
     return """
     <style>
         /* Modern 2026 Luxury Executive Design System */
-        @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700&family=Inter:wght@300;400;500;600;700&family=Cinzel:wght@500;700&family=Alex+Brush&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700&family=Inter:wght@300;400;500;600;700&family=Cinzel:wght@500;700&family=Alex+Brush&family=Cairo:wght@400;600;700&display=swap');
         
         :root {
             --luxury-gold: #D4AF37;
@@ -179,7 +179,7 @@ def get_css():
         .stApp {
             background: radial-gradient(circle at top right, #001F3F, #000000) !important;
             color: var(--text-main);
-            font-family: 'Inter', 'Tajawal', sans-serif;
+            font-family: 'Inter', 'Cairo', 'Tajawal', sans-serif;
             direction: rtl; /* Force RTL */
         }
 
@@ -205,8 +205,8 @@ def get_css():
 
         /* 3) Luxury Typography & Large Title */
         .luxury-main-title {
-            font-family: 'Cinzel', serif !important;
-            font-size: 3.5rem !important;
+            font-family: 'Cinzel', 'Cairo', serif !important;
+            font-size: 2.2rem !important; /* Smaller size for better balance */
             font-weight: 700 !important;
             text-align: center !important;
             background: linear-gradient(to bottom, #FFFFFF 20%, #D4AF37 100%) !important;
@@ -214,8 +214,8 @@ def get_css():
             -webkit-text-fill-color: transparent !important;
             text-shadow: 0 4px 15px rgba(212, 175, 55, 0.4) !important;
             margin: 0 !important;
-            padding: 0 !important; /* Zero padding at top of title */
-            letter-spacing: 3px !important;
+            padding: 0 !important; 
+            letter-spacing: 2px !important;
         }
 
         /* 4) Premium Form & Vertical Alignment */
@@ -831,12 +831,15 @@ def render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search", 
 # 11. Logic Functions
 def login_screen():
     lang = st.session_state.lang
+    # Define Bilingual Titles
+    title_text = "برنامج توريد العمالة الآسيوية" if lang == "ar" else "Recruitment of Asian Labor Program"
+    
     col1, col2, col3 = st.columns([1.5, 2.2, 1.5]) 
     with col2:
         # 1. Giant Luxury Title at Absolute Top
-        st.markdown('<div class="luxury-main-title">برنامج توريد العمالة الآسيوية</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="luxury-main-title">{title_text}</div>', unsafe_allow_html=True)
         
-        st.markdown('<div class="login-screen-wrapper" style="margin-top: -10px !important;">', unsafe_allow_html=True)
+        st.markdown('<div class="login-screen-wrapper" style="margin-top: -20px !important;">', unsafe_allow_html=True)
         
         with st.form("login"):
             # 2. Horizontal Profile + Welcome Message Row
