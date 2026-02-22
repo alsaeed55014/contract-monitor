@@ -1010,8 +1010,16 @@ def render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search", 
 # 11. Logic Functions
 def login_screen():
     lang = st.session_state.lang
+    
+    # 2026 Luxury Flag Icons (Ensures consistent rendering on Windows)
+    sa_icon = '<img src="https://flagcdn.com/w40/sa.png" style="width:24px; vertical-align:middle; border-radius:3px; margin:0 4px; box-shadow:0 0 8px rgba(0,0,0,0.4);">'
+    ph_icon = '<img src="https://flagcdn.com/w40/ph.png" style="width:24px; vertical-align:middle; border-radius:3px; margin:0 4px; box-shadow:0 0 8px rgba(0,0,0,0.4);">'
+    
     # Define Bilingual Titles with Flag Icons
-    title_text = 'برنامج توريد العمالة الفلبينية <span class="flag-icon">🇸🇦</span> <span class="flag-icon">🇵🇭</span>' if lang == "ar" else 'Philippines Recruitment Program <span class="flag-icon">🇸🇦</span> <span class="flag-icon">🇵🇭</span>'
+    if lang == "ar":
+        title_text = f'برنامج توريد العمالة الفلبينية {sa_icon} {ph_icon}'
+    else:
+        title_text = f'Philippines Recruitment Program {sa_icon} {ph_icon}'
     
     col1, col2, col3 = st.columns([1.5, 2.2, 1.5]) 
     with col2:
