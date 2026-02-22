@@ -1676,15 +1676,19 @@ def render_order_processing_content():
                 cv = str(customer_row.get(c_category, ""))
                 wv = str(worker.get(w_gender_col, ""))
                 if cv.strip():
+                    if not match_gender(cv, wv):
+                        continue # Hard Filter: Skip if gender mismatch
                     total_criteria += 1
-                    if match_gender(cv, wv): score += 1
+                    score += 1
             
             if c_nationality and w_nationality_col:
                 cv = str(customer_row.get(c_nationality, ""))
                 wv = str(worker.get(w_nationality_col, ""))
                 if cv.strip():
+                    if not match_nationality(cv, wv):
+                        continue # Hard Filter: Skip if nationality mismatch
                     total_criteria += 1
-                    if match_nationality(cv, wv): score += 1
+                    score += 1
             
             if c_work_nature and w_job_col:
                 cv = str(customer_row.get(c_work_nature, ""))
