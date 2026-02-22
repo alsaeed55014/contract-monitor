@@ -1525,7 +1525,13 @@ def render_order_processing_content():
             
     if ts_sort_col:
         try:
-            customers_df['__temp_sort'] = pd.to_datetime(customers_df[ts_sort_col], errors='coerce')
+            # Robust parsing for Arabic AM/PM markers
+            def robust_parse(v):
+                if not v: return pd.NaT
+                s = str(v).replace('م', 'PM').replace('ص', 'AM')
+                return pd.to_datetime(s, errors='coerce')
+                
+            customers_df['__temp_sort'] = customers_df[ts_sort_col].apply(robust_parse)
             # Sort newest first
             customers_df = customers_df.sort_values(by='__temp_sort', ascending=False)
             customers_df = customers_df.drop(columns=['__temp_sort'])
@@ -1851,7 +1857,31 @@ def render_order_processing_content():
             # Info Grid
             col1, col2, col3 = st.columns(3)
             with col1:
-                if c_timestamp: info_cell("📅", "التاريخ" if lang == 'ar' else "Date", str(customer_row.get(c_timestamp, "")))
+                if c_timestamp:
+                    raw_ts = str(customer_row.get(c_timestamp, ""))
+                    date_part = ""
+                    time_part = ""
+                    
+                    # Heuristic to separate Date and Time
+                    parts = raw_ts.split()
+                    for p in parts:
+                        if '/' in p or '-' in p:
+                            date_part = p
+                        elif ':' in p:
+                            time_part = p
+                    
+                    # Re-attach Arabic marker if present
+                    if 'م' in raw_ts: time_part += " م"
+                    elif 'ص' in raw_ts: time_part += " ص"
+                    
+                    # Fallback if parsing fails
+                    if not date_part and not time_part: date_part = raw_ts
+
+                    if date_part:
+                        info_cell("📅", "تاريخ الطلب" if lang == 'ar' else "Order Date", date_part)
+                    if time_part:
+                        info_cell("⏰", "وقت الطلب" if lang == 'ar' else "Order Time", time_part)
+                
                 info_cell("📍", t('work_location', lang), str(customer_row.get(c_location, "")))
                 info_cell("💼", t('work_nature', lang), str(customer_row.get(c_work_nature, "")))
             with col2:
