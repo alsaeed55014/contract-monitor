@@ -531,6 +531,65 @@ def get_css():
             from { opacity: 0.6; text-shadow: 0 0 10px rgba(212, 175, 55, 0.2); }
             to { opacity: 1; text-shadow: 0 0 25px rgba(212, 175, 55, 0.8), 0 0 15px rgba(212, 175, 55, 0.4); }
         }
+
+        /* 10) Persistent Top Banner */
+        .persistent-top-banner {
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+            background: rgba(10, 10, 10, 0.7);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-bottom: 2px solid rgba(212, 175, 55, 0.3);
+            margin: -1rem -5rem 2rem -5rem !important;
+            padding: 1rem 5rem !important;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            animation: banner-slide-down 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        @keyframes banner-slide-down {
+            from { transform: translateY(-100%); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+
+        .banner-user-info {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .banner-avatar {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            border: 2px solid #D4AF37;
+            object-fit: cover;
+            box-shadow: 0 0 15px rgba(212, 175, 55, 0.4);
+            transition: transform 0.3s ease;
+        }
+
+        .banner-avatar:hover {
+            transform: scale(1.1) rotate(5deg);
+        }
+
+        .banner-welcome-msg {
+            font-family: 'Cairo', 'Tajawal', sans-serif;
+            color: #FFFFFF;
+            font-size: 1.1rem;
+            font-weight: 600;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+            margin: 0;
+        }
+
+        .banner-subtext {
+            font-size: 0.8rem;
+            color: rgba(212, 175, 55, 0.8);
+            margin-top: -5px;
+        }
     </style>
     """
 
@@ -1009,6 +1068,52 @@ def login_screen():
         
         st.markdown('</div>', unsafe_allow_html=True)
 
+def render_top_banner():
+    """renders a persistent top banner with user image and welcome message."""
+    user = st.session_state.user
+    lang = st.session_state.lang
+    
+    if lang == 'ar':
+        f_name = user.get('first_name_ar', '')
+        fa_name = user.get('father_name_ar', '')
+        welcome_prefix = "مرحباً بك،"
+        program_name = "نظام السعيد المتكامل 💎"
+    else:
+        f_name = user.get('first_name_en', '')
+        fa_name = user.get('father_name_en', '')
+        welcome_prefix = "Welcome,"
+        program_name = "Alsaeed Integrated System 💎"
+
+    full_name = f"{f_name} {fa_name}".strip()
+    if not full_name: full_name = user.get('username', 'User')
+
+    # Get user avatar
+    avatar_b64 = st.session_state.auth.get_avatar(user.get('username', ''))
+    if avatar_b64:
+        avatar_html = f'<img src="data:image/png;base64,{avatar_b64}" class="banner-avatar" />'
+    else:
+        avatar_html = '<div class="banner-avatar" style="background:linear-gradient(135deg,#D4AF37,#8B7520);display:flex;align-items:center;justify-content:center;font-size:24px;">👤</div>'
+
+    st.markdown(f"""
+    <div class="persistent-top-banner">
+        <div style="display: flex; align-items: center; gap: 20px;">
+             <div class="banner-user-info">
+                {avatar_html}
+            </div>
+            <div>
+                <p class="banner-welcome-msg">{welcome_prefix} {full_name}</p>
+                <p class="banner-subtext">{program_name}</p>
+            </div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 15px;">
+            <div style="text-align: right;">
+                <p style="color: rgba(255,255,255,0.6); font-size: 0.75rem; margin: 0;">{datetime.now().strftime('%Y-%m-%d')}</p>
+                <p style="color: #D4AF37; font-size: 0.85rem; font-weight: bold; margin: 0;">{t('contract_dashboard', lang)}</p>
+            </div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
 def dashboard():
     user = st.session_state.user
     lang = st.session_state.lang
@@ -1251,6 +1356,9 @@ def dashboard():
                 st.success("تم تنظيف الذاكرة وتحديث البيانات!")
                 time.sleep(1)
                 st.rerun()
+
+    # --- Render Global Top Banner (Persistent) ---
+    render_top_banner()
 
     # Admin Debug
     if user.get("role") == "admin":
