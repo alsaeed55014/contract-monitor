@@ -1048,6 +1048,10 @@ def dashboard():
             st.session_state.page = "dashboard"
             st.rerun()
         if st.button(t("smart_search", lang), use_container_width=True):
+            # Reset the filter expander state to force open on entry
+            for key in list(st.session_state.keys()):
+                if key.startswith("filter_expander_"):
+                    del st.session_state[key]
             st.session_state.page = "search"
             st.rerun()
         if st.button(t("cv_translator", lang), use_container_width=True):
@@ -1318,7 +1322,8 @@ def render_search_content():
     
     # Advanced Filters UI
     # Advanced Filters UI
-    with st.expander(t("advanced_filters", lang) if t("advanced_filters", lang) != "advanced_filters" else "تصفية متقدمة", expanded=True):
+    filter_expander_key = f"filter_expander_{st.session_state.get('search_entry_count', 0)}"
+    with st.expander(t("advanced_filters", lang) if t("advanced_filters", lang) != "advanced_filters" else "تصفية متقدمة", expanded=False):
         
         # Row 1: Date & Range Filters
         st.markdown(f'<div class="premium-filter-label">📅 {t("filter_dates_group", lang)}</div>', unsafe_allow_html=True)
