@@ -637,37 +637,33 @@ def get_css():
                 background-color: #080808 !important;
             }
 
-            /* 12) Force Red Sidebar Toggle (Hamburger/Arrow) on Mobile */
-            /* Target both the main header button and the sidebar-specific collapse button */
-            button[data-testid="stBaseButton-headerNoPadding"], 
-            button[data-testid="stSidebarCollapse"],
-            button[kind="header"] {
-                z-index: 99999 !important;
-                background-color: #FF0000 !important; /* Bright Red for visibility */
-                color: #FFFFFF !important;
+            /* 12) UI CLEANUP: Hide Streamlit default menu/fork/deploy buttons */
+            header[data-testid="stHeader"] .stAppDeployButton,
+            header[data-testid="stHeader"] #MainMenu,
+            header[data-testid="stHeader"] button[data-testid="stBaseButton-headerNoPadding"] {
+                display: none !important;
+            }
+
+            /* 13) TARGET ONLY THE SIDEBAR TOGGLE (Arrow) to be RED */
+            button[data-testid="stSidebarCollapse"] {
+                display: flex !important;
+                background-color: #FF0000 !important; /* Bright Red */
                 border: 2px solid #D4AF37 !important;
                 border-radius: 50% !important;
                 box-shadow: 0 0 20px rgba(255, 0, 0, 0.8) !important;
                 width: 45px !important;
                 height: 45px !important;
-                display: flex !important;
-                align-items: center !important;
-                justify-content: center !important;
+                z-index: 1000002 !important;
+                position: fixed !important;
+                top: 10px !important;
+                left: 10px !important;
             }
 
-            /* Target the SVG icon inside the button to be gold */
-            button[data-testid="stBaseButton-headerNoPadding"] svg, 
-            button[data-testid="stSidebarCollapse"] svg,
-            button[kind="header"] svg {
+            button[data-testid="stSidebarCollapse"] svg {
                 fill: #D4AF37 !important;
                 color: #D4AF37 !important;
                 width: 25px !important;
                 height: 25px !important;
-            }
-
-            /* Support for the "back arrow" when sidebar is open */
-            section[data-testid="stSidebar"] button[data-testid="stBaseButton-headerNoPadding"] {
-                background-color: #FF0000 !important;
             }
 
             /* 12) Hide Streamlit Form Captions (Press Enter to submit) */
