@@ -637,42 +637,49 @@ def get_css():
                 background-color: #080808 !important;
             }
 
-            /* 12) UI CLEANUP: Hide Streamlit default junk buttons */
-            header[data-testid="stHeader"] .stAppDeployButton,
-            header[data-testid="stHeader"] #MainMenu,
-            header[data-testid="stHeader"] button[data-testid="stBaseButton-headerNoPadding"],
-            header[data-testid="stHeader"] a {
+            /* 12) GLOBAL UI CLEANUP: Hide ALL default Streamlit header junk */
+            .stAppDeployButton, 
+            #MainMenu, 
+            header[data-testid="stHeader"] a,
+            header[data-testid="stHeader"] button:not([data-testid="stSidebarCollapse"]):not([aria-label*="sidebar"]) {
                 display: none !important;
             }
 
-            /* 13) NEON WHITE SIDEBAR TOGGLE */
-            /* Target both the button and its container for maximum effect */
-            button[data-testid="stSidebarCollapse"] {
+            /* 13) FORCE NEON WHITE ON SIDEBAR TOGGLE ONLY */
+            /* This target covers both open and close buttons across different versions */
+            button[data-testid="stSidebarCollapse"],
+            button[aria-label*="Open sidebar"],
+            button[aria-label*="Close sidebar"],
+            button[kind="headerNoPadding"] {
                 display: flex !important;
-                background-color: #FFFFFF !important; /* Pure White */
+                visibility: visible !important;
+                background-color: #FFFFFF !important; /* Pure Neon White */
                 border: 2px solid #D4AF37 !important;
                 border-radius: 50% !important;
-                box-shadow: 0 0 15px #FFFFFF, 0 0 30px rgba(212, 175, 55, 0.6) !important;
-                width: 48px !important;
-                height: 48px !important;
-                z-index: 1000005 !important;
-                position: fixed !important;
-                top: 15px !important;
-                right: 15px !important;
-                animation: neon-pulse 2s infinite alternate !important;
+                box-shadow: 0 0 20px #FFFFFF, 0 0 40px rgba(212, 175, 55, 0.8) !important;
+                width: 50px !important;
+                height: 50px !important;
+                z-index: 999999 !important;
+                opacity: 1 !important;
             }
 
-            @keyframes neon-pulse {
-                from { box-shadow: 0 0 10px #FFF, 0 0 20px #FFF; }
-                to { box-shadow: 0 0 20px #FFF, 0 0 40px rgba(212, 175, 55, 0.8); }
-            }
-
-            /* Force the arrow icon (SVG) to be Dark/Gold for contrast */
+            /* Style the icon inside to be Black/Gold for extreme contrast */
+            button[aria-label*="sidebar"] svg,
             button[data-testid="stSidebarCollapse"] svg {
-                fill: #1A1A1A !important;
-                color: #1A1A1A !important;
-                width: 26px !important;
-                height: 26px !important;
+                fill: #000000 !important;
+                color: #000000 !important;
+                stroke: #D4AF37 !important;
+                stroke-width: 1 !important;
+                width: 30px !important;
+                height: 30px !important;
+            }
+
+            /* Desktop Adjustments for the same button */
+            @media (min-width: 769px) {
+                button[data-testid="stSidebarCollapse"] {
+                    top: 20px !important;
+                    left: 20px !important;
+                }
             }
 
             /* 12) Hide Streamlit Form Captions (Press Enter to submit) */
