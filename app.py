@@ -372,6 +372,7 @@ def get_css():
             text-align: center;
             margin-top: 10px;
             line-height: 1.2;
+            white-space: nowrap !important;
         }
         
         /* English version specific font */
@@ -408,6 +409,7 @@ def get_css():
             width: 100% !important;
             margin: 0 auto 10px auto !important;
             letter-spacing: 1px !important;
+            white-space: nowrap !important; /* Prevent vertical wrapping on mobile */
         }
 
         /* Signature Under Image */
@@ -418,6 +420,7 @@ def get_css():
             margin-top: 5px;
             text-align: center;
             letter-spacing: 1px;
+            white-space: nowrap !important;
         }
 
         /* Login Screen Special Centering */
@@ -614,8 +617,15 @@ def get_css():
             section[data-testid="stSidebar"] {
                 background-color: #080808 !important;
                 background-image: none !important;
-                z-index: 10 !important; /* Lower z-index to stay below splash but above content */
-                box-shadow: none !important; /* REMOVE shadow so it doesn't peek when closed */
+                z-index: 10 !important;
+                box-shadow: none !important;
+            }
+
+            /* FORCE HIDE sidebar when closed on mobile to prevent layout competition */
+            section[data-testid="stSidebar"][aria-expanded="false"] {
+                display: none !important;
+                visibility: hidden !important;
+                width: 0 !important;
             }
 
             /* Streamlit Mobile Sidebar User Content Fix */
