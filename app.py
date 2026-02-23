@@ -637,33 +637,42 @@ def get_css():
                 background-color: #080808 !important;
             }
 
-            /* 12) UI CLEANUP: Hide Streamlit default menu/fork/deploy buttons */
+            /* 12) UI CLEANUP: Hide Streamlit default junk buttons */
             header[data-testid="stHeader"] .stAppDeployButton,
             header[data-testid="stHeader"] #MainMenu,
-            header[data-testid="stHeader"] button[data-testid="stBaseButton-headerNoPadding"] {
+            header[data-testid="stHeader"] button[data-testid="stBaseButton-headerNoPadding"],
+            header[data-testid="stHeader"] a {
                 display: none !important;
             }
 
-            /* 13) TARGET ONLY THE SIDEBAR TOGGLE (Arrow) to be RED */
+            /* 13) NEON WHITE SIDEBAR TOGGLE */
+            /* Target both the button and its container for maximum effect */
             button[data-testid="stSidebarCollapse"] {
                 display: flex !important;
-                background-color: #FF0000 !important; /* Bright Red */
+                background-color: #FFFFFF !important; /* Pure White */
                 border: 2px solid #D4AF37 !important;
                 border-radius: 50% !important;
-                box-shadow: 0 0 20px rgba(255, 0, 0, 0.8) !important;
-                width: 45px !important;
-                height: 45px !important;
-                z-index: 1000002 !important;
+                box-shadow: 0 0 15px #FFFFFF, 0 0 30px rgba(212, 175, 55, 0.6) !important;
+                width: 48px !important;
+                height: 48px !important;
+                z-index: 1000005 !important;
                 position: fixed !important;
-                top: 10px !important;
-                left: 10px !important;
+                top: 15px !important;
+                right: 15px !important;
+                animation: neon-pulse 2s infinite alternate !important;
             }
 
+            @keyframes neon-pulse {
+                from { box-shadow: 0 0 10px #FFF, 0 0 20px #FFF; }
+                to { box-shadow: 0 0 20px #FFF, 0 0 40px rgba(212, 175, 55, 0.8); }
+            }
+
+            /* Force the arrow icon (SVG) to be Dark/Gold for contrast */
             button[data-testid="stSidebarCollapse"] svg {
-                fill: #D4AF37 !important;
-                color: #D4AF37 !important;
-                width: 25px !important;
-                height: 25px !important;
+                fill: #1A1A1A !important;
+                color: #1A1A1A !important;
+                width: 26px !important;
+                height: 26px !important;
             }
 
             /* 12) Hide Streamlit Form Captions (Press Enter to submit) */
