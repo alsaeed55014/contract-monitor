@@ -1145,10 +1145,14 @@ def render_top_banner():
     full_name = f"{f_name} {fa_name}".strip()
     if not full_name: full_name = user.get('username', 'User')
 
-    # Get user avatar
-    avatar_b64 = st.session_state.auth.get_avatar(user.get('username', ''))
-    if avatar_b64:
-        avatar_html = f'<img src="data:image/png;base64,{avatar_b64}" class="banner-avatar" />'
+    # Get user avatar - Handle legacy base64 or full Data URI
+    avatar_val = st.session_state.auth.get_avatar(user.get('username', ''))
+    if avatar_val:
+        if str(avatar_val).startswith('data:'):
+            avatar_html = f'<img src="{avatar_val}" class="banner-avatar" />'
+        else:
+            # Legacy fallback
+            avatar_html = f'<img src="data:image/png;base64,{avatar_val}" class="banner-avatar" />'
     else:
         avatar_html = '<div class="banner-avatar" style="background:linear-gradient(135deg,#D4AF37,#8B7520);display:flex;align-items:center;justify-content:center;font-size:24px;">👤</div>'
 
@@ -1191,11 +1195,15 @@ def dashboard():
         if not full_name: full_name = user.get('username', 'User')
         greeting = "أهلاً،" if lang == 'ar' else "Hello,"
 
-        # Get user avatar if exists
+        # Get user avatar if exists - Universal Format Detection
         username_key = user.get('username', '')
-        avatar_b64 = st.session_state.auth.get_avatar(username_key)
-        if avatar_b64:
-            avatar_html = f'<img src="data:image/png;base64,{avatar_b64}" style="width:80px;height:80px;border-radius:50%;object-fit:cover;border:2px solid #D4AF37;" />'
+        avatar_val = st.session_state.auth.get_avatar(username_key)
+        if avatar_val:
+            if str(avatar_val).startswith('data:'):
+                avatar_html = f'<img src="{avatar_val}" style="width:80px;height:80px;border-radius:50%;object-fit:cover;border:2px solid #D4AF37;" />'
+            else:
+                # Legacy fallback
+                avatar_html = f'<img src="data:image/png;base64,{avatar_val}" style="width:80px;height:80px;border-radius:50%;object-fit:cover;border:2px solid #D4AF37;" />'
         else:
             avatar_html = '<div style="width:80px;height:80px;border-radius:50%;background:linear-gradient(135deg,#D4AF37,#8B7520);display:flex;align-items:center;justify-content:center;font-size:36px;">👤</div>'
 
@@ -2050,7 +2058,8 @@ def render_permissions_content():
         av_col1, av_col2 = st.columns([1, 3])
         with av_col1:
             if current_avatar:
-                st.markdown(f'<img src="data:image/png;base64,{current_avatar}" style="width:80px;height:80px;border-radius:50%;object-fit:cover;border:2px solid #D4AF37;" />', unsafe_allow_html=True)
+                img_src = current_avatar if str(current_avatar).startswith('data:') else f"data:image/png;base64,{current_avatar}"
+                st.markdown(f'<img src="{img_src}" style="width:80px;height:80px;border-radius:50%;object-fit:cover;border:2px solid #D4AF37;" />', unsafe_allow_html=True)
             else:
                 st.markdown('<div style="width:80px;height:80px;border-radius:50%;background:linear-gradient(135deg,#D4AF37,#8B7520);display:flex;align-items:center;justify-content:center;font-size:36px;">👤</div>', unsafe_allow_html=True)
         with av_col2:
@@ -2061,10 +2070,12 @@ def render_permissions_content():
                 label_visibility="collapsed"
             )
             if uploaded_photo:
+                mime = uploaded_photo.type
                 avatar_bytes = uploaded_photo.read()
                 avatar_b64 = base64.b64encode(avatar_bytes).decode()
+                full_uri = f"data:{mime};base64,{avatar_b64}"
                 if st.button("💾 " + ("حفظ الصورة" if lang == 'ar' else "Save Photo"), key="save_avatar_btn"):
-                    st.session_state.auth.update_avatar(selected_user, avatar_b64)
+                    st.session_state.auth.update_avatar(selected_user, full_uri)
                     show_toast("✅ " + ("تم حفظ الصورة بنجاح" if lang == 'ar' else "Photo saved successfully!"), "success")
                     st.rerun()
 
