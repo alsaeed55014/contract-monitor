@@ -639,6 +639,11 @@ def get_css():
                 background-color: rgba(212, 175, 55, 0.1) !important;
                 border-radius: 50% !important;
             }
+
+            /* 12) Hide Streamlit Form Captions (Press Enter to submit) */
+            [data-testid="stFormSubmitButton"] + div {
+                display: none !important;
+            }
         }
     </style>
     """
