@@ -137,33 +137,37 @@ class AuthManager:
         return False
 
     def update_profile(self, username, f_ar=None, fa_ar=None, f_en=None, fa_en=None):
-        if username in self.users:
-            if f_ar is not None: self.users[username]["first_name_ar"] = f_ar
-            if fa_ar is not None: self.users[username]["father_name_ar"] = fa_ar
-            if f_en is not None: self.users[username]["first_name_en"] = f_en
-            if fa_en is not None: self.users[username]["father_name_en"] = fa_en
+        target = str(username).lower().strip()
+        if target in self.users:
+            if f_ar is not None: self.users[target]["first_name_ar"] = f_ar
+            if fa_ar is not None: self.users[target]["father_name_ar"] = fa_ar
+            if f_en is not None: self.users[target]["first_name_en"] = f_en
+            if fa_en is not None: self.users[target]["father_name_en"] = fa_en
             self.save_users()
             return True
         return False
 
     def update_permissions(self, username, perms_list):
-        if username in self.users:
-            self.users[username]["permissions"] = perms_list
+        target = str(username).lower().strip()
+        if target in self.users:
+            self.users[target]["permissions"] = perms_list
             self.save_users()
             return True
         return False
 
     def update_avatar(self, username, avatar_b64):
         """Save a base64-encoded profile photo for the user."""
-        if username in self.users:
-            self.users[username]["avatar"] = avatar_b64
+        target = str(username).lower().strip()
+        if target in self.users:
+            self.users[target]["avatar"] = avatar_b64
             self.save_users()
             return True
         return False
 
     def get_avatar(self, username):
         """Get the base64-encoded profile photo for the user, or None."""
-        return self.users.get(username, {}).get("avatar", None)
+        target = str(username).lower().strip()
+        return self.users.get(target, {}).get("avatar", None)
 
 def get_base64_image(image_path):
     with open(image_path, "rb") as img_file:
@@ -1118,7 +1122,9 @@ def login_screen():
                 user = st.session_state.auth.authenticate(u, p_norm)
                 login_loader.empty()
                 if user:
-                    user['username'] = u
+                    # Save the CANONICAL lowercase username to session state
+                    # This prevents case-sensitivity bugs on mobile avatar sync
+                    user['username'] = u.lower().strip()
                     st.session_state.user = user
                     st.session_state.show_welcome = True
                     st.rerun()
