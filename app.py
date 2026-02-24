@@ -1978,47 +1978,332 @@ def render_search_content():
 
 def render_translator_content():
     lang = st.session_state.lang
-    st.title(f" {t('translator_title', lang)}")
-    st.markdown(t("translator_desc", lang))
-    uploaded = st.file_uploader(t("upload_cv", lang), type=["pdf"])
-    if uploaded:
-        # Avoid redundant translation on every rerun by using session state
-        file_id = f"cv_{uploaded.name}_{uploaded.size}"
-        if st.session_state.get('last_trans_file') != file_id:
-            trans_loader = show_loading_hourglass()
-            tm = TranslationManager()
-            try:
-                # Read once
-                file_bytes = uploaded.read()
-                text = tm.extract_text_from_pdf(file_bytes)
-                if text.startswith("Error"):
-                    st.error(text)
-                else:
-                    trans = tm.translate_full_text(text)
-                    st.session_state.last_trans_result = {'text': text, 'trans': trans}
-                    st.session_state.last_trans_file = file_id
-            except Exception as e:
-                st.error(f"{t('error', lang)}: {e}")
-            finally:
-                trans_loader.empty()
+    from src.core.file_translator import FileTranslator, TranslationService
 
-        # Display results if they exist
-        res = st.session_state.get('last_trans_result')
-        if res and st.session_state.get('last_trans_file') == file_id:
-            c1, c2 = st.columns(2)
-            with c1:
-                st.subheader(t("original", lang))
-                st.text_area("Original", res['text'], height=400)
-            with c2:
-                st.subheader(t("translated", lang))
-                st.text_area("Translated", res['trans'], height=400)
-            st.download_button(t("download_trans", lang), res['trans'], file_name="translated_cv.txt")
+    # ──── Premium CSS for Translator Module ────
+    st.markdown("""
+    <style>
+    .translator-hero {
+        background: linear-gradient(135deg, rgba(13,18,32,0.95) 0%, rgba(9,14,29,0.95) 50%, rgba(14,20,40,0.95) 100%);
+        border: 1px solid rgba(212,175,55,0.2);
+        border-radius: 20px;
+        padding: 35px 40px;
+        margin-bottom: 25px;
+        position: relative;
+        overflow: hidden;
+    }
+    .translator-hero::before {
+        content: '';
+        position: absolute;
+        top: 0; left: -100%;
+        height: 1px; width: 60%;
+        background: linear-gradient(90deg, transparent, rgba(212,175,55,0.6), transparent);
+        animation: heroScan 3s linear infinite;
+    }
+    @keyframes heroScan {
+        0% { left: -100%; }
+        100% { left: 100%; }
+    }
+    .translator-title {
+        font-family: 'Cairo', 'Inter', sans-serif;
+        font-size: 2rem;
+        font-weight: 700;
+        background: linear-gradient(135deg, #fff 0%, #D4AF37 50%, #fff 100%);
+        background-size: 200% auto;
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        animation: titleShimmer 3s linear infinite;
+        margin-bottom: 8px;
+    }
+    @keyframes titleShimmer {
+        0% { background-position: -200% center; }
+        100% { background-position: 200% center; }
+    }
+    .translator-subtitle {
+        color: rgba(255,255,255,0.55);
+        font-size: 0.95rem;
+        font-family: 'Cairo', sans-serif;
+        margin-bottom: 0;
+    }
+    .format-badges {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        margin-top: 15px;
+    }
+    .format-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 14px;
+        border-radius: 50px;
+        font-size: 0.8rem;
+        font-weight: 600;
+        border: 1px solid rgba(212,175,55,0.25);
+        background: rgba(212,175,55,0.08);
+        color: #D4AF37;
+        transition: all 0.3s ease;
+    }
+    .format-badge:hover {
+        background: rgba(212,175,55,0.18);
+        border-color: rgba(212,175,55,0.5);
+        transform: translateY(-2px);
+        box-shadow: 0 4px 15px rgba(212,175,55,0.15);
+    }
+    .log-entry {
+        padding: 6px 12px;
+        border-radius: 8px;
+        margin: 4px 0;
+        font-family: 'Consolas', 'Courier New', monospace;
+        font-size: 0.82rem;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .log-info { background: rgba(59,130,246,0.08); color: #93c5fd; border-left: 3px solid #3b82f6; }
+    .log-success { background: rgba(34,197,94,0.08); color: #86efac; border-left: 3px solid #22c55e; }
+    .log-warning { background: rgba(234,179,8,0.08); color: #fde047; border-left: 3px solid #eab308; }
+    .log-error { background: rgba(239,68,68,0.08); color: #fca5a5; border-left: 3px solid #ef4444; }
+    .log-time { color: rgba(255,255,255,0.3); font-size: 0.75rem; min-width: 65px; }
+    .result-card {
+        background: linear-gradient(160deg, rgba(13,18,32,0.9), rgba(9,14,29,0.9));
+        border: 1px solid rgba(212,175,55,0.15);
+        border-radius: 16px;
+        padding: 20px;
+    }
+    .stat-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 8px 16px;
+        border-radius: 50px;
+        font-size: 0.85rem;
+        background: rgba(212,175,55,0.1);
+        border: 1px solid rgba(212,175,55,0.2);
+        color: #D4AF37;
+        margin-right: 8px;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+    # ──── Hero Section ────
+    formats_html = ""
+    for ext, info in FileTranslator.FILE_TYPE_INFO.items():
+        name = info.get(f"name_{lang}", info.get("name_en"))
+        icon = info["icon"]
+        formats_html += f'<span class="format-badge">{icon} {ext}</span>'
+
+    subtitle = t("translator_desc_new", lang)
+    st.markdown(f"""
+    <div class="translator-hero">
+        <div class="translator-title">{'🌐 ' + t('translator_title', lang)}</div>
+        <div class="translator-subtitle">{subtitle}</div>
+        <div class="format-badges">{formats_html}</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # ──── Language Selection ────
+    lang_options = TranslationService.SUPPORTED_LANGUAGES
+    lang_keys = list(lang_options.keys())
+    lang_labels = list(lang_options.values())
+
+    col_src, col_arrow, col_tgt = st.columns([2, 0.5, 2])
+    with col_src:
+        src_idx = 0  # "auto" is first option
+        src_options = [t("auto_detect", lang)] + lang_labels
+        src_keys = ["auto"] + lang_keys
+        selected_src = st.selectbox(
+            t("src_lang", lang),
+            options=src_options,
+            index=0,
+            key="trans_src_lang"
+        )
+        src_lang_code = src_keys[src_options.index(selected_src)]
+
+    with col_arrow:
+        st.markdown("<div style='text-align:center; padding-top:32px; font-size:1.8rem; color:#D4AF37;'>→</div>", unsafe_allow_html=True)
+
+    with col_tgt:
+        # Default to Arabic
+        default_tgt_idx = lang_keys.index("ar") if "ar" in lang_keys else 0
+        selected_tgt = st.selectbox(
+            t("tgt_lang", lang),
+            options=lang_labels,
+            index=default_tgt_idx,
+            key="trans_tgt_lang"
+        )
+        tgt_lang_code = lang_keys[lang_labels.index(selected_tgt)]
+
+    st.markdown("<div style='margin: 10px 0;'></div>", unsafe_allow_html=True)
+
+    # ──── File Upload ────
+    supported_types = ["docx", "bdf", "jpg", "jpeg", "png", "pdf"]
+    uploaded = st.file_uploader(
+        t("upload_file_label", lang),
+        type=supported_types,
+        key="translator_file_upload",
+        help=f"{t('supported_formats', lang)}: .docx, .pdf, .jpg, .png, .jpeg, .bdf"
+    )
+
+    if uploaded:
+        file_id = f"ft_{uploaded.name}_{uploaded.size}_{src_lang_code}_{tgt_lang_code}"
+        file_bytes = uploaded.read()
+        file_size = len(file_bytes)
+
+        # File info display
+        ft_temp = FileTranslator()
+        ext = ft_temp.get_file_type(uploaded.name)
+        file_info = FileTranslator.FILE_TYPE_INFO.get(ext, {})
+        icon = file_info.get("icon", "📁")
+        type_name = file_info.get(f"name_{lang}", file_info.get("name_en", ext))
+        size_str = FileTranslator._format_size(file_size)
+
+        st.markdown(f"""
+        <div style="display:flex; gap:15px; flex-wrap:wrap; margin: 10px 0 20px 0;">
+            <span class="stat-pill">📁 {uploaded.name}</span>
+            <span class="stat-pill">{icon} {type_name}</span>
+            <span class="stat-pill">📏 {size_str}</span>
+        </div>
+        """, unsafe_allow_html=True)
+
+        # ──── Translation Trigger ────
+        btn_col1, btn_col2, btn_col3 = st.columns([1.5, 2, 1.5])
+        with btn_col2:
+            translate_clicked = st.button(
+                t("translate_now", lang),
+                use_container_width=True,
+                type="primary",
+                key="btn_start_translation"
+            )
+
+        # Run translation
+        if translate_clicked or st.session_state.get('last_trans_file') == file_id:
+            if st.session_state.get('last_trans_file') != file_id:
+                # New file — translate
+                progress_bar = st.progress(0, text=t("translating_wait", lang))
+                status_text = st.empty()
+
+                def update_progress(pct, msg):
+                    progress_bar.progress(min(pct, 1.0), text=msg)
+
+                try:
+                    translator = FileTranslator(
+                        source_lang=src_lang_code,
+                        target_lang=tgt_lang_code
+                    )
+
+                    result = translator.translate(file_bytes, uploaded.name, progress_callback=update_progress)
+                    log_entries = translator.get_log()
+
+                    progress_bar.progress(1.0, text=t("translation_complete", lang) if result.get("success") else t("translation_failed", lang))
+
+                    # Cache results
+                    st.session_state.last_trans_result = result
+                    st.session_state.last_trans_file = file_id
+                    st.session_state.last_trans_log = log_entries
+
+                except Exception as e:
+                    progress_bar.progress(1.0, text=t("translation_failed", lang))
+                    st.error(f"{t('error', lang)}: {str(e)}")
+                    st.session_state.last_trans_result = None
+                    st.session_state.last_trans_file = file_id
+                    st.session_state.last_trans_log = []
+
+            # Display results
+            result = st.session_state.get('last_trans_result')
+            log_entries = st.session_state.get('last_trans_log', [])
+
+            if result and result.get("success"):
+                st.markdown(f"""
+                <div style="background: rgba(34,197,94,0.1); border: 1px solid rgba(34,197,94,0.3); 
+                     border-radius: 12px; padding: 15px 20px; margin: 15px 0;">
+                    <span style="font-size: 1.1rem; color: #86efac; font-weight: 600;">
+                        {t("translation_complete", lang)}
+                    </span>
+                </div>
+                """, unsafe_allow_html=True)
+
+                # Download buttons
+                dl_col1, dl_col2 = st.columns(2)
+                with dl_col1:
+                    if result.get("output_bytes"):
+                        st.download_button(
+                            t("download_trans", lang),
+                            data=result["output_bytes"],
+                            file_name=result.get("output_filename", "translated_file"),
+                            mime=result.get("output_mime", "application/octet-stream"),
+                            use_container_width=True,
+                            key="dl_translated_file"
+                        )
+                with dl_col2:
+                    if result.get("translated_text"):
+                        st.download_button(
+                            t("download_trans_txt", lang),
+                            data=result["translated_text"],
+                            file_name=f"translated_{uploaded.name.rsplit('.', 1)[0]}.txt",
+                            mime="text/plain",
+                            use_container_width=True,
+                            key="dl_translated_txt"
+                        )
+
+                # Side-by-side text comparison
+                st.markdown("<div style='margin: 15px 0;'></div>", unsafe_allow_html=True)
+                c1, c2 = st.columns(2)
+                with c1:
+                    st.markdown(f"""<div class="result-card">
+                        <div style="color:#D4AF37; font-weight:600; margin-bottom:10px; font-family:'Cairo',sans-serif;">
+                            📝 {t("original", lang)}
+                        </div>
+                    </div>""", unsafe_allow_html=True)
+                    st.text_area("orig", result.get("original_text", ""), height=350,
+                                 key="trans_orig_area", label_visibility="collapsed")
+                with c2:
+                    st.markdown(f"""<div class="result-card">
+                        <div style="color:#D4AF37; font-weight:600; margin-bottom:10px; font-family:'Cairo',sans-serif;">
+                            🌐 {t("translated", lang)}
+                        </div>
+                    </div>""", unsafe_allow_html=True)
+                    st.text_area("trans", result.get("translated_text", ""), height=350,
+                                 key="trans_result_area", label_visibility="collapsed")
+
+            elif result and not result.get("success"):
+                st.error(f"{t('translation_failed', lang)}: {result.get('error', '')}")
+
+            # ──── Operation Log ────
+            if log_entries:
+                with st.expander(t("translation_log", lang), expanded=False):
+                    log_html = ""
+                    for entry in log_entries:
+                        level = entry.get("level", "info")
+                        log_html += f"""
+                        <div class="log-entry log-{level}">
+                            <span class="log-time">{entry['time']}</span>
+                            <span>{entry['message']}</span>
+                        </div>"""
+                    st.markdown(log_html, unsafe_allow_html=True)
+
     else:
         # Clear cache if no file is uploaded
         if 'last_trans_file' in st.session_state:
             del st.session_state.last_trans_file
-            if 'last_trans_result' in st.session_state:
-                del st.session_state.last_trans_result
+        if 'last_trans_result' in st.session_state:
+            del st.session_state.last_trans_result
+        if 'last_trans_log' in st.session_state:
+            del st.session_state.last_trans_log
+
+        # Empty state placeholder
+        st.markdown(f"""
+        <div style="text-align:center; padding: 60px 20px; color: rgba(255,255,255,0.3);">
+            <div style="font-size: 4rem; margin-bottom: 15px;">📄</div>
+            <div style="font-size: 1.1rem; font-family: 'Cairo', sans-serif;">
+                {t("no_file_uploaded", lang)}
+            </div>
+            <div style="font-size: 0.85rem; margin-top: 8px; color: rgba(255,255,255,0.2);">
+                {t("supported_formats", lang)}: .docx, .pdf, .jpg, .png, .bdf
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
 
 def render_permissions_content():
     lang = st.session_state.lang
