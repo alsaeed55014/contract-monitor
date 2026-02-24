@@ -979,6 +979,8 @@ def render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search", 
     with col_a:
         if st.button(f"✨ {t('translate_cv_btn', lang)}", use_container_width=True, type="primary", key=f"btn_trans_{key_prefix}_{selected_idx}"):
             if cv_url and str(cv_url).startswith("http"):
+                from src.core.file_translator import FileTranslator
+                
                 trans_loader = show_loading_hourglass(t("extracting", lang))
                 try:
                     import requests
@@ -987,10 +989,11 @@ def render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search", 
                         if "id=" in cv_url: file_id = cv_url.split("id=")[1].split("&")[0]
                         elif "/d/" in cv_url: file_id = cv_url.split("/d/")[1].split("/")[0]
 
+                    # 1. Download full content
+                    session = requests.Session()
+                    session.headers.update({"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"})
+                    
                     if file_id:
-                        session = requests.Session()
-                        session.headers.update({"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"})
-                        
                         dl_url = f"https://docs.google.com/uc?export=download&id={file_id}"
                         resp = session.get(dl_url, stream=True, timeout=15)
                         
@@ -1002,34 +1005,58 @@ def render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search", 
                             dl_url = f"https://docs.google.com/uc?export=download&confirm={token}&id={file_id}"
                             resp = session.get(dl_url, stream=True, timeout=15)
                         
-                        # Fallback: If still 500, try the absolute direct link if available
                         if resp.status_code >= 500:
                             resp = requests.get(cv_url, timeout=15)
-                            
-                        pdf_content = resp.content
                     else:
                         resp = requests.get(cv_url, timeout=15)
-                        pdf_content = resp.content
-
+                    
                     if resp.status_code == 200:
-                        if not pdf_content.startswith(b"%PDF"):
-                            st.error("⚠️ الملف الذي تم تحميله ليس ملف PDF صالح. قد يكون الرابط محمياً.")
-                            if b"google" in pdf_content.lower():
-                                st.info("تأكد أن الملف متاح 'لأي شخص لديه الرابط' في إعدادات Google Drive.")
+                        content = resp.content
+                        
+                        # 2. Determine file type from content or header
+                        # Try to get extension from 'Content-Disposition' or original text
+                        content_type = resp.headers.get('Content-Type', '').lower()
+                        filename_from_header = ""
+                        cd = resp.headers.get('Content-Disposition', '')
+                        if 'filename=' in cd:
+                            filename_from_header = cd.split('filename=')[1].strip('"')
+                        
+                        # Fallback extension detection
+                        ext = ".pdf" # Default
+                        if "word" in content_type or filename_from_header.endswith(".docx"): ext = ".docx"
+                        elif "image" in content_type: 
+                            if "png" in content_type: ext = ".png"
+                            else: ext = ".jpg"
+                        elif filename_from_header.endswith(".bdf"): ext = ".bdf"
+                        elif content.startswith(b"%PDF"): ext = ".pdf"
+                        elif content.startswith(b"PK\x03\x04"): ext = ".docx" # Zip/Docx signature
+                        
+                        # 3. Translate using the new Engine
+                        ft = FileTranslator(source_lang="auto", target_lang="ar")
+                        
+                        # Mock a filename if not found
+                        virtual_filename = filename_from_header if filename_from_header else f"file{ext}"
+                        
+                        result = ft.translate(content, virtual_filename)
+                        
+                        if result.get("success"):
+                            st.session_state[f"trans_{key_prefix}_{selected_idx}"] = {
+                                "orig": result.get("original_text", ""), 
+                                "trans": result.get("translated_text", ""),
+                                "output": result.get("output_bytes"),
+                                "out_filename": result.get("output_filename")
+                            }
+                            st.rerun()
                         else:
-                            tm = TranslationManager()
-                            text = tm.extract_text_from_pdf(pdf_content)
-                            if text.startswith("Error"): st.error(text)
-                            else:
-                                trans = tm.translate_full_text(text)
-                                st.session_state[f"trans_{key_prefix}_{selected_idx}"] = {"orig": text, "trans": trans}
+                            st.error(f"❌ {result.get('error', 'Unknown Error')}")
                     else:
                         st.error(f"خطأ في الوصول للملف: (HTTP {resp.status_code}). جرب فتح الرابط يدوياً.")
-                        st.info(f"رابط الملف المستخدم: {cv_url}")
-                except Exception as e: st.error(f"Error: {str(e)}")
+                except Exception as e: 
+                    st.error(f"Error Processing File: {str(e)}")
                 finally:
                     trans_loader.empty()
-            else: st.warning("رابط السيرة الذاتية غير موجود أو غير صالح.")
+            else: 
+                st.warning("رابط السيرة الذاتية غير موجود أو غير صالح.")
 
     # Permanent Deletion with Confirmation
     sheet_row = worker_row.get('__sheet_row')
@@ -1093,6 +1120,17 @@ def render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search", 
         with c2:
             st.caption("العربية (المترجمة)")
             st.text_area("Trans", t_data["trans"], height=300, key=f"trans_area_{key_prefix}_{selected_idx}")
+        
+        # Download Button for the Translated File itself
+        if t_data.get("output"):
+            st.download_button(
+                f"⬇️ {t('download_trans', lang)}",
+                data=t_data["output"],
+                file_name=t_data.get("out_filename", "translated_file"),
+                mime="application/octet-stream",
+                use_container_width=True,
+                key=f"dl_trans_file_{key_prefix}_{selected_idx}"
+            )
     
     st.markdown(f"#### 🔎 {t('preview_cv', lang)}")
     if cv_url and str(cv_url).startswith("http"):
