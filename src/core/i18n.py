@@ -182,6 +182,7 @@ TRANSLATIONS = {
     "select_supplier": {"ar": "اختر المورد", "en": "Select Supplier"},
     "select_employer": {"ar": "اختر صاحب العمل", "en": "Select Employer"},
     "perm_bengali_supply": {"ar": "صلاحية نموذج توريد عمال بنقال", "en": "Bengali Supply Permission"},
+    "perm_delete_global": {"ar": "صلاحية الحذف على مستوى البرنامج", "en": "Global Delete Permission"},
     "search_manage_title": {"ar": "🔍 البحث وإدارة السجلات", "en": "Search & Manage Records"},
     "search_manage_title": {"ar": "🔍 البحث وإدارة السجلات", "en": "Search & Manage Records"},
     "delete_btn": {"ar": "حذف", "en": "Delete"},

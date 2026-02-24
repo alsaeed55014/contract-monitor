@@ -2403,15 +2403,21 @@ def render_permissions_content():
             
             # Additional Permissions Toggle
             st.markdown(f"**⚙️ {t('permissions', lang)}**")
-            bengali_perm = st.toggle(t("perm_bengali_supply", lang), value="bengali_supply" in current_data.get("permissions", []))
+            current_perms = current_data.get("permissions", [])
+            bengali_perm = st.toggle(t("perm_bengali_supply", lang), value="bengali_supply" in current_perms)
+            delete_perm = st.toggle(t("perm_delete_global", lang), value="can_delete" in current_perms)
             
             if st.form_submit_button(t("update_btn", lang)):
                 # Prepare permission list
-                new_perms = current_data.get("permissions", [])
+                new_perms = []
+                # Keep 'all' if they had it
+                if "all" in current_perms: new_perms.append("all")
+                if "read" in current_perms: new_perms.append("read")
+                
                 if bengali_perm:
                     if "bengali_supply" not in new_perms: new_perms.append("bengali_supply")
-                else:
-                    if "bengali_supply" in new_perms: new_perms.remove("bengali_supply")
+                if delete_perm:
+                    if "can_delete" not in new_perms: new_perms.append("can_delete")
                 
                 st.session_state.auth.update_permissions(selected_user, new_perms)
                 st.session_state.auth.update_role(selected_user, new_role)
@@ -3012,23 +3018,27 @@ def render_order_processing_content():
                 
                 st.markdown('<div style="margin-top: 20px;"></div>', unsafe_allow_html=True)
                 
-                # Delete with confirmation
-                with st.popover("🗑️ حذف" if lang == 'ar' else "🗑️ Delete"):
-                    st.warning("⚠️ هل أنت متأكد من حذف هذا الطلب نهائياً؟" if lang == 'ar' else "⚠️ Delete this request permanently?")
-                    if st.button("نعم، حذف" if lang == 'ar' else "Yes, Delete", key=f"del_cust_{idx}", type="primary", use_container_width=True):
-                        # Get sheet row from hidden __sheet_row column
-                        row_num = customer_row.get('__sheet_row')
-                        if row_num:
-                            url = "https://docs.google.com/spreadsheets/d/1ZlLGXqbFSnKrr2J-PRnxRhxykwrNOgOE6Mb34Zei_FU/edit"
-                            success = st.session_state.db.delete_row(row_num, url=url)
-                            if success:
-                                show_toast("✅ تم حذف الطلب بنجاح" if lang == 'ar' else "✅ Request deleted successfully", "success")
-                                time.sleep(1)
-                                st.rerun()
+                # Delete with confirmation (Permission check)
+                user_perms = st.session_state.user_data.get('permissions', [])
+                if "can_delete" in user_perms or "all" in user_perms:
+                    with st.popover("🗑️ حذف" if lang == 'ar' else "🗑️ Delete"):
+                        st.warning("⚠️ هل أنت متأكد من حذف هذا الطلب نهائياً؟" if lang == 'ar' else "⚠️ Delete this request permanently?")
+                        if st.button("نعم، حذف" if lang == 'ar' else "Yes, Delete", key=f"del_cust_{idx}", type="primary", use_container_width=True):
+                            # Get sheet row from hidden __sheet_row column
+                            row_num = customer_row.get('__sheet_row')
+                            if row_num:
+                                url = "https://docs.google.com/spreadsheets/d/1ZlLGXqbFSnKrr2J-PRnxRhxykwrNOgOE6Mb34Zei_FU/edit"
+                                success = st.session_state.db.delete_row(row_num, url=url)
+                                if success:
+                                    show_toast("✅ تم حذف الطلب بنجاح" if lang == 'ar' else "✅ Request deleted successfully", "success")
+                                    time.sleep(1)
+                                    st.rerun()
+                                else:
+                                    st.error("فشل الحذف" if lang == 'ar' else "Delete failed")
                             else:
-                                st.error("فشل الحذف" if lang == 'ar' else "Delete failed")
-                        else:
-                            st.error("تعذر تحديد رقم الصف" if lang == 'ar' else "Could not determine row number")
+                                st.error("تعذر تحديد رقم الصف" if lang == 'ar' else "Could not determine row number")
+                else:
+                    st.caption("🔒 لا تملك صلاحية الحذف" if lang == 'ar' else "🔒 No delete permission")
 
             # --- Workers ---
             matches, scores, city_count = find_matching_workers(customer_row)
@@ -3359,11 +3369,15 @@ def render_bengali_supply_content():
                     with h1:
                         st.markdown(f"### 👷 {w.get('name', 'N/A')}")
                     with h2:
-                        if st.button("🗑️", key=f"del_{w['worker_uuid']}", help=t("delete_btn", lang)):
-                            if bm.delete_worker(w['worker_uuid']):
-                                show_toast("تم حذف السجل بنجاح", "success")
-                                time.sleep(0.5)
-                                st.rerun()
+                        user_perms = st.session_state.user_data.get('permissions', [])
+                        if "can_delete" in user_perms or "all" in user_perms:
+                            if st.button("🗑️", key=f"del_{w['worker_uuid']}", help=t("delete_btn", lang)):
+                                if bm.delete_worker(w['worker_uuid']):
+                                    show_toast("تم حذف السجل بنجاح", "success")
+                                    time.sleep(0.5)
+                                    st.rerun()
+                        else:
+                            st.button("🔒", key=f"lock_{w['worker_uuid']}", disabled=True, help="لا تملك صلاحية الحذف")
 
                     # Full Details in Columns
                     d1, d2, d3 = st.columns(3)
