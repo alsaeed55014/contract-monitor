@@ -2953,7 +2953,11 @@ def render_order_processing_content():
                     city_df, city_idx_map = build_worker_table(city_list, city_scores)
                     if not city_df.empty:
                         loc_val = str(customer_row.get(c_location, ""))
-                        regional_keywords = ["عسير", "الجنوب", "الشمال", "الشرقية", "منطقة", "region", "south", "north", "east", "asir"]
+                        regional_keywords = [
+                            "عسير", "الجنوب", "الشمال", "الشرقية", "منطقة", 
+                            "الوسطى", "الغربية", "نجد", "الحجاز",
+                            "region", "south", "north", "east", "asir", "central", "western"
+                        ]
                         is_regional = any(kw in loc_val.lower() for kw in regional_keywords)
                         
                         if is_regional:
