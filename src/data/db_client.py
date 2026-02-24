@@ -53,8 +53,8 @@ class DBClient:
             st.error(f"Connection Failed: {e}") # Show in UI immediately
             raise e
 
-    def fetch_data(self, url=None, force=False):
-        """Fetches data from Google Sheets with caching. 'url' defaults to main worker sheet."""
+    def fetch_data(self, url=None, force=False, retries=3):
+        """Fetches data from Google Sheets with caching and automatic retries for transient errors (503)."""
         current_time = time.time()
         
         # Use main sheet if no URL provided
@@ -77,40 +77,53 @@ class DBClient:
         if not self.client:
             self.connect()
 
-        try:
-            sheet = self.client.open_by_url(url).sheet1
-            data = sheet.get_all_values()
-            
-            if not data:
-                return pd.DataFrame()
+        # Retry logic for 503 / transient errors
+        for attempt in range(retries):
+            try:
+                sheet = self.client.open_by_url(url).sheet1
+                data = sheet.get_all_values()
+                
+                if not data:
+                    return pd.DataFrame()
 
-            headers = [str(h).strip() for h in data[0]]
-            seen = {}
-            clean_headers = []
-            for h in headers:
-                if not h: h = "Column"
-                if h in seen:
-                    seen[h] += 1
-                    clean_headers.append(f"{h}_{seen[h]}")
-                else:
-                    seen[h] = 0
-                    clean_headers.append(h)
+                headers = [str(h).strip() for h in data[0]]
+                seen = {}
+                clean_headers = []
+                for h in headers:
+                    if not h: h = "Column"
+                    if h in seen:
+                        seen[h] += 1
+                        clean_headers.append(f"{h}_{seen[h]}")
+                    else:
+                        seen[h] = 0
+                        clean_headers.append(h)
 
-            df = pd.DataFrame(data[1:], columns=clean_headers)
-            
-            # Inject hidden sheet row index
-            row_ids = list(range(2, len(df) + 2))
-            if '__sheet_row' not in df.columns:
-                df.insert(0, '__sheet_row', row_ids)
-            df['__sheet_row_backup'] = row_ids
-            
-            self._data_caches[cache_key] = df
-            self._last_fetches[last_fetch_key] = current_time
-            return df
+                df = pd.DataFrame(data[1:], columns=clean_headers)
+                
+                # Inject hidden sheet row index
+                row_ids = list(range(2, len(df) + 2))
+                if '__sheet_row' not in df.columns:
+                    df.insert(0, '__sheet_row', row_ids)
+                df['__sheet_row_backup'] = row_ids
+                
+                self._data_caches[cache_key] = df
+                self._last_fetches[last_fetch_key] = current_time
+                return df
 
-        except Exception as e:
-            print(f"[ERROR] Error fetching data: {e}")
-            raise e
+            except Exception as e:
+                # Check for 503 specifically or other transient errors
+                error_msg = str(e)
+                if attempt < retries - 1 and ("503" in error_msg or "unavailable" in error_msg.lower() or "quota" in error_msg.lower()):
+                    wait_time = (attempt + 1) * 2 # 2s, 4s, 6s...
+                    print(f"[RETRY] Attempt {attempt+1} failed with transient error: {e}. Retrying in {wait_time}s...")
+                    time.sleep(wait_time)
+                    # Re-authenticate if it might be a stale session
+                    if "401" in error_msg or "expired" in error_msg.lower():
+                        self.connect()
+                    continue
+                
+                print(f"[ERROR] Final attempt failed for {url[:30]}: {e}")
+                raise e
 
     def fetch_customer_requests(self, force=False):
         """Specifically fetches the Customer Requests sheet."""

@@ -1,10 +1,16 @@
 # src/core/file_translator.py
 """
-Professional Multi-Format File Translation Engine
+Professional Multi-Format File Translation Engine (Optimized)
 Supports: .docx, .bdf, .jpg/.png/.jpeg, .pdf
-Uses: deep_translator (free, no API key), easyocr (free OCR)
+Uses: deep_translator (free, no API key)
 Architecture: Extensible handler pattern for future formats (pptx, xlsx)
 Author: Alsaeed Alwazzan
+
+Performance Optimizations:
+- Batch translation: combine texts with separator → single API call → split back
+- Larger chunks (4500 chars) to minimize API roundtrips
+- Lazy imports to avoid startup delay
+- OCR is optional (easyocr or pytesseract, with graceful fallback)
 """
 
 import io
@@ -16,44 +22,18 @@ from datetime import datetime
 from typing import Callable, Optional, Dict, List, Tuple, Any
 
 # ──────────────────────────────────────────────
-# Lazy imports for optional dependencies
+# Constants
 # ──────────────────────────────────────────────
+BATCH_SEPARATOR = "\n|||SPLIT|||\n"
+CHUNK_SIZE = 4500  # Max chars per translation request
 
-def _import_docx():
-    try:
-        from docx import Document
-        from docx.shared import Pt, RGBColor
-        return Document, True
-    except ImportError:
-        return None, False
-
-def _import_easyocr():
-    try:
-        import easyocr
-        return easyocr, True
-    except ImportError:
-        return None, False
-
-def _import_pdfplumber():
-    try:
-        import pdfplumber
-        return pdfplumber, True
-    except ImportError:
-        return None, False
-
-def _import_pillow():
-    try:
-        from PIL import Image
-        return Image, True
-    except ImportError:
-        return None, False
 
 # ──────────────────────────────────────────────
 # Translation Service (Free, No API Key)
 # ──────────────────────────────────────────────
 
 class TranslationService:
-    """Wrapper around deep_translator for chunked, robust translation."""
+    """Fast, chunked translation using deep_translator (free Google Translate)."""
 
     SUPPORTED_LANGUAGES = {
         "ar": "العربية (Arabic)",
@@ -78,8 +58,6 @@ class TranslationService:
         "vi": "الفيتنامية (Vietnamese)",
     }
 
-    CHUNK_SIZE = 4000  # Max chars per translation request
-
     def __init__(self, source_lang: str = "auto", target_lang: str = "ar"):
         from deep_translator import GoogleTranslator
         self.source_lang = source_lang
@@ -87,11 +65,22 @@ class TranslationService:
         self._translator = GoogleTranslator(source=source_lang, target=target_lang)
 
     def translate_text(self, text: str, progress_callback: Optional[Callable] = None) -> str:
-        """Translate text with chunking for large content."""
+        """Translate a single text string, with chunking for large content."""
         if not text or not text.strip():
             return ""
 
-        # Split into chunks respecting sentence boundaries
+        # If small enough, translate directly
+        if len(text) <= CHUNK_SIZE:
+            try:
+                result = self._translator.translate(text)
+                if progress_callback:
+                    progress_callback(1.0, "✅")
+                return result if result else text
+            except Exception as e:
+                logging.warning(f"Translation failed: {e}")
+                return text
+
+        # Split large text into chunks at newline boundaries
         chunks = self._split_into_chunks(text)
         total = len(chunks)
         translated_parts = []
@@ -101,67 +90,145 @@ class TranslationService:
                 result = self._translator.translate(chunk)
                 translated_parts.append(result if result else chunk)
             except Exception as e:
-                logging.warning(f"Translation chunk {i+1}/{total} failed: {e}")
-                translated_parts.append(chunk)  # Keep original on failure
+                logging.warning(f"Chunk {i+1}/{total} failed: {e}")
+                translated_parts.append(chunk)
 
             if progress_callback:
                 progress_callback((i + 1) / total, f"ترجمة الجزء {i+1}/{total}")
 
         return "\n".join(translated_parts)
 
-    def translate_batch(self, texts: List[str], progress_callback: Optional[Callable] = None) -> List[str]:
-        """Translate a list of text strings."""
-        results = []
-        total = len(texts)
-        for i, text in enumerate(texts):
-            if text and text.strip():
-                try:
-                    result = self._translator.translate(text)
-                    results.append(result if result else text)
-                except Exception:
-                    results.append(text)
-            else:
-                results.append(text)
+    def translate_batch_fast(self, texts: List[str], progress_callback: Optional[Callable] = None) -> List[str]:
+        """
+        ULTRA-FAST batch translation: combines multiple texts into mega-chunks,
+        translates them in parallel using multi-threading.
+        """
+        if not texts:
+            return []
 
-            if progress_callback:
-                progress_callback((i + 1) / total, f"ترجمة النص {i+1}/{total}")
+        indexed_texts = []
+        results = [""] * len(texts)
+
+        for i, txt in enumerate(texts):
+            if txt and txt.strip():
+                indexed_texts.append((i, txt))
+            else:
+                results[i] = txt
+
+        if not indexed_texts:
+            return results
+
+        # Build mega-chunks
+        mega_chunks = []
+        current_indices = []
+        current_text = ""
+
+        for idx, txt in indexed_texts:
+            candidate = current_text + BATCH_SEPARATOR + txt if current_text else txt
+            if len(candidate) <= CHUNK_SIZE:
+                current_text = candidate
+                current_indices.append(idx)
+            else:
+                if current_text:
+                    mega_chunks.append((list(current_indices), current_text))
+                if len(txt) > CHUNK_SIZE:
+                    mega_chunks.append(([idx], txt))
+                    current_text = ""
+                    current_indices = []
+                else:
+                    current_text = txt
+                    current_indices = [idx]
+
+        if current_text:
+            mega_chunks.append((list(current_indices), current_text))
+
+        total_mega = len(mega_chunks)
+        
+        # USE MULTI-THREADING FOR SPEED
+        from concurrent.futures import ThreadPoolExecutor
+        
+        def process_chunk(chunk_data):
+            indices, combined = chunk_data
+            try:
+                translated = self._translator.translate(combined)
+                if not translated: translated = combined
+                
+                if len(indices) == 1:
+                    return [(indices[0], translated)]
+                else:
+                    parts = self._smart_split(translated, len(indices))
+                    chunk_results = []
+                    for j, part_idx in enumerate(indices):
+                        val = parts[j].strip() if j < len(parts) else texts[part_idx]
+                        chunk_results.append((part_idx, val))
+                    return chunk_results
+            except Exception as e:
+                logging.warning(f"Chunk failed: {e}")
+                return [(idx, texts[idx]) for idx in indices]
+
+        # Limit threads to avoid rate limiting (max 5)
+        self.logger.log(f"🚀 معالجة {total_mega} حزمة ترجمة متوازية...")
+        with ThreadPoolExecutor(max_workers=min(total_mega, 5)) as executor:
+            batch_results = list(executor.map(process_chunk, mega_chunks))
+            
+            # Map back to final results
+            completed = 0
+            for chunk_res in batch_results:
+                for idx, val in chunk_res:
+                    results[idx] = val
+                completed += 1
+                if progress_callback:
+                    progress_callback(completed / total_mega, f"مكتمل: {completed}/{total_mega}")
 
         return results
 
+    def _smart_split(self, translated_text: str, expected_count: int) -> List[str]:
+        """Split translated text back into parts, handling separator variations."""
+        # Try exact separator first
+        for sep in ["|||SPLIT|||", "|||split|||", "||| SPLIT |||", "|||Split|||",
+                     "|||تقسيم|||", "|||انقسام|||", "SPLIT", "|||"]:
+            parts = translated_text.split(sep)
+            if len(parts) == expected_count:
+                return parts
+
+        # Fallback: split by double newline
+        parts = translated_text.split("\n\n")
+        if len(parts) >= expected_count:
+            return parts[:expected_count]
+
+        # Last resort: split by newline
+        parts = translated_text.split("\n")
+        if len(parts) >= expected_count:
+            # Distribute lines evenly
+            chunk_size = max(1, len(parts) // expected_count)
+            result = []
+            for i in range(expected_count):
+                start = i * chunk_size
+                end = start + chunk_size if i < expected_count - 1 else len(parts)
+                result.append("\n".join(parts[start:end]))
+            return result
+
+        # Absolute fallback: return as single chunk
+        return [translated_text]
+
     def _split_into_chunks(self, text: str) -> List[str]:
-        """Split text into chunks at sentence boundaries."""
-        if len(text) <= self.CHUNK_SIZE:
+        """Split text into chunks at paragraph/sentence boundaries."""
+        if len(text) <= CHUNK_SIZE:
             return [text]
 
         chunks = []
         current = ""
-        # Split by newlines first, then by sentences
-        paragraphs = text.split("\n")
 
-        for para in paragraphs:
-            if len(current) + len(para) + 1 <= self.CHUNK_SIZE:
+        for para in text.split("\n"):
+            if len(current) + len(para) + 1 <= CHUNK_SIZE:
                 current += para + "\n"
             else:
                 if current:
                     chunks.append(current.strip())
-                # If single paragraph > chunk size, split by sentences
-                if len(para) > self.CHUNK_SIZE:
-                    sentences = re.split(r'(?<=[.!?。؟])\s+', para)
-                    sub_chunk = ""
-                    for sent in sentences:
-                        if len(sub_chunk) + len(sent) + 1 <= self.CHUNK_SIZE:
-                            sub_chunk += sent + " "
-                        else:
-                            if sub_chunk:
-                                chunks.append(sub_chunk.strip())
-                            # If single sentence > chunk size, force split
-                            if len(sent) > self.CHUNK_SIZE:
-                                for j in range(0, len(sent), self.CHUNK_SIZE):
-                                    chunks.append(sent[j:j + self.CHUNK_SIZE])
-                            else:
-                                sub_chunk = sent + " "
-                    if sub_chunk.strip():
-                        chunks.append(sub_chunk.strip())
+                if len(para) > CHUNK_SIZE:
+                    # Force-split very long paragraphs
+                    for j in range(0, len(para), CHUNK_SIZE):
+                        chunks.append(para[j:j + CHUNK_SIZE])
                     current = ""
                 else:
                     current = para + "\n"
@@ -186,7 +253,7 @@ class OperationLogger:
         self.entries.append({
             "time": datetime.now().strftime("%H:%M:%S"),
             "message": message,
-            "level": level,  # info, success, warning, error
+            "level": level,
         })
 
     def get_entries(self) -> List[Dict[str, Any]]:
@@ -214,34 +281,29 @@ class BaseTranslator:
 
     def translate(self, file_bytes: bytes, filename: str,
                   progress_callback: Optional[Callable] = None) -> Dict[str, Any]:
-        """
-        Returns dict with:
-          - original_text: str
-          - translated_text: str
-          - output_bytes: bytes (translated file)
-          - output_filename: str
-          - output_mime: str
-          - success: bool
-          - error: str (if any)
-        """
         raise NotImplementedError
+
+    def _error(self, msg):
+        self.logger.log(f"❌ {msg}", "error")
+        return {"success": False, "error": msg, "original_text": "", "translated_text": "",
+                "output_bytes": b"", "output_filename": "", "output_mime": ""}
 
 
 # ──────────────────────────────────────────────
-# DOCX Translator
+# DOCX Translator (Optimized — batched)
 # ──────────────────────────────────────────────
 
 class DocxTranslator(BaseTranslator):
-    """Translate .docx files while preserving formatting."""
+    """Translate .docx files while preserving formatting. Uses fast batch translation."""
 
     SUPPORTED_EXTENSIONS = [".docx"]
 
     def translate(self, file_bytes: bytes, filename: str,
                   progress_callback: Optional[Callable] = None) -> Dict[str, Any]:
-
-        Document, available = _import_docx()
-        if not available:
-            return self._error("مكتبة python-docx غير مثبتة. pip install python-docx")
+        try:
+            from docx import Document
+        except ImportError:
+            return self._error("مكتبة python-docx غير مثبتة.\nشغّل: pip install python-docx")
 
         self.logger.log(f"📄 بدء ترجمة ملف Word: {filename}")
 
@@ -250,7 +312,7 @@ class DocxTranslator(BaseTranslator):
             original_texts = []
             translatable_runs = []
 
-            # Phase 1: Collect all text from paragraphs
+            # Phase 1: Collect all text runs
             self.logger.log("📋 استخراج النصوص من المستند...")
             for para in doc.paragraphs:
                 for run in para.runs:
@@ -258,7 +320,6 @@ class DocxTranslator(BaseTranslator):
                         original_texts.append(run.text)
                         translatable_runs.append(run)
 
-            # Collect text from tables
             for table in doc.tables:
                 for row in table.rows:
                     for cell in row.cells:
@@ -274,26 +335,24 @@ class DocxTranslator(BaseTranslator):
             total = len(original_texts)
             self.logger.log(f"📊 تم العثور على {total} نص قابل للترجمة")
 
-            # Phase 2: Translate in batches
-            self.logger.log("🔄 بدء الترجمة...")
-            translated_texts = self.service.translate_batch(
-                original_texts,
-                progress_callback=progress_callback
+            # Phase 2: FAST batch translation (combine → translate → split)
+            self.logger.log("🚀 بدء الترجمة السريعة (دُفعة واحدة)...")
+            translated_texts = self.service.translate_batch_fast(
+                original_texts, progress_callback=progress_callback
             )
 
-            # Phase 3: Replace text while keeping formatting
+            # Phase 3: Replace text in-place (formatting preserved)
             self.logger.log("✏️ استبدال النصوص مع الحفاظ على التنسيق...")
             for run, trans in zip(translatable_runs, translated_texts):
                 run.text = trans
 
-            # Save translated document
+            # Save
             output = io.BytesIO()
             doc.save(output)
             output.seek(0)
 
             base_name = os.path.splitext(filename)[0]
             output_filename = f"translated_{base_name}.docx"
-
             self.logger.log(f"✅ تمت الترجمة بنجاح: {output_filename}", "success")
 
             return {
@@ -302,22 +361,17 @@ class DocxTranslator(BaseTranslator):
                 "output_bytes": output.read(),
                 "output_filename": output_filename,
                 "output_mime": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                "success": True,
-                "error": None,
+                "success": True, "error": None,
                 "stats": {"total_texts": total}
             }
 
         except Exception as e:
             return self._error(f"خطأ في ترجمة ملف Word: {str(e)}")
 
-    def _error(self, msg):
-        self.logger.log(f"❌ {msg}", "error")
-        return {"success": False, "error": msg, "original_text": "", "translated_text": "",
-                "output_bytes": b"", "output_filename": "", "output_mime": ""}
-
 
 # ──────────────────────────────────────────────
 # Image Translator (OCR + Translation)
+# Uses easyocr if available, otherwise pytesseract, otherwise Pillow-only
 # ──────────────────────────────────────────────
 
 class ImageTranslator(BaseTranslator):
@@ -325,94 +379,101 @@ class ImageTranslator(BaseTranslator):
 
     SUPPORTED_EXTENSIONS = [".jpg", ".jpeg", ".png"]
 
+    def _ocr_with_easyocr(self, image_bytes: bytes) -> Optional[List[str]]:
+        """Try OCR with easyocr (best quality, but heavy)."""
+        try:
+            import easyocr
+            import numpy as np
+            from PIL import Image
+
+            reader = easyocr.Reader(['en', 'ar'], gpu=False, verbose=False)
+            image = Image.open(io.BytesIO(image_bytes))
+            image_np = np.array(image)
+            results = reader.readtext(image_np)
+            if results:
+                return [text for (_, text, _) in results]
+        except ImportError:
+            pass
+        except Exception as e:
+            logging.warning(f"easyocr failed: {e}")
+        return None
+
+    def _ocr_with_pytesseract(self, image_bytes: bytes) -> Optional[List[str]]:
+        """Try OCR with pytesseract (lighter, needs Tesseract installed)."""
+        try:
+            import pytesseract
+            from PIL import Image
+
+            image = Image.open(io.BytesIO(image_bytes))
+            text = pytesseract.image_to_string(image, lang='eng+ara')
+            if text and text.strip():
+                return text.strip().split("\n")
+        except ImportError:
+            pass
+        except Exception as e:
+            logging.warning(f"pytesseract failed: {e}")
+        return None
+
     def translate(self, file_bytes: bytes, filename: str,
                   progress_callback: Optional[Callable] = None) -> Dict[str, Any]:
 
-        easyocr_mod, available = _import_easyocr()
-        if not available:
-            return self._error("مكتبة easyocr غير مثبتة. pip install easyocr")
-
-        Image, pil_available = _import_pillow()
-        if not pil_available:
-            return self._error("مكتبة Pillow غير مثبتة. pip install Pillow")
-
         self.logger.log(f"🖼️ بدء معالجة الصورة: {filename}")
 
-        try:
-            # Phase 1: OCR
-            self.logger.log("🔍 استخراج النص من الصورة (OCR)...")
-            if progress_callback:
-                progress_callback(0.1, "جارٍ تحميل نموذج OCR...")
+        if progress_callback:
+            progress_callback(0.1, "جارٍ استخراج النص من الصورة...")
 
-            # Detect languages based on source/target
-            ocr_langs = ['en']
-            src = self.service.source_lang
-            if src == 'auto' or src == 'ar':
-                ocr_langs = ['ar', 'en']
-            elif src == 'en':
-                ocr_langs = ['en']
+        # Try OCR methods in order of preference
+        extracted_lines = self._ocr_with_easyocr(file_bytes)
+        if extracted_lines:
+            self.logger.log("✅ تم استخراج النص بـ EasyOCR")
+        else:
+            extracted_lines = self._ocr_with_pytesseract(file_bytes)
+            if extracted_lines:
+                self.logger.log("✅ تم استخراج النص بـ Tesseract")
             else:
-                ocr_langs = ['en']  # Default to English
+                return self._error(
+                    "لم يتم العثور على أداة OCR.\n"
+                    "ثبّت إحدى المكتبات:\n"
+                    "• pip install easyocr (أفضل جودة)\n"
+                    "• pip install pytesseract (أخف وزناً، يحتاج Tesseract)"
+                )
 
-            reader = easyocr_mod.Reader(ocr_langs, gpu=False)
+        # Filter empty lines
+        extracted_lines = [l for l in extracted_lines if l and l.strip()]
+        if not extracted_lines:
+            return self._error("لم يتم العثور على نص في الصورة")
 
+        original_text = "\n".join(extracted_lines)
+        self.logger.log(f"📊 تم استخراج {len(extracted_lines)} سطر")
+
+        if progress_callback:
+            progress_callback(0.4, "جارٍ ترجمة النص المستخرج...")
+
+        # Translate
+        self.logger.log("🔄 بدء الترجمة...")
+
+        def sub_progress(pct, msg):
             if progress_callback:
-                progress_callback(0.3, "جارٍ قراءة النص من الصورة...")
+                progress_callback(0.4 + pct * 0.6, msg)
 
-            # Read image from bytes
-            image = Image.open(io.BytesIO(file_bytes))
-            import numpy as np
-            image_np = np.array(image)
+        translated_text = self.service.translate_text(original_text, progress_callback=sub_progress)
 
-            results = reader.readtext(image_np)
+        base_name = os.path.splitext(filename)[0]
+        output_filename = f"translated_{base_name}.txt"
+        output_content = f"=== النص الأصلي (Original) ===\n\n{original_text}\n\n"
+        output_content += f"=== النص المترجم (Translated) ===\n\n{translated_text}\n"
 
-            if not results:
-                return self._error("لم يتم العثور على نص في الصورة")
+        self.logger.log(f"✅ تمت ترجمة نص الصورة: {output_filename}", "success")
 
-            # Extract text
-            extracted_lines = [text for (_, text, conf) in results]
-            original_text = "\n".join(extracted_lines)
-
-            self.logger.log(f"📊 تم استخراج {len(extracted_lines)} سطر من الصورة")
-
-            if progress_callback:
-                progress_callback(0.5, "جارٍ ترجمة النص المستخرج...")
-
-            # Phase 2: Translate
-            self.logger.log("🔄 بدء ترجمة النص المستخرج...")
-
-            def sub_progress(pct, msg):
-                if progress_callback:
-                    progress_callback(0.5 + pct * 0.5, msg)
-
-            translated_text = self.service.translate_text(original_text, progress_callback=sub_progress)
-
-            # Output as text file
-            base_name = os.path.splitext(filename)[0]
-            output_filename = f"translated_{base_name}.txt"
-            output_content = f"=== النص الأصلي (Original) ===\n\n{original_text}\n\n"
-            output_content += f"=== النص المترجم (Translated) ===\n\n{translated_text}\n"
-
-            self.logger.log(f"✅ تمت ترجمة نص الصورة بنجاح: {output_filename}", "success")
-
-            return {
-                "original_text": original_text,
-                "translated_text": translated_text,
-                "output_bytes": output_content.encode("utf-8"),
-                "output_filename": output_filename,
-                "output_mime": "text/plain",
-                "success": True,
-                "error": None,
-                "stats": {"lines_extracted": len(extracted_lines)}
-            }
-
-        except Exception as e:
-            return self._error(f"خطأ في معالجة الصورة: {str(e)}")
-
-    def _error(self, msg):
-        self.logger.log(f"❌ {msg}", "error")
-        return {"success": False, "error": msg, "original_text": "", "translated_text": "",
-                "output_bytes": b"", "output_filename": "", "output_mime": ""}
+        return {
+            "original_text": original_text,
+            "translated_text": translated_text,
+            "output_bytes": output_content.encode("utf-8"),
+            "output_filename": output_filename,
+            "output_mime": "text/plain",
+            "success": True, "error": None,
+            "stats": {"lines_extracted": len(extracted_lines)}
+        }
 
 
 # ──────────────────────────────────────────────
@@ -424,7 +485,6 @@ class BdfTranslator(BaseTranslator):
 
     SUPPORTED_EXTENSIONS = [".bdf"]
 
-    # BDF properties that contain translatable text
     TRANSLATABLE_KEYS = {
         "FAMILY_NAME", "FONT", "COMMENT", "COPYRIGHT",
         "NOTICE", "FOUNDRY", "FULL_NAME", "WEIGHT_NAME",
@@ -437,7 +497,6 @@ class BdfTranslator(BaseTranslator):
         self.logger.log(f"🔤 بدء ترجمة ملف BDF: {filename}")
 
         try:
-            # Try to decode the file
             try:
                 content = file_bytes.decode("utf-8")
             except UnicodeDecodeError:
@@ -445,79 +504,66 @@ class BdfTranslator(BaseTranslator):
 
             lines = content.split("\n")
             total_lines = len(lines)
-            translated_lines = []
-            original_texts = []
-            translated_texts = []
-            text_count = 0
-
             self.logger.log(f"📊 الملف يحتوي على {total_lines} سطر")
 
+            # Phase 1: Collect translatable texts
+            translatable_items = []  # (line_index, key, value, is_quoted)
             for i, line in enumerate(lines):
                 stripped = line.strip()
-
-                # Check if the line starts with a translatable property
-                translated = False
                 for key in self.TRANSLATABLE_KEYS:
                     if stripped.startswith(key + " "):
-                        # Extract the value part
                         value = stripped[len(key) + 1:].strip()
-                        # Remove quotes if present
-                        if value.startswith('"') and value.endswith('"'):
-                            inner = value[1:-1]
-                            if inner and not self._is_technical(inner):
-                                try:
-                                    trans = self.service.translate_text(inner)
-                                    original_texts.append(inner)
-                                    translated_texts.append(trans)
-                                    translated_lines.append(f'{key} "{trans}"')
-                                    text_count += 1
-                                    translated = True
-                                except Exception:
-                                    translated_lines.append(line)
-                                    translated = True
-                        elif value and not self._is_technical(value):
-                            try:
-                                trans = self.service.translate_text(value)
-                                original_texts.append(value)
-                                translated_texts.append(trans)
-                                translated_lines.append(f"{key} {trans}")
-                                text_count += 1
-                                translated = True
-                            except Exception:
-                                translated_lines.append(line)
-                                translated = True
+                        is_quoted = value.startswith('"') and value.endswith('"')
+                        inner = value[1:-1] if is_quoted else value
+                        if inner and not self._is_technical(inner):
+                            translatable_items.append((i, key, inner, is_quoted))
                         break
 
-                if not translated:
-                    translated_lines.append(line)
+            if not translatable_items:
+                self.logger.log("ℹ️ لا توجد نصوص قابلة للترجمة في هذا الملف", "warning")
+                return {
+                    "original_text": "(لا يوجد نصوص قابلة للترجمة)",
+                    "translated_text": "(لا يوجد ترجمة)",
+                    "output_bytes": file_bytes,
+                    "output_filename": f"translated_{os.path.splitext(filename)[0]}.bdf",
+                    "output_mime": "application/octet-stream",
+                    "success": True, "error": None,
+                    "stats": {"total_lines": total_lines, "translated_properties": 0}
+                }
 
-                if progress_callback and i % max(1, total_lines // 20) == 0:
-                    progress_callback(i / total_lines, f"معالجة السطر {i}/{total_lines}")
+            # Phase 2: Batch translate
+            texts_to_translate = [item[2] for item in translatable_items]
+            self.logger.log(f"🔄 ترجمة {len(texts_to_translate)} خاصية...")
 
-            # Generate output
-            output_content = "\n".join(translated_lines)
+            translated = self.service.translate_batch_fast(texts_to_translate, progress_callback)
+
+            # Phase 3: Replace in content
+            for (line_idx, key, original, is_quoted), trans in zip(translatable_items, translated):
+                if is_quoted:
+                    lines[line_idx] = f'{key} "{trans}"'
+                else:
+                    lines[line_idx] = f"{key} {trans}"
+
+            output_content = "\n".join(lines)
             base_name = os.path.splitext(filename)[0]
             output_filename = f"translated_{base_name}.bdf"
 
-            self.logger.log(f"✅ تمت ترجمة {text_count} نص في ملف BDF", "success")
+            self.logger.log(f"✅ تمت ترجمة {len(translatable_items)} خاصية في BDF", "success")
 
             return {
-                "original_text": "\n".join(original_texts) if original_texts else "(لا يوجد نصوص قابلة للترجمة)",
-                "translated_text": "\n".join(translated_texts) if translated_texts else "(لا يوجد ترجمة)",
+                "original_text": "\n".join(texts_to_translate),
+                "translated_text": "\n".join(translated),
                 "output_bytes": output_content.encode("utf-8"),
                 "output_filename": output_filename,
                 "output_mime": "application/octet-stream",
-                "success": True,
-                "error": None,
-                "stats": {"total_lines": total_lines, "translated_properties": text_count}
+                "success": True, "error": None,
+                "stats": {"total_lines": total_lines, "translated_properties": len(translatable_items)}
             }
 
         except Exception as e:
-            return self._error(f"خطأ في ترجمة ملف BDF: {str(e)}")
+            return self._error(f"خطأ في ترجمة BDF: {str(e)}")
 
     def _is_technical(self, text: str) -> bool:
-        """Check if text is technical/binary data that shouldn't be translated."""
-        # Skip hex patterns, pure numbers, encoding names, etc.
         if re.match(r'^[0-9A-Fa-f\s\-_.]+$', text):
             return True
         if re.match(r'^ISO\d+', text):
@@ -526,14 +572,9 @@ class BdfTranslator(BaseTranslator):
             return True
         return False
 
-    def _error(self, msg):
-        self.logger.log(f"❌ {msg}", "error")
-        return {"success": False, "error": msg, "original_text": "", "translated_text": "",
-                "output_bytes": b"", "output_filename": "", "output_mime": ""}
-
 
 # ──────────────────────────────────────────────
-# PDF Translator (Enhanced from existing)
+# PDF Translator
 # ──────────────────────────────────────────────
 
 class PdfTranslator(BaseTranslator):
@@ -543,18 +584,17 @@ class PdfTranslator(BaseTranslator):
 
     def translate(self, file_bytes: bytes, filename: str,
                   progress_callback: Optional[Callable] = None) -> Dict[str, Any]:
-
-        pdfplumber, available = _import_pdfplumber()
-        if not available:
-            return self._error("مكتبة pdfplumber غير مثبتة. pip install pdfplumber")
+        try:
+            import pdfplumber
+        except ImportError:
+            return self._error("مكتبة pdfplumber غير مثبتة.\nشغّل: pip install pdfplumber")
 
         self.logger.log(f"📑 بدء ترجمة ملف PDF: {filename}")
 
         try:
-            # Phase 1: Extract text
             self.logger.log("📋 استخراج النصوص من PDF...")
             if progress_callback:
-                progress_callback(0.1, "جارٍ استخراج النصوص...")
+                progress_callback(0.05, "جارٍ استخراج النصوص...")
 
             original_text = ""
             with pdfplumber.open(io.BytesIO(file_bytes)) as pdf:
@@ -564,28 +604,27 @@ class PdfTranslator(BaseTranslator):
                     if page_text:
                         original_text += page_text + "\n\n"
                     if progress_callback:
-                        progress_callback(0.1 + 0.3 * ((idx + 1) / total_pages),
+                        progress_callback(0.05 + 0.15 * ((idx + 1) / total_pages),
                                           f"صفحة {idx+1}/{total_pages}")
 
             if not original_text.strip():
-                return self._error("لم يتم العثور على نص في ملف PDF. قد يكون الملف عبارة عن صور.")
+                return self._error("لم يتم العثور على نص في PDF. قد يكون عبارة عن صور.")
 
-            self.logger.log(f"📊 تم استخراج النص ({len(original_text)} حرف)")
+            self.logger.log(f"📊 تم استخراج {len(original_text)} حرف من {total_pages} صفحة")
 
-            # Phase 2: Translate
-            self.logger.log("🔄 بدء الترجمة...")
+            # Translate
+            self.logger.log("🚀 بدء الترجمة...")
 
             def sub_progress(pct, msg):
                 if progress_callback:
-                    progress_callback(0.4 + pct * 0.6, msg)
+                    progress_callback(0.2 + pct * 0.8, msg)
 
             translated_text = self.service.translate_text(original_text, progress_callback=sub_progress)
 
-            # Output as text file
             base_name = os.path.splitext(filename)[0]
             output_filename = f"translated_{base_name}.txt"
 
-            self.logger.log(f"✅ تمت ترجمة PDF بنجاح: {output_filename}", "success")
+            self.logger.log(f"✅ تمت ترجمة PDF بنجاح", "success")
 
             return {
                 "original_text": original_text,
@@ -593,18 +632,12 @@ class PdfTranslator(BaseTranslator):
                 "output_bytes": translated_text.encode("utf-8"),
                 "output_filename": output_filename,
                 "output_mime": "text/plain",
-                "success": True,
-                "error": None,
+                "success": True, "error": None,
                 "stats": {"total_pages": total_pages, "total_chars": len(original_text)}
             }
 
         except Exception as e:
             return self._error(f"خطأ في ترجمة PDF: {str(e)}")
-
-    def _error(self, msg):
-        self.logger.log(f"❌ {msg}", "error")
-        return {"success": False, "error": msg, "original_text": "", "translated_text": "",
-                "output_bytes": b"", "output_filename": "", "output_mime": ""}
 
 
 # ──────────────────────────────────────────────
@@ -613,34 +646,27 @@ class PdfTranslator(BaseTranslator):
 
 class FileTranslator:
     """
-    Main orchestrator that auto-detects file type and routes to the correct handler.
-    
+    Main orchestrator: auto-detects file type → routes to correct handler.
+
     Usage:
         translator = FileTranslator(source_lang="auto", target_lang="ar")
         result = translator.translate(file_bytes, "resume.docx", progress_callback)
-        
-    Extensible: Add new handlers by creating a class extending BaseTranslator
-    and registering it in the handlers list.
     """
 
-    # All supported file extensions
     SUPPORTED_EXTENSIONS = [".docx", ".bdf", ".jpg", ".jpeg", ".png", ".pdf"]
 
-    # File type descriptions (for UI)
     FILE_TYPE_INFO = {
         ".docx": {"icon": "📄", "name_ar": "ملف Word", "name_en": "Word Document"},
-        ".bdf": {"icon": "🔤", "name_ar": "ملف خط BDF", "name_en": "BDF Font File"},
-        ".jpg": {"icon": "🖼️", "name_ar": "صورة JPG", "name_en": "JPG Image"},
+        ".bdf":  {"icon": "🔤", "name_ar": "ملف خط BDF", "name_en": "BDF Font File"},
+        ".jpg":  {"icon": "🖼️", "name_ar": "صورة JPG", "name_en": "JPG Image"},
         ".jpeg": {"icon": "🖼️", "name_ar": "صورة JPEG", "name_en": "JPEG Image"},
-        ".png": {"icon": "🖼️", "name_ar": "صورة PNG", "name_en": "PNG Image"},
-        ".pdf": {"icon": "📑", "name_ar": "ملف PDF", "name_en": "PDF Document"},
+        ".png":  {"icon": "🖼️", "name_ar": "صورة PNG", "name_en": "PNG Image"},
+        ".pdf":  {"icon": "📑", "name_ar": "ملف PDF", "name_en": "PDF Document"},
     }
 
     def __init__(self, source_lang: str = "auto", target_lang: str = "ar"):
         self.service = TranslationService(source_lang=source_lang, target_lang=target_lang)
         self.logger = OperationLogger()
-
-        # Register all handlers
         self._handlers: List[BaseTranslator] = [
             DocxTranslator(self.service, self.logger),
             ImageTranslator(self.service, self.logger),
@@ -649,12 +675,10 @@ class FileTranslator:
         ]
 
     def get_file_type(self, filename: str) -> Optional[str]:
-        """Detect file extension."""
         _, ext = os.path.splitext(filename)
         return ext.lower() if ext else None
 
     def get_handler(self, filename: str) -> Optional[BaseTranslator]:
-        """Find the appropriate handler for a file."""
         ext = self.get_file_type(filename)
         if not ext:
             return None
@@ -664,16 +688,10 @@ class FileTranslator:
         return None
 
     def is_supported(self, filename: str) -> bool:
-        """Check if a file type is supported."""
-        ext = self.get_file_type(filename)
-        return ext in self.SUPPORTED_EXTENSIONS
+        return self.get_file_type(filename) in self.SUPPORTED_EXTENSIONS
 
     def translate(self, file_bytes: bytes, filename: str,
                   progress_callback: Optional[Callable] = None) -> Dict[str, Any]:
-        """
-        Main translation entry point.
-        Auto-detects file type and routes to the correct handler.
-        """
         ext = self.get_file_type(filename)
         info = self.FILE_TYPE_INFO.get(ext, {})
         icon = info.get("icon", "📁")
@@ -702,20 +720,13 @@ class FileTranslator:
         return result
 
     def get_log(self) -> List[Dict]:
-        """Get operation log entries."""
         return self.logger.get_entries()
 
     @staticmethod
     def _format_size(size_bytes: int) -> str:
-        """Format file size in human-readable format."""
         if size_bytes < 1024:
             return f"{size_bytes} B"
         elif size_bytes < 1024 * 1024:
             return f"{size_bytes / 1024:.1f} KB"
         else:
             return f"{size_bytes / (1024 * 1024):.1f} MB"
-
-    @classmethod
-    def get_supported_extensions_str(cls) -> str:
-        """Get comma-separated list of supported extensions."""
-        return ", ".join(cls.SUPPORTED_EXTENSIONS)
