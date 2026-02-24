@@ -58,10 +58,11 @@ class TranslationService:
         "vi": "الفيتنامية (Vietnamese)",
     }
 
-    def __init__(self, source_lang: str = "auto", target_lang: str = "ar"):
+    def __init__(self, source_lang: str = "auto", target_lang: str = "ar", logger=None):
         from deep_translator import GoogleTranslator
         self.source_lang = source_lang
         self.target_lang = target_lang
+        self.logger = logger
         self._translator = GoogleTranslator(source=source_lang, target=target_lang)
 
     def translate_text(self, text: str, progress_callback: Optional[Callable] = None) -> str:
@@ -163,11 +164,13 @@ class TranslationService:
                         chunk_results.append((part_idx, val))
                     return chunk_results
             except Exception as e:
+                import logging
                 logging.warning(f"Chunk failed: {e}")
                 return [(idx, texts[idx]) for idx in indices]
 
         # Limit threads to avoid rate limiting (max 5)
-        self.logger.log(f"🚀 معالجة {total_mega} حزمة ترجمة متوازية...")
+        if self.logger:
+            self.logger.log(f"🚀 معالجة {total_mega} حزمة ترجمة متوازية...")
         with ThreadPoolExecutor(max_workers=min(total_mega, 5)) as executor:
             batch_results = list(executor.map(process_chunk, mega_chunks))
             
@@ -665,8 +668,8 @@ class FileTranslator:
     }
 
     def __init__(self, source_lang: str = "auto", target_lang: str = "ar"):
-        self.service = TranslationService(source_lang=source_lang, target_lang=target_lang)
         self.logger = OperationLogger()
+        self.service = TranslationService(source_lang=source_lang, target_lang=target_lang, logger=self.logger)
         self._handlers: List[BaseTranslator] = [
             DocxTranslator(self.service, self.logger),
             ImageTranslator(self.service, self.logger),
