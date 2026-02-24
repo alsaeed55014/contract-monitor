@@ -1084,18 +1084,24 @@ def render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search", 
     else:
         # Original Deletion Logic for Search/Contract Board
         if sheet_row:
-            with st.popover(f"🗑️ {t('delete_btn', lang)}", use_container_width=True):
-                st.warning(t("confirm_delete_msg", lang))
-                if st.button(t("confirm_btn", lang), type="primary", use_container_width=True, key=f"del_confirm_{key_prefix}_{selected_idx}"):
-                    with st.spinner("⏳ جارٍ الحذف النهائي..."):
-                        success = st.session_state.db.delete_row(sheet_row)
-                        if success == True:
-                            st.success(t("delete_success", lang))
-                            time.sleep(1)
-                            if f"last_scroll_{key_prefix}" in st.session_state: del st.session_state[f"last_scroll_{key_prefix}"]
-                            st.rerun()
-                        else:
-                            st.error(f"{t('delete_error', lang)}: {success}")
+            user_perms = st.session_state.user.get('permissions', [])
+            is_admin = st.session_state.user.get('role') == 'admin'
+            
+            if "can_delete" in user_perms or "all" in user_perms or is_admin:
+                with st.popover(f"🗑️ {t('delete_btn', lang)}", use_container_width=True):
+                    st.warning(t("confirm_delete_msg", lang))
+                    if st.button(t("confirm_btn", lang), type="primary", use_container_width=True, key=f"del_confirm_{key_prefix}_{selected_idx}"):
+                        with st.spinner("⏳ جارٍ الحذف النهائي..."):
+                            success = st.session_state.db.delete_row(sheet_row)
+                            if success == True:
+                                st.success(t("delete_success", lang))
+                                time.sleep(1)
+                                if f"last_scroll_{key_prefix}" in st.session_state: del st.session_state[f"last_scroll_{key_prefix}"]
+                                st.rerun()
+                            else:
+                                st.error(f"{t('delete_error', lang)}: {success}")
+            else:
+                st.info("🔒 ليس لك صلاحيات الحذف" if lang == 'ar' else "🔒 No delete permissions")
         else:
             # Final Error UI with reset options
             st.error(f"⚠️ {t('delete_error', lang)} (ID Missing)")
@@ -3019,8 +3025,9 @@ def render_order_processing_content():
                 st.markdown('<div style="margin-top: 20px;"></div>', unsafe_allow_html=True)
                 
                 # Delete with confirmation (Permission check)
-                user_perms = st.session_state.user_data.get('permissions', [])
-                if "can_delete" in user_perms or "all" in user_perms:
+                user_perms = st.session_state.user.get('permissions', [])
+                is_admin = st.session_state.user.get('role') == 'admin'
+                if "can_delete" in user_perms or "all" in user_perms or is_admin:
                     with st.popover("🗑️ حذف" if lang == 'ar' else "🗑️ Delete"):
                         st.warning("⚠️ هل أنت متأكد من حذف هذا الطلب نهائياً؟" if lang == 'ar' else "⚠️ Delete this request permanently?")
                         if st.button("نعم، حذف" if lang == 'ar' else "Yes, Delete", key=f"del_cust_{idx}", type="primary", use_container_width=True):
@@ -3369,8 +3376,9 @@ def render_bengali_supply_content():
                     with h1:
                         st.markdown(f"### 👷 {w.get('name', 'N/A')}")
                     with h2:
-                        user_perms = st.session_state.user_data.get('permissions', [])
-                        if "can_delete" in user_perms or "all" in user_perms:
+                        user_perms = st.session_state.user.get('permissions', [])
+                        is_admin = st.session_state.user.get('role') == 'admin'
+                        if "can_delete" in user_perms or "all" in user_perms or is_admin:
                             if st.button("🗑️", key=f"del_{w['worker_uuid']}", help=t("delete_btn", lang)):
                                 if bm.delete_worker(w['worker_uuid']):
                                     show_toast("تم حذف السجل بنجاح", "success")
