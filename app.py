@@ -3031,7 +3031,7 @@ def render_order_processing_content():
                     st.markdown('<div style="margin-top: 20px;"></div>', unsafe_allow_html=True)
                     
                     # Delete with confirmation (Permission check)
-                    user_perms = st.session_state.user_data.get('permissions', [])
+                    user_perms = st.session_state.user.get('permissions', [])
                     if "can_delete" in user_perms or "all" in user_perms:
                         with st.popover("🗑️ حذف" if lang == 'ar' else "🗑️ Delete"):
                             st.warning("⚠️ هل أنت متأكد من حذف هذا الطلب نهائياً؟" if lang == 'ar' else "⚠️ Delete this request permanently?")
@@ -3384,7 +3384,7 @@ def render_bengali_supply_content():
                     with h1:
                         st.markdown(f"### 👷 {w.get('name', 'N/A')}")
                     with h2:
-                        user_perms = st.session_state.user_data.get('permissions', [])
+                        user_perms = st.session_state.user.get('permissions', [])
                         if "can_delete" in user_perms or "all" in user_perms:
                             if st.button("🗑️", key=f"del_{w['worker_uuid']}", help=t("delete_btn", lang)):
                                 if bm.delete_worker(w['worker_uuid']):
