@@ -1084,24 +1084,18 @@ def render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search", 
     else:
         # Original Deletion Logic for Search/Contract Board
         if sheet_row:
-            user_perms = st.session_state.user.get('permissions', [])
-            is_admin = st.session_state.user.get('role') == 'admin'
-            
-            if "can_delete" in user_perms or "all" in user_perms or is_admin:
-                with st.popover(f"🗑️ {t('delete_btn', lang)}", use_container_width=True):
-                    st.warning(t("confirm_delete_msg", lang))
-                    if st.button(t("confirm_btn", lang), type="primary", use_container_width=True, key=f"del_confirm_{key_prefix}_{selected_idx}"):
-                        with st.spinner("⏳ جارٍ الحذف النهائي..."):
-                            success = st.session_state.db.delete_row(sheet_row)
-                            if success == True:
-                                st.success(t("delete_success", lang))
-                                time.sleep(1)
-                                if f"last_scroll_{key_prefix}" in st.session_state: del st.session_state[f"last_scroll_{key_prefix}"]
-                                st.rerun()
-                            else:
-                                st.error(f"{t('delete_error', lang)}: {success}")
-            else:
-                st.info("🔒 ليس لك صلاحيات الحذف" if lang == 'ar' else "🔒 No delete permissions")
+            with st.popover(f"🗑️ {t('delete_btn', lang)}", use_container_width=True):
+                st.warning(t("confirm_delete_msg", lang))
+                if st.button(t("confirm_btn", lang), type="primary", use_container_width=True, key=f"del_confirm_{key_prefix}_{selected_idx}"):
+                    with st.spinner("⏳ جارٍ الحذف النهائي..."):
+                        success = st.session_state.db.delete_row(sheet_row)
+                        if success == True:
+                            st.success(t("delete_success", lang))
+                            time.sleep(1)
+                            if f"last_scroll_{key_prefix}" in st.session_state: del st.session_state[f"last_scroll_{key_prefix}"]
+                            st.rerun()
+                        else:
+                            st.error(f"{t('delete_error', lang)}: {success}")
         else:
             # Final Error UI with reset options
             st.error(f"⚠️ {t('delete_error', lang)} (ID Missing)")
@@ -1465,9 +1459,10 @@ def dashboard():
         if st.button(t("cv_translator", lang), use_container_width=True):
             st.session_state.page = "translator"
             st.rerun()
-        if st.button(t("customer_requests", lang), use_container_width=True):
-            st.session_state.page = "customer_requests"
-            st.rerun()
+        if user.get("role") != "viewer":
+            if st.button(t("customer_requests", lang), use_container_width=True):
+                st.session_state.page = "customer_requests"
+                st.rerun()
         if st.button(t("order_processing", lang), use_container_width=True):
             st.session_state.page = "order_processing"
             st.rerun()
@@ -1533,7 +1528,12 @@ def dashboard():
     if page == "dashboard": render_dashboard_content()
     elif page == "search": render_search_content()
     elif page == "translator": render_translator_content()
-    elif page == "customer_requests": render_customer_requests_content()
+    elif page == "customer_requests":
+        if user.get("role") == "viewer":
+            st.error("🔒 لا تملك صلاحية الوصول لهذه الصفحة" if lang == 'ar' else "🔒 Access Denied")
+            st.session_state.page = "dashboard"
+            st.rerun()
+        render_customer_requests_content()
     elif page == "order_processing": render_order_processing_content()
     elif page == "permissions": render_permissions_content()
     elif page == "bengali_supply": render_bengali_supply_content()
@@ -2971,10 +2971,12 @@ def render_order_processing_content():
         # --- Single Customer Section ---
         with st.container():
             # Header
+            user_role = st.session_state.user.get("role")
+            display_title = f"🏢 {company_val}" if user_role != "viewer" else "🏢 " + ("طلب عميل" if lang == 'ar' else f"Customer Request")
             st.markdown(f"""
                 <div style="background: linear-gradient(90deg, rgba(212,175,55,0.15), transparent); 
                             padding: 10px 20px; border-radius: 10px; border-left: 5px solid #D4AF37; margin: 15px 0 5px 0;">
-                    <h3 style="color: #D4AF37; margin: 0; font-family: 'Tajawal', sans-serif;">🏢 {company_val} <span style="font-size: 0.8rem; color: #888;">#{idx+1}</span></h3>
+                    <h3 style="color: #D4AF37; margin: 0; font-family: 'Tajawal', sans-serif;">{display_title} <span style="font-size: 0.8rem; color: #888;">#{idx+1}</span></h3>
                 </div>
             """, unsafe_allow_html=True)
             
@@ -3013,39 +3015,45 @@ def render_order_processing_content():
                 info_cell("👥", t('required_category', lang), str(customer_row.get(c_category, "")))
                 info_cell("🔢", t('num_employees', lang), str(customer_row.get(c_num_emp, "")), "#D4AF37")
             with col3:
-                info_cell("📱", t('mobile_number', lang), str(customer_row.get(c_mobile, "")))
+                if user_role != "viewer":
+                    info_cell("📱", t('mobile_number', lang), str(customer_row.get(c_mobile, "")))
+                else:
+                    info_cell("🔒", t('mobile_number', lang), "********")
                 info_cell("🌍", t('required_nationality', lang), str(customer_row.get(c_nationality, "")))
                 info_cell("💰", t('expected_salary', lang), str(customer_row.get(c_salary, "")), "#00FF41")
             
             with col4:
-                st.markdown('<div style="margin-top: 5px;"></div>', unsafe_allow_html=True)
-                # Activate Toggle (Visual only for now or session state)
-                is_active = st.toggle("✅ تفعيل" if lang == 'ar' else "✅ Activate", key=f"active_{idx}", value=True)
-                
-                st.markdown('<div style="margin-top: 20px;"></div>', unsafe_allow_html=True)
-                
-                # Delete with confirmation (Permission check)
-                user_perms = st.session_state.user.get('permissions', [])
-                is_admin = st.session_state.user.get('role') == 'admin'
-                if "can_delete" in user_perms or "all" in user_perms or is_admin:
-                    with st.popover("🗑️ حذف" if lang == 'ar' else "🗑️ Delete"):
-                        st.warning("⚠️ هل أنت متأكد من حذف هذا الطلب نهائياً؟" if lang == 'ar' else "⚠️ Delete this request permanently?")
-                        if st.button("نعم، حذف" if lang == 'ar' else "Yes, Delete", key=f"del_cust_{idx}", type="primary", use_container_width=True):
-                            # Get sheet row from hidden __sheet_row column
-                            row_num = customer_row.get('__sheet_row')
-                            if row_num:
-                                url = "https://docs.google.com/spreadsheets/d/1ZlLGXqbFSnKrr2J-PRnxRhxykwrNOgOE6Mb34Zei_FU/edit"
-                                success = st.session_state.db.delete_row(row_num, url=url)
-                                if success:
-                                    show_toast("✅ تم حذف الطلب بنجاح" if lang == 'ar' else "✅ Request deleted successfully", "success")
-                                    time.sleep(1)
-                                    st.rerun()
+                if user_role != "viewer":
+                    st.markdown('<div style="margin-top: 5px;"></div>', unsafe_allow_html=True)
+                    # Activate Toggle (Visual only for now or session state)
+                    is_active = st.toggle("✅ تفعيل" if lang == 'ar' else "✅ Activate", key=f"active_{idx}", value=True)
+                    
+                    st.markdown('<div style="margin-top: 20px;"></div>', unsafe_allow_html=True)
+                    
+                    # Delete with confirmation (Permission check)
+                    user_perms = st.session_state.user_data.get('permissions', [])
+                    if "can_delete" in user_perms or "all" in user_perms:
+                        with st.popover("🗑️ حذف" if lang == 'ar' else "🗑️ Delete"):
+                            st.warning("⚠️ هل أنت متأكد من حذف هذا الطلب نهائياً؟" if lang == 'ar' else "⚠️ Delete this request permanently?")
+                            if st.button("نعم، حذف" if lang == 'ar' else "Yes, Delete", key=f"del_cust_{idx}", type="primary", use_container_width=True):
+                                # Get sheet row from hidden __sheet_row column
+                                row_num = customer_row.get('__sheet_row')
+                                if row_num:
+                                    url = "https://docs.google.com/spreadsheets/d/1ZlLGXqbFSnKrr2J-PRnxRhxykwrNOgOE6Mb34Zei_FU/edit"
+                                    success = st.session_state.db.delete_row(row_num, url=url)
+                                    if success:
+                                        show_toast("✅ تم حذف الطلب بنجاح" if lang == 'ar' else "✅ Request deleted successfully", "success")
+                                        time.sleep(1)
+                                        st.rerun()
+                                    else:
+                                        st.error("فشل الحذف" if lang == 'ar' else "Delete failed")
                                 else:
-                                    st.error("فشل الحذف" if lang == 'ar' else "Delete failed")
-                            else:
-                                st.error("تعذر تحديد رقم الصف" if lang == 'ar' else "Could not determine row number")
+                                    st.error("تعذر تحديد رقم الصف" if lang == 'ar' else "Could not determine row number")
+                    else:
+                        st.caption("🔒 لا تملك صلاحية الحذف" if lang == 'ar' else "🔒 No delete permission")
                 else:
-                    st.caption("🔒 لا تملك صلاحية الحذف" if lang == 'ar' else "🔒 No delete permission")
+                    st.markdown('<div style="height: 10px;"></div>', unsafe_allow_html=True)
+                    st.caption("🔒 وضع المشاهد" if lang == 'ar' else "🔒 Viewer Mode")
 
             # --- Workers ---
             matches, scores, city_count = find_matching_workers(customer_row)
@@ -3376,9 +3384,8 @@ def render_bengali_supply_content():
                     with h1:
                         st.markdown(f"### 👷 {w.get('name', 'N/A')}")
                     with h2:
-                        user_perms = st.session_state.user.get('permissions', [])
-                        is_admin = st.session_state.user.get('role') == 'admin'
-                        if "can_delete" in user_perms or "all" in user_perms or is_admin:
+                        user_perms = st.session_state.user_data.get('permissions', [])
+                        if "can_delete" in user_perms or "all" in user_perms:
                             if st.button("🗑️", key=f"del_{w['worker_uuid']}", help=t("delete_btn", lang)):
                                 if bm.delete_worker(w['worker_uuid']):
                                     show_toast("تم حذف السجل بنجاح", "success")
