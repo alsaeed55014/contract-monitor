@@ -2952,7 +2952,23 @@ def render_order_processing_content():
                 if city_list:
                     city_df, city_idx_map = build_worker_table(city_list, city_scores)
                     if not city_df.empty:
-                        st.markdown(f"""<div style="color: #D4AF37; font-weight: 700; margin: 10px 5px;">📍 عمال في نفس المدينة ({str(customer_row.get(c_location, ""))}) — {len(city_df)}</div>""", unsafe_allow_html=True)
+                        loc_val = str(customer_row.get(c_location, ""))
+                        regional_keywords = ["عسير", "الجنوب", "الشمال", "الشرقية", "منطقة", "region", "south", "north", "east", "asir"]
+                        is_regional = any(kw in loc_val.lower() for kw in regional_keywords)
+                        
+                        if is_regional:
+                            label = f"🗺️ عمال في منطقة {loc_val}" if lang == 'ar' else f"🗺️ Workers in {loc_val} Region"
+                            color = "#D4AF37"
+                            explainer = f"""<div style="font-size: 0.85rem; color: #888; margin-top: -8px; margin-bottom: 10px; margin-left: 10px; font-family: 'Cairo', sans-serif;">
+                                {'هؤلاء العمال مناسبون لأن مدنهم تتبع لمنطقة ' if lang == 'ar' else 'These workers are matches because their cities belong to '} {loc_val}
+                            </div>"""
+                        else:
+                            label = f"📍 عمال في نفس المدينة ({loc_val})" if lang == 'ar' else f"📍 Workers in the same city ({loc_val})"
+                            color = "#D4AF37"
+                            explainer = ""
+
+                        st.markdown(f"""<div style="color: {color}; font-weight: 700; margin: 10px 5px;">{label} — {len(city_df)}</div>""", unsafe_allow_html=True)
+                        if explainer: st.markdown(explainer, unsafe_allow_html=True)
                         
                         # Use selection
                         df_city_height = min((len(city_df) + 1) * 35 + 40, 500)
