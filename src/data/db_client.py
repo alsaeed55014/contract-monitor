@@ -50,7 +50,8 @@ class DBClient:
                 
         except Exception as e:
             print(f"[ERROR] Connection Error: {e}")
-            self._connect_error = str(e)  # Store error but don't crash
+            st.error(f"Connection Failed: {e}") # Show in UI immediately
+            raise e
 
     def fetch_data(self, url=None, force=False, retries=3):
         """Fetches data from Google Sheets with caching and automatic retries for transient errors (503)."""

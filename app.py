@@ -1459,10 +1459,9 @@ def dashboard():
         if st.button(t("cv_translator", lang), use_container_width=True):
             st.session_state.page = "translator"
             st.rerun()
-        if user.get("role") != "viewer":
-            if st.button(t("customer_requests", lang), use_container_width=True):
-                st.session_state.page = "customer_requests"
-                st.rerun()
+        if st.button(t("customer_requests", lang), use_container_width=True):
+            st.session_state.page = "customer_requests"
+            st.rerun()
         if st.button(t("order_processing", lang), use_container_width=True):
             st.session_state.page = "order_processing"
             st.rerun()
@@ -1528,12 +1527,7 @@ def dashboard():
     if page == "dashboard": render_dashboard_content()
     elif page == "search": render_search_content()
     elif page == "translator": render_translator_content()
-    elif page == "customer_requests":
-        if user.get("role") == "viewer":
-            st.error("🔒 لا تملك صلاحية الوصول لهذه الصفحة" if lang == 'ar' else "🔒 Access Denied")
-            st.session_state.page = "dashboard"
-            st.rerun()
-        render_customer_requests_content()
+    elif page == "customer_requests": render_customer_requests_content()
     elif page == "order_processing": render_order_processing_content()
     elif page == "permissions": render_permissions_content()
     elif page == "bengali_supply": render_bengali_supply_content()
@@ -2409,21 +2403,15 @@ def render_permissions_content():
             
             # Additional Permissions Toggle
             st.markdown(f"**⚙️ {t('permissions', lang)}**")
-            current_perms = current_data.get("permissions", [])
-            bengali_perm = st.toggle(t("perm_bengali_supply", lang), value="bengali_supply" in current_perms)
-            delete_perm = st.toggle(t("perm_delete_global", lang), value="can_delete" in current_perms)
+            bengali_perm = st.toggle(t("perm_bengali_supply", lang), value="bengali_supply" in current_data.get("permissions", []))
             
             if st.form_submit_button(t("update_btn", lang)):
                 # Prepare permission list
-                new_perms = []
-                # Keep 'all' if they had it
-                if "all" in current_perms: new_perms.append("all")
-                if "read" in current_perms: new_perms.append("read")
-                
+                new_perms = current_data.get("permissions", [])
                 if bengali_perm:
                     if "bengali_supply" not in new_perms: new_perms.append("bengali_supply")
-                if delete_perm:
-                    if "can_delete" not in new_perms: new_perms.append("can_delete")
+                else:
+                    if "bengali_supply" in new_perms: new_perms.remove("bengali_supply")
                 
                 st.session_state.auth.update_permissions(selected_user, new_perms)
                 st.session_state.auth.update_role(selected_user, new_role)
@@ -2550,74 +2538,6 @@ def render_order_processing_content():
     if workers_df.empty:
         st.warning("لا توجد بيانات عمال" if lang == 'ar' else "No worker data available")
         return
-
-    # --- NEW: Advanced Filtering Panel (Matching Image) ---
-    st.markdown('<div style="color: #D4AF37; font-weight: 600; margin-bottom: 5px; font-family: \'Cairo\', sans-serif;">(AI) البحث الذكي</div>', unsafe_allow_html=True)
-    
-    with st.expander("🔍 " + ("تصفية متقدمة" if lang == 'ar' else "Advanced Filtering"), expanded=False):
-        # 1. Row: Scheduling & Dates
-        st.markdown(f'<div style="color: #888; margin-bottom: 10px;">{"📅 جدولة وتواريخ" if lang == 'ar' else "📅 Scheduling & Dates"}</div>', unsafe_allow_html=True)
-        rc1, rc2, rc3 = st.columns(3)
-        with rc3: # Rightmost (Arabic)
-            age_enabled = st.checkbox("تفعيل العمر" if lang == 'ar' else "Enable Age", key="op_age_en")
-            if age_enabled:
-                age_range = st.slider("", 18, 65, (20, 45), key="op_age_slider")
-        with rc2:
-            contract_enabled = st.checkbox("تفعيل تاريخ انتهاء العقد" if lang == 'ar' else "Enable Contract End Date", key="op_cont_en")
-            if contract_enabled:
-                c_start = st.date_input("من", value=datetime.today(), key="op_cont_start")
-                c_end = st.date_input("إلى", value=datetime.today() + timedelta(days=365), key="op_cont_end")
-        with rc1:
-            date_enabled = st.checkbox("تفعيل تاريخ التسجيل" if lang == 'ar' else "Enable Reg. Date", key="op_date_en")
-            if date_enabled:
-                d_start = st.date_input("من", value=datetime.today() - timedelta(days=30), key="op_date_start")
-                d_end = st.date_input("إلى", value=datetime.today(), key="op_date_end")
-
-        # 2. Row: Advanced Smart Filtering
-        st.markdown(f'<div style="color: #888; margin-top: 15px; margin-bottom: 10px;">{"⚙️ تصفية ذكية متقدمة" if lang == 'ar' else "⚙️ Advanced Smart Filtering"}</div>', unsafe_allow_html=True)
-        sc1, sc2, sc3 = st.columns(3)
-        with sc3:
-            expired_only = st.checkbox("العقود المنتهية" if lang == 'ar' else "Expired Contracts", key="op_expired")
-        with sc2:
-            not_working_only = st.checkbox("No (هل يعمل حالياً؟)" if lang == 'ar' else "No (Working Now?)", key="op_not_working")
-        with sc1:
-            st.markdown(f'<div style="font-size: 0.8rem; color: #888;">{"عدد نقل الكفالة" if lang == 'ar' else "Transfer Count"}</div>', unsafe_allow_html=True)
-            trans_count = st.selectbox("", ["— الكل —", "1", "2", "3", "4+"], key="op_transfer", label_visibility="collapsed")
-
-        # 3. Row: Status Flags
-        tc1, tc2, tc3 = st.columns(3)
-        with tc3:
-            no_huroob = st.checkbox("بدون بلاغ هروب (No)" if lang == 'ar' else "No Huroob (No)", key="op_no_huroob")
-        with tc2:
-            work_outside = st.checkbox("يقبل العمل خارج مدينته (Yes)" if lang == 'ar' else "Work Outside City (Yes)", key="op_outside")
-        with tc1:
-            pass # Reserved
-
-        # Apply Filters using SmartSearchEngine
-        filters = {
-            'age_enabled': age_enabled,
-            'age_min': age_range[0] if age_enabled else None,
-            'age_max': age_range[1] if age_enabled else None,
-            'contract_enabled': contract_enabled,
-            'contract_end_start': c_start if contract_enabled else None,
-            'contract_end_end': c_end if contract_enabled else None,
-            'date_enabled': date_enabled,
-            'date_start': d_start if date_enabled else None,
-            'date_end': d_end if date_enabled else None,
-            'expired_only': expired_only,
-            'not_working_only': not_working_only,
-            'no_huroob': no_huroob,
-            'work_outside_city': work_outside,
-            'transfer_count': trans_count if trans_count != "— الكل —" else None
-        }
-        
-        # Execute global filter on worker dataset
-        if any(filters.values()):
-            engine = SmartSearchEngine(workers_df)
-            workers_df = engine.search("", filters=filters)
-            st.info(f"💡 {'تم تطبيق التصفية: متاح حالياً ' if lang == 'ar' else 'Filter applied: available '} {len(workers_df)} {' عامل' if lang == 'ar' else ' workers'}")
-
-    # --- Resume Original Logic ---
 
     # --- Customer Column Names (name-based lookup to handle __sheet_row offset) ---
     def find_cust_col(keywords):
@@ -2971,17 +2891,15 @@ def render_order_processing_content():
         # --- Single Customer Section ---
         with st.container():
             # Header
-            user_role = st.session_state.user.get("role")
-            display_title = f"🏢 {company_val}" if user_role != "viewer" else "🏢 " + ("طلب عميل" if lang == 'ar' else f"Customer Request")
             st.markdown(f"""
                 <div style="background: linear-gradient(90deg, rgba(212,175,55,0.15), transparent); 
                             padding: 10px 20px; border-radius: 10px; border-left: 5px solid #D4AF37; margin: 15px 0 5px 0;">
-                    <h3 style="color: #D4AF37; margin: 0; font-family: 'Tajawal', sans-serif;">{display_title} <span style="font-size: 0.8rem; color: #888;">#{idx+1}</span></h3>
+                    <h3 style="color: #D4AF37; margin: 0; font-family: 'Tajawal', sans-serif;">🏢 {company_val} <span style="font-size: 0.8rem; color: #888;">#{idx+1}</span></h3>
                 </div>
             """, unsafe_allow_html=True)
             
             # Info Grid
-            col1, col2, col3, col4 = st.columns([3, 3, 3, 1])
+            col1, col2, col3 = st.columns(3)
             with col1:
                 if c_timestamp:
                     raw_ts = str(customer_row.get(c_timestamp, ""))
@@ -3015,45 +2933,9 @@ def render_order_processing_content():
                 info_cell("👥", t('required_category', lang), str(customer_row.get(c_category, "")))
                 info_cell("🔢", t('num_employees', lang), str(customer_row.get(c_num_emp, "")), "#D4AF37")
             with col3:
-                if user_role != "viewer":
-                    info_cell("📱", t('mobile_number', lang), str(customer_row.get(c_mobile, "")))
-                else:
-                    info_cell("🔒", t('mobile_number', lang), "********")
+                info_cell("📱", t('mobile_number', lang), str(customer_row.get(c_mobile, "")))
                 info_cell("🌍", t('required_nationality', lang), str(customer_row.get(c_nationality, "")))
                 info_cell("💰", t('expected_salary', lang), str(customer_row.get(c_salary, "")), "#00FF41")
-            
-            with col4:
-                if user_role != "viewer":
-                    st.markdown('<div style="margin-top: 5px;"></div>', unsafe_allow_html=True)
-                    # Activate Toggle (Visual only for now or session state)
-                    is_active = st.toggle("✅ تفعيل" if lang == 'ar' else "✅ Activate", key=f"active_{idx}", value=True)
-                    
-                    st.markdown('<div style="margin-top: 20px;"></div>', unsafe_allow_html=True)
-                    
-                    # Delete with confirmation (Permission check)
-                    user_perms = st.session_state.user.get('permissions', [])
-                    if "can_delete" in user_perms or "all" in user_perms:
-                        with st.popover("🗑️ حذف" if lang == 'ar' else "🗑️ Delete"):
-                            st.warning("⚠️ هل أنت متأكد من حذف هذا الطلب نهائياً؟" if lang == 'ar' else "⚠️ Delete this request permanently?")
-                            if st.button("نعم، حذف" if lang == 'ar' else "Yes, Delete", key=f"del_cust_{idx}", type="primary", use_container_width=True):
-                                # Get sheet row from hidden __sheet_row column
-                                row_num = customer_row.get('__sheet_row')
-                                if row_num:
-                                    url = "https://docs.google.com/spreadsheets/d/1ZlLGXqbFSnKrr2J-PRnxRhxykwrNOgOE6Mb34Zei_FU/edit"
-                                    success = st.session_state.db.delete_row(row_num, url=url)
-                                    if success:
-                                        show_toast("✅ تم حذف الطلب بنجاح" if lang == 'ar' else "✅ Request deleted successfully", "success")
-                                        time.sleep(1)
-                                        st.rerun()
-                                    else:
-                                        st.error("فشل الحذف" if lang == 'ar' else "Delete failed")
-                                else:
-                                    st.error("تعذر تحديد رقم الصف" if lang == 'ar' else "Could not determine row number")
-                    else:
-                        st.caption("🔒 لا تملك صلاحية الحذف" if lang == 'ar' else "🔒 No delete permission")
-                else:
-                    st.markdown('<div style="height: 10px;"></div>', unsafe_allow_html=True)
-                    st.caption("🔒 وضع المشاهد" if lang == 'ar' else "🔒 Viewer Mode")
 
             # --- Workers ---
             matches, scores, city_count = find_matching_workers(customer_row)
@@ -3384,15 +3266,11 @@ def render_bengali_supply_content():
                     with h1:
                         st.markdown(f"### 👷 {w.get('name', 'N/A')}")
                     with h2:
-                        user_perms = st.session_state.user.get('permissions', [])
-                        if "can_delete" in user_perms or "all" in user_perms:
-                            if st.button("🗑️", key=f"del_{w['worker_uuid']}", help=t("delete_btn", lang)):
-                                if bm.delete_worker(w['worker_uuid']):
-                                    show_toast("تم حذف السجل بنجاح", "success")
-                                    time.sleep(0.5)
-                                    st.rerun()
-                        else:
-                            st.button("🔒", key=f"lock_{w['worker_uuid']}", disabled=True, help="لا تملك صلاحية الحذف")
+                        if st.button("🗑️", key=f"del_{w['worker_uuid']}", help=t("delete_btn", lang)):
+                            if bm.delete_worker(w['worker_uuid']):
+                                show_toast("تم حذف السجل بنجاح", "success")
+                                time.sleep(0.5)
+                                st.rerun()
 
                     # Full Details in Columns
                     d1, d2, d3 = st.columns(3)

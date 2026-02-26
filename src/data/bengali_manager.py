@@ -29,12 +29,8 @@ class BengaliDataManager:
         return {"suppliers": [], "employers": [], "workers": []}
 
     def save_data(self):
-        try:
-            with open(BENGALI_DATA_FILE, "w", encoding="utf-8") as f:
-                json.dump(self.data, f, ensure_ascii=False, indent=4)
-        except Exception as e:
-            print(f"[WARNING] Could not save bengali data to file: {e}")
-            # Data stays in memory even if file write fails
+        with open(BENGALI_DATA_FILE, "w", encoding="utf-8") as f:
+            json.dump(self.data, f, ensure_ascii=False, indent=4)
 
     def add_supplier_employer(self, supplier, employer):
         # Add supplier if unique
