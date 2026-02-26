@@ -241,11 +241,7 @@ class TranslationManager:
         if not text:
             return ""
 
-        # Remove invisible Unicode characters (Bidi markers, zero-width spaces, etc.)
-        # Range includes: \u200B-\u200F (Marks/Spaces), \u202A-\u202E (Embeddings), \u2066-\u2069 (Isolates)
-        text = re.sub(r'[\u200B-\u200F\u202A-\u202E\u2066-\u2069]', '', str(text))
-        
-        text = text.lower().strip()
+        text = str(text).lower().strip()
 
         # Remove Arabic definite article
         if text.startswith("ال") and len(text) > 4:

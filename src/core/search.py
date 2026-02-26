@@ -30,10 +30,8 @@ class SmartSearchEngine:
 
     def is_phone_query(self, query):
         """Detects if the query is likely a phone number."""
-        # Strip spaces, plus, dashes, and invisible Unicode markers
-        # We use \D to remove ALL non-digit characters for the purpose of checking
-        # if this represents a phone number search.
-        clean = re.sub(r'\D', '', str(query))
+        # Strip spaces, plus, dashes first
+        clean = re.sub(r'[\s\+\-\(\)]', '', str(query))
         return clean.isdigit() and len(clean) >= 5
 
     def search(self, query, filters=None):
@@ -56,12 +54,7 @@ class SmartSearchEngine:
             'total_before_search': len(results),
         }
         
-        # 0. Clean query and handle invisible formatting characters
-        if query:
-            # Strip bidirectional formatting characters and other invisible Unicode
-            # (LRI: \u2066, RLI: \u2067, FSI: \u2068, PDI: \u2069, etc.)
-            query = re.sub(r'[\u200B-\u200F\u202A-\u202E\u2066-\u2069]', '', str(query))
-        
+        # Clean query
         query_clean = str(query).strip() if query else ""
         
         # 1. Text Search

@@ -2674,9 +2674,7 @@ def render_order_processing_content():
     
     def normalize(text):
         if not text: return ""
-        # Remove invisible Unicode characters (Bidi markers, etc.)
-        s = re.sub(r'[\u200B-\u200F\u202A-\u202E\u2066-\u2069]', '', str(text))
-        s = s.strip().lower()
+        s = str(text).strip().lower()
         s = re.sub(r'[^\w\s\-]', ' ', s, flags=re.UNICODE)
         return ' '.join(s.split()).strip()
     
@@ -3356,9 +3354,7 @@ def render_bengali_supply_content():
         
         def normalize_ar(text):
             if not text: return ""
-            # Remove invisible Unicode characters (Bidi markers, etc.)
-            t = re.sub(r'[\u200B-\u200F\u202A-\u202E\u2066-\u2069]', '', str(text))
-            t = t.lower().strip()
+            t = str(text).lower().strip()
             # Basic Arabic Normalization
             t = t.replace("أ", "ا").replace("إ", "ا").replace("آ", "ا")
             t = t.replace("ة", "ه").replace("ى", "ي")
