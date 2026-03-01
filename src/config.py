@@ -35,3 +35,37 @@ FONTS = {
     "body_bold": ("Segoe UI", 11, "bold"),
     "small": ("Segoe UI", 9)
 }
+# WhatsApp API Configuration
+WHATSAPP_CONFIG = {
+    "access_token": os.environ.get("WHATSAPP_ACCESS_TOKEN"),
+    "phone_number_id": os.environ.get("WHATSAPP_PHONE_NUMBER_ID"),
+    "verify_token": os.environ.get("WHATSAPP_VERIFY_TOKEN", "my_secure_token_123"),
+    "api_version": os.environ.get("WHATSAPP_API_VERSION", "v18.0")
+}
+
+# Translations Addition (Simulated global update)
+# In a real app, these would go into the i18n manager dictionary
+WHATSAPP_TRANSLATIONS = {
+    'ar': {
+        'whatsapp_messages': '🟢 رسائل الواتس',
+        'whatsapp_analytics': '📊 WhatsApp Analytics',
+        'sent_count': 'تم الإرسال',
+        'delivered_count': 'تم التوصيل',
+        'read_count': 'تمت القراءة',
+        'failed_count': 'فشل الإرسال',
+        'message_history': 'سجل الرسائل',
+        'send_new_msg': 'إرسال رسالة جديدة',
+        'stats_overview': 'نظرة عامة على الإحصائيات'
+    },
+    'en': {
+        'whatsapp_messages': '🟢 WhatsApp Messages',
+        'whatsapp_analytics': '📊 WhatsApp Analytics',
+        'sent_count': 'Sent',
+        'delivered_count': 'Delivered',
+        'read_count': 'Read',
+        'failed_count': 'Failed',
+        'message_history': 'Message History',
+        'send_new_msg': 'Send New Message',
+        'stats_overview': 'Stats Overview'
+    }
+}

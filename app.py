@@ -17,6 +17,9 @@ if ROOT_DIR not in sys.path:
 
 from src.core.contracts import ContractManager
 from src.data.bengali_manager import BengaliDataManager
+from services.whatsapp_service import WhatsAppService
+from services.message_queue import WhatsAppQueue
+from src.data.whatsapp_db import WhatsAppDB
 
 # 2. Local Auth Class to prevent Import/Sync Errors
 class AuthManager:
@@ -904,6 +907,13 @@ if 'lang' not in st.session_state:
     st.session_state.lang = 'ar' 
 
 # 8. Constants
+if 'whatsapp_db' not in st.session_state:
+    st.session_state.whatsapp_db = WhatsAppDB()
+if 'whatsapp_service' not in st.session_state:
+    st.session_state.whatsapp_service = WhatsAppService()
+if 'whatsapp_queue' not in st.session_state:
+    st.session_state.whatsapp_queue = WhatsAppQueue()
+
 IMG_PATH = os.path.join(ASSETS_DIR, "alsaeed.jpg")
 if not os.path.exists(IMG_PATH):
     IMG_PATH = "alsaeed.jpg" # Fallback
@@ -1473,6 +1483,14 @@ def dashboard():
             if st.button("🇧🇩 " + t("bengali_supply_title", lang), key="btn_bengali_supply_main", use_container_width=True):
                 st.session_state.page = "bengali_supply"
                 st.rerun()
+        if user.get("permissions") and ("all" in user.get("permissions") or "whatsapp" in user.get("permissions")):
+            if st.button("🟢 " + ("رسائل الواتس" if lang == 'ar' else "WhatsApp Messages"), use_container_width=True):
+                st.session_state.page = "whatsapp_messages"
+                st.rerun()
+            if st.button("📊 " + ("إحصائيات الواتس" if lang == 'ar' else "WhatsApp Analytics"), use_container_width=True):
+                st.session_state.page = "whatsapp_analytics"
+                st.rerun()
+
         if user.get("role") == "admin":
             if st.button(t("permissions", lang), use_container_width=True):
                 st.session_state.page = "permissions"
@@ -1537,6 +1555,8 @@ def dashboard():
     elif page == "order_processing": render_order_processing_content()
     elif page == "permissions": render_permissions_content()
     elif page == "bengali_supply": render_bengali_supply_content()
+    elif page == "whatsapp_messages": render_whatsapp_messages_content()
+    elif page == "whatsapp_analytics": render_whatsapp_analytics_content()
 
 def render_dashboard_content():
     lang = st.session_state.lang
@@ -3412,6 +3432,118 @@ def render_bengali_supply_content():
                         with st.expander("📝 Notes - ملاحظات"):
                             if w.get('file_notes'): st.write(f"**Files:** {w['file_notes']}")
                             if w.get('general_notes'): st.write(f"**General:** {w['general_notes']}")
+
+
+# --- WhatsApp Messaging Pages ---
+
+def render_whatsapp_messages_content():
+    lang = st.session_state.lang
+    st.markdown('<div class="programmer-signature-neon">By: Alsaeed Alwazzan</div>', unsafe_allow_html=True)
+    st.title("🟢 " + ("إدارة رسائل الواتساب" if lang == 'ar' else "WhatsApp Message Management"))
+
+    # 1. Stats Dashboard Cards
+    stats = st.session_state.whatsapp_db.get_stats()
+    c1, c2, c3, c4 = st.columns(4)
+    with c1: st.markdown(f'<div class="metric-container glow-green"><div class="metric-label">Sent</div><div class="metric-value">{stats.get("sent", 0)}</div></div>', unsafe_allow_html=True)
+    with c2: st.markdown(f'<div class="metric-container glow-orange"><div class="metric-label">Delivered</div><div class="metric-value">{stats.get("delivered", 0)}</div></div>', unsafe_allow_html=True)
+    with c3: st.markdown(f'<div class="metric-container glow-blue"><div class="metric-label">Read</div><div class="metric-value">{stats.get("read", 0)}</div></div>', unsafe_allow_html=True)
+    with c4: st.markdown(f'<div class="metric-container glow-red"><div class="metric-label">Failed</div><div class="metric-value">{stats.get("failed", 0)}</div></div>', unsafe_allow_html=True)
+
+    st.markdown("---")
+
+    # 2. Composition Area
+    with st.expander("📝 " + ("إرسال رسالة جديدة" if lang == 'ar' else "Send New Message"), expanded=True):
+        msg_type = st.radio(("نوع الرسالة" if lang == 'ar' else "Message Type"), ["Text", "Template"], horizontal=True)
+        to_number = st.text_input(("رقم الواتساب (مع مفتاح الدولة)" if lang == 'ar' else "WhatsApp Number (Ex: 9665...)"))
+        
+        if msg_type == "Text":
+            msg_content = st.text_area(("محتوى الرسالة" if lang == 'ar' else "Message Content"))
+            if st.button(("إرسال الآن" if lang == 'ar' else "Send Now"), type="primary", use_container_width=True):
+                if to_number and msg_content:
+                    st.session_state.whatsapp_queue.add_to_queue("text", 
+                        to_number=to_number, 
+                        message=msg_content, 
+                        created_by=st.session_state.user['username']
+                    )
+                    st.success("✅ تمت إضافة الرسالة إلى طابور الإرسال!")
+                    time.sleep(1)
+                    st.rerun()
+                else: st.error("يرجى ملء جميع الحقول")
+        
+        else: # Template
+            template_name = st.text_input(("اسم القالب (Approved Template Name)" if lang == 'ar' else "Template Name"))
+            vars_str = st.text_input(("المتغيرات (مفصولة بفاصلة ,)" if lang == 'ar' else "Variables (Comma separated)"))
+            if st.button(("إرسال القالب" if lang == 'ar' else "Send Template"), type="primary", use_container_width=True):
+                if to_number and template_name:
+                    variables = [v.strip() for v in vars_str.split(",")] if vars_str else []
+                    st.session_state.whatsapp_queue.add_to_queue("template", 
+                        to_number=to_number, 
+                        template_name=template_name, 
+                        variables=variables,
+                        created_by=st.session_state.user['username']
+                    )
+                    st.success("✅ تمت إضافة القالب إلى طابور الإرسال!")
+                    time.sleep(1)
+                    st.rerun()
+
+    st.markdown("---")
+
+    # 3. Message History Table
+    st.subheader("📜 " + ("سجل الرسائل" if lang == 'ar' else "Message History"))
+    df = st.session_state.whatsapp_db.get_recent_messages()
+    if not df.empty:
+        # Styling the dataframe status
+        def color_status(val):
+            color = 'white'
+            if val == 'read': color = '#00ffc2'
+            elif val == 'delivered': color = '#79d2ff'
+            elif val == 'failed': color = '#ff4b4b'
+            elif val == 'sent': color = '#4caf50'
+            return f'color: {color}'
+
+        # Note: applymap is older, using style.map for pandas 2.0+
+        try:
+            st.dataframe(df.style.map(color_status, subset=['status']), use_container_width=True)
+        except:
+            st.dataframe(df.style.applymap(color_status, subset=['status']), use_container_width=True)
+    else:
+        st.info("لا يوجد سجل رسائل بعد.")
+
+def render_whatsapp_analytics_content():
+    lang = st.session_state.lang
+    st.title("📊 WhatsApp Analytics")
+    st.markdown('<div class="programmer-signature-neon">By: Alsaeed Alwazzan</div>', unsafe_allow_html=True)
+
+    df = st.session_state.whatsapp_db.get_recent_messages(limit=1000)
+    
+    if df.empty:
+        st.warning("⚠️ لا توجد بيانات كافية لعرض الرسوم البيانية.")
+        return
+
+    # Convert timestamps
+    df['created_at'] = pd.to_datetime(df['created_at'])
+    df['date'] = df['created_at'].dt.date
+
+    # Daily Volume Chart
+    st.subheader("📈 " + ("حجم الرسائل اليومي" if lang == 'ar' else "Daily Message Volume"))
+    daily_count = df.groupby('date').size().reset_index(name='count')
+    st.line_chart(daily_count.set_index('date'))
+
+    # Status Distribution
+    st.subheader("🎯 " + ("توزيع الحالات" if lang == 'ar' else "Status Distribution"))
+    status_counts = df['status'].value_counts()
+    st.bar_chart(status_counts)
+
+    # Conversion Rates (SaaS Metrics)
+    total = len(df)
+    delivered = len(df[df['status'].isin(['delivered', 'read'])])
+    read = len(df[df['status'] == 'read'])
+    failed = len(df[df['status'] == 'failed'])
+
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Delivery Rate", f"{(delivered/total*100):.1f}%" if total > 0 else "0%")
+    c2.metric("Read Rate", f"{(read/total*100):.1f}%" if total > 0 else "0%")
+    c3.metric("Failure Rate", f"{(failed/total*100):.1f}%" if total > 0 else "0%")
 
 # 11. Main Entry
 if not st.session_state.user:
