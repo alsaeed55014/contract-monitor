@@ -17,8 +17,8 @@ if ROOT_DIR not in sys.path:
 
 from src.core.contracts import ContractManager
 from src.data.bengali_manager import BengaliDataManager
-from services.whatsapp_service import WhatsAppService
-from services.message_queue import WhatsAppQueue
+from src.services.whatsapp_service import WhatsAppService
+from src.services.message_queue import WhatsAppQueue
 from src.data.whatsapp_db import WhatsAppDB
 
 # 2. Local Auth Class to prevent Import/Sync Errors
