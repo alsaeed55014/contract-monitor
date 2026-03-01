@@ -15,6 +15,24 @@ ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
 if ROOT_DIR not in sys.path:
     sys.path.insert(0, ROOT_DIR)
 
+def normalize_sa_phone(phone):
+    """Normalizes Saudi phone numbers to 9665xxxxxxxx format."""
+    if not phone: return None
+    # Remove all non-numeric characters
+    clean = "".join(filter(str.isdigit, str(phone)))
+    
+    # 05xxxxxxxx -> 9665xxxxxxxx
+    if clean.startswith("05") and len(clean) == 10:
+        return "966" + clean[1:]
+    # 5xxxxxxxx -> 9665xxxxxxxx
+    if clean.startswith("5") and len(clean) == 9:
+        return "966" + clean
+    # Already 9665xxxxxxxx
+    if clean.startswith("9665") and len(clean) == 12:
+        return clean
+    
+    return clean # Return as is if not matching standard patterns
+
 from src.core.contracts import ContractManager
 from src.data.bengali_manager import BengaliDataManager
 from src.services.whatsapp_service import WhatsAppService
@@ -3453,38 +3471,112 @@ def render_whatsapp_messages_content():
 
     # 2. Composition Area
     with st.expander("📝 " + ("إرسال رسالة جديدة" if lang == 'ar' else "Send New Message"), expanded=True):
-        msg_type = st.radio(("نوع الرسالة" if lang == 'ar' else "Message Type"), ["Text", "Template"], horizontal=True)
-        to_number = st.text_input(("رقم الواتساب (مع مفتاح الدولة)" if lang == 'ar' else "WhatsApp Number (Ex: 9665...)"))
+        tabs = st.tabs([("رسالة فردية" if lang == 'ar' else "Single Message"), ("إرسال جماعي (ملف)" if lang == 'ar' else "Bulk Send (File)")])
         
-        if msg_type == "Text":
-            msg_content = st.text_area(("محتوى الرسالة" if lang == 'ar' else "Message Content"))
-            if st.button(("إرسال الآن" if lang == 'ar' else "Send Now"), type="primary", use_container_width=True):
-                if to_number and msg_content:
-                    st.session_state.whatsapp_queue.add_to_queue("text", 
-                        to_number=to_number, 
-                        message=msg_content, 
-                        created_by=st.session_state.user['username']
-                    )
-                    st.success("✅ تمت إضافة الرسالة إلى طابور الإرسال!")
-                    time.sleep(1)
-                    st.rerun()
-                else: st.error("يرجى ملء جميع الحقول")
-        
-        else: # Template
-            template_name = st.text_input(("اسم القالب (Approved Template Name)" if lang == 'ar' else "Template Name"))
-            vars_str = st.text_input(("المتغيرات (مفصولة بفاصلة ,)" if lang == 'ar' else "Variables (Comma separated)"))
-            if st.button(("إرسال القالب" if lang == 'ar' else "Send Template"), type="primary", use_container_width=True):
-                if to_number and template_name:
-                    variables = [v.strip() for v in vars_str.split(",")] if vars_str else []
-                    st.session_state.whatsapp_queue.add_to_queue("template", 
-                        to_number=to_number, 
-                        template_name=template_name, 
-                        variables=variables,
-                        created_by=st.session_state.user['username']
-                    )
-                    st.success("✅ تمت إضافة القالب إلى طابور الإرسال!")
-                    time.sleep(1)
-                    st.rerun()
+        with tabs[0]:
+            msg_type = st.radio(("نوع الرسالة" if lang == 'ar' else "Message Type"), ["Text", "Template"], horizontal=True, key="single_msg_type")
+            to_raw = st.text_input(("رقم الواتساب" if lang == 'ar' else "WhatsApp Number"), placeholder="05xxxxxxxx")
+            to_number = normalize_sa_phone(to_raw)
+            if to_raw and to_number != to_raw:
+                st.caption(f"✅ تم التعديل تلقائياً إلى: `{to_number}`")
+            
+            if msg_type == "Text":
+                msg_content = st.text_area(("محتوى الرسالة" if lang == 'ar' else "Message Content"), key="single_text_content")
+                if st.button(("إرسال الآن" if lang == 'ar' else "Send Now"), type="primary", use_container_width=True, key="btn_send_single"):
+                    if to_number and msg_content:
+                        st.session_state.whatsapp_queue.add_to_queue("text", 
+                            to_number=to_number, 
+                            message=msg_content, 
+                            created_by=st.session_state.user['username']
+                        )
+                        st.success("✅ تمت إضافة الرسالة إلى طابور الإرسال!")
+                        time.sleep(1)
+                        st.rerun()
+                    else: st.error("يرجى ملء جميع الحقول")
+            
+            else: # Template
+                template_name = st.text_input(("اسم القالب" if lang == 'ar' else "Template Name"), key="single_tpl_name")
+                vars_str = st.text_input(("المتغيرات (مفصولة بفاصلة ,)" if lang == 'ar' else "Variables (Comma separated)"), key="single_tpl_vars")
+                if st.button(("إرسال القالب" if lang == 'ar' else "Send Template"), type="primary", use_container_width=True, key="btn_send_single_tpl"):
+                    if to_number and template_name:
+                        variables = [v.strip() for v in vars_str.split(",")] if vars_str else []
+                        st.session_state.whatsapp_queue.add_to_queue("template", 
+                            to_number=to_number, 
+                            template_name=template_name, 
+                            variables=variables,
+                            created_by=st.session_state.user['username']
+                        )
+                        st.success("✅ تمت إضافة القالب إلى طابور الإرسال!")
+                        time.sleep(1)
+                        st.rerun()
+
+        with tabs[1]:
+            st.info("💡 ارفع ملف Excel أو Text يحتوي على أرقام الجوال في العمود الأول.")
+            uploaded_file = st.file_uploader("Upload File", type=['xlsx', 'csv', 'txt'], label_visibility="collapsed")
+            
+            # Anti-Ban Settings Section
+            st.markdown("---")
+            st.markdown("🛡️ **" + ("إعدادات الحماية (Anti-Ban)" if lang == 'ar' else "Protection Settings (Anti-Ban)") + "**")
+            ac1, ac2, ac3 = st.columns(3)
+            with ac1:
+                wait_time = st.number_input(("الانتظار بين الرسائل (ثواني)" if lang == 'ar' else "Wait between messages (s)"), min_value=0.5, value=2.0)
+            with ac2:
+                batch_limit = st.number_input(("عدد الرسائل قبل التوقف" if lang == 'ar' else "Messages before break"), min_value=0, value=50, help="0 تعني إرسال الكل بدون توقف")
+            with ac3:
+                break_time = st.number_input(("مدة التوقف (ثواني)" if lang == 'ar' else "Break duration (s)"), min_value=1, value=60)
+            
+            if uploaded_file:
+                try:
+                    if uploaded_file.name.endswith('.xlsx'):
+                        bulk_df = pd.read_excel(uploaded_file)
+                    elif uploaded_file.name.endswith('.csv'):
+                        bulk_df = pd.read_csv(uploaded_file)
+                    else: # .txt
+                        lines = uploaded_file.read().decode("utf-8").splitlines()
+                        bulk_df = pd.DataFrame(lines, columns=["phone"])
+                    
+                    if not bulk_df.empty:
+                        # Normalize first column
+                        first_col = bulk_df.columns[0]
+                        bulk_df['Original'] = bulk_df[first_col].astype(str)
+                        bulk_df['Normalized'] = bulk_df['Original'].apply(normalize_sa_phone)
+                        
+                        st.write(f"📊 تم العثور على `{len(bulk_df)}` رقم.")
+                        st.dataframe(bulk_df[['Original', 'Normalized']], height=200, use_container_width=True)
+                        
+                        msg_type_bulk = st.radio("Bulk Message Type", ["Text", "Template"], horizontal=True, key="bulk_msg_type")
+                        
+                        if msg_type_bulk == "Text":
+                            bulk_text = st.text_area("Bulk Message Text", key="bulk_text_area")
+                            if st.button("🚀 بدء الإرسال الجماعي", type="primary", use_container_width=True):
+                                if bulk_text:
+                                    # Update Queue limits before starting
+                                    st.session_state.whatsapp_queue.set_limits(wait_time, batch_limit, break_time)
+                                    
+                                    counter = 0
+                                    for num in bulk_df['Normalized'].unique():
+                                        if num:
+                                            st.session_state.whatsapp_queue.add_to_queue("text", 
+                                                to_number=num, message=bulk_text, created_by=st.session_state.user['username'])
+                                            counter += 1
+                                    st.success(f"✅ تمت إضافة {counter} رسالة إلى الطابور!")
+                                else: st.error("أدخل نص الرسالة أولاً")
+                        else:
+                            tpl_bulk = st.text_input("Bulk Template Name", key="bulk_tpl_name")
+                            if st.button("🚀 إرسال القالب للجميع", type="primary", use_container_width=True):
+                                if tpl_bulk:
+                                    # Update Queue limits before starting
+                                    st.session_state.whatsapp_queue.set_limits(wait_time, batch_limit, break_time)
+                                    
+                                    counter = 0
+                                    for num in bulk_df['Normalized'].unique():
+                                        if num:
+                                            st.session_state.whatsapp_queue.add_to_queue("template", 
+                                                to_number=num, template_name=tpl_bulk, created_by=st.session_state.user['username'])
+                                            counter += 1
+                                    st.success(f"✅ تمت إضافة {counter} قالب إلى الطابور!")
+                except Exception as e:
+                    st.error(f"خطأ في معالجة الملف: {e}")
 
     st.markdown("---")
 
