@@ -849,6 +849,7 @@ try:
     from src.data.db_client import DBClient
     from src.config import USERS_FILE, ASSETS_DIR
     from src.core.i18n import t, t_col # Added t_col
+    from src.ui.whatsapp_ui import render_whatsapp_page
 except ImportError as e:
     # Diagnostic: Check if 'src' exists
     import os
@@ -1467,6 +1468,11 @@ def dashboard():
             st.session_state.page = "order_processing"
             st.rerun()
         
+        # WhatsApp Marketing 2026 Button
+        if st.button("💬 " + t("whatsapp_marketing", lang), use_container_width=True):
+            st.session_state.page = "whatsapp_marketing"
+            st.rerun()
+        
         # Determine Bengali Supply Visibility
         user_perms = user.get("permissions", [])
         if "all" in user_perms or "bengali_supply" in user_perms:
@@ -1537,6 +1543,7 @@ def dashboard():
     elif page == "order_processing": render_order_processing_content()
     elif page == "permissions": render_permissions_content()
     elif page == "bengali_supply": render_bengali_supply_content()
+    elif page == "whatsapp_marketing": render_whatsapp_page()
 
 def render_dashboard_content():
     lang = st.session_state.lang

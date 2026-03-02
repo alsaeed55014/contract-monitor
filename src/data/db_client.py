@@ -1,5 +1,4 @@
 import gspread
-from oauth2client.service_account import ServiceAccountCredentials
 import os
 import pandas as pd
 from datetime import datetime
@@ -9,8 +8,8 @@ import hashlib
 
 class DBClient:
     _instance = None
-    _data_cache = None
-    _last_fetch = 0
+    _data_caches = {}
+    _last_fetches = {}
     CACHE_DURATION = 300  # 5 Minutes
 
     def __new__(cls):
@@ -21,62 +20,62 @@ class DBClient:
         return cls._instance
 
     def connect(self):
-        """Initializes the connection to Google Sheets."""
+        """Initializes the connection to Google Sheets using modern gspread auth."""
+        self.client = None
+        
+        # 1. Try connecting via Streamlit Secrets (Recommended for Cloud)
         try:
-            scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-            
-            # 1. Try connecting via Streamlit Secrets (Recommended for Cloud)
-            try:
-                if hasattr(st, "secrets") and "gcp_service_account" in st.secrets:
-                    # Create a dictionary from secrets
-                    key_dict = dict(st.secrets["gcp_service_account"])
-                    creds = ServiceAccountCredentials.from_json_keyfile_dict(key_dict, scope)
-                    self.client = gspread.authorize(creds)
-                    print("[DEBUG] Connected to Google Sheets via Secrets")
-                    return
-            except Exception:
-                # Silently ignore if secrets are not configured or file is missing
-                print("[DEBUG] Streamlit Secrets not available or not configured")
-                pass
-
-            # 2. Fallback to local file (for local testing)
-            self.creds_file = 'credentials.json'
-            if os.path.exists(self.creds_file):
-                creds = ServiceAccountCredentials.from_json_keyfile_name(self.creds_file, scope)
-                self.client = gspread.authorize(creds)
-                print("[DEBUG] Connected to Google Sheets via File")
-            else:
-                print("[ERROR] Credentials file not found & No Secrets available")
-                
+            if hasattr(st, "secrets") and "gcp_service_account" in st.secrets:
+                key_dict = dict(st.secrets["gcp_service_account"])
+                self.client = gspread.service_account_from_dict(key_dict)
+                print("[DEBUG] Connected via Streamlit Secrets")
+                return
         except Exception as e:
-            print(f"[ERROR] Connection Error: {e}")
-            self._connect_error = str(e)  # Store error but don't crash
+            print(f"[DEBUG] st.secrets check skipped or failed: {e}")
+        
+        # 2. Fallback to local file (Recommended for Local Dev)
+        try:
+            # Use absolute path for reliability
+            creds_file = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 'credentials.json')
+            if not os.path.exists(creds_file):
+                # Fallback to current working directory if not found in root relative to this file
+                creds_file = 'credentials.json'
+
+            if os.path.exists(creds_file):
+                self.client = gspread.service_account(filename=creds_file)
+                print(f"[DEBUG] Connected via {creds_file}")
+                return
+            else:
+                self._error_msg = f"Credentials file not found at {os.path.abspath(creds_file)}"
+                print(f"[ERROR] {self._error_msg}")
+        except Exception as e:
+            self._error_msg = f"Local file auth failed: {e}"
+            print(f"[ERROR] {self._error_msg}")
 
     def fetch_data(self, url=None, force=False, retries=3):
-        """Fetches data from Google Sheets with caching and automatic retries for transient errors (503)."""
-        current_time = time.time()
-        
-        # Use main sheet if no URL provided
+        """Fetches data from Google Sheets with caching and automatic retries."""
         if url is None:
             url = "https://docs.google.com/spreadsheets/d/1u87sScIve_-xT_jDG56EKFMXegzAxOqwVJCh3Irerrw/edit"
 
+        current_time = time.time()
         cache_key = f"cache_{hashlib.md5(url.encode()).hexdigest()}"
         last_fetch_key = f"last_fetch_{hashlib.md5(url.encode()).hexdigest()}"
 
-        # Initialize storage for this specific URL if not exists
+        # Initialize storage
         if not hasattr(self, '_data_caches'): self._data_caches = {}
         if not hasattr(self, '_last_fetches'): self._last_fetches = {}
 
-        # Check if cache exists
+        # Cache check
         if not force and cache_key in self._data_caches:
             if (current_time - self._last_fetches.get(last_fetch_key, 0) < self.CACHE_DURATION):
-                print(f"[DEBUG] Returning cached data for {url[:30]}...")
+                print(f"[DEBUG] Cache Hit for {url[:30]}...")
                 return self._data_caches[cache_key]
 
         if not self.client:
             self.connect()
+            if not self.client:
+                raise Exception(f"Connection Failed: {getattr(self, '_error_msg', 'Unknown Reason')}")
 
-        # Retry logic for 503 / transient errors
         for attempt in range(retries):
             try:
                 sheet = self.client.open_by_url(url).sheet1
@@ -86,6 +85,7 @@ class DBClient:
                     return pd.DataFrame()
 
                 headers = [str(h).strip() for h in data[0]]
+                # Handle duplicate headers
                 seen = {}
                 clean_headers = []
                 for h in headers:
@@ -99,7 +99,7 @@ class DBClient:
 
                 df = pd.DataFrame(data[1:], columns=clean_headers)
                 
-                # Inject hidden sheet row index
+                # Injection of internal tracking columns
                 row_ids = list(range(2, len(df) + 2))
                 if '__sheet_row' not in df.columns:
                     df.insert(0, '__sheet_row', row_ids)
@@ -110,18 +110,14 @@ class DBClient:
                 return df
 
             except Exception as e:
-                # Check for 503 specifically or other transient errors
                 error_msg = str(e)
-                if attempt < retries - 1 and ("503" in error_msg or "unavailable" in error_msg.lower() or "quota" in error_msg.lower()):
-                    wait_time = (attempt + 1) * 2 # 2s, 4s, 6s...
-                    print(f"[RETRY] Attempt {attempt+1} failed with transient error: {e}. Retrying in {wait_time}s...")
+                if attempt < retries - 1 and any(x in error_msg.lower() for x in ["503", "unavailable", "quota"]):
+                    wait_time = (attempt + 1) * 2
+                    print(f"[RETRY] Attempt {attempt+1} failed ({error_msg}). Retrying in {wait_time}s...")
                     time.sleep(wait_time)
-                    # Re-authenticate if it might be a stale session
-                    if "401" in error_msg or "expired" in error_msg.lower():
-                        self.connect()
                     continue
                 
-                print(f"[ERROR] Final attempt failed for {url[:30]}: {e}")
+                print(f"[ERROR] Spreadsheets API Error for {url[:30]}: {e}")
                 raise e
 
     def fetch_customer_requests(self, force=False):
@@ -130,11 +126,11 @@ class DBClient:
         return self.fetch_data(url=url, force=force)
 
     def find_row_by_data(self, worker_name, phone="", url=None):
-        """Fallback: Tries to find the row index by matching name and optionally phone."""
+        """Tries to find the row index by matching name and optionally phone."""
         df = self.fetch_data(url=url)
         if df.empty: return None
         
-        name_col = next((c for c in df.columns if "name" in c.lower() or "الاسم" in c), None)
+        name_col = next((c for c in df.columns if "name" in str(c).lower() or "الاسم" in str(c)), None)
         if not name_col: return None
         
         matches = df[df[name_col].astype(str).str.strip().str.lower() == str(worker_name).strip().lower()]
@@ -143,7 +139,7 @@ class DBClient:
             return matches.iloc[0]['__sheet_row']
         
         if len(matches) > 1 and phone:
-            phone_col = next((c for c in df.columns if "phone" in c.lower() or "جوال" in c), None)
+            phone_col = next((c for c in df.columns if "phone" in str(c).lower() or "جوال" in str(c)), None)
             if phone_col:
                 final_matches = matches[matches[phone_col].astype(str).str.contains(str(phone))]
                 if not final_matches.empty:
@@ -152,7 +148,7 @@ class DBClient:
         return None
 
     def delete_row(self, row_number, url=None):
-        """Permanently deletes a row from Google Sheets by its 1-indexed row number."""
+        """Permanently deletes a row from Google Sheets."""
         if url is None:
             url = "https://docs.google.com/spreadsheets/d/1u87sScIve_-xT_jDG56EKFMXegzAxOqwVJCh3Irerrw/edit"
 
@@ -163,9 +159,9 @@ class DBClient:
             sheet = self.client.open_by_url(url).sheet1
             sheet.delete_rows(int(row_number))
             
-            # Clear cache for this URL
+            # Clear cache
             cache_key = f"cache_{hashlib.md5(url.encode()).hexdigest()}"
-            if hasattr(self, '_data_caches') and cache_key in self._data_caches:
+            if cache_key in self._data_caches:
                 del self._data_caches[cache_key]
             
             return True
@@ -182,9 +178,9 @@ class DBClient:
             sheet = self.client.open_by_url(url).sheet1
             sheet.append_row(row_data)
             
-            # Clear cache for this URL
+            # Clear cache
             cache_key = f"cache_{hashlib.md5(url.encode()).hexdigest()}"
-            if hasattr(self, '_data_caches') and cache_key in self._data_caches:
+            if cache_key in self._data_caches:
                 del self._data_caches[cache_key]
             
             return True
@@ -193,8 +189,11 @@ class DBClient:
             return False, str(e)
 
     def get_headers(self, url=None):
-        """Returns the list of headers."""
-        cache_key = f"cache_{hashlib.md5(url.encode()).hexdigest()}" if url else "cache_default"
-        if hasattr(self, '_data_caches') and cache_key in self._data_caches:
+        """Returns the list of headers for the current data."""
+        if url is None:
+            url = "https://docs.google.com/spreadsheets/d/1u87sScIve_-xT_jDG56EKFMXegzAxOqwVJCh3Irerrw/edit"
+        
+        cache_key = f"cache_{hashlib.md5(url.encode()).hexdigest()}"
+        if cache_key in self._data_caches:
             return list(self._data_caches[cache_key].columns)
         return []
