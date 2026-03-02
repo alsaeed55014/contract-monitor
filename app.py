@@ -3642,6 +3642,14 @@ def render_whatsapp_connection_content():
 
     if st.session_state.whatsapp_service.mode != "web":
         st.warning("⚠️ يرجى تفعيل وضع 'web' في ملف .env لاستخدام هذه الطريقة.")
+        if st.button("🚀 تفعيل وضع الباركود الآن", type="primary"):
+            import os
+            os.environ["WHATSAPP_MODE"] = "web"
+            from src.services.whatsapp_service import WhatsAppService
+            from src.services.message_queue import WhatsAppQueue
+            st.session_state.whatsapp_service = WhatsAppService()
+            st.session_state.whatsapp_queue = WhatsAppQueue()
+            st.rerun()
         return
 
     ws = st.session_state.whatsapp_service.web_service
