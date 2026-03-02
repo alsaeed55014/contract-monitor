@@ -1,0 +1,13 @@
+{
+    "users": {
+        "admin": {
+            "password": "c685e710931707e3e9aaab6c8625a9798cd06a31bcf40cd8d6963e3703400d14",
+            "role": "admin",
+            "full_name_ar": "المدير العام",
+            "full_name_en": "General Manager",
+            "permissions": [
+                "all"
+            ]
+        }
+    }
+}
