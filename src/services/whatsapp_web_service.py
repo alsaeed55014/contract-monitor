@@ -55,8 +55,20 @@ class WhatsAppWebService:
         chrome_options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
         
         try:
-            service = Service(ChromeDriverManager().install())
-            self.driver = webdriver.Chrome(service=service, options=chrome_options)
+            # Check for Streamlit Cloud (Linux) Environment
+            if os.path.exists("/usr/bin/chromium"):
+                chrome_options.binary_location = "/usr/bin/chromium"
+                service = Service("/usr/bin/chromedriver")
+                self.driver = webdriver.Chrome(service=service, options=chrome_options)
+            elif os.path.exists("/usr/bin/google-chrome"):
+                chrome_options.binary_location = "/usr/bin/google-chrome"
+                service = Service("/usr/bin/chromedriver")
+                self.driver = webdriver.Chrome(service=service, options=chrome_options)
+            else:
+                # Windows / Local Dev
+                service = Service(ChromeDriverManager().install())
+                self.driver = webdriver.Chrome(service=service, options=chrome_options)
+            
             self.driver.get("https://web.whatsapp.com")
             logger.info("WhatsApp Web engine started.")
             self.last_error = None
