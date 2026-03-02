@@ -4,6 +4,7 @@ import json
 import logging
 from datetime import datetime
 from src.data.whatsapp_db import WhatsAppDB
+from src.services.whatsapp_web_service import WhatsAppWebService
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -11,11 +12,13 @@ logger = logging.getLogger("WhatsAppService")
 
 class WhatsAppService:
     def __init__(self):
+        self.mode = os.environ.get("WHATSAPP_MODE", "api") # 'api' or 'web'
         self.access_token = os.environ.get("WHATSAPP_ACCESS_TOKEN")
         self.phone_number_id = os.environ.get("WHATSAPP_PHONE_NUMBER_ID")
         self.version = os.environ.get("WHATSAPP_API_VERSION", "v18.0")
         self.base_url = f"https://graph.facebook.com/{self.version}/{self.phone_number_id}/messages"
         self.db = WhatsAppDB()
+        self.web_service = WhatsAppWebService() if self.mode == "web" else None
 
     def _get_headers(self):
         return {
@@ -25,6 +28,16 @@ class WhatsAppService:
 
     def send_text_message(self, to_number, message, worker_id=None, full_name=None, created_by="System"):
         msg_uuid = self.db.log_message(worker_id, full_name, to_number, "text", message, created_by)
+        
+        if self.mode == "web" and self.web_service:
+            success, meta_id = self.web_service.send_message(to_number, message)
+            if success:
+                self.db.update_message_meta(msg_uuid, meta_id)
+                return True, meta_id
+            else:
+                self._update_failed_by_uuid(msg_uuid, meta_id)
+                return False, meta_id
+
         payload = {
             "messaging_product": "whatsapp",
             "recipient_type": "individual",
@@ -49,6 +62,17 @@ class WhatsAppService:
 
     def send_template_message(self, to_number, template_name, variables=None, language="ar", worker_id=None, full_name=None, created_by="System"):
         msg_uuid = self.db.log_message(worker_id, full_name, to_number, "template", f"Template: {template_name}", created_by)
+        
+        if self.mode == "web" and self.web_service:
+            formatted_msg = f"Template: {template_name}\nVariables: {variables}"
+            success, meta_id = self.web_service.send_message(to_number, formatted_msg)
+            if success:
+                self.db.update_message_meta(msg_uuid, meta_id)
+                return True, meta_id
+            else:
+                self._update_failed_by_uuid(msg_uuid, meta_id)
+                return False, meta_id
+
         parameters = [{"type": "text", "text": str(v)} for v in variables] if variables else []
         payload = {
             "messaging_product": "whatsapp",

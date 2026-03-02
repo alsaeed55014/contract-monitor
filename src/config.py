@@ -39,6 +39,7 @@ FONTS = {
 WHATSAPP_CONFIG = {
     "access_token": os.environ.get("WHATSAPP_ACCESS_TOKEN"),
     "phone_number_id": os.environ.get("WHATSAPP_PHONE_NUMBER_ID"),
+    "sender_phone_number": os.environ.get("WHATSAPP_SENDER_PHONE", "+966582313126"),
     "verify_token": os.environ.get("WHATSAPP_VERIFY_TOKEN", "my_secure_token_123"),
     "api_version": os.environ.get("WHATSAPP_API_VERSION", "v18.0")
 }

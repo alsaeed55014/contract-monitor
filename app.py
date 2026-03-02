@@ -7,6 +7,10 @@ import hashlib
 import time
 from datetime import datetime, timedelta
 import base64
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 # 1. Ensure project root is in path (Robust Injection)
 import os
@@ -1508,6 +1512,9 @@ def dashboard():
             if st.button("📊 " + ("إحصائيات الواتس" if lang == 'ar' else "WhatsApp Analytics"), use_container_width=True):
                 st.session_state.page = "whatsapp_analytics"
                 st.rerun()
+            if st.button("🔗 " + ("ربط الواتساب" if lang == 'ar' else "Connect WhatsApp"), use_container_width=True):
+                st.session_state.page = "whatsapp_connection"
+                st.rerun()
 
         if user.get("role") == "admin":
             if st.button(t("permissions", lang), use_container_width=True):
@@ -1540,7 +1547,9 @@ def dashboard():
                     if any(k.startswith(prefix) for prefix in ["dash_table_", "last_scroll_", "trans_", "search_results"]):
                         del st.session_state[k]
                 st.session_state.db.fetch_data(force=True)
-                st.success("تم تنظيف الذاكرة وتحديث البيانات!")
+                st.session_state.whatsapp_service = WhatsAppService()
+                st.session_state.whatsapp_queue = WhatsAppQueue()
+                st.success("تم تنظيف الذاكرة وتحديث البيانات وإعادة تشغيل محرك الواتساب!")
                 time.sleep(1)
                 st.rerun()
 
@@ -1575,6 +1584,7 @@ def dashboard():
     elif page == "bengali_supply": render_bengali_supply_content()
     elif page == "whatsapp_messages": render_whatsapp_messages_content()
     elif page == "whatsapp_analytics": render_whatsapp_analytics_content()
+    elif page == "whatsapp_connection": render_whatsapp_connection_content()
 
 def render_dashboard_content():
     lang = st.session_state.lang
@@ -3459,6 +3469,21 @@ def render_whatsapp_messages_content():
     st.markdown('<div class="programmer-signature-neon">By: Alsaeed Alwazzan</div>', unsafe_allow_html=True)
     st.title("🟢 " + ("إدارة رسائل الواتساب" if lang == 'ar' else "WhatsApp Message Management"))
 
+    # Connection Status Banner for Web Mode
+    if st.session_state.whatsapp_service.mode == "web":
+        ws = st.session_state.whatsapp_service.web_service
+        is_connected = ws.is_connected if ws else False
+        
+        if not is_connected:
+            st.warning("⚠️ **الواتساب غير مرتبط حالياً!** يرجى الذهاب إلى صفحة 'ربط الواتساب' لمسح الباركود.")
+            if st.button("🔗 اذهب لصفحة الربط الآن", use_container_width=True):
+                st.session_state.page = "whatsapp_connection"
+                st.rerun()
+            st.markdown("---")
+        else:
+            st.success("✅ الواتساب مرتبط وجاهز للإرسال.")
+            st.markdown("---")
+
     # 1. Stats Dashboard Cards
     stats = st.session_state.whatsapp_db.get_stats()
     c1, c2, c3, c4 = st.columns(4)
@@ -3600,6 +3625,62 @@ def render_whatsapp_messages_content():
             st.dataframe(df.style.applymap(color_status, subset=['status']), use_container_width=True)
     else:
         st.info("لا يوجد سجل رسائل بعد.")
+
+def render_whatsapp_connection_content():
+    lang = st.session_state.lang
+    st.title("🔗 " + ("ربط الواتساب (باركود)" if lang == 'ar' else "WhatsApp Connection (QR)"))
+    st.markdown('<div class="programmer-signature-neon">By: Alsaeed Alwazzan</div>', unsafe_allow_html=True)
+
+    if st.session_state.whatsapp_service.mode != "web":
+        st.warning("⚠️ يرجى تفعيل وضع 'web' في ملف .env لاستخدام هذه الطريقة.")
+        return
+
+    ws = st.session_state.whatsapp_service.web_service
+    if not ws:
+        st.error("فشل تحميل خدمة الواتساب ويب.")
+        return
+
+    # Connection Status
+    with st.spinner("⏳ فحص حالة الاتصال..."):
+        status, qr_data = ws.get_qr_status()
+
+    if status == "connected":
+        st.success("✅ متصل بنجاح!")
+        if st.button("قطع الاتصال الخروج Safe Logout"):
+            ws.close()
+            st.rerun()
+    elif status == "qr_ready":
+        st.info("قم بمسح الباركود باستخدام الواتساب في جوالك (الأجهزة المرتبطة).")
+        st.image(f"data:image/png;base64,{qr_data}", width=350)
+        
+        # Guide
+        st.markdown("""
+        **طريقة الربط:**
+        1. افتح الواتساب على جوالك 📱
+        2. اذهب إلى **الإعدادات** > **الأجهزة المرتبطة**
+        3. اضغط على **ربط جهاز** ووجه الكاميرا لهذا الكود
+        """)
+        
+        if st.button("تحديث يدوي / Refresh"):
+            st.rerun()
+        
+        # Auto-refresh helper
+        st.caption("🔄 يتم التحديث تلقائياً...")
+        time.sleep(1.5)
+        st.rerun()
+        
+    elif status == "loading":
+        st.warning("جاري تحميل الباركود من واتساب ويب... يرجى الانتظار 30-60 ثانية للتنزيل الأول.")
+        time.sleep(5)
+        st.rerun()
+    else:
+        st.error("❌ فشل الاتصال بالمتصفح أو واتساب ويب.")
+        err = getattr(ws, 'last_error', 'خطأ غير معروف')
+        st.code(f"Error: {err}")
+        if st.button("إعادة تشغيل المحرك Reset Browser"):
+            ws.close()
+            ws.start_driver()
+            st.rerun()
 
 def render_whatsapp_analytics_content():
     lang = st.session_state.lang
