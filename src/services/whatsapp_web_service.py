@@ -34,7 +34,8 @@ class WhatsAppWebService:
         self.qr_code_base64 = None
         self.is_connected = False
         self.last_error = None
-        self.session_path = os.path.join(os.getcwd(), "whatsapp_session")
+        # Move session to a location without non-ASCII characters to avoid Chrome issues
+        self.session_path = "C:\\whatsapp_automation_session"
         if not os.path.exists(self.session_path):
             os.makedirs(self.session_path)
         self._initialized = True
@@ -112,6 +113,22 @@ class WhatsAppWebService:
             self.last_error = str(e)
             logger.error(f"Error checking QR status: {e}")
             return "loading", None
+
+    def get_diagnostic_screenshot(self):
+        """Captures a full-page screenshot for debugging purposes."""
+        if not self.driver:
+            return None
+        try:
+            return self.driver.screenshot_as_base64
+        except Exception as e:
+            logger.error(f"Failed to take diagnostic screenshot: {e}")
+            return None
+
+    def get_page_source(self):
+        """Returns the current page HTML for deep debugging."""
+        if not self.driver:
+            return "Driver not started"
+        return self.driver.page_source
 
     def send_message(self, phone, message):
         """Sends a message using the active WhatsApp Web session."""

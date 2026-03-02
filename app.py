@@ -3687,13 +3687,39 @@ def render_whatsapp_connection_content():
         st.rerun()
         
     elif status == "loading":
-        st.warning("جاري تحميل الباركود من واتساب ويب... يرجى الانتظار 30-60 ثانية للتنزيل الأول.")
+        st.warning("⏳ جاري تحميل الباركود من واتساب ويب... يرجى الانتظار 30-60 ثانية للتنزيل الأول.")
+        
+        # Diagnostic Tools (Hidden by default, expandable)
+        with st.expander("🛠️ أدوات التشخيص - Diagnostic Tools (إذا طال الانتظار)"):
+            st.info("إذا استغرق هذا وقتاً طويلاً (أكثر من دقيقتين)، فقد تكون هناك مشكلة في المتصفح المخفي.")
+            
+            if st.button("📸 التقاط صورة لشاشة المتصفح (Screenshot)"):
+                diag_img = ws.get_diagnostic_screenshot()
+                if diag_img:
+                    st.image(f"data:image/png;base64,{diag_img}", caption="ما يراه المتصفح حالياً")
+                else:
+                    st.error("فشل التقاط الصورة (المتصفح قد لا يكون بدأ بعد)")
+            
+            if st.button("🔄 إعادة تصفير الجلسة تماماً (Hard Reset)"):
+                import shutil
+                ws.close()
+                if os.path.exists(ws.session_path):
+                    shutil.rmtree(ws.session_path)
+                    st.success("تم حذف ملفات الجلسة المؤقتة. أعد المحاولة الآن!")
+                st.rerun()
+
         time.sleep(5)
         st.rerun()
     else:
         st.error("❌ فشل الاتصال بالمتصفح أو واتساب ويب.")
         err = getattr(ws, 'last_error', 'خطأ غير معروف')
         st.code(f"Error: {err}")
+        
+        if st.button("📸 التقاط صورة للخطأ (Debug Screenshot)"):
+            diag_img = ws.get_diagnostic_screenshot()
+            if diag_img:
+                st.image(f"data:image/png;base64,{diag_img}")
+
         if st.button("إعادة تشغيل المحرك Reset Browser"):
             ws.close()
             ws.start_driver()
