@@ -1515,6 +1515,15 @@ def dashboard():
             if st.button("🔗 " + ("ربط الواتساب" if lang == 'ar' else "Connect WhatsApp"), use_container_width=True):
                 st.session_state.page = "whatsapp_connection"
                 st.rerun()
+            
+            # --- DEBUG MODE INFO ---
+            current_mode = st.session_state.whatsapp_service.mode
+            st.sidebar.caption(f"Mode: {current_mode} | [Switch](?switch=1)")
+            if st.sidebar.button("🔄 تفعيل وضع الباركود (Web Mode)"):
+                os.environ["WHATSAPP_MODE"] = "web"
+                st.session_state.whatsapp_service = WhatsAppService()
+                st.session_state.whatsapp_queue = WhatsAppQueue()
+                st.rerun()
 
         if user.get("role") == "admin":
             if st.button(t("permissions", lang), use_container_width=True):
