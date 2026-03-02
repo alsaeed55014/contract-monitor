@@ -12,10 +12,7 @@ def get_whatsapp_ui_css(lang):
     
     return f"""
     <style>
-        .wa-container {{
-            direction: {direction};
-            text-align: {alignment};
-        }}
+        .wa-container {{ direction: {direction}; text-align: {alignment}; }}
         .wa-glass-card {{
             background: rgba(255, 255, 255, 0.05);
             backdrop-filter: blur(20px);
@@ -26,7 +23,7 @@ def get_whatsapp_ui_css(lang):
             margin-bottom: 20px;
             transition: all 0.3s ease;
             direction: {direction};
-        }}
+        }
         .wa-status-connected {{ color: #00FF41; font-weight: bold; text-shadow: 0 0 10px rgba(0, 255, 65, 0.5); }}
         .wa-status-disconnected {{ color: #FF3131; font-weight: bold; text-shadow: 0 0 10px rgba(255, 49, 49, 0.5); }}
         .wa-status-loading {{ color: #D4AF37; animation: pulse 1.5s infinite; }}
@@ -37,10 +34,17 @@ def get_whatsapp_ui_css(lang):
             background: rgba(0,0,0,0.5);
             padding: 15px;
             border-radius: 12px;
-            max-height: 200px;
+            max-height: 250px;
             overflow-y: auto;
             color: #aaa;
             direction: ltr;
+        }}
+        .wa-qr-container {{
+            background: white;
+            padding: 20px;
+            border-radius: 20px;
+            display: inline-block;
+            box-shadow: 0 0 20px rgba(212,175,55,0.3);
         }}
     </style>
     """
@@ -48,8 +52,6 @@ def get_whatsapp_ui_css(lang):
 def render_whatsapp_page():
     lang = st.session_state.lang
     st.markdown(get_whatsapp_ui_css(lang), unsafe_allow_html=True)
-    
-    # Check if we are on Cloud (to auto-headless)
     is_cloud = "/mount/" in __file__
     
     st.markdown(f'<div class="wa-container">', unsafe_allow_html=True)
@@ -76,38 +78,36 @@ def render_whatsapp_page():
         status = st.session_state.wa_service.get_status()
         
         if status == "Connected":
-            st.markdown(f'{t("role", lang)}: <span class="wa-status-connected">{t("wa_online", lang)}</span>', unsafe_allow_html=True)
+            st.markdown(f'<div style="text-align:center;"><span class="wa-status-connected" style="font-size:1.5rem;">{t("wa_online", lang)}</span></div>', unsafe_allow_html=True)
             if st.button(t("wa_disconnect", lang), use_container_width=True):
                 st.session_state.wa_service.close()
                 st.rerun()
         elif status == "Awaiting Login":
-            st.markdown(f'{t("role", lang)}: <span class="wa-status-loading">{t("wa_ready", lang)}</span>', unsafe_allow_html=True)
+            st.markdown(f'Status: <span class="wa-status-loading">{t("wa_ready", lang)}</span>', unsafe_allow_html=True)
             st.info(t("wa_scan_msg", lang))
             qr_b64 = st.session_state.wa_service.get_qr_base64()
             if qr_b64:
-                st.image(f"data:image/png;base64,{qr_b64}", use_container_width=True)
-                if st.button(t("wa_refresh_qr", lang), use_container_width=True):
-                    st.rerun()
+                st.markdown('<div style="text-align:center;" class="wa-qr-container">', unsafe_allow_html=True)
+                st.image(f"data:image/png;base64,{qr_b64}", width=250)
+                st.markdown('</div>', unsafe_allow_html=True)
+                
+                # Auto-refresh to detect login
+                time.sleep(5)
+                st.rerun()
             else:
-                st.warning("QR Code is generating... please wait")
+                st.warning("Generating fresh QR...")
                 time.sleep(2)
                 st.rerun()
         elif status == "Loading...":
-            st.markdown(f'{t("role", lang)}: <span class="wa-status-loading">{t("wa_loading", lang)}</span>', unsafe_allow_html=True)
-            time.sleep(2)
+            st.markdown(f'Status: <span class="wa-status-loading">{t("wa_loading", lang)}</span>', unsafe_allow_html=True)
+            time.sleep(3)
             st.rerun()
         else:
-            st.markdown(f'{t("role", lang)}: <span class="wa-status-disconnected">{t("wa_offline", lang)}</span>', unsafe_allow_html=True)
+            st.markdown(f'Status: <span class="wa-status-disconnected">{t("wa_offline", lang)}</span>', unsafe_allow_html=True)
             if st.button(t("wa_launch_btn", lang), use_container_width=True):
                 with st.spinner(t("extracting", lang)):
-                    # CRITICAL FIX: If on cloud, headless must be True
                     headless_mode = True if is_cloud else False
-                    res = st.session_state.wa_service.start_driver(headless=headless_mode)
-                    
-                    # Robust handling of the return value
-                    if isinstance(res, tuple):
-                        success, info = res
-                        if not success: st.error(f"Error: {info}")
+                    st.session_state.wa_service.start_driver(headless=headless_mode)
                     st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
 
@@ -118,6 +118,7 @@ def render_whatsapp_page():
         st.markdown('</div>', unsafe_allow_html=True)
 
     with col_main:
+        # Recipient Logic
         st.markdown('<div class="wa-glass-card">', unsafe_allow_html=True)
         st.subheader(t('wa_step1_lbl', lang))
         upload_type = st.radio(t("wa_input_method", lang), [t("wa_paste_opt", lang), t("wa_upload_opt", lang)], horizontal=True)
@@ -133,7 +134,7 @@ def render_whatsapp_page():
                         df = pd.read_excel(uploaded_file)
                         phone_cols = [c for c in df.columns if any(kw in str(c).lower() for kw in ['phone', 'num', 'mob', 'جوال', 'هاتف'])]
                         if phone_cols: raw_input = "\n".join(df[phone_cols[0]].astype(str).tolist())
-                    except Exception as e: st.error(f"Excel Error: {e}")
+                    except: pass
                 else: raw_input = uploaded_file.read().decode('utf-8')
 
         if raw_input:
@@ -145,12 +146,14 @@ def render_whatsapp_page():
             c3.error(f"{t('wa_invalid', lang)}: {len(invalid)}")
         st.markdown('</div>', unsafe_allow_html=True)
 
+        # Message logic
         st.markdown('<div class="wa-glass-card">', unsafe_allow_html=True)
         st.subheader(t('wa_step2_lbl', lang))
         msg_text = st.text_area(t("wa_msg_body", lang), height=100)
         delay = st.slider(t("wa_delay_lbl", lang), 2, 60, 5)
         st.markdown('</div>', unsafe_allow_html=True)
 
+        # Execution logic
         st.markdown('<div class="wa-glass-card">', unsafe_allow_html=True)
         st.subheader(t('wa_step3_lbl', lang))
         
