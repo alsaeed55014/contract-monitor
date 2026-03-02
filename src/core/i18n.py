@@ -163,6 +163,7 @@ TRANSLATIONS = {
     "work_outside_city": {"ar": "يقبل العمل خارج مدينته (Yes)", "en": "Can work outside city"},
     
     # Bengali Supply Module
+    # Bengali Supply Module
     "bengali_supply_title": {"ar": "توريد عمال بنقال", "en": "Bengali Worker Supply"},
     "form_supplier_employer": {"ar": "النموذج الأول: بيانات المورد وصاحب العمل", "en": "Part 1: Supplier & Employer Data"},
     "form_worker_details": {"ar": "النموذج الثاني: بيانات العامل المختارة", "en": "Part 2: Worker Details Entry"},
@@ -185,10 +186,40 @@ TRANSLATIONS = {
     "perm_bengali_supply": {"ar": "صلاحية نموذج توريد عمال بنقال", "en": "Bengali Supply Permission"},
     "perm_delete_global": {"ar": "صلاحية الحذف على مستوى البرنامج", "en": "Global Delete Permission"},
     "search_manage_title": {"ar": "🔍 البحث وإدارة السجلات", "en": "Search & Manage Records"},
-    "search_manage_title": {"ar": "🔍 البحث وإدارة السجلات", "en": "Search & Manage Records"},
     "delete_btn": {"ar": "حذف", "en": "Delete"},
     "search_placeholder_bengali": {"ar": "ابحث باسم العامل، المورد، أو العميل...", "en": "Search by worker, supplier, or employer name..."},
     "no_records_found": {"ar": "لم يتم العثور على سجلات", "en": "No records found"},
+
+    # WhatsApp Luxury 2026
+    "wa_title": {"ar": "جناح واتساب الفاخر 2026", "en": "WhatsApp Luxury Suite 2026"},
+    "wa_subtitle": {"ar": "محرك الرسائل التنفيذي • آمن • مؤتمت", "en": "Executive Messaging Engine • Secure • Automated"},
+    "wa_status_lbl": {"ar": "📡 الحالة", "en": "📡 Status"},
+    "wa_stats_lbl": {"ar": "📊 إحصائيات الجلسة", "en": "📊 Session Statistics"},
+    "wa_step1_lbl": {"ar": "📝 الخطوة 1: إدارة المستلمين", "en": "📝 Step 1: Manage Recipients"},
+    "wa_step2_lbl": {"ar": "✉️ الخطوة 2: إنشاء الرسالة", "en": "✉️ Step 2: Compose Message"},
+    "wa_step3_lbl": {"ar": "🚀 الخطوة 3: بدء الإرسال", "en": "🚀 Step 3: Deployment"},
+    "wa_online": {"ar": "● متصل", "en": "● ONLINE"},
+    "wa_offline": {"ar": "● غير متصل", "en": "● OFFLINE"},
+    "wa_ready": {"ar": "● جاهز للمسح", "en": "● QR READY"},
+    "wa_loading": {"ar": "● جاري التحميل...", "en": "● LOADING..."},
+    "wa_launch_btn": {"ar": "تشغيل واتساب ويب", "en": "Launch WhatsApp Web"},
+    "wa_refresh_qr": {"ar": "تحديث الرمز", "en": "Refresh QR"},
+    "wa_disconnect": {"ar": "قطع الاتصال", "en": "Disconnect"},
+    "wa_input_method": {"ar": "طريقة الإدخال", "en": "Input Method"},
+    "wa_paste_opt": {"ar": "لصق نص / أرقام", "en": "Paste Text / Numbers"},
+    "wa_upload_opt": {"ar": "رفع ملف (Excel/TXT)", "en": "Upload File (Excel/TXT)"},
+    "wa_msg_body": {"ar": "نص الرسالة", "en": "Message Body"},
+    "wa_delay_lbl": {"ar": "التأخير بين الرسائل (ثواني)", "en": "Delay between messages (Seconds)"},
+    "wa_start_btn": {"ar": "🔥 بدء البث الذكي", "en": "🔥 START LUXURY BROADCAST"},
+    "wa_stop_btn": {"ar": "⏹️ إيقاف البث", "en": "⏹️ STOP BROADCAST"},
+    "wa_total_sent": {"ar": "إجمالي المرسل", "en": "Total Sent"},
+    "wa_pending": {"ar": "المتبقي", "en": "Pending"},
+    "wa_saudi": {"ar": "🇸🇦 السعودية", "en": "🇸🇦 Saudi"},
+    "wa_philippines": {"ar": "🇵🇭 الفلبين", "en": "🇵🇭 Philippines"},
+    "wa_invalid": {"ar": "❌ غير صالح", "en": "❌ Invalid"},
+    "wa_show_cleaned": {"ar": "عرض الأرقام المنظفة", "en": "Show cleaned numbers"},
+    "wa_export_report": {"ar": "تصدير التقرير (CSV)", "en": "Export Report (CSV)"},
+    "wa_scan_msg": {"ar": "امسح الكود باستخدام الواتساب في جوالك", "en": "Scan with WhatsApp on your phone"},
 
 
 
