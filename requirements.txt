@@ -1,0 +1,13 @@
+streamlit>=1.36.0
+pandas
+gspread
+oauth2client
+python-dateutil
+Pillow
+deep-translator
+pdfplumber
+requests
+python-docx>=0.8.11
+selenium
+webdriver-manager
+openpyxl
