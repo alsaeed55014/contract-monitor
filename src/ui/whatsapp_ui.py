@@ -59,6 +59,7 @@ def render_whatsapp_page():
         'send': "📨 ارسال ({})" if is_ar else "📨 Send ({})",
         'sending': "⏳ إرسال إلى: {} ({})..." if is_ar else "⏳ Sending to: {} ({})...",
         'log_title': "#### 📄 سجل الإرسال" if is_ar else "#### 📄 Send Log",
+        'delete_log': "🗑️ مسح السجل" if is_ar else "🗑️ Clear Log",
         'diag': "🛠️ أدوات التشخيص" if is_ar else "🛠️ Diagnostics",
         'screenshot': "📸 لقطة شاشة" if is_ar else "📸 Screenshot",
         'batch_size': "استراحة بعد (عدد الرسائل)" if is_ar else "Pause after (messages)",
