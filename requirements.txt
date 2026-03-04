@@ -11,3 +11,6 @@ python-docx>=0.8.11
 selenium
 webdriver-manager
 openpyxl
+easyocr
+opencv-python-headless
+pytesseract
