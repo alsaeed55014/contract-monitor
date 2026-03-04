@@ -2084,8 +2084,9 @@ def render_search_content():
             # --- EXPORT BUTTON FOR SEARCH ---
             c_s_1, c_s_2 = st.columns([4, 1])
             with c_s_2:
-                xl_buf_search = create_pasha_whatsapp_excel(res)
-                if xl_buf_search:
+                xl_result_search = create_pasha_whatsapp_excel(res)
+                if xl_result_search:
+                    xl_buf_search, _ = xl_result_search
                     st.download_button("📤 تصدير للواتساب", xl_buf_search, f"Search_WhatsApp_{datetime.now().strftime('%M%S')}.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
             
             # Use on_select to capture row selection
