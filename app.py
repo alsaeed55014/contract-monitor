@@ -25,12 +25,12 @@ if SRC_DIR not in sys.path:
 try:
     from src.core.contracts import ContractManager
     from src.data.bengali_manager import BengaliDataManager
-    from src.utils.phone_utils import create_pasha_whatsapp_excel, format_phone_number
+    from src.utils.phone_utils import create_pasha_whatsapp_excel, format_phone_number, save_to_local_desktop, render_pasha_export_button
 except ImportError:
     # Fallback for different environment path configurations
     from core.contracts import ContractManager
     from data.bengali_manager import BengaliDataManager
-    from utils.phone_utils import create_pasha_whatsapp_excel, format_phone_number
+    from utils.phone_utils import create_pasha_whatsapp_excel, format_phone_number, save_to_local_desktop, render_pasha_export_button
 
 # 2. Local Auth Class to prevent Import/Sync Errors
 class AuthManager:
@@ -1774,25 +1774,28 @@ def render_dashboard_content():
     with t1: 
         c_exp_1, c_exp_2 = st.columns([4, 1])
         with c_exp_2:
-            xl_buf = create_pasha_whatsapp_excel(pd.DataFrame(stats['urgent']))
-            if xl_buf:
-                st.download_button("📤 تصدير للواتساب", xl_buf, "Urgent_WhatsApp.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
+            xl_data = create_pasha_whatsapp_excel(pd.DataFrame(stats['urgent']))
+            if xl_data:
+                xl_buf, xl_df = xl_data
+                render_pasha_export_button(xl_df, "📤 تصدير للواتساب", "Urgent_WhatsApp.xlsx", "المرشحين_العاجل")
         show(stats['urgent'], "urgent")
         
     with t2: 
         c_exp_1, c_exp_2 = st.columns([4, 1])
         with c_exp_2:
-            xl_buf = create_pasha_whatsapp_excel(pd.DataFrame(stats['expired']))
-            if xl_buf:
-                st.download_button("📤 تصدير للواتساب", xl_buf, "Expired_WhatsApp.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
+            xl_data = create_pasha_whatsapp_excel(pd.DataFrame(stats['expired']))
+            if xl_data:
+                xl_buf, xl_df = xl_data
+                render_pasha_export_button(xl_df, "📤 تصدير للواتساب", "Expired_WhatsApp.xlsx", "المرشحين_المنتهية")
         show(stats['expired'], "expired")
         
     with t3: 
         c_exp_1, c_exp_2 = st.columns([4, 1])
         with c_exp_2:
-            xl_buf = create_pasha_whatsapp_excel(pd.DataFrame(stats['active']))
-            if xl_buf:
-                st.download_button("📤 تصدير للواتساب", xl_buf, "Active_WhatsApp.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
+            xl_data = create_pasha_whatsapp_excel(pd.DataFrame(stats['active']))
+            if xl_data:
+                xl_buf, xl_df = xl_data
+                render_pasha_export_button(xl_df, "📤 تصدير للواتساب", "Active_WhatsApp.xlsx", "المرشحين_الفواعل")
         show(stats['active'], "active")
 
 def render_search_content():
@@ -3169,11 +3172,11 @@ def render_order_processing_content():
                         # --- EXPORT FOR ORDER PROCESSING ---
                         c_op_1, c_op_2 = st.columns([4, 1])
                         with c_op_2:
-                            xl_buf_op = create_pasha_whatsapp_excel(city_df)
-                            if xl_buf_op:
-                                st.download_button("📤 تصدير للواتساب", xl_buf_op, f"Matched_Workers_City_{idx+1}.xlsx", 
-                                                  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", 
-                                                  key=f"dl_op_city_{idx}", use_container_width=True)
+                            xl_data_op = create_pasha_whatsapp_excel(city_df)
+                            if xl_data_op:
+                                xl_buf_op, xl_df_op = xl_data_op
+                                render_pasha_export_button(xl_df_op, "📤 تصدير للواتساب", f"Matched_Workers_City_{idx+1}.xlsx", 
+                                                          f"Matched_Workers_City_{idx+1}", key=f"dl_op_city_{idx}")
                         
                         loc_val = str(customer_row.get(c_location, ""))
                         regional_keywords = [
@@ -3225,11 +3228,11 @@ def render_order_processing_content():
                         # --- EXPORT FOR OTHER WORKERS ---
                         c_op2_1, c_op2_2 = st.columns([4, 1])
                         with c_op2_2:
-                            xl_buf_other = create_pasha_whatsapp_excel(other_df)
-                            if xl_buf_other:
-                                st.download_button("📤 تصدير للواتساب", xl_buf_other, f"Matched_Workers_Other_{idx+1}.xlsx", 
-                                                  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", 
-                                                  key=f"dl_op_other_{idx}", use_container_width=True)
+                            xl_data_other = create_pasha_whatsapp_excel(other_df)
+                            if xl_data_other:
+                                xl_buf_other, xl_df_other = xl_data_other
+                                render_pasha_export_button(xl_df_other, "📤 تصدير للواتساب", f"Matched_Workers_Other_{idx+1}.xlsx", 
+                                                          f"مرشحين_مطابقين_{idx+1}", key=f"dl_op_other_{idx}")
                         
                         label_other = "🌍 عمال في مدن أخرى مناسبين" if lang == 'ar' else f"🌍 Workers in other cities ({len(other_df)})"
                         st.markdown(f"""

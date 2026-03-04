@@ -3,7 +3,7 @@ import pandas as pd
 import time
 from datetime import datetime
 from src.services.whatsapp_service import WhatsAppService
-from src.utils.phone_utils import validate_numbers, format_phone_number
+from src.utils.phone_utils import validate_numbers, format_phone_number, save_to_local_desktop, render_pasha_export_button
 from src.core.i18n import t
 
 def render_whatsapp_page():
@@ -200,15 +200,10 @@ def render_whatsapp_page():
             with pd.ExcelWriter(output, engine='openpyxl') as writer:
                 template_df.to_excel(writer, index=False)
             
-            st.download_button(
-                label=lbl['download_template'],
-                data=output.getvalue(),
-                file_name="whatsapp_template.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                use_container_width=True
-            )
+            render_pasha_export_button(template_df, lbl['download_template'], "whatsapp_template.xlsx", "نموذج_إكسل_جديد")
         
         final_targets = []
+        c_cv = None
         if manual_list:
             for n in manual_list:
                 final_targets.append({'phone': n, 'name': 'Customer', 'cv': ''})
@@ -227,12 +222,16 @@ def render_whatsapp_page():
                     phone = format_phone_number(raw_p)
                     if not phone: phone = format_phone_number("".join(raw_p.split()))
                     if phone:
-                        # Capture ALL columns dynamically
-                        target_data = {str(col): str(row[col]) for col in df.columns}
+                        # Capture ALL columns dynamically with nan handling
+                        target_data = {}
+                        for col in df.columns:
+                            val = row[col]
+                            target_data[str(col)] = "" if pd.isna(val) or str(val).lower() == 'nan' else str(val).strip()
+                            
                         target_data.update({
                             'phone': phone,
-                            'name': str(row[c_name]) if c_name else "Client",
-                            'cv': str(row[c_cv]) if c_cv else ""
+                            'name': target_data.get(str(c_name), "Client") if c_name else "Client",
+                            'cv': target_data.get(str(c_cv), "") if c_cv else ""
                         })
                         final_targets.append(target_data)
 
@@ -324,6 +323,17 @@ Abu Fahd"""
                 
                 # Intelligent dynamic replacement for ALL columns
                 final_msg = msg_body
+                cv_placeholders = ["{CV}", "{cv}", "{السيرة}", "{" + str(c_cv) + "}"]
+                
+                # If CV is empty, remove lines containing CV placeholders
+                if not v or v.lower() == 'nan':
+                    lines = final_msg.split('\n')
+                    final_lines = []
+                    for line in lines:
+                        if not any(ph in line for ph in cv_placeholders):
+                            final_lines.append(line)
+                    final_msg = '\n'.join(final_lines)
+                
                 for key, val in trg.items():
                     # Support both {Key} and {key} and various Arabic variations
                     final_msg = final_msg.replace("{" + key + "}", val)
@@ -331,6 +341,10 @@ Abu Fahd"""
                 
                 # Traditional fallbacks for Name and CV (if placeholders weren't exact match)
                 final_msg = final_msg.replace("{Name}", n).replace("{name}", n).replace("{الاسم}", n).replace("{CV}", v).replace("{cv}", v).replace("{السيرة}", v)
+                
+                # Final cleanup: Remove excessive empty lines that might result from removal
+                import re
+                final_msg = re.sub(r'\n{3,}', '\n\n', final_msg).strip()
                 
                 st.info(lbl['sending'].format(n, p))
                 
