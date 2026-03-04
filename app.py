@@ -26,11 +26,13 @@ try:
     from src.core.contracts import ContractManager
     from src.data.bengali_manager import BengaliDataManager
     from src.utils.phone_utils import create_pasha_whatsapp_excel, format_phone_number, save_to_local_desktop, render_pasha_export_button
+    from src.core.matcher import CandidateMatcher, format_match_result
 except ImportError:
     # Fallback for different environment path configurations
     from core.contracts import ContractManager
     from data.bengali_manager import BengaliDataManager
     from utils.phone_utils import create_pasha_whatsapp_excel, format_phone_number, save_to_local_desktop, render_pasha_export_button
+    from core.matcher import CandidateMatcher, format_match_result
 
 # 2. Local Auth Class to prevent Import/Sync Errors
 class AuthManager:
@@ -3364,6 +3366,94 @@ def render_customer_requests_content():
         hide_index=True,
         key="customer_requests_table"
     )
+
+    # ═══════════════════════════════════════════════════════════
+    # Candidate Matching Section
+    # ═══════════════════════════════════════════════════════════
+    st.divider()
+    match_title = "🔎 مطابقة المرشحين مع طلب العميل" if lang == "ar" else "🔎 Match Candidates to Request"
+    st.markdown(f"### {match_title}")
+
+    # Row selector
+    row_count = len(df)
+    if row_count == 0:
+        return
+
+    select_label = "اختر رقم الطلب للمطابقة:" if lang == "ar" else "Select request row to match:"
+    selected_idx = st.selectbox(
+        select_label,
+        options=list(range(row_count)),
+        format_func=lambda i: f"{'طلب' if lang == 'ar' else 'Request'} #{i + 1}",
+        key="matcher_row_select"
+    )
+
+    # Show selected request details in an expander
+    selected_row = df.iloc[selected_idx]
+    with st.expander("📋 " + ("تفاصيل الطلب المحدد" if lang == "ar" else "Selected Request Details"), expanded=False):
+        for col_name, val in selected_row.items():
+            if str(col_name).startswith("__"):
+                continue
+            st.markdown(f"**{t_col(col_name, lang)}:** {val}")
+
+    # Match button
+    match_btn_label = "🚀 بحث ومطابقة المرشحين" if lang == "ar" else "🚀 Search & Match Candidates"
+    if st.button(match_btn_label, key="run_matcher_btn", use_container_width=True, type="primary"):
+        with st.spinner("جارٍ البحث عن مرشحين مطابقين..." if lang == "ar" else "Searching for matching candidates..."):
+            try:
+                # Fetch candidates (main workers database)
+                candidates_df = st.session_state.db.fetch_data()
+
+                if candidates_df is None or candidates_df.empty:
+                    st.error("❌ " + ("لا توجد بيانات مرشحين في قاعدة البيانات" if lang == "ar" else "No candidate data in the database"))
+                else:
+                    # Run the matcher
+                    matcher = CandidateMatcher(candidates_df)
+                    result = matcher.match(selected_row)
+
+                    # Format and display
+                    summary_md, status_md, result_df = format_match_result(result, lang)
+
+                    st.markdown("---")
+                    st.markdown(summary_md)
+                    st.markdown(status_md)
+
+                    if not result_df.empty:
+                        # Clean result columns for display
+                        display_df = result_df.copy()
+                        for int_col in ["__sheet_row", "__sheet_row_backup"]:
+                            if int_col in display_df.columns:
+                                display_df = display_df.drop(columns=[int_col])
+
+                        # Rename columns for display
+                        disp_names = {}
+                        disp_used = set()
+                        for c in display_df.columns:
+                            new_n = t_col(c, lang)
+                            orig_n = new_n
+                            cnt = 1
+                            while new_n in disp_used:
+                                cnt += 1
+                                new_n = f"{orig_n} ({cnt})"
+                            disp_used.add(new_n)
+                            disp_names[c] = new_n
+                        display_df.rename(columns=disp_names, inplace=True)
+
+                        st.dataframe(
+                            style_df(display_df),
+                            use_container_width=True,
+                            hide_index=True,
+                            key="matcher_results_table"
+                        )
+
+                    # Debug info (collapsible)
+                    with st.expander("🛠️ " + ("معلومات التشخيص" if lang == "ar" else "Debug Info")):
+                        st.json(matcher.debug_info)
+
+            except Exception as match_err:
+                import traceback
+                st.error(f"❌ {'خطأ في المطابقة' if lang == 'ar' else 'Matching Error'}: {match_err}")
+                with st.expander("تفاصيل الخطأ"):
+                    st.code(traceback.format_exc())
 
 
 def render_bengali_supply_content():

@@ -118,6 +118,148 @@ REGION_PROXIMITY = {
 
 
 # ═══════════════════════════════════════════════════════════════
+# Arabic → English Translation Dictionary (for bilingual search)
+# ═══════════════════════════════════════════════════════════════
+
+AR_TO_EN = {
+    # --- Nationalities ---
+    "فلبيني": ["Filipino", "Philippine"], "فلبينية": ["Filipino", "Philippine"],
+    "هندي": ["Indian"], "هندية": ["Indian"],
+    "باكستاني": ["Pakistani"], "باكستانية": ["Pakistani"],
+    "بنجلاديشي": ["Bangladeshi", "Bangladesh"], "بنجالية": ["Bangladeshi"],
+    "بنقالي": ["Bangladeshi"], "بنحلاديش": ["Bangladesh", "Bangladeshi"],
+    "مصري": ["Egyptian"], "مصرية": ["Egyptian"],
+    "نيبالي": ["Nepali", "Nepalese"], "نيبالية": ["Nepali"],
+    "سيريلانكي": ["Sri Lankan"], "سيريلانكية": ["Sri Lankan"],
+    "سيرلانكي": ["Sri Lankan"],
+    "كيني": ["Kenyan"], "كينية": ["Kenyan"],
+    "اوغندي": ["Ugandan"], "اوغندية": ["Ugandan"],
+    "اثيوبي": ["Ethiopian"], "اثيوبية": ["Ethiopian"],
+    "اندونيسي": ["Indonesian"], "اندونيسية": ["Indonesian"],
+    "مغربي": ["Moroccan"], "مغربية": ["Moroccan"],
+    "سوداني": ["Sudanese"], "سودانية": ["Sudanese"],
+    "يمني": ["Yemeni"], "يمنية": ["Yemeni"],
+    "نيجيري": ["Nigerian"], "نيجيرية": ["Nigerian"],
+    "غاني": ["Ghanaian"], "غانية": ["Ghanaian"],
+    "سنغالي": ["Senegalese"], "سنغالية": ["Senegalese"],
+    "تونسي": ["Tunisian"], "تونسية": ["Tunisian"],
+    "تنزاني": ["Tanzanian"], "تنزانية": ["Tanzanian"],
+    "افريقي": ["African", "Nigeria", "Kenya", "Ghana", "Ethiopia"],
+    "افريقية": ["African", "Nigeria", "Kenya", "Ghana", "Ethiopia"],
+
+    # --- Gender ---
+    "ذكر": ["Male"], "رجل": ["Male"], "ولد": ["Male"],
+    "أنثى": ["Female"], "انثى": ["Female"], "بنت": ["Female"],
+    "سيدة": ["Female"], "امرأة": ["Female"],
+
+    # --- Jobs / Professions ---
+    "باريستا": ["Barista"],
+    "طباخ": ["Cook", "Chef"], "شيف": ["Chef", "Cook"],
+    "حلا": ["Pastry", "Dessert"], "حلويات": ["Pastry", "Dessert", "Sweets"],
+    "نادل": ["Waiter"], "نادلة": ["Waitress"],
+    "سائق": ["Driver"],
+    "ممرض": ["Nurse"], "ممرضة": ["Nurse"],
+    "طبيب": ["Doctor"],
+    "نظافة": ["Cleaner"], "عامل نظافة": ["Cleaner"], "عاملة نظافة": ["Cleaner"],
+    "بدكير": ["Pedicure", "Technician"], "منكير": ["Manicure", "Technician"],
+    "حلاق": ["Barber"],
+    "كوافير": ["Hairdresser", "Hair Stylist"],
+    "مصففة": ["Hairdresser", "Hair Stylist"],
+    "مساج": ["Massage", "Therapist"],
+    "سكرتيرة": ["Secretary"],
+    "مبرمج": ["Programmer"], "مهندس": ["Engineer"], "فني": ["Technician"],
+    "مطعم": ["Restaurant"],
+    "خادمة": ["Housemaid", "Domestic"], "عاملة": ["Housemaid", "Worker"],
+    "شغالة": ["Housemaid", "Domestic"],
+
+    # --- Cities (Arabic → English) ---
+    "الرياض": ["Riyadh"], "الخرج": ["Al Kharj", "Al-Kharj", "Kharj"],
+    "الدوادمي": ["Al Dawadmi"], "الزلفي": ["Al Zulfi", "Zulfi"],
+    "شقراء": ["Shaqra"], "المجمعة": ["Al Majmaah", "Majmaah"],
+    "وادي الدواسر": ["Wadi Al Dawasir"], "الأفلاج": ["Al Aflaj"],
+    "جدة": ["Jeddah", "Jiddah"], "مكة": ["Makkah", "Mecca"],
+    "مكة المكرمة": ["Makkah", "Mecca"],
+    "المدينة المنورة": ["Madinah", "Medina"], "المدينة": ["Madinah", "Medina"],
+    "الطائف": ["Taif"], "رابغ": ["Rabigh"],
+    "القنفذة": ["Al Qunfudhah"], "الليث": ["Al Lith"],
+    "ينبع": ["Yanbu"], "العلا": ["Al Ula"], "بدر": ["Badr"],
+    "حائل": ["Hail"], "بقعاء": ["Baqaa"],
+    "الدمام": ["Dammam"], "الخبر": ["Khobar", "Al Khobar"],
+    "الظهران": ["Dhahran"], "القطيف": ["Qatif"],
+    "الجبيل": ["Jubail"], "الأحساء": ["Al Ahsa", "Al Hasa", "Al-Ahsa"],
+    "الهفوف": ["Hofuf"], "المبرز": ["Al Mubarraz"],
+    "حفر الباطن": ["Hafar Al Batin", "Hafar Al-Batin"],
+    "الخفجي": ["Khafji"], "النعيرية": ["Nairyah", "Nariyah"],
+    "تبوك": ["Tabuk"], "ضباء": ["Duba"],
+    "الوجه": ["Al Wajh"], "أملج": ["Umluj"],
+    "حقل": ["Haql"], "عرعر": ["Arar"],
+    "رفحاء": ["Rafha"], "طريف": ["Turaif"],
+    "سكاكا": ["Sakaka"], "القريات": ["Al Qurayyat"],
+    "دومة الجندل": ["Dumat Al Jandal"],
+    "أبها": ["Abha"], "خميس مشيط": ["Khamis Mushait"],
+    "بيشة": ["Bisha"], "النماص": ["Al Namas"],
+    "محايل عسير": ["Muhayil Asir", "Muhayil"], "ظهران الجنوب": ["Dhahran Al Janub"],
+    "جازان": ["Jazan", "Jizan"], "صبيا": ["Sabya"],
+    "أبو عريش": ["Abu Arish"], "صامطة": ["Samtah"],
+    "الدرب": ["Al Darb"], "نجران": ["Najran"],
+    "شرورة": ["Sharurah"],
+    "الباحة": ["Al Baha", "Al Bahah"], "بلجرشي": ["Baljurashi"],
+    "المخواة": ["Al Makhwah", "Almikhwah"],
+    "بريدة": ["Buraidah", "Buraydah"], "عنيزة": ["Unaizah", "Unayza", "UNAYZA"],
+    "الرس": ["Al Rass", "Ar Rass"],
+    "البكيرية": ["Al Bukayriyah"], "البدائع": ["Al Badayea"],
+    "الأسياح": ["Al Asyah"], "النبهانية": ["An Nabhaniyah"],
+    "عيون الجواء": ["Uyun Al Jawa"], "رياض الخبراء": ["Riyadh Al Khabra"],
+    "المذنب": ["Al Mithnab"], "الشماسية": ["Ash Shimasiyah"],
+    "عقلة الصقور": ["Uqlat As Suqur"], "ضرية": ["Dhariyah"],
+    "سيهات": ["Saihat"], "تاروت": ["Tarout"],
+    "صفوى": ["Safwa"], "بقيق": ["Abqaiq"],
+    "رأس تنورة": ["Ras Tanura"],
+
+    # --- Regions ---
+    "الشرقية": ["Eastern", "East"], "الشرق": ["Eastern", "East"],
+    "المنطقة الشرقية": ["Eastern Region", "Eastern"],
+    "الغربية": ["Western", "West"], "الغرب": ["Western", "West"],
+    "المنطقة الغربية": ["Western Region", "Western"],
+    "الوسطى": ["Central", "Middle"], "الوسط": ["Central", "Middle"],
+    "المنطقة الوسطى": ["Central Region", "Central"],
+    "الشمالية": ["Northern", "North"], "الشمال": ["Northern", "North"],
+    "المنطقة الشمالية": ["Northern Region", "Northern"],
+    "الجنوبية": ["Southern", "South"], "الجنوب": ["Southern", "South"],
+    "المنطقة الجنوبية": ["Southern Region", "Southern"],
+    "القصيم": ["Qassim", "Al Qassim", "AL QASSIM"],
+    "منطقة القصيم": ["Qassim Region", "Qassim"],
+}
+
+
+def _translate_ar_to_en(text):
+    """
+    Translate Arabic text to all possible English equivalents.
+    Returns a list of English strings (may be empty if no translation found).
+    """
+    if not text:
+        return []
+
+    text_clean = str(text).strip()
+    results = []
+
+    # Direct lookup
+    if text_clean in AR_TO_EN:
+        results.extend(AR_TO_EN[text_clean])
+
+    # Normalized lookup
+    text_norm = _normalize(text_clean)
+    for ar_key, en_vals in AR_TO_EN.items():
+        ar_norm = _normalize(ar_key)
+        if ar_norm == text_norm:
+            results.extend(en_vals)
+        elif len(text_norm) > 3 and (text_norm in ar_norm or ar_norm in text_norm):
+            results.extend(en_vals)
+
+    return list(set(results))
+
+
+# ═══════════════════════════════════════════════════════════════
 # Helper Functions
 # ═══════════════════════════════════════════════════════════════
 
@@ -156,14 +298,49 @@ def _find_col(df, keywords):
 
 
 def _fuzzy_match(value, target):
-    """Check if value matches target (fuzzy Arabic normalization)."""
+    """
+    Bilingual fuzzy match: checks Arabic AND English equivalents.
+    value = what's in the database (could be English)
+    target = what the user searched for (could be Arabic)
+    """
     if not value or not target:
         return False
-    v_norm = _normalize(str(value))
-    t_norm = _normalize(str(target))
-    if not v_norm or not t_norm:
+
+    v_str = str(value).strip()
+    t_str = str(target).strip()
+
+    if not v_str or not t_str or v_str.lower() == "nan" or t_str.lower() == "nan":
         return False
-    return t_norm in v_norm or v_norm in t_norm
+
+    v_lower = v_str.lower()
+    t_lower = t_str.lower()
+    v_norm = _normalize(v_str)
+    t_norm = _normalize(t_str)
+
+    # 1. Direct Arabic/normalized match
+    if t_norm and v_norm:
+        if t_norm in v_norm or v_norm in t_norm:
+            return True
+
+    # 2. Direct English match (both already in English)
+    if t_lower in v_lower or v_lower in t_lower:
+        return True
+
+    # 3. Translate target (Arabic) → English, match against value
+    en_translations = _translate_ar_to_en(t_str)
+    for en in en_translations:
+        en_lower = en.lower()
+        if en_lower in v_lower or v_lower in en_lower:
+            return True
+
+    # 4. Translate value (Arabic) → English, match against target
+    en_val_translations = _translate_ar_to_en(v_str)
+    for en in en_val_translations:
+        en_lower = en.lower()
+        if t_lower in en_lower or en_lower in t_lower:
+            return True
+
+    return False
 
 
 def _resolve_region(location_text):
