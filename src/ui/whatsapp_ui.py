@@ -55,7 +55,7 @@ def render_whatsapp_page():
         'attached': "📎 مرفق: {} ({} KB)" if is_ar else "📎 Attached: {} ({} KB)",
         'delay': "مهلة الإرسال (ثانية)" if is_ar else "Send delay (seconds)",
         'stop': "🛑 إيقاف" if is_ar else "🛑 Stop",
-        'sent_done': "✅ تم الارسال" if is_ar else "✅ Sent",
+        'sent_done': "تم الارسال ✅" if is_ar else "Sent ✅",
         'send': "📨 ارسال ({})" if is_ar else "📨 Send ({})",
         'sending': "⏳ إرسال إلى: {} ({})..." if is_ar else "⏳ Sending to: {} ({})...",
         'log_title': "#### 📄 سجل الإرسال" if is_ar else "#### 📄 Send Log",
@@ -68,6 +68,7 @@ def render_whatsapp_page():
         'next_msg_in': "⏳ الرسالة القادمة خلال: {}" if is_ar else "⏳ Next message in: {}",
         'settings_title': "#### ⚙️ إعدادات الإرسال" if is_ar else "#### ⚙️ Sending Settings",
         'batch_help': "0 = بدون استراحة" if is_ar else "0 = No pause",
+        'download_template': "📥 تحميل نموذج إكسل" if is_ar else "📥 Download Excel Template",
     }
 
     # 1. Connection Status
@@ -151,16 +152,19 @@ def render_whatsapp_page():
             manual_list, _, _ = validate_numbers(txt)
             if manual_list:
                 st.success(lbl['ready_count'].format(len(manual_list)))
-                if st.session_state.get('wa_last_manual_count', 0) != len(manual_list):
+                if st.session_state.get('wa_last_manual_count', 0) != len(manual_list) or txt != st.session_state.get('wa_last_txt', ''):
                     st.session_state.wa_done = False
                     st.session_state.wa_last_manual_count = len(manual_list)
+                    st.session_state.wa_last_txt = txt
 
         with t_xl:
             uploaded = st.file_uploader(lbl['upload_excel'], type=["xlsx"], key=st.session_state.get('wa_upload_key', 'xl_0'))
             if uploaded:
                 df = pd.read_excel(uploaded)
-                if st.session_state.wa_data is None or len(df) != len(st.session_state.wa_data):
+                # Reset if it's a new upload (even if count is the same)
+                if st.session_state.get('wa_last_uploaded_name') != uploaded.name:
                     st.session_state.wa_done = False
+                    st.session_state.wa_last_uploaded_name = uploaded.name
                 st.session_state.wa_data = df
                 xl_col1, xl_col2 = st.columns([3, 1])
                 with xl_col1:
@@ -184,6 +188,25 @@ def render_whatsapp_page():
                         old_key = st.session_state.get('wa_upload_key', 'xl_0')
                         st.session_state.wa_upload_key = 'xl_1' if old_key == 'xl_0' else 'xl_0'
                         st.rerun()
+            
+            # --- Download Template Section ---
+            cols = ["الاسم", "رقم الجوال", "السيرة الذاتية", "الجنسيه", "الجنس", "العمر", "المدينة", 
+                    "الوظيفه المطلوبه", "الخبرة في هذا المجال", "مهارات اخرى", "الخبرة", 
+                    "هل يمكنك العمل خارج المدينة", "هل انت جاهز للعمل فورا", "هل معك عائلته", 
+                    "رقم الاقامة", "عدد مرات نقل الكفالة"]
+            template_df = pd.DataFrame(columns=cols)
+            from io import BytesIO
+            output = BytesIO()
+            with pd.ExcelWriter(output, engine='openpyxl') as writer:
+                template_df.to_excel(writer, index=False)
+            
+            st.download_button(
+                label=lbl['download_template'],
+                data=output.getvalue(),
+                file_name="whatsapp_template.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                use_container_width=True
+            )
         
         final_targets = []
         if manual_list:
@@ -204,11 +227,14 @@ def render_whatsapp_page():
                     phone = format_phone_number(raw_p)
                     if not phone: phone = format_phone_number("".join(raw_p.split()))
                     if phone:
-                        final_targets.append({
+                        # Capture ALL columns dynamically
+                        target_data = {str(col): str(row[col]) for col in df.columns}
+                        target_data.update({
                             'phone': phone,
                             'name': str(row[c_name]) if c_name else "Client",
                             'cv': str(row[c_cv]) if c_cv else ""
                         })
+                        final_targets.append(target_data)
 
         st.markdown(lbl['msg_title'])
         
@@ -295,7 +321,17 @@ Abu Fahd"""
             if st.session_state.wa_idx < len(final_targets):
                 trg = final_targets[st.session_state.wa_idx]
                 p, n, v = trg['phone'], trg['name'], trg['cv']
-                final_msg = msg_body.replace("{Name}", n).replace("{name}", n).replace("{الاسم}", n).replace("{CV}", v).replace("{cv}", v).replace("{السيرة}", v)
+                
+                # Intelligent dynamic replacement for ALL columns
+                final_msg = msg_body
+                for key, val in trg.items():
+                    # Support both {Key} and {key} and various Arabic variations
+                    final_msg = final_msg.replace("{" + key + "}", val)
+                    final_msg = final_msg.replace("{" + key.lower() + "}", val)
+                
+                # Traditional fallbacks for Name and CV (if placeholders weren't exact match)
+                final_msg = final_msg.replace("{Name}", n).replace("{name}", n).replace("{الاسم}", n).replace("{CV}", v).replace("{cv}", v).replace("{السيرة}", v)
+                
                 st.info(lbl['sending'].format(n, p))
                 
                 # Call send_message with temp_path
