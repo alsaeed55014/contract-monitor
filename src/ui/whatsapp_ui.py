@@ -49,7 +49,6 @@ def render_whatsapp_page():
         'upload_excel': "ارفع ملف الإكسل" if is_ar else "Upload Excel file",
         'loaded_count': "تم تحميل {} عامل ✅" if is_ar else "Loaded {} workers ✅",
         'delete_file': "🗑️ حذف الملف" if is_ar else "🗑️ Delete File",
-        'msg_title': "### ✍️ نص الرسالة" if is_ar else "### ✍️ Message Text",
         'msg_label': "اكتب رسالتك" if is_ar else "Write your message",
         'attach': "📎 إرفاق ملف (اختياري)" if is_ar else "📎 Attach file (optional)",
         'attached': "📎 مرفق: {} ({} KB)" if is_ar else "📎 Attached: {} ({} KB)",
@@ -68,7 +67,6 @@ def render_whatsapp_page():
         'next_msg_in': "⏳ الرسالة القادمة خلال: {}" if is_ar else "⏳ Next message in: {}",
         'settings_title': "#### ⚙️ إعدادات الإرسال" if is_ar else "#### ⚙️ Sending Settings",
         'batch_help': "0 = بدون استراحة" if is_ar else "0 = No pause",
-        'download_template': "📥 تحميل نموذج إكسل" if is_ar else "📥 Download Excel Template",
     }
 
     # 1. Connection Status
@@ -189,18 +187,6 @@ def render_whatsapp_page():
                         st.session_state.wa_upload_key = 'xl_1' if old_key == 'xl_0' else 'xl_0'
                         st.rerun()
             
-            # --- Download Template Section ---
-            cols = ["الاسم", "رقم الجوال", "السيرة الذاتية", "الجنسيه", "الجنس", "العمر", "المدينة", 
-                    "الوظيفه المطلوبه", "الخبرة في هذا المجال", "مهارات اخرى", "الخبرة", 
-                    "هل يمكنك العمل خارج المدينة", "هل انت جاهز للعمل فورا", "هل معك عائلته", 
-                    "رقم الاقامة", "عدد مرات نقل الكفالة"]
-            template_df = pd.DataFrame(columns=cols)
-            from io import BytesIO
-            output = BytesIO()
-            with pd.ExcelWriter(output, engine='openpyxl') as writer:
-                template_df.to_excel(writer, index=False)
-            
-            render_pasha_export_button(template_df, lbl['download_template'], "whatsapp_template.xlsx", "نموذج_إكسل_جديد")
         
         final_targets = []
         c_cv = None
@@ -235,7 +221,6 @@ def render_whatsapp_page():
                         })
                         final_targets.append(target_data)
 
-        st.markdown(lbl['msg_title'])
         
         # LTR for English messages
         st.markdown("""
