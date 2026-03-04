@@ -68,22 +68,36 @@ REGION_MAP = {
         "aliases_ar": ["الوسطى", "الوسط", "المنطقة الوسطى"],
         "aliases_en": ["central", "middle", "central region"],
         "cities_ar": [
-            "الرياض", "الخرج", "الدوادمي", "الزلفي", "شقراء", "المجمعة", "وادي الدواسر", "الأفلاج",
-            "بريدة", "عنيزة", "الرس"
+            "الرياض", "الخرج", "الدوادمي", "الزلفي", "شقراء", "المجمعة", "وادي الدواسر", "الأفلاج"
         ],
         "cities_en": [
-            "riyadh", "al kharj", "al dawadmi", "al zulfi", "shaqra", "al majmaah", "wadi al dawasir", "al aflaj",
-            "buraidah", "unaizah", "al rass"
+            "riyadh", "al kharj", "al dawadmi", "al zulfi", "shaqra", "al majmaah", "wadi al dawasir", "al aflaj"
+        ],
+    },
+    # --- Al Qassim Region ---
+    "القصيم": {
+        "aliases_ar": ["القصيم", "منطقة القصيم", "المنطقة القصيم"],
+        "aliases_en": ["qassim", "al qassim", "qassim region"],
+        "cities_ar": [
+            "بريدة", "عنيزة", "الرس", "البكيرية", "البدائع", "الأسياح",
+            "النبهانية", "عيون الجواء", "رياض الخبراء", "المذنب", "الشماسية",
+            "عقلة الصقور", "ضرية"
+        ],
+        "cities_en": [
+            "buraidah", "unaizah", "ar rass", "al bukayriyah", "al badayea", "al asyah",
+            "an nabhaniyah", "uyun al jawa", "riyadh al khabra", "al mithnab", "ash shimasiyah",
+            "uqlat as suqur", "dhariyah"
         ],
     },
 }
 
 # Proximity order: if searching from one region, which regions are closest?
 REGION_PROXIMITY = {
-    "الشمالية": ["الوسطى", "الغربية", "الجنوبية"],
-    "الجنوبية": ["الغربية", "الوسطى", "الشمالية"],
-    "الغربية": ["الجنوبية", "الوسطى", "الشمالية"],
-    "الوسطى": ["الشمالية", "الغربية", "الجنوبية"],
+    "الشمالية": ["القصيم", "الوسطى", "الغربية", "الجنوبية"],
+    "الجنوبية": ["الغربية", "الوسطى", "القصيم", "الشمالية"],
+    "الغربية": ["الجنوبية", "الوسطى", "القصيم", "الشمالية"],
+    "الوسطى": ["القصيم", "الشمالية", "الغربية", "الجنوبية"],
+    "القصيم": ["الوسطى", "الشمالية", "الغربية", "الجنوبية"],
 }
 
 
