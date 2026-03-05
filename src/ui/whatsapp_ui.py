@@ -1,10 +1,29 @@
 import streamlit as st
 import pandas as pd
+import json
+import os
 import time
 from datetime import datetime
 from src.services.whatsapp_service import WhatsAppService
 from src.utils.phone_utils import validate_numbers, format_phone_number, save_to_local_desktop, render_pasha_export_button
 from src.core.i18n import t
+from src.config import WA_HISTORY_FILE
+
+def load_wa_history():
+    if os.path.exists(WA_HISTORY_FILE):
+        try:
+            with open(WA_HISTORY_FILE, 'r', encoding='utf-8') as f:
+                return set(json.load(f))
+        except:
+            return set()
+    return set()
+
+def save_wa_history(history_set):
+    try:
+        with open(WA_HISTORY_FILE, 'w', encoding='utf-8') as f:
+            json.dump(list(history_set), f, ensure_ascii=False)
+    except:
+        pass
 
 def render_whatsapp_page():
     lang = st.session_state.get('lang', 'ar')
@@ -15,14 +34,20 @@ def render_whatsapp_page():
         st.session_state.wa_service = WhatsAppService()
     else:
         # Check if the existing service object is outdated (missing attachment_path in send_message)
-        import inspect
-        sig = inspect.signature(st.session_state.wa_service.send_message)
-        if 'attachment_path' not in sig.parameters:
-            st.session_state.wa_service = WhatsAppService()
+        try:
+            import inspect
+            sig = inspect.signature(st.session_state.wa_service.send_message)
+            if 'attachment_path' not in sig.parameters:
+                st.session_state.wa_service = WhatsAppService()
+        except:
+            pass
+
     if 'wa_logs' not in st.session_state: st.session_state.wa_logs = []
     if 'wa_running' not in st.session_state: st.session_state.wa_running = False
     if 'wa_idx' not in st.session_state: st.session_state.wa_idx = 0
     if 'wa_data' not in st.session_state: st.session_state.wa_data = None
+    if 'wa_history' not in st.session_state: st.session_state.wa_history = load_wa_history()
+    if 'wa_review_targets' not in st.session_state: st.session_state.wa_review_targets = []
 
     st.markdown('<div class="programmer-signature-neon">By: Alsaeed Alwazzan</div>', unsafe_allow_html=True)
 
@@ -67,6 +92,16 @@ def render_whatsapp_page():
         'next_msg_in': "⏳ الرسالة القادمة خلال: {}" if is_ar else "⏳ Next message in: {}",
         'settings_title': "#### ⚙️ إعدادات الإرسال" if is_ar else "#### ⚙️ Sending Settings",
         'batch_help': "0 = بدون استراحة" if is_ar else "0 = No pause",
+        'sent_count': "تم إرسال" if is_ar else "Sent",
+        'remaining_count': "متبقي" if is_ar else "Remaining",
+        'review_section': "📋 مراجعة قائمة الأرقام" if is_ar else "📋 Review Numbers List",
+        'col_name': "الاسم" if is_ar else "Name",
+        'col_phone': "الجوال" if is_ar else "Phone",
+        'col_status': "أرسل؟" if is_ar else "Sent?",
+        'col_action': "حذف" if is_ar else "Delete",
+        'total_pending': "بانتظار الإرسال: {}" if is_ar else "Pending: {}",
+        'total_ready': "الإجمالي الجاهز: {}" if is_ar else "Total Ready: {}",
+        'uncheck_all': "🔄 إرجاع الكل لقائمة الإرسال" if is_ar else "🔄 Return all to Sending List",
     }
 
     # 1. Connection Status
@@ -97,30 +132,12 @@ def render_whatsapp_page():
                 else: st.error(f"❌ {msg}")
                 st.rerun()
 
-    # 2. QR CODE SECTION (DO NOT MODIFY)
+    # 2. QR CODE SECTION
     if status == "Awaiting Login":
         qr_b64 = st.session_state.wa_service.get_qr_hd()
         if qr_b64:
             src = qr_b64 if qr_b64.startswith("data:") else f"data:image/png;base64,{qr_b64}"
-            st.markdown(f"""
-            <div style="
-                background: #FFFFFF;
-                padding: 25px;
-                border-radius: 20px;
-                max-width: 420px;
-                margin: 15px auto;
-                text-align: center;
-                box-shadow: 0 0 40px rgba(255,255,255,0.4);
-            ">
-                <img src="{src}" 
-                     style="
-                        width: 350px; 
-                        height: 350px; 
-                        image-rendering: pixelated;
-                        image-rendering: crisp-edges;
-                     " />
-            </div>
-            """, unsafe_allow_html=True)
+            st.markdown(f'<div style="background: #FFFFFF; padding: 25px; border-radius: 20px; max-width: 420px; margin: 15px auto; text-align: center; box-shadow: 0 0 40px rgba(255,255,255,0.4);"><img src="{src}" style="width: 350px; height: 350px; image-rendering: pixelated; image-rendering: crisp-edges;" /></div>', unsafe_allow_html=True)
         else:
             st.info(lbl['qr_loading'])
         
@@ -139,19 +156,19 @@ def render_whatsapp_page():
                     st.error(lbl['not_connected'])
                 st.rerun()
 
-    # 3. INPUT + BROADCAST (Only when Connected)
+    # 3. INPUT + BROADCAST
     if status == "Connected":
         st.markdown("---")
         t_manual, t_xl = st.tabs([lbl['tab_manual'], lbl['tab_excel']])
         
+        rebuild_review = False
         manual_list = []
         with t_manual:
             txt = st.text_area(lbl['paste_numbers'], height=100)
             manual_list, _, _ = validate_numbers(txt)
             if manual_list:
-                st.success(lbl['ready_count'].format(len(manual_list)))
                 if st.session_state.get('wa_last_manual_count', 0) != len(manual_list) or txt != st.session_state.get('wa_last_txt', ''):
-                    st.session_state.wa_done = False
+                    rebuild_review = True
                     st.session_state.wa_last_manual_count = len(manual_list)
                     st.session_state.wa_last_txt = txt
 
@@ -159,67 +176,158 @@ def render_whatsapp_page():
             uploaded = st.file_uploader(lbl['upload_excel'], type=["xlsx"], key=st.session_state.get('wa_upload_key', 'xl_0'))
             if uploaded:
                 df = pd.read_excel(uploaded)
-                # Reset if it's a new upload (even if count is the same)
                 if st.session_state.get('wa_last_uploaded_name') != uploaded.name:
-                    st.session_state.wa_done = False
+                    rebuild_review = True
                     st.session_state.wa_last_uploaded_name = uploaded.name
-                st.session_state.wa_data = df
+                    st.session_state.wa_data = df
+                
                 xl_col1, xl_col2 = st.columns([3, 1])
-                with xl_col1:
-                    st.success(lbl['loaded_count'].format(len(df)))
+                with xl_col1: st.success(lbl['loaded_count'].format(len(df)))
                 with xl_col2:
                     if st.button(lbl['delete_file'], use_container_width=True, key="del_xl"):
                         st.session_state.wa_data = None
-                        st.session_state.wa_done = False
-                        old_key = st.session_state.get('wa_upload_key', 'xl_0')
-                        st.session_state.wa_upload_key = 'xl_1' if old_key == 'xl_0' else 'xl_0'
+                        st.session_state.wa_review_targets = []
+                        st.session_state.wa_last_uploaded_name = None
+                        st.session_state.wa_upload_key = 'xl_1' if st.session_state.get('wa_upload_key') == 'xl_0' else 'xl_0'
                         st.rerun()
             elif st.session_state.wa_data is not None:
-                # Show delete button even if uploader is empty but data exists
                 xl_col1, xl_col2 = st.columns([3, 1])
-                with xl_col1:
-                    st.info(lbl['loaded_count'].format(len(st.session_state.wa_data)))
+                with xl_col1: st.info(lbl['loaded_count'].format(len(st.session_state.wa_data)))
                 with xl_col2:
                     if st.button(lbl['delete_file'], use_container_width=True, key="del_xl2"):
                         st.session_state.wa_data = None
-                        st.session_state.wa_done = False
-                        old_key = st.session_state.get('wa_upload_key', 'xl_0')
-                        st.session_state.wa_upload_key = 'xl_1' if old_key == 'xl_0' else 'xl_0'
+                        st.session_state.wa_review_targets = []
+                        st.session_state.wa_last_uploaded_name = None
+                        st.session_state.wa_upload_key = 'xl_1' if st.session_state.get('wa_upload_key') == 'xl_0' else 'xl_0'
                         st.rerun()
-            
         
-        final_targets = []
-        c_cv = None
-        if manual_list:
-            for n in manual_list:
-                final_targets.append({'phone': n, 'name': 'Customer', 'cv': ''})
-        elif st.session_state.wa_data is not None:
-            df = st.session_state.wa_data
-            def find_c(keys):
-                for c in df.columns:
-                    if any(k in str(c).lower() for k in keys): return c
-                return None
-            c_name = find_c(["اسم", "name"])
-            c_phone = find_c(["واتساب", "رقم", "هاتف", "phone", "جوال"])
-            c_cv = find_c(["سيرة", "cv", "resume", "link"])
-            for _, row in df.iterrows():
-                if c_phone:
-                    raw_p = str(row[c_phone]).strip()
+        # Build review targets if data changed or list is empty but data exists
+        if rebuild_review or (not st.session_state.wa_review_targets and (manual_list or st.session_state.wa_data is not None)):
+            new_targets = []
+            seen_in_current_file = set() # To detect duplicates in the current upload
+            
+            # Manual
+            if manual_list:
+                for n in manual_list:
+                    is_dup = n in seen_in_current_file
+                    new_targets.append({
+                        'phone': n, 'name': 'Client', 'cv': '', 
+                        'is_sent': (n in st.session_state.wa_history) or is_dup
+                    })
+                    seen_in_current_file.add(n)
+            # Excel
+            elif st.session_state.wa_data is not None:
+                df_curr = st.session_state.wa_data
+                def find_c(keys):
+                    for c in df_curr.columns:
+                        if any(k in str(c).lower() for k in keys): return c
+                    return None
+                c_name = find_c(["اسم", "name"])
+                c_phone = find_c(["واتساب", "رقم", "هاتف", "phone", "جوال"])
+                c_cv = find_c(["سيرة", "cv", "resume", "link"])
+                
+                for idx, row in df_curr.iterrows():
+                    raw_p = str(row[c_phone]).strip() if c_phone else ""
                     phone = format_phone_number(raw_p)
                     if not phone: phone = format_phone_number("".join(raw_p.split()))
+                    
                     if phone:
-                        # Capture ALL columns dynamically with nan handling
-                        target_data = {}
-                        for col in df.columns:
-                            val = row[col]
-                            target_data[str(col)] = "" if pd.isna(val) or str(val).lower() == 'nan' else str(val).strip()
-                            
-                        target_data.update({
-                            'phone': phone,
-                            'name': target_data.get(str(c_name), "Client") if c_name else "Client",
-                            'cv': target_data.get(str(c_cv), "") if c_cv else ""
-                        })
-                        final_targets.append(target_data)
+                        is_dup = phone in seen_in_current_file
+                        target_data = {'idx': idx, 'phone': phone}
+                        target_data['name'] = str(row[c_name]).strip() if c_name else "Client"
+                        target_data['cv'] = str(row[c_cv]).strip() if c_cv else ""
+                        target_data['is_sent'] = (phone in st.session_state.wa_history) or is_dup
+                        for col in df_curr.columns: target_data[str(col)] = str(row[col]).strip()
+                        new_targets.append(target_data)
+                        seen_in_current_file.add(phone)
+            
+            if new_targets:
+                st.session_state.wa_review_targets = new_targets
+                st.session_state.wa_done = False
+
+        # --- 📋 Review Contacts Table ---
+        if st.session_state.wa_review_targets:
+            pending_list = [t for t in st.session_state.wa_review_targets if not t['is_sent']]
+            excluded_list = [t for t in st.session_state.wa_review_targets if t['is_sent']]
+            
+            st.markdown("---")
+            # 1. READY LIST (Items NOT checked)
+            if pending_list:
+                with st.expander(f"📥 {lbl['total_pending'].format(len(pending_list))}", expanded=True):
+                    h1, h2, h3, h4 = st.columns([1, 4, 3, 1])
+                    h1.markdown(f"**{lbl['col_status']}**")
+                    h2.markdown(f"**{lbl['col_name']}**")
+                    h3.markdown(f"**{lbl['col_phone']}**")
+                    h4.markdown(f"**{lbl['col_action']}**")
+                    
+                    to_delete = []
+                    for i, trg in enumerate(st.session_state.wa_review_targets):
+                        if trg['is_sent']: continue
+                        r1, r2, r3, r4 = st.columns([1, 4, 3, 1])
+                        # Checkbox to Exclude (becomes true)
+                        if r1.checkbox("", value=False, key=f"trg_pending_{i}_{trg['phone']}"):
+                            st.session_state.wa_review_targets[i]['is_sent'] = True
+                            st.session_state.wa_history.add(trg['phone'])
+                            save_wa_history(st.session_state.wa_history)
+                            st.rerun()
+                        
+                        r2.text(trg['name'])
+                        r3.text(trg['phone'])
+                        if r4.button("🗑️", key=f"trg_del_p_{i}_{trg['phone']}"):
+                            to_delete.append(i)
+                    
+                    if to_delete:
+                        for idx in sorted(to_delete, reverse=True):
+                            deleted_item = st.session_state.wa_review_targets.pop(idx)
+                            if st.session_state.wa_data is not None and 'idx' in deleted_item:
+                                st.session_state.wa_data = st.session_state.wa_data.drop(deleted_item['idx'])
+                        st.rerun()
+
+            # 2. EXCLUDED LIST (Items Checked) - THIS IS THE LIST THE USER ASKED FOR
+            if excluded_list:
+                with st.expander(f"✅ {lbl['review_section']} (مرسلة أو مكررة: {len(excluded_list)})", expanded=True):
+                    if st.button(lbl['uncheck_all'], use_container_width=True):
+                        # Reset all is_sent in review list and history
+                        for i in range(len(st.session_state.wa_review_targets)):
+                            st.session_state.wa_review_targets[i]['is_sent'] = False
+                        st.session_state.wa_history = set() # Clear history as requested to return all
+                        save_wa_history(st.session_state.wa_history)
+                        st.rerun()
+
+                    h1, h2, h3, h4 = st.columns([1, 4, 3, 1])
+                    h1.markdown(f"**{lbl['col_status']}**")
+                    h2.markdown(f"**{lbl['col_name']}**")
+                    h3.markdown(f"**{lbl['col_phone']}**")
+                    h4.markdown(f"**{lbl['col_action']}**")
+                    
+                    to_delete_ex = []
+                    for i, trg in enumerate(st.session_state.wa_review_targets):
+                        if not trg['is_sent']: continue
+                        r1, r2, r3, r4 = st.columns([1, 4, 3, 1])
+                        # Uncheck to move to pending (becomes false)
+                        if not r1.checkbox("", value=True, key=f"trg_excl_{i}_{trg['phone']}"):
+                            st.session_state.wa_review_targets[i]['is_sent'] = False
+                            st.session_state.wa_history.discard(trg['phone'])
+                            save_wa_history(st.session_state.wa_history)
+                            st.rerun()
+                        
+                        r2.text(trg['name'])
+                        r3.text(trg['phone'])
+                        if r4.button("🗑️", key=f"trg_del_e_{i}_{trg['phone']}"):
+                            to_delete_ex.append(i)
+                    
+                    if to_delete_ex:
+                        for idx in sorted(to_delete_ex, reverse=True):
+                            deleted_item = st.session_state.wa_review_targets.pop(idx)
+                            if st.session_state.wa_data is not None and 'idx' in deleted_item:
+                                st.session_state.wa_data = st.session_state.wa_data.drop(deleted_item['idx'])
+                        st.rerun()
+            
+            final_targets = pending_list
+            st.markdown(f"---")
+            st.markdown(f"**{lbl['total_ready'].format(len(st.session_state.wa_review_targets))} | {lbl['total_pending'].format(len(final_targets))}**")
+        else:
+            final_targets = []
 
         
         # LTR for English messages
@@ -301,54 +409,76 @@ Abu Fahd"""
                 t_file.close()
                 temp_path = t_file.name
 
-            st.progress(st.session_state.wa_idx / len(final_targets))
-            if st.session_state.wa_idx < len(final_targets):
-                trg = final_targets[st.session_state.wa_idx]
-                p, n, v = trg['phone'], trg['name'], trg['cv']
+                st.markdown(f"""
+                <div style="background: rgba(212, 175, 55, 0.05); padding: 15px; border-radius: 15px; border: 1px solid rgba(212, 175, 55, 0.2); margin-bottom: 20px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                        <span style="color: #00FF41; font-weight: 700; font-size: 1.1rem;">✅ {lbl['sent_count']}: {st.session_state.wa_idx}</span>
+                        <span style="color: #D4AF37; font-weight: 700; font-size: 1.1rem;">⌛ {lbl['remaining_count']}: {len(final_targets) - st.session_state.wa_idx}</span>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
                 
-                # Intelligent dynamic replacement for ALL columns
-                final_msg = msg_body
-                cv_placeholders = ["{CV}", "{cv}", "{السيرة}", "{" + str(c_cv) + "}"]
+                st.progress(st.session_state.wa_idx / len(final_targets))
                 
-                # If CV is empty, remove lines containing CV placeholders
-                if not v or v.lower() == 'nan':
-                    lines = final_msg.split('\n')
-                    final_lines = []
-                    for line in lines:
-                        if not any(ph in line for ph in cv_placeholders):
-                            final_lines.append(line)
-                    final_msg = '\n'.join(final_lines)
-                
-                for key, val in trg.items():
-                    # Support both {Key} and {key} and various Arabic variations
-                    final_msg = final_msg.replace("{" + key + "}", val)
-                    final_msg = final_msg.replace("{" + key.lower() + "}", val)
-                
-                # Traditional fallbacks for Name and CV (if placeholders weren't exact match)
-                final_msg = final_msg.replace("{Name}", n).replace("{name}", n).replace("{الاسم}", n).replace("{CV}", v).replace("{cv}", v).replace("{السيرة}", v)
-                
-                # Final cleanup: Remove excessive empty lines that might result from removal
-                import re
-                final_msg = re.sub(r'\n{3,}', '\n\n', final_msg).strip()
-                
-                st.info(lbl['sending'].format(n, p))
-                
-                # Call send_message with temp_path
-                ok, log = st.session_state.wa_service.send_message(p, final_msg, attachment_path=temp_path)
-                
-                icon = "✅" if ok else "❌"
-                st.session_state.wa_logs.append(f"[{datetime.now().strftime('%H:%M:%S')}] {icon} {n}: {log}")
-                st.session_state.wa_idx += 1
-                
-                if st.session_state.wa_idx == len(final_targets):
-                    st.session_state.wa_running = False
-                    st.session_state.wa_done = True
-                    # Clean up temp file
-                    if temp_path and os.path.exists(temp_path):
-                        try: os.remove(temp_path)
-                        except: pass
-                    st.balloons()
-                    st.rerun()
+                if st.session_state.wa_idx < len(final_targets):
+                    trg = final_targets[st.session_state.wa_idx]
+                    p, n, v = trg['phone'], trg['name'], trg['cv']
+                    
+                    # Intelligent dynamic replacement for ALL columns
+                    final_msg = msg_body
+                    cv_placeholders = ["{CV}", "{cv}", "{السيرة}", "{" + str(c_cv) + "}"]
+                    
+                    # If CV is empty, remove lines containing CV placeholders
+                    if not v or v.lower() == 'nan':
+                        lines = final_msg.split('\n')
+                        final_lines = []
+                        for line in lines:
+                            if not any(ph in line for ph in cv_placeholders):
+                                final_lines.append(line)
+                        final_msg = '\n'.join(final_lines)
+                    
+                    for key, val in trg.items():
+                        # Support both {Key} and {key} and various Arabic variations
+                        final_msg = final_msg.replace("{" + key + "}", val)
+                        final_msg = final_msg.replace("{" + key.lower() + "}", val)
+                    
+                    # Traditional fallbacks for Name and CV (if placeholders weren't exact match)
+                    final_msg = final_msg.replace("{Name}", n).replace("{name}", n).replace("{الاسم}", n).replace("{CV}", v).replace("{cv}", v).replace("{السيرة}", v)
+                    
+                    # Final cleanup: Remove excessive empty lines that might result from removal
+                    import re
+                    final_msg = re.sub(r'\n{3,}', '\n\n', final_msg).strip()
+                    
+                    st.info(lbl['sending'].format(n, p))
+                    
+                    # Call send_message with temp_path
+                    ok, log = st.session_state.wa_service.send_message(p, final_msg, attachment_path=temp_path)
+                    
+                    # Professional Log Entry (2026 Style) - With Date and Vebose Info
+                    st.session_state.wa_logs.append({
+                        'name': n,
+                        'phone': p,
+                        'time': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                        'status': log if ok else f"فشل ({log})", # More descriptive Arabic feedback
+                        'ok': ok
+                    })
+
+                    # Update history if send was successful
+                    if ok:
+                        st.session_state.wa_history.add(p)
+                        save_wa_history(st.session_state.wa_history)
+
+                    st.session_state.wa_idx += 1
+                    
+                    if st.session_state.wa_idx == len(final_targets):
+                        st.session_state.wa_running = False
+                        st.session_state.wa_done = True
+                        # Clean up temp file
+                        if temp_path and os.path.exists(temp_path):
+                            try: os.remove(temp_path)
+                            except: pass
+                        st.balloons()
+                        st.rerun()
                 else:
                     def format_time(seconds):
                         m, s = divmod(seconds, 60)
@@ -379,18 +509,43 @@ Abu Fahd"""
                 try: os.remove(temp_path)
                 except: pass
 
-        # Logs
+        # 📄 Professional 2026 Log Section
         if st.session_state.wa_logs:
-            log_h, log_del = st.columns([3, 1])
-            with log_h:
-                st.markdown(lbl['log_title'])
-            with log_del:
-                if st.button(lbl['delete_log'], use_container_width=True):
-                    st.session_state.wa_logs = []
-                    st.session_state.wa_done = False
-                    st.rerun()
-            for l in reversed(st.session_state.wa_logs):
-                st.text(l)
+            st.markdown("---")
+            with st.expander(lbl['log_title'], expanded=True):
+                log_h, log_del = st.columns([3, 1])
+                with log_del:
+                    if st.button(lbl['delete_log'], use_container_width=True, key="clear_log_btn"):
+                        st.session_state.wa_logs = []
+                        st.session_state.wa_done = False
+                        st.rerun()
+                
+                # Render logs in reverse (newest first)
+                for entry in reversed(st.session_state.wa_logs):
+                    # Fallback for old string-based logs if any exist during the transition
+                    if isinstance(entry, str):
+                        st.text(entry)
+                        continue
+                        
+                    status_class = "status-success" if entry['ok'] else "status-error"
+                    status_icon = "CHECK" if entry['ok'] else "ERROR" # Simplified icons or text
+                    status_text = entry['status']
+                    
+                    # Modern Luxury Card Rendering
+                    st.markdown(f"""
+                    <div class="log-card">
+                        <div class="log-info">
+                            <div class="log-name">{entry['name']}</div>
+                            <div class="log-phone">📱 {entry['phone']}</div>
+                        </div>
+                        <div class="log-status-group">
+                            <div class="log-status">
+                                <span class="status-badge {status_class}">{status_text}</span>
+                                <span class="log-time">🕒 {entry['time']}</span>
+                            </div>
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)
 
     # Diagnostic
     if status not in ["Connected", "Awaiting Login"]:

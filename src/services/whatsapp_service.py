@@ -178,6 +178,13 @@ class WhatsAppService:
             from selenium.webdriver.common.action_chains import ActionChains
             
             clean_phone = "".join(filter(str.isdigit, str(phone)))
+            
+            # 1. Length Validation (2026 Professional Guard)
+            if len(clean_phone) < 8:
+                return False, "رقم قصير جداً (خطأ)" # Too short
+            if len(clean_phone) > 15:
+                return False, "رقم طويل جداً (زيادة)" # Too long
+            
             # Open the chat window first
             url = f"https://web.whatsapp.com/send?phone={clean_phone}"
             self.driver.get(url)
@@ -191,9 +198,11 @@ class WhatsAppService:
                 ))
             except:
                 # Check for "Phone number shared via url is invalid" popup
-                if "invalid" in self.driver.page_source.lower() or "غير صحيح" in self.driver.page_source:
-                    return False, "Invalid Number"
-                return False, "Load Timeout"
+                # This usually means the number does NOT have a WhatsApp account
+                src = self.driver.page_source.lower()
+                if "invalid" in src or "غير صحيح" in src:
+                    return False, "لا يوجد حساب واتساب (رقم غير مسجل)"
+                return False, "فشل التحميل (تحقق من الاتصال)"
 
             time.sleep(2) # Stability
 

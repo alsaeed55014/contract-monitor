@@ -710,10 +710,64 @@ def get_css():
                 100% { box-shadow: 0 0 20px #FFF, 0 0 40px rgba(212, 175, 55, 0.8); }
             }
 
-            /* 12) Hide Streamlit Form Captions (Press Enter to submit) */
-            [data-testid="stFormSubmitButton"] + div {
-                display: none !important;
+            /* 14) Log Message Cards */
+            .log-card {
+                background: rgba(255, 255, 255, 0.03) !important;
+                border: 1px solid rgba(212, 175, 55, 0.1) !important;
+                border-radius: 12px !important;
+                padding: 12px 15px !important;
+                margin-bottom: 8px !important;
+                display: flex !important;
+                align-items: center !important;
+                justify-content: space-between !important;
+                transition: all 0.3s ease !important;
+                direction: rtl !important;
             }
+            .log-card:hover {
+                background: rgba(212, 175, 55, 0.05) !important;
+                border-color: rgba(212, 175, 55, 0.3) !important;
+                transform: translateX(-5px) !important;
+            }
+            .log-info {
+                display: flex !important;
+                flex-direction: column !important;
+                gap: 2px !important;
+                text-align: right !important;
+            }
+            .log-name {
+                font-weight: 700 !important;
+                color: #FFF !important;
+                font-size: 0.95rem !important;
+            }
+            .log-phone {
+                font-size: 0.8rem !important;
+                color: rgba(212, 175, 55, 0.8) !important;
+            }
+            .log-status-group {
+                display: flex !important;
+                flex-direction: column !important;
+                align-items: flex-start !important;
+                gap: 4px !important;
+            }
+            .log-status {
+                display: flex !important;
+                align-items: center !important;
+                gap: 8px !important;
+                font-size: 0.85rem !important;
+            }
+            .log-time {
+                font-size: 0.75rem !important;
+                color: #888 !important;
+                font-family: 'Inter', sans-serif !important;
+            }
+            .status-badge {
+                padding: 2px 8px !important;
+                border-radius: 6px !important;
+                font-size: 0.75rem !important;
+                font-weight: 600 !important;
+            }
+            .status-success { background: rgba(0, 255, 65, 0.1) !important; color: #00FF41 !important; border: 1px solid rgba(0, 255, 65, 0.2) !important; }
+            .status-error { background: rgba(255, 49, 49, 0.1) !important; color: #FF3131 !important; border: 1px solid rgba(255, 49, 49, 0.2) !important; }
         }
     </style>
     """
