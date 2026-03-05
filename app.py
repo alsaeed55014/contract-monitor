@@ -1574,6 +1574,13 @@ def check_notifications():
         st.session_state.notif_last_cust_count = None
     if 'notif_triggered' not in st.session_state:
         st.session_state.notif_triggered = False
+        
+    # Throttle: Don't check more than once every 10 seconds per rerun
+    now = time.time()
+    if 'last_background_check' in st.session_state:
+        if now - st.session_state.last_background_check < 10:
+            return
+    st.session_state.last_background_check = now
 
     def find_col(df, keywords):
         """Smart column finder - searches for columns containing any of the keywords."""
@@ -1594,21 +1601,15 @@ def check_notifications():
         return val
 
     try:
-        # 1. Check Workers (Main Sheet)
-        df_workers = st.session_state.db.fetch_data()
+        # 1. Check Workers (Main Sheet) - Using NOTIF CACHE
+        df_workers = st.session_state.db.fetch_data(is_notif_check=True)
         current_worker_count = len(df_workers)
-        
-        # Debug: Log column names once
-        if not st.session_state.get('_worker_cols_logged'):
-            print(f"[NOTIF DEBUG] Worker columns: {list(df_workers.columns)}")
-            st.session_state._worker_cols_logged = True
         
         if st.session_state.notif_last_worker_count is not None:
             if current_worker_count > st.session_state.notif_last_worker_count:
                 new_count = current_worker_count - st.session_state.notif_last_worker_count
                 new_rows = df_workers.tail(new_count)
                 
-                # Smart column detection for workers
                 name_col = find_col(df_workers, ['الاسم الكامل', 'الاسم', 'اسم', 'Name', 'name'])
                 nat_col = find_col(df_workers, ['الجنسية', 'جنسية', 'Nationality'])
                 phone_col = find_col(df_workers, ['رقم الهاتف', 'هاتف', 'جوال', 'موبايل', 'Phone', 'phone'])
@@ -1618,51 +1619,37 @@ def check_notifications():
                     nat = safe_val(row, nat_col)
                     phone = safe_val(row, phone_col)
                     
-                    msg = f"👤 {name}\n🌍 {nat}\n📱 {phone}"
                     st.session_state.notifications.append({
                         'title': "🆕 عامل جديد",
-                        'msg': msg,
+                        'msg': f"👤 {name}\n🌍 {nat}\n📱 {phone}",
                         'time': datetime.now().strftime("%H:%M")
                     })
-                    st.toast(f"🆕 عامل جديد: {name} - {nat} - {phone}", icon="🔔")
+                    st.toast(f"🆕 عامل جديد: {name}", icon="🔔")
                 st.session_state.notif_triggered = True
         st.session_state.notif_last_worker_count = current_worker_count
 
-        # 2. Check Customer Requests
-        df_cust = st.session_state.db.fetch_customer_requests()
+        # 2. Check Customer Requests - Using NOTIF CACHE
+        df_cust = st.session_state.db.fetch_customer_requests(is_notif_check=True)
         current_cust_count = len(df_cust)
-        
-        # Debug: Log column names once
-        if not st.session_state.get('_cust_cols_logged'):
-            print(f"[NOTIF DEBUG] Customer columns: {list(df_cust.columns)}")
-            st.session_state._cust_cols_logged = True
         
         if st.session_state.notif_last_cust_count is not None:
             if current_cust_count > st.session_state.notif_last_cust_count:
                 new_count = current_cust_count - st.session_state.notif_last_cust_count
                 new_rows = df_cust.tail(new_count)
                 
-                # Smart column detection for customers
                 company_col = find_col(df_cust, ['الشركة', 'المؤسسة', 'شركة', 'مؤسسة', 'Company', 'company'])
                 phone_col = find_col(df_cust, ['موبيل', 'موبايل', 'هاتف', 'جوال', 'Phone', 'phone'])
-                nat_col = find_col(df_cust, ['الجنسية', 'جنسية', 'Nationality'])
-                loc_col = find_col(df_cust, ['موقع', 'مدينة', 'Location', 'location'])
-                job_col = find_col(df_cust, ['طبيعه', 'طبيعة', 'عمل العامل', 'وظيفة', 'Job', 'job'])
                 
                 for _, row in new_rows.iterrows():
                     company = safe_val(row, company_col)
                     phone = safe_val(row, phone_col)
-                    nationality = safe_val(row, nat_col)
-                    location = safe_val(row, loc_col)
-                    job_type = safe_val(row, job_col)
                     
-                    msg = f"🏢 {company}\n📱 {phone}\n🌍 {nationality}\n📍 {location}\n💼 {job_type}"
                     st.session_state.notifications.append({
                         'title': "🔔 طلب عميل جديد",
-                        'msg': msg,
+                        'msg': f"🏢 {company}\n📱 {phone}",
                         'time': datetime.now().strftime("%H:%M")
                     })
-                    st.toast(f"🔔 طلب جديد: {company} - {phone}", icon="☕")
+                    st.toast(f"🔔 طلب جديد: {company}", icon="☕")
                 st.session_state.notif_triggered = True
         st.session_state.notif_last_cust_count = current_cust_count
 
@@ -1704,6 +1691,38 @@ def render_top_banner():
 </script>
 """, height=0, width=0)
         st.session_state.notif_triggered = False
+
+    # 1.5 Live Monitor (Silent Auto-Refresh every 30 seconds)
+    # This ensures check_notifications() runs periodically even without user interaction
+    st.components.v1.html("""
+<script>
+    if (!window.liveMonitorSet) {
+        window.liveMonitorSet = true;
+        // Search for the hidden heartbeat button and click it every 30s
+        setInterval(function() {
+            var activeEl = window.parent.document.activeElement;
+            var isTyping = activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA');
+            
+            if (!isTyping) {
+                // Look for the heartbeat button inside the document
+                var buttons = window.parent.document.querySelectorAll('button');
+                var heartbeatBtn = null;
+                for (var i = 0; i < buttons.length; i++) {
+                    if (buttons[i].innerText === 'Heartbeat') {
+                        heartbeatBtn = buttons[i];
+                        break;
+                    }
+                }
+                
+                if (heartbeatBtn) {
+                    console.log("[LiveMonitor] Triggering Heartbeat...");
+                    heartbeatBtn.click();
+                }
+            }
+        }, 30000); // 30 seconds interval
+    }
+</script>
+""", height=0, width=0)
 
     # 2. Styling and Content
     if lang == 'ar':
@@ -2025,6 +2044,13 @@ def dashboard():
         if st.button(t("logout", lang), type="primary", use_container_width=True):
             st.session_state.user = None
             st.rerun()
+        
+        # --- Hidden Heartbeat for Live Monitor (Silent Refresh) ---
+        # This button is clicked by JavaScript every 30s to trigger check_notifications()
+        st.markdown('<div id="live-monitor-trigger" style="display:none;">', unsafe_allow_html=True)
+        if st.button("Heartbeat", key="background_heartbeat_btn"):
+            st.rerun()
+        st.markdown('</div>', unsafe_allow_html=True)
         
         # Global Deep Reset Opportunity
         st.sidebar.divider()

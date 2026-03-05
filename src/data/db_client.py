@@ -10,7 +10,8 @@ class DBClient:
     _instance = None
     _data_caches = {}
     _last_fetches = {}
-    CACHE_DURATION = 300  # 5 Minutes
+    CACHE_DURATION = 120  # Reduced to 2 Minutes for better responsiveness
+    NOTIF_CACHE_DURATION = 20  # Short cache for background notification checks
 
     def __new__(cls):
         if cls._instance is None:
@@ -52,7 +53,7 @@ class DBClient:
             self._error_msg = f"Local file auth failed: {e}"
             print(f"[ERROR] {self._error_msg}")
 
-    def fetch_data(self, url=None, force=False, retries=3):
+    def fetch_data(self, url=None, force=False, retries=3, is_notif_check=False):
         """Fetches data from Google Sheets with caching and automatic retries."""
         if url is None:
             url = "https://docs.google.com/spreadsheets/d/1u87sScIve_-xT_jDG56EKFMXegzAxOqwVJCh3Irerrw/edit"
@@ -66,9 +67,11 @@ class DBClient:
         if not hasattr(self, '_last_fetches'): self._last_fetches = {}
 
         # Cache check
+        effective_duration = self.NOTIF_CACHE_DURATION if is_notif_check else self.CACHE_DURATION
+        
         if not force and cache_key in self._data_caches:
-            if (current_time - self._last_fetches.get(last_fetch_key, 0) < self.CACHE_DURATION):
-                print(f"[DEBUG] Cache Hit for {url[:30]}...")
+            if (current_time - self._last_fetches.get(last_fetch_key, 0) < effective_duration):
+                print(f"[DEBUG] Cache Hit ({'Notif' if is_notif_check else 'Main'}) for {url[:30]}...")
                 return self._data_caches[cache_key]
 
         if not self.client:
@@ -120,10 +123,10 @@ class DBClient:
                 print(f"[ERROR] Spreadsheets API Error for {url[:30]}: {e}")
                 raise e
 
-    def fetch_customer_requests(self, force=False):
+    def fetch_customer_requests(self, force=False, is_notif_check=False):
         """Specifically fetches the Customer Requests sheet."""
         url = "https://docs.google.com/spreadsheets/d/1ZlLGXqbFSnKrr2J-PRnxRhxykwrNOgOE6Mb34Zei_FU/edit"
-        return self.fetch_data(url=url, force=force)
+        return self.fetch_data(url=url, force=force, is_notif_check=is_notif_check)
 
     def find_row_by_data(self, worker_name, phone="", url=None):
         """Tries to find the row index by matching name and optionally phone."""
