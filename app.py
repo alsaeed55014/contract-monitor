@@ -1561,7 +1561,7 @@ def login_screen():
         st.markdown('</div>', unsafe_allow_html=True)
 
 def check_notifications():
-    """Checks for new worker entries or customer requests in Google Sheets."""
+    """Checks for new worker entries or customer requests and synchronizes UI data."""
     if 'db' not in st.session_state or not st.session_state.user:
         return
 
@@ -1571,14 +1571,18 @@ def check_notifications():
     if 'notif_last_cust_count' not in st.session_state: st.session_state.notif_last_cust_count = None
     if 'notif_triggered' not in st.session_state: st.session_state.notif_triggered = False
     
-    # UI sync feedback
+    # UI sync feedback timestamp
     st.session_state.last_sync_time = datetime.now().strftime("%H:%M:%S")
 
     def find_col(df, keywords):
+        """Finds column using fuzzy matching and Arabic normalization (ة/ه)."""
         cols = list(df.columns)
+        import re
         for kw in keywords:
+            kw_norm = kw.replace('ة', '[ةه]').replace('ه', '[ةه]')
+            pattern = re.compile(kw_norm, re.IGNORECASE)
             for c in cols:
-                if kw.strip().lower() in str(c).strip().lower():
+                if pattern.search(str(c)):
                     return c
         return None
 
@@ -1589,15 +1593,13 @@ def check_notifications():
         return val
 
     try:
-        # 1. Check Workers (Filling in employee data)
+        # 1. Check Workers
         df_workers = st.session_state.db.fetch_data(is_notif_check=True)
         current_worker_count = len(df_workers)
         
         if st.session_state.notif_last_worker_count is not None:
             if current_worker_count > st.session_state.notif_last_worker_count:
                 new_rows = df_workers.tail(current_worker_count - st.session_state.notif_last_worker_count)
-                
-                # Requested Fields: Full Name, Nationality, Phone Number, Which job are you looking for, Gender
                 c_name = find_col(df_workers, ['Full Name', 'الاسم'])
                 c_nat = find_col(df_workers, ['Nationality', 'الجنسية'])
                 c_phone = find_col(df_workers, ['Phone Number', 'رقم الهاتف', 'هاتف'])
@@ -1606,29 +1608,24 @@ def check_notifications():
 
                 for _, row in new_rows.iterrows():
                     name = safe_val(row, c_name)
-                    nat = safe_val(row, c_nat)
-                    phone = safe_val(row, c_phone)
-                    job = safe_val(row, c_job)
-                    gender = safe_val(row, c_gender)
-                    
                     st.session_state.notifications.append({
                         'title': "🆕 تسجيل عامل جديد",
-                        'msg': f"👤 {name}\n🌍 {nat}\n📱 {phone}\n💼 {job}\n⚧ {gender}",
+                        'msg': f"👤 {name}\n🌍 {safe_val(row, c_nat)}\n📱 {safe_val(row, c_phone)}\n💼 {safe_val(row, c_job)}\n⚧ {safe_val(row, c_gender)}",
                         'time': datetime.now().strftime("%H:%M")
                     })
                     st.toast(f"🆕 عامل جديد: {name}", icon="🔔")
                     st.session_state.notif_triggered = True
+                    # Force main cache update so the table shows the new worker immediately
+                    st.session_state.db.fetch_data(force=True)
         st.session_state.notif_last_worker_count = current_worker_count
 
-        # 2. Check Customer Requests (استقطاب موظفين)
+        # 2. Check Customer Requests
         df_cust = st.session_state.db.fetch_customer_requests(is_notif_check=True)
         current_cust_count = len(df_cust)
         
         if st.session_state.notif_last_cust_count is not None:
             if current_cust_count > st.session_state.notif_last_cust_count:
                 new_rows = df_cust.tail(current_cust_count - st.session_state.notif_last_cust_count)
-                
-                # Requested Fields: اسم الشركه او المؤسسة, رقم الموبيل, أذكر الفئة المطلوبة, الجنسية المطلوبة, موقع العمل
                 c_comp = find_col(df_cust, ['الشركة', 'اسم الشركه', 'المؤسسة', 'Company'])
                 c_phone = find_col(df_cust, ['رقم الموبيل', 'جوال', 'هاتف', 'Mobile', 'Phone'])
                 c_role = find_col(df_cust, ['الفئة المطلوبة', 'نوع العمل', 'Role'])
@@ -1637,18 +1634,15 @@ def check_notifications():
                 
                 for _, row in new_rows.iterrows():
                     comp = safe_val(row, c_comp)
-                    phone = safe_val(row, c_phone)
-                    role = safe_val(row, c_role)
-                    nat = safe_val(row, c_nat)
-                    loc = safe_val(row, c_loc)
-                    
                     st.session_state.notifications.append({
                         'title': "🔔 طلب عميل جديد",
-                        'msg': f"🏢 {comp}\n📱 {phone}\n💪 {role}\n🌍 {nat}\n📍 {loc}",
+                        'msg': f"🏢 {comp}\n📱 {safe_val(row, c_phone)}\n💪 {safe_val(row, c_role)}\n🌍 {safe_val(row, c_nat)}\n📍 {safe_val(row, c_loc)}",
                         'time': datetime.now().strftime("%H:%M")
                     })
                     st.toast(f"🔔 طلب جديد: {comp}", icon="☕")
                     st.session_state.notif_triggered = True 
+                    # Force main cache update so the table shows the new request immediately
+                    st.session_state.db.fetch_customer_requests(force=True)
         st.session_state.notif_last_cust_count = current_cust_count
 
     except Exception as e:
@@ -1667,8 +1661,11 @@ def render_top_banner():
 <script>
 (function(){
     try {
-        var ctx = new (window.AudioContext || window.webkitAudioContext)();
-        function playBell(freq, startTime, dur) {
+        var AudioContext = window.AudioContext || window.webkitAudioContext;
+        var ctx = new AudioContext();
+        
+        async function playBell(freq, startTime, dur) {
+            if (ctx.state === 'suspended') await ctx.resume();
             var osc = ctx.createOscillator();
             var gain = ctx.createGain();
             osc.connect(gain);
@@ -1680,7 +1677,6 @@ def render_top_banner():
             osc.start(ctx.currentTime + startTime);
             osc.stop(ctx.currentTime + startTime + dur);
         }
-        // Play 3 bell chimes with rising pitch
         playBell(830, 0.0, 0.6);
         playBell(1050, 0.3, 0.6);
         playBell(1320, 0.6, 0.8);
@@ -4100,13 +4096,10 @@ def render_customer_requests_content():
         run_match = st.button(match_btn_label, key="run_matcher_btn", use_container_width=True, type="primary")
 
     with c_m2:
-        # Deletion logic
-        del_label = "🗑️ حذف هذا الطلب" if lang == "ar" else "🗑️ Delete this Request"
-        confirm_label = "⚠️ تأكيد الحذف النهائي" if lang == "ar" else "⚠️ Confirm Perm. Deletion"
-        
-        if st.session_state.get(f"confirm_delete_{selected_idx}"):
-            if st.button(confirm_label, key=f"btn_confirm_del_{selected_idx}", use_container_width=True):
-                # Execute deletion
+        # Modern Deletion UI using Popover
+        with st.popover("🗑️ " + ("حذف هذا الطلب" if lang == "ar" else "Delete this Request"), use_container_width=True):
+            st.warning("⚠️ " + ("هل أنت متأكد من حذف هذا الطلب نهائياً؟" if lang == "ar" else "Are you sure you want to delete this permanently?"))
+            if st.button("نعم، حذف", key=f"btn_confirm_del_{selected_idx}", use_container_width=True, type="primary"):
                 sheet_url = "https://docs.google.com/spreadsheets/d/1ZlLGXqbFSnKrr2J-PRnxRhxykwrNOgOE6Mb34Zei_FU/edit"
                 row_to_del = selected_row.get("__sheet_row")
                 if row_to_del:
@@ -4114,18 +4107,12 @@ def render_customer_requests_content():
                         success = st.session_state.db.delete_row(row_to_del, url=sheet_url)
                         if success:
                             st.success("تم الحذف بنجاح" if lang == "ar" else "Deleted successfully")
-                            st.session_state.pop(f"confirm_delete_{selected_idx}")
+                            # Force database refresh after deletion
+                            st.session_state.db.fetch_customer_requests(force=True)
                             time.sleep(1)
                             st.rerun()
                         else:
                             st.error("فشل في الحذف" if lang == "ar" else "Failed to delete")
-            if st.button("إلغاء" if lang == "ar" else "Cancel", key=f"btn_cancel_del_{selected_idx}", use_container_width=True):
-                st.session_state[f"confirm_delete_{selected_idx}"] = False
-                st.rerun()
-        else:
-            if st.button(del_label, key=f"btn_del_req_{selected_idx}", use_container_width=True):
-                st.session_state[f"confirm_delete_{selected_idx}"] = True
-                st.rerun()
 
     if run_match:
         with st.spinner("جارٍ البحث عن مرشحين مطابقين..." if lang == "ar" else "Searching for matching candidates..."):
