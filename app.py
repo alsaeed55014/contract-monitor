@@ -1608,7 +1608,7 @@ def dashboard():
             st.rerun()
         
         # WhatsApp Marketing 2026 Button
-        if st.button("💬 " + t("whatsapp_marketing", lang), use_container_width=True):
+        if st.button("📱 " + t("whatsapp_marketing", lang), use_container_width=True):
             st.session_state.page = "whatsapp_marketing"
             st.rerun()
         
