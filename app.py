@@ -7,6 +7,7 @@ import hashlib
 import time
 from datetime import datetime, timedelta
 import base64
+import re
 
 # 1. Ensure project root is in path (Robust Injection)
 import os
