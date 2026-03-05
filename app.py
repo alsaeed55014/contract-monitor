@@ -375,23 +375,34 @@ def get_css():
             border: 1px solid var(--luxury-gold) !important;
         }
 
-        /* 6) Table & Data Presentation - WHITE NEON STYLE */
-        [data-testid="stDataFrame"], [data-testid="stTable"], .neon-white-table, .streamlit-expanderContent {
+        /* 6) Table & Data Presentation - WHITE NEON STYLE (For DataFrames) */
+        [data-testid="stDataFrame"], [data-testid="stTable"], .neon-white-table {
             background: rgba(255, 255, 255, 1) !important;
             border: 2px solid #FFFFFF !important;
             border-radius: 12px !important;
-            box-shadow: 0 0 30px rgba(255, 255, 255, 1), 
+            box-shadow: 0 0 30px rgba(255, 255, 255, 0.8), 
                         inset 0 0 15px rgba(255, 255, 255, 0.5) !important;
             margin: 20px 0 !important;
             color: #000000 !important;
-            transition: all 0.3s ease !important;
         }
         
-        /* Force Black Text for EVERYTHING inside white neon containers */
-        [data-testid="stDataFrame"] *, [data-testid="stTable"] *, .neon-white-table *, .streamlit-expanderContent *,
-        .streamlit-expanderContent p, .streamlit-expanderContent h1, .streamlit-expanderContent h2, .streamlit-expanderContent h3 {
-            color: #000000 !important;
+        [data-testid="stDataFrame"] *, [data-testid="stTable"] *, .neon-white-table * {
+            color: #000000; /* Removed !important to allow selective overrides */
             font-weight: 500 !important;
+        }
+
+        /* FIX: White Icons for Data Table Toolbars (Fullscreen, Search, Download) */
+        [data-testid="stElementToolbar"] button, 
+        [data-testid="stDataFrame"] [data-testid="stElementToolbar"] svg,
+        [data-testid="stTable"] [data-testid="stElementToolbar"] svg {
+            color: #FFFFFF !important;
+            fill: #FFFFFF !important;
+            filter: drop-shadow(0 0 5px rgba(255, 255, 255, 0.5)) !important;
+        }
+        
+        [data-testid="stElementToolbar"] button:hover {
+            background-color: rgba(255, 255, 255, 0.1) !important;
+            border-radius: 50% !important;
         }
         
         /* Header specific for dataframes to handle high brightness */
@@ -401,10 +412,10 @@ def get_css():
             font-weight: 700 !important;
         }
 
-        /* Status Column Glows - Adjusted for White Neon contrast */
-        .glow-green { color: #008037 !important; text-shadow: none !important; font-weight: 700 !important; }
-        .glow-red { color: #D32F2F !important; text-shadow: none !important; font-weight: 700 !important; }
-        .glow-orange { color: #E65100 !important; text-shadow: none !important; font-weight: 700 !important; }
+        /* Status Column Glows - Enhanced for 2026 High-Tech Look */
+        .glow-green { color: #00FF66 !important; text-shadow: 0 0 10px rgba(0, 255, 102, 0.4) !important; font-weight: 800 !important; }
+        .glow-red { color: #FF3333 !important; text-shadow: 0 0 10px rgba(255, 51, 51, 0.4) !important; font-weight: 800 !important; }
+        .glow-orange { color: #FF9900 !important; text-shadow: 0 0 10px rgba(255, 153, 0, 0.4) !important; font-weight: 800 !important; }
 
         /* 7) Sidebar Professionalism */
         section[data-testid="stSidebar"] {
@@ -432,19 +443,60 @@ def get_css():
             letter-spacing: 1px;
         }
 
-        /* 8) Expander Luxury (Filters) */
-        .streamlit-expanderHeader {
-            background-color: rgba(255, 255, 255, 0.03) !important;
-            border: 1px solid rgba(212, 175, 55, 0.1) !important;
-            border-radius: 16px !important;
-            padding: 1rem !important;
-            font-weight: 600 !important;
-            color: var(--luxury-gold) !important;
-            transition: all 0.3s ease;
+        /* 8) Expander Luxury - UNIVERSAL WHITE NEON FRAME STYLE */
+        .stExpander {
+            background-color: rgba(10, 14, 26, 0.6) !important;
+            border: 2px solid rgba(255, 255, 255, 0.5) !important;
+            border-radius: 20px !important;
+            margin-bottom: 25px !important;
+            animation: neonWhitePulse 3s ease-in-out infinite alternate !important;
+            box-shadow: 0 0 15px rgba(255, 255, 255, 0.2) !important;
+            transition: all 0.4s ease !important;
+            overflow: hidden !important;
         }
-        .streamlit-expanderHeader:hover {
-            border-color: var(--luxury-gold) !important;
+        
+        .stExpander:hover {
+            border-color: rgba(255, 255, 255, 0.9) !important;
+            box-shadow: 0 0 30px rgba(255, 255, 255, 0.6) !important;
+            transform: translateY(-2px);
+        }
+
+        /* Target the Header/Summary Area */
+        .stExpander > details > summary {
             background-color: rgba(255, 255, 255, 0.05) !important;
+            color: #FFFFFF !important;
+            padding: 1.2rem 1.5rem !important;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
+        }
+        
+        .stExpander > details > summary:hover {
+            background-color: rgba(255, 255, 255, 0.1) !important;
+        }
+
+        /* Target the internal icons and labels */
+        .stExpander summary span, .stExpander summary svg {
+            color: #FFFFFF !important;
+            fill: #FFFFFF !important;
+        }
+
+        /* Ensure internal content is appropriately styled */
+        .stExpander > details > div[role="region"] {
+            border: none !important;
+            background: transparent !important;
+            padding: 20px !important;
+        }
+
+        /* Re-refine filter labels for maximum white neon impact */
+        .premium-filter-label {
+            color: #FFFFFF !important;
+            font-weight: 800 !important;
+            text-shadow: 0 0 15px rgba(255, 255, 255, 0.8) !important;
+            margin: 15px 0 10px 0 !important;
+            font-size: 1.15rem !important;
+            border-right: 5px solid #FFFFFF !important;
+            padding-right: 12px !important;
+            letter-spacing: 1px;
+            display: inline-block;
         }
 
         /* Signature Neon (Standardized White-Gold) */
@@ -479,15 +531,44 @@ def get_css():
             text-align: center;
         }
         
-        /* Metric Styling */
-        .metric-container {
-            background: rgba(255, 255, 255, 0.02) !important;
-            border-radius: 20px !important;
-            border: 1px solid rgba(212, 175, 55, 0.05) !important;
-            padding: 1.5rem !important;
-            transition: transform 0.3s ease !important;
+        /* Metric Styling with White Neon Glow */
+        @keyframes neonWhitePulse {
+            0% { 
+                box-shadow: 0 0 10px rgba(255, 255, 255, 0.4), 0 0 20px rgba(255, 255, 255, 0.15), inset 0 0 10px rgba(255, 255, 255, 0.05);
+                border-color: rgba(255, 255, 255, 0.5);
+            }
+            100% { 
+                box-shadow: 0 0 20px rgba(255, 255, 255, 0.7), 0 0 40px rgba(255, 255, 255, 0.35), inset 0 0 20px rgba(255, 255, 255, 0.1);
+                border-color: rgba(255, 255, 255, 0.8);
+            }
         }
-        .metric-container:hover { transform: scale(1.05); }
+
+        .metric-container {
+            background: rgba(10, 14, 26, 0.7) !important;
+            border-radius: 20px !important;
+            border: 1.5px solid rgba(255, 255, 255, 0.4) !important;
+            padding: 1.8rem 1.5rem !important;
+            transition: all 0.3s ease !important;
+            animation: neonWhitePulse 3s ease-in-out infinite alternate;
+            text-align: center;
+        }
+        .metric-container:hover { 
+            transform: scale(1.05) translateY(-5px);
+            border-color: #FFFFFF !important;
+            box-shadow: 0 0 30px rgba(255, 255, 255, 0.9), 0 0 60px rgba(255, 255, 255, 0.4) !important;
+        }
+
+        .metric-label {
+            font-size: 0.95rem;
+            color: rgba(255, 255, 255, 0.6);
+            margin-bottom: 8px;
+            font-weight: 500;
+        }
+        .metric-value {
+            font-size: 2.2rem;
+            font-weight: 800;
+            line-height: 1;
+        }
 
         /* 9) Modern 2026 Premium Loader */
         .loader-wrapper {
@@ -3480,15 +3561,36 @@ def render_order_processing_content():
             
         # --- Single Customer Section ---
         with st.container():
-            # Header
+            # Header with White Neon Glow Frame integrated
             user_role = st.session_state.user.get("role")
             display_title = f"🏢 {company_val}" if user_role != "viewer" else "🏢 " + ("طلب عميل" if lang == 'ar' else f"Customer Request")
+            
+            # Start Neon Frame and Header
             st.markdown(f"""
-                <div style="background: linear-gradient(90deg, rgba(212,175,55,0.15), transparent); 
-                            padding: 10px 20px; border-radius: 10px; border-left: 5px solid #D4AF37; margin: 15px 0 5px 0;">
-                    <h3 style="color: #D4AF37; margin: 0; font-family: 'Tajawal', sans-serif;">{display_title} <span style="font-size: 0.8rem; color: #888;">#{idx+1}</span></h3>
-                </div>
-            """, unsafe_allow_html=True)
+<style>
+@keyframes neonWhitePulseCard {{
+    0% {{ box-shadow: 0 0 10px rgba(255, 255, 255, 0.3), 0 0 20px rgba(255, 255, 255, 0.1); }}
+    100% {{ box-shadow: 0 0 20px rgba(255, 255, 255, 0.6), 0 0 40px rgba(255, 255, 255, 0.3); }}
+}}
+.neon-wrapper-card {{
+    border: 1.5px solid rgba(255, 255, 255, 0.6);
+    border-radius: 18px;
+    padding: 15px;
+    margin: 15px 0;
+    background: rgba(10, 14, 26, 0.6);
+    animation: neonWhitePulseCard 3s ease-in-out infinite alternate;
+    direction: rtl;
+}}
+</style>
+<div class="neon-wrapper-card">
+    <div style="background: linear-gradient(90deg, rgba(255,255,255,0.1), transparent); 
+                padding: 12px 20px; border-radius: 12px; border-right: 5px solid #FFFFFF; margin: 0 0 15px 0;
+                box-shadow: 0 0 15px rgba(255,255,255,0.2);">
+        <h3 style="color: #FFFFFF; margin: 0; font-family: 'Tajawal', sans-serif; text-shadow: 0 0 10px rgba(255,255,255,0.5);">
+            {display_title} <span style="font-size: 0.8rem; color: #888;">#{idx+1}</span>
+        </h3>
+    </div>
+""", unsafe_allow_html=True)
             
             # Info Grid (Flexbox) - Removing all indentation from strings to avoid markdown code-block triggers
             info_html = '<div style="display: flex; flex-wrap: wrap; gap: 0; width: 100%;">'
@@ -3572,6 +3674,9 @@ def render_order_processing_content():
                 else:
                     st.markdown('<div style="height: 10px;"></div>', unsafe_allow_html=True)
                     st.caption("🔒 وضع المشاهد" if lang == 'ar' else "🔒 Viewer Mode")
+
+            # Close the White Neon Glow Frame integrated
+            st.markdown("</div>", unsafe_allow_html=True)
 
             # --- Workers ---
             matches, scores, city_count = find_matching_workers(customer_row)
@@ -3886,7 +3991,7 @@ def render_customer_requests_content():
     for int_col in ["__sheet_row", "__sheet_row_backup"]:
         if int_col in res_display.columns:
             res_display = res_display.drop(columns=[int_col])
-            
+    # White Neon Glow Frame around Customer Requests Table
     st.dataframe(
         style_df(res_display), 
         use_container_width=True,
