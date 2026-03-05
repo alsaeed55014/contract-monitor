@@ -375,17 +375,36 @@ def get_css():
             border: 1px solid var(--luxury-gold) !important;
         }
 
-        /* 6) Table & Data Presentation */
-        [data-testid="stDataFrame"] {
-            background: rgba(20, 20, 20, 0.5) !important;
-            border: 1px solid rgba(212, 175, 55, 0.1) !important;
-            margin: 10px 0 !important;
+        /* 6) Table & Data Presentation - WHITE NEON STYLE */
+        [data-testid="stDataFrame"], [data-testid="stTable"], .neon-white-table, .streamlit-expanderContent {
+            background: rgba(255, 255, 255, 1) !important;
+            border: 2px solid #FFFFFF !important;
+            border-radius: 12px !important;
+            box-shadow: 0 0 30px rgba(255, 255, 255, 1), 
+                        inset 0 0 15px rgba(255, 255, 255, 0.5) !important;
+            margin: 20px 0 !important;
+            color: #000000 !important;
+            transition: all 0.3s ease !important;
+        }
+        
+        /* Force Black Text for EVERYTHING inside white neon containers */
+        [data-testid="stDataFrame"] *, [data-testid="stTable"] *, .neon-white-table *, .streamlit-expanderContent *,
+        .streamlit-expanderContent p, .streamlit-expanderContent h1, .streamlit-expanderContent h2, .streamlit-expanderContent h3 {
+            color: #000000 !important;
+            font-weight: 500 !important;
+        }
+        
+        /* Header specific for dataframes to handle high brightness */
+        [data-testid="stDataFrame"] div[role="columnheader"] {
+            background-color: rgba(240, 240, 240, 0.9) !important;
+            color: #000000 !important;
+            font-weight: 700 !important;
         }
 
-        /* Status Column Glows */
-        .glow-green { color: var(--accent-green) !important; text-shadow: 0 0 10px var(--accent-green); }
-        .glow-red { color: #FF3131 !important; text-shadow: 0 0 10px #FF3131; }
-        .glow-orange { color: #FF9100 !important; text-shadow: 0 0 10px #FF9100; }
+        /* Status Column Glows - Adjusted for White Neon contrast */
+        .glow-green { color: #008037 !important; text-shadow: none !important; font-weight: 700 !important; }
+        .glow-red { color: #D32F2F !important; text-shadow: none !important; font-weight: 700 !important; }
+        .glow-orange { color: #E65100 !important; text-shadow: none !important; font-weight: 700 !important; }
 
         /* 7) Sidebar Professionalism */
         section[data-testid="stSidebar"] {

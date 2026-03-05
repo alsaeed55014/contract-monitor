@@ -13,14 +13,19 @@ def format_phone_number(phone):
     if not phone:
         return None
     
-    # 1. Clean all separators (spaces, dashes, etc.)
-    clean = re.sub(r'[^\d+]', '', str(phone))
+    # 1. Clean characters: Keep ONLY digits. (Handle leading plus separately)
+    has_leading_plus = str(phone).strip().startswith('+')
+    clean = re.sub(r'[^\d]', '', str(phone))
     
-    # 2. If it has + or 00, it's already international
-    if clean.startswith('+'):
-        return clean if len(clean) > 8 else None
-    if clean.startswith('00'):
-        return '+' + clean[2:]
+    if not clean: return None
+    
+    # 2. Re-attach plus if it was there or handle 00
+    if has_leading_plus:
+        s = clean
+        return '+' + s if len(s) > 8 else None
+    if str(phone).strip().startswith('00'):
+        s = clean
+        return '+' + s if len(s) > 8 else None
     
     s = clean
     

@@ -79,8 +79,8 @@ def render_whatsapp_page():
         'attached': "📎 مرفق: {} ({} KB)" if is_ar else "📎 Attached: {} ({} KB)",
         'delay': "مهلة الإرسال (ثانية)" if is_ar else "Send delay (seconds)",
         'stop': "🛑 إيقاف" if is_ar else "🛑 Stop",
-        'sent_done': "تم الارسال ✅" if is_ar else "Sent ✅",
-        'send': "📨 ارسال ({})" if is_ar else "📨 Send ({})",
+        'sent_done': "تم الإرسال ✅" if is_ar else "Sent ✅",
+        'send': "📨 إرسال ({})" if is_ar else "📨 Send ({})",
         'sending': "⏳ إرسال إلى: {} ({})..." if is_ar else "⏳ Sending to: {} ({})...",
         'log_title': "#### 📄 سجل الإرسال" if is_ar else "#### 📄 Send Log",
         'delete_log': "🗑️ مسح السجل" if is_ar else "🗑️ Clear Log",
@@ -244,6 +244,7 @@ def render_whatsapp_page():
             if new_targets:
                 st.session_state.wa_review_targets = new_targets
                 st.session_state.wa_done = False
+                st.rerun()
 
         # --- 📋 Review Contacts Table ---
         if st.session_state.wa_review_targets:
@@ -323,11 +324,8 @@ def render_whatsapp_page():
                                 st.session_state.wa_data = st.session_state.wa_data.drop(deleted_item['idx'])
                         st.rerun()
             
-            final_targets = pending_list
-            st.markdown(f"---")
-            st.markdown(f"**{lbl['total_ready'].format(len(st.session_state.wa_review_targets))} | {lbl['total_pending'].format(len(final_targets))}**")
-        else:
-            final_targets = []
+        # Consolidate Pending Targets for the rest of the application
+        final_targets = [t for t in st.session_state.wa_review_targets if not t['is_sent']]
 
         
         # LTR for English messages
@@ -396,37 +394,69 @@ Abu Fahd"""
                         st.session_state.wa_idx = 0
                         st.session_state.wa_done = False
                         st.session_state.wa_sent_fingerprint = current_fp
+                        # CRITICAL: Store a STABLE copy of targets to avoid "shrinking list" bug
+                        st.session_state.wa_active_targets = list(final_targets)
                         st.rerun()
 
-        if st.session_state.wa_running and final_targets:
-            # Save attachment to temp file if exists
-            temp_path = None
-            if attachment:
+        if st.session_state.wa_running and st.session_state.get('wa_active_targets'):
+            active_targets = st.session_state.wa_active_targets
+            
+            # Save attachment to temp file ONCE at the start of the batch
+            if attachment and not st.session_state.get('wa_temp_path'):
                 import tempfile
                 suffix = os.path.splitext(attachment.name)[1]
                 t_file = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
                 t_file.write(attachment.getvalue())
                 t_file.close()
-                temp_path = t_file.name
-
-                st.markdown(f"""
-                <div style="background: rgba(212, 175, 55, 0.05); padding: 15px; border-radius: 15px; border: 1px solid rgba(212, 175, 55, 0.2); margin-bottom: 20px;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                        <span style="color: #00FF41; font-weight: 700; font-size: 1.1rem;">✅ {lbl['sent_count']}: {st.session_state.wa_idx}</span>
-                        <span style="color: #D4AF37; font-weight: 700; font-size: 1.1rem;">⌛ {lbl['remaining_count']}: {len(final_targets) - st.session_state.wa_idx}</span>
-                    </div>
+                st.session_state.wa_temp_path = t_file.name
+            
+            # Status Card
+            st.markdown(f"""
+            <div style="background: rgba(212, 175, 55, 0.05); padding: 15px; border-radius: 15px; border: 1px solid rgba(212, 175, 55, 0.2); margin-bottom: 20px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                    <span style="color: #00FF41; font-weight: 700; font-size: 1.1rem;">✅ {lbl['sent_count']}: {st.session_state.wa_idx}</span>
+                    <span style="color: #D4AF37; font-weight: 700; font-size: 1.1rem;">⌛ {lbl['remaining_count']}: {len(active_targets) - st.session_state.wa_idx}</span>
                 </div>
-                """, unsafe_allow_html=True)
-                
-                st.progress(st.session_state.wa_idx / len(final_targets))
-                
-                if st.session_state.wa_idx < len(final_targets):
-                    trg = final_targets[st.session_state.wa_idx]
+            </div>
+            """, unsafe_allow_html=True)
+            
+            st.progress(st.session_state.wa_idx / len(active_targets))
+            
+            if st.session_state.wa_idx < len(active_targets):
+                # --- ⏳ DELAY & COUNTDOWN (Before each message EXCEPT the first one) ---
+                if st.session_state.wa_idx > 0:
+                    def format_time(seconds):
+                        m, s = divmod(seconds, 60)
+                        if m > 0:
+                            return f"{m} دقيقة و {s} ثانية" if is_ar else f"{m}m {s}s"
+                        return f"{s} ثانية" if is_ar else f"{s}s"
+
+                    wait_ph = st.empty()
+                    is_batch_pause = batch_size > 0 and st.session_state.wa_idx % batch_size == 0
+                    current_delay = batch_delay if is_batch_pause else delay
+                    delay_lbl = lbl['pausing'] if is_batch_pause else lbl['next_msg_in']
+                    
+                    for i in range(current_delay, 0, -1):
+                        if not st.session_state.wa_running: break
+                        wait_ph.warning(delay_lbl.format(format_time(i))) if is_batch_pause else wait_ph.info(delay_lbl.format(format_time(i)))
+                        time.sleep(1)
+                    wait_ph.empty()
+
+                if st.session_state.wa_running:
+                    trg = active_targets[st.session_state.wa_idx]
                     p, n, v = trg['phone'], trg['name'], trg['cv']
                     
                     # Intelligent dynamic replacement for ALL columns
                     final_msg = msg_body
-                    cv_placeholders = ["{CV}", "{cv}", "{السيرة}", "{" + str(c_cv) + "}"]
+                    
+                    # Check for CV placeholder variations
+                    cv_placeholders = ["{CV}", "{cv}", "{السيرة}"]
+                    # Attempt to find what the CV column was named in the current session
+                    if 'wa_review_targets' in st.session_state and st.session_state.wa_review_targets:
+                        first_trg = st.session_state.wa_review_targets[0]
+                        for k in first_trg.keys():
+                            if any(x in k.lower() for x in ["سيرة", "cv", "resume", "link"]):
+                                cv_placeholders.append("{" + k + "}")
                     
                     # If CV is empty, remove lines containing CV placeholders
                     if not v or v.lower() == 'nan':
@@ -438,76 +468,48 @@ Abu Fahd"""
                         final_msg = '\n'.join(final_lines)
                     
                     for key, val in trg.items():
-                        # Support both {Key} and {key} and various Arabic variations
-                        final_msg = final_msg.replace("{" + key + "}", val)
-                        final_msg = final_msg.replace("{" + key.lower() + "}", val)
+                        final_msg = final_msg.replace("{" + str(key) + "}", str(val))
+                        final_msg = final_msg.replace("{" + str(key).lower() + "}", str(val))
                     
-                    # Traditional fallbacks for Name and CV (if placeholders weren't exact match)
                     final_msg = final_msg.replace("{Name}", n).replace("{name}", n).replace("{الاسم}", n).replace("{CV}", v).replace("{cv}", v).replace("{السيرة}", v)
                     
-                    # Final cleanup: Remove excessive empty lines that might result from removal
                     import re
                     final_msg = re.sub(r'\n{3,}', '\n\n', final_msg).strip()
                     
                     st.info(lbl['sending'].format(n, p))
                     
-                    # Call send_message with temp_path
+                    # Call send_message with stored temp_path
+                    temp_path = st.session_state.get('wa_temp_path')
                     ok, log = st.session_state.wa_service.send_message(p, final_msg, attachment_path=temp_path)
                     
-                    # Professional Log Entry (2026 Style) - With Date and Vebose Info
                     st.session_state.wa_logs.append({
-                        'name': n,
-                        'phone': p,
+                        'name': n, 'phone': p,
                         'time': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                        'status': log if ok else f"فشل ({log})", # More descriptive Arabic feedback
-                        'ok': ok
+                        'status': log if ok else f"فشل ({log})", 'ok': ok
                     })
 
-                    # Update history if send was successful
                     if ok:
                         st.session_state.wa_history.add(p)
                         save_wa_history(st.session_state.wa_history)
+                        for t in st.session_state.wa_review_targets:
+                            if t['phone'] == p: t['is_sent'] = True
 
                     st.session_state.wa_idx += 1
                     
-                    if st.session_state.wa_idx == len(final_targets):
+                    if st.session_state.wa_idx == len(active_targets):
                         st.session_state.wa_running = False
                         st.session_state.wa_done = True
-                        # Clean up temp file
-                        if temp_path and os.path.exists(temp_path):
-                            try: os.remove(temp_path)
-                            except: pass
                         st.balloons()
-                        st.rerun()
-                else:
-                    def format_time(seconds):
-                        m, s = divmod(seconds, 60)
-                        if m > 0:
-                            return f"{m} دقيقة و {s} ثانية" if is_ar else f"{m}m {s}s"
-                        return f"{s} ثانية" if is_ar else f"{s}s"
-
-                    if batch_size > 0 and st.session_state.wa_idx % batch_size == 0:
-                        wait_ph = st.empty()
-                        for i in range(batch_delay, 0, -1):
-                            if not st.session_state.wa_running: break
-                            wait_ph.warning(lbl['pausing'].format(format_time(i)))
-                            time.sleep(1)
-                        wait_ph.empty()
-                    else:
-                        wait_ph = st.empty()
-                        for i in range(delay, 0, -1):
-                            if not st.session_state.wa_running: break
-                            wait_ph.info(lbl['next_msg_in'].format(format_time(i)))
-                            time.sleep(1)
-                        wait_ph.empty()
                     
-                    if st.session_state.wa_running:
-                        st.rerun()
+                    st.rerun()
             
-            # Clean up temp file if stopped or finished early
-            if not st.session_state.wa_running and temp_path and os.path.exists(temp_path):
-                try: os.remove(temp_path)
-                except: pass
+            # Clean up temp file ONLY when done or stopped
+            if not st.session_state.wa_running and st.session_state.get('wa_temp_path'):
+                tp = st.session_state.get('wa_temp_path')
+                if os.path.exists(tp):
+                    try: os.remove(tp)
+                    except: pass
+                st.session_state.wa_temp_path = None
 
         # 📄 Professional 2026 Log Section
         if st.session_state.wa_logs:
