@@ -720,25 +720,25 @@ def get_css():
 # --- Icon Mappings ---
 FLAG_MAP = {
     # Arabic
-    "هندي": "🇮🇳", "هندية": "🇮🇳", "الهند": "🇮🇳",
-    "فلبيني": "🇵🇭", "فلبينية": "🇵🇭", "الفلبين": "🇵🇭",
-    "نيبالي": "🇳🇵", "نيبالية": "🇳🇵", "نيبال": "🇳🇵",
-    "بنجلاديشي": "🇧🇩", "بنجالية": "🇧🇩", "بنجلاديش": "🇧🇩", "بنقالي": "🇧🇩",
-    "باكستاني": "🇵🇰", "باكستانية": "🇵🇰", "باكستان": "🇵🇰",
-    "مصري": "🇪🇬", "مصرية": "🇪🇬", "مصر": "🇪🇬",
-    "سوداني": "🇸🇩", "سودانية": "🇸🇩", "السودان": "🇸🇩",
-    "سيريلانكي": "🇱🇰", "سيريلانكية": "🇱🇰", "سيريلانكا": "🇱🇰",
-    "كيني": "🇰🇪", "كينية": "🇰🇪", "كينيا": "🇰🇪",
-    "اوغندي": "🇺🇬", "اوغندية": "🇺🇬", "اوغندا": "🇺🇬",
-    "اثيوبي": "🇪🇹", "اثيوبية": "🇪🇹", "اثيوبيا": "🇪🇹",
-    "مغربي": "🇲🇦", "مغربية": "🇲🇦", "المغرب": "🇲🇦",
-    "يمني": "🇾🇪", "يمنية": "🇾🇪", "اليمن": "🇾🇪",
+    "هندي": "in", "هندية": "in", "الهند": "in",
+    "فلبيني": "ph", "فلبينية": "ph", "الفلبين": "ph",
+    "نيبالي": "np", "نيبالية": "np", "نيبال": "np",
+    "بنجلاديشي": "bd", "بنجالية": "bd", "بنجلاديش": "bd", "بنقالي": "bd",
+    "باكستاني": "pk", "باكستانية": "pk", "باكستان": "pk",
+    "مصري": "eg", "مصرية": "eg", "مصر": "eg",
+    "سوداني": "sd", "سودانية": "sd", "السودان": "sd",
+    "سيريلانكي": "lk", "سيريلانكية": "lk", "سيريلانكا": "lk",
+    "كيني": "ke", "كينية": "ke", "كينيا": "ke",
+    "اوغندي": "ug", "اوغندية": "ug", "اوغندا": "ug",
+    "اثيوبي": "et", "اثيوبية": "et", "اثيوبيا": "et",
+    "مغربي": "ma", "مغربية": "ma", "المغرب": "ma",
+    "يمني": "ye", "يمنية": "ye", "اليمن": "ye",
     # English
-    "indian": "🇮🇳", "filipino": "🇵🇭", "nepi": "🇳🇵", "nepali": "🇳🇵", "nepal": "🇳🇵",
-    "bangla": "🇧🇩", "bangladeshi": "🇧🇩", "pakistan": "🇵🇰", "pakistani": "🇵🇰",
-    "egypt": "🇪🇬", "egyptian": "🇪🇬", "sudan": "🇸🇩", "sudanese": "🇸🇩",
-    "sri lanka": "🇱🇰", "sri lankan": "🇱🇰", "kenya": "🇰🇪", "kenyan": "🇰🇪",
-    "uganda": "🇺🇬", "ugandan": "🇺🇬", "ethiopia": "🇪🇹", "ethiopian": "🇪🇹"
+    "indian": "in", "filipino": "ph", "nepi": "np", "nepali": "np", "nepal": "np",
+    "bangla": "bd", "bangladeshi": "bd", "pakistan": "pk", "pakistani": "pk",
+    "egypt": "eg", "egyptian": "eg", "sudan": "sd", "sudanese": "sd",
+    "sri lanka": "lk", "sri lankan": "lk", "kenya": "ke", "kenyan": "ke",
+    "uganda": "ug", "ugandan": "ug", "ethiopia": "et", "ethiopian": "et"
 }
 
 GENDER_MAP = {
@@ -749,7 +749,7 @@ GENDER_MAP = {
 def style_df(df):
     """
     Applies custom styling to DataFrames.
-    - Adds icons to specific columns based on content
+    - Injects Flag URLs for nationality
     - Colors rows/cells dynamically (Gender: Blue/Pink, Default: Green)
     """
     if not isinstance(df, pd.DataFrame):
@@ -757,21 +757,26 @@ def style_df(df):
 
     styled_df = df.copy()
     
-    # Identify key columns
+    # 1. Flag Image Injection
     nat_cols = [c for c in styled_df.columns if any(kw in str(c).lower() for kw in ["nationality", "الجنسية"])]
-    gen_cols = [c for c in styled_df.columns if any(kw in str(c).lower() for kw in ["gender", "الجنس"]) and str(c).lower() != "الجنسية"]
-
-    # 1. Inject Icons
     for col in nat_cols:
-        def add_flag(val):
-            if not val: return val
-            s_val = str(val).strip().lower()
-            for key, icon in FLAG_MAP.items():
-                if key in s_val:
-                    return f"{icon} {val}"
-            return val
-        styled_df[col] = styled_df[col].apply(add_flag)
+        # Avoid double flags if re-running
+        flag_col = f"🚩_{col}"
+        if flag_col not in styled_df.columns:
+            def get_flag_url(val):
+                if not val: return None
+                s_val = str(val).strip().lower()
+                for key, code in FLAG_MAP.items():
+                    if key in s_val:
+                        return f"https://flagcdn.com/w40/{code}.png"
+                return None
+            
+            # Position flag before nationality
+            idx = list(styled_df.columns).index(col)
+            styled_df.insert(idx, flag_col, styled_df[col].apply(get_flag_url))
 
+    # 2. Gender Icon Injection
+    gen_cols = [c for c in styled_df.columns if any(kw in str(c).lower() for kw in ["gender", "الجنس"]) and str(c).lower() != "الجنسية"]
     for col in gen_cols:
         def add_gender_icon(val):
             if not val: return val
@@ -782,16 +787,13 @@ def style_df(df):
             return val
         styled_df[col] = styled_df[col].apply(add_gender_icon)
 
-    # 2. Apply Dynamic Styling (Colors)
+    # 3. Apply Dynamic Styling (Colors)
     def apply_colors(val):
         s_val = str(val).lower()
-        # Blue for Male
         if any(k in s_val for k in ["🚹", "ذكر", "male"]):
-            return "color: #3498db; font-weight: bold;" # Soft Blue
-        # Pink/Red for Female
+            return "color: #3498db; font-weight: bold;" 
         if any(k in s_val for k in ["🚺", "أنثى", "female"]):
-            return "color: #e91e63; font-weight: bold;" # Pink/Magenta
-        # Default Green
+            return "color: #e91e63; font-weight: bold;"
         return "color: #4CAF50;"
 
     return styled_df.style.map(apply_colors)
@@ -1823,6 +1825,11 @@ def render_dashboard_content():
             rem_key_display,
             format="%d يوم" if lang == 'ar' else "%d Days"
         )
+        
+        # Flag Image Configuration
+        for col in d_final.columns:
+            if any(kw in str(col).lower() for kw in ["nationality", "الجنسية"]):
+                final_cfg[f"🚩_{col}"] = st.column_config.ImageColumn("", width="small")
 
         # Apply Green Text Styling
         styled_final = style_df(d_final)
@@ -2151,6 +2158,11 @@ def render_search_content():
                 rem_key_search,
                 format="%d يوم" if lang == 'ar' else "%d Days"
             )
+
+            # Flag Image Configuration
+            for col in res_display.columns:
+                if any(kw in str(col).lower() for kw in ["nationality", "الجنسية"]):
+                    column_config[f"🚩_{col}"] = st.column_config.ImageColumn("", width="small")
 
             # --- EXPORT BUTTON FOR SEARCH ---
             c_s_1, c_s_2 = st.columns([4, 1])
@@ -3272,6 +3284,12 @@ def render_order_processing_content():
                         st.markdown(f"""<div style="color: {color}; font-weight: 700; margin: 10px 5px;">{label} — {len(city_df)}</div>""", unsafe_allow_html=True)
                         if explainer: st.markdown(explainer, unsafe_allow_html=True)
                         
+                        # Configure Image columns
+                        col_cfg_city = {}
+                        for col in city_df.columns:
+                            if any(kw in str(col).lower() for kw in ["nationality", "الجنسية"]):
+                                col_cfg_city[f"🚩_{col}"] = st.column_config.ImageColumn("", width="small")
+
                         # Use selection
                         df_city_height = min((len(city_df) + 1) * 35 + 40, 500)
                         event_city = st.dataframe(
@@ -3280,6 +3298,7 @@ def render_order_processing_content():
                             hide_index=True,
                             on_select="rerun",
                             selection_mode="single-row",
+                            column_config=col_cfg_city,
                             key=f"op_city_table_{idx}",
                             height=df_city_height
                         )
@@ -3315,6 +3334,12 @@ def render_order_processing_content():
                         
                         column_config_other = {}
                         
+                        # Configure Image columns
+                        col_cfg_other = {}
+                        for col in other_df.columns:
+                            if any(kw in str(col).lower() for kw in ["nationality", "الجنسية"]):
+                                col_cfg_other[f"🚩_{col}"] = st.column_config.ImageColumn("", width="small")
+
                         df_other_height = min((len(other_df) + 1) * 35 + 40, 500)
                         event_other = st.dataframe(
                             style_df(other_df.drop(columns=["__uid"])),
@@ -3322,6 +3347,7 @@ def render_order_processing_content():
                             hide_index=True,
                             on_select="rerun",
                             selection_mode="single-row",
+                            column_config=col_cfg_other,
                             key=f"op_other_table_{idx}",
                             height=df_other_height
                         )
@@ -3645,10 +3671,17 @@ def render_customer_requests_content():
                             disp_names[c] = new_n
                         display_df.rename(columns=disp_names, inplace=True)
 
+                        # Configure Image columns
+                        col_cfg_match = {}
+                        for col in display_df.columns:
+                            if any(kw in str(col).lower() for kw in ["nationality", "الجنسية"]):
+                                col_cfg_match[f"🚩_{col}"] = st.column_config.ImageColumn("", width="small")
+
                         st.dataframe(
                             style_df(display_df),
                             use_container_width=True,
                             hide_index=True,
+                            column_config=col_cfg_match,
                             key="matcher_results_table"
                         )
                         
@@ -3883,7 +3916,13 @@ def render_bengali_supply_content():
                             "صاحب العمل": e_info.get("name", w.get("employer")),
                             "التاريخ": w.get("timestamp", "")
                         })
-                    st.dataframe(style_df(pd.DataFrame(df_g)), use_container_width=True, hide_index=True)
+                    df_bengali_search = pd.DataFrame(df_g)
+                    col_cfg_b = {}
+                    for col in df_bengali_search.columns:
+                        if any(kw in str(col).lower() for kw in ["nationality", "الجنسية"]):
+                            col_cfg_b[f"🚩_{col}"] = st.column_config.ImageColumn("", width="small")
+                    
+                    st.dataframe(style_df(df_bengali_search), use_container_width=True, hide_index=True, column_config=col_cfg_b)
                     
                     st.markdown("---")
                     for w in sorted(results, key=lambda x: x.get("timestamp", ""), reverse=True):
