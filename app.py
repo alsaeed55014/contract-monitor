@@ -1922,8 +1922,14 @@ def render_search_content():
         with c1:
             use_age = st.checkbox(f" {lbl_enable} {lbl_age}", key="use_age_filter")
             if use_age:
-                age_range = st.slider(lbl_age, 18, 60, (20, 45), key="age_slider")
-            else: age_range = (18, 60)
+                ac1, ac2 = st.columns(2)
+                with ac1:
+                    a_min = st.number_input("من سن" if lang == 'ar' else "From", 1, 100, 16, key="age_min_search")
+                with ac2:
+                    a_max = st.number_input("إلى سن" if lang == 'ar' else "To", 1, 100, 35, key="age_max_search")
+                age_range = (a_min, a_max)
+            else: 
+                age_range = (16, 35)
 
         with c2:
             use_contract = st.checkbox(f" {lbl_enable} {lbl_contract}", key="use_contract_filter")
@@ -2754,7 +2760,14 @@ def render_order_processing_content():
         with rc3: # Rightmost (Arabic)
             age_enabled = st.checkbox("تفعيل العمر" if lang == 'ar' else "Enable Age", key="op_age_en")
             if age_enabled:
-                age_range = st.slider("", 18, 65, (20, 45), key="op_age_slider")
+                ac1, ac2 = st.columns(2)
+                with ac1:
+                    a_min = st.number_input("من سن" if lang == 'ar' else "From", 1, 100, 16, key="op_age_min")
+                with ac2:
+                    a_max = st.number_input("إلى سن" if lang == 'ar' else "To", 1, 100, 35, key="op_age_max")
+                age_range = (a_min, a_max)
+            else:
+                age_range = (16, 35)
         with rc2:
             contract_enabled = st.checkbox("تفعيل تاريخ انتهاء العقد" if lang == 'ar' else "Enable Contract End Date", key="op_cont_en")
             if contract_enabled:
@@ -3463,8 +3476,14 @@ def render_customer_requests_content():
         with c1:
             use_age = st.checkbox(f" {lbl_enable} {lbl_age}", key="cr_use_age_filter")
             if use_age:
-                age_range = st.slider(lbl_age, 18, 60, (20, 45), key="cr_age_slider")
-            else: age_range = (18, 60)
+                ac1, ac2 = st.columns(2)
+                with ac1:
+                    a_min = st.number_input("من سن" if lang == 'ar' else "From", 1, 100, 16, key="cr_age_min")
+                with ac2:
+                    a_max = st.number_input("إلى سن" if lang == 'ar' else "To", 1, 100, 35, key="cr_age_max")
+                age_range = (a_min, a_max)
+            else: 
+                age_range = (16, 35)
 
         with c2:
             use_contract = st.checkbox(f" {lbl_enable} {lbl_contract}", key="cr_use_contract_filter")
