@@ -603,6 +603,57 @@ def get_css():
             animation: banner-slide-down 0.8s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
+        .notif-bell-container {
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 45px;
+            height: 45px;
+            background: rgba(212, 175, 55, 0.1);
+            border: 1px solid rgba(212, 175, 55, 0.3);
+            border-radius: 50%;
+            transition: all 0.3s ease;
+            box-shadow: 0 0 15px rgba(212, 175, 55, 0.1);
+        }
+
+        /* Target the specific Streamlit button inside our bell container */
+        div[data-testid="column"]:nth-of-type(3) button[key*="bell_trigger"] {
+            background-color: transparent !important;
+            border: none !important;
+            padding: 0 !important;
+            width: 45px !important;
+            height: 45px !important;
+            font-size: 24px !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            box-shadow: none !important;
+            transform: none !important;
+        }
+
+        .notif-badge {
+            position: absolute;
+            top: -2px;
+            right: -2px;
+            background: #FF3131;
+            color: white;
+            font-size: 11px;
+            font-weight: bold;
+            padding: 2px 6px;
+            border-radius: 50%;
+            border: 2px solid #0A0A0A;
+            box-shadow: 0 0 10px rgba(255, 49, 49, 0.8);
+            z-index: 10;
+            animation: pulse-red 2s infinite;
+        }
+
+        @keyframes pulse-red {
+            0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(255, 49, 49, 0.7); }
+            70% { transform: scale(1.1); box-shadow: 0 0 0 8px rgba(255, 49, 49, 0); }
+            100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(255, 49, 49, 0); }
+        }
+
         @keyframes banner-slide-down {
             from { transform: translateY(-100%); opacity: 0; }
             to { transform: translateY(0); opacity: 1; }
@@ -1428,55 +1479,231 @@ def login_screen():
         
         st.markdown('</div>', unsafe_allow_html=True)
 
+def check_notifications():
+    """Checks for new worker entries or customer requests in Google Sheets."""
+    if 'db' not in st.session_state or not st.session_state.user:
+        return
+
+    # Initialize session state for notifications
+    if 'notifications' not in st.session_state:
+        st.session_state.notifications = []
+    if 'notif_last_worker_count' not in st.session_state:
+        st.session_state.notif_last_worker_count = None
+    if 'notif_last_cust_count' not in st.session_state:
+        st.session_state.notif_last_cust_count = None
+    if 'notif_triggered' not in st.session_state:
+        st.session_state.notif_triggered = False
+
+    def find_col(df, keywords):
+        """Smart column finder - searches for columns containing any of the keywords."""
+        cols = list(df.columns)
+        for kw in keywords:
+            for c in cols:
+                if kw in str(c):
+                    return c
+        return None
+
+    def safe_val(row, col_name):
+        """Safely get a value from a row, return empty string if None/NaN/---."""
+        if col_name is None:
+            return '---'
+        val = str(row.get(col_name, '---'))
+        if val in ['nan', 'None', '', 'NaN']:
+            return '---'
+        return val
+
+    try:
+        # 1. Check Workers (Main Sheet)
+        df_workers = st.session_state.db.fetch_data()
+        current_worker_count = len(df_workers)
+        
+        # Debug: Log column names once
+        if not st.session_state.get('_worker_cols_logged'):
+            print(f"[NOTIF DEBUG] Worker columns: {list(df_workers.columns)}")
+            st.session_state._worker_cols_logged = True
+        
+        if st.session_state.notif_last_worker_count is not None:
+            if current_worker_count > st.session_state.notif_last_worker_count:
+                new_count = current_worker_count - st.session_state.notif_last_worker_count
+                new_rows = df_workers.tail(new_count)
+                
+                # Smart column detection for workers
+                name_col = find_col(df_workers, ['الاسم الكامل', 'الاسم', 'اسم', 'Name', 'name'])
+                nat_col = find_col(df_workers, ['الجنسية', 'جنسية', 'Nationality'])
+                phone_col = find_col(df_workers, ['رقم الهاتف', 'هاتف', 'جوال', 'موبايل', 'Phone', 'phone'])
+                
+                for _, row in new_rows.iterrows():
+                    name = safe_val(row, name_col)
+                    nat = safe_val(row, nat_col)
+                    phone = safe_val(row, phone_col)
+                    
+                    msg = f"👤 {name}\n🌍 {nat}\n📱 {phone}"
+                    st.session_state.notifications.append({
+                        'title': "🆕 عامل جديد",
+                        'msg': msg,
+                        'time': datetime.now().strftime("%H:%M")
+                    })
+                    st.toast(f"🆕 عامل جديد: {name} - {nat} - {phone}", icon="🔔")
+                st.session_state.notif_triggered = True
+        st.session_state.notif_last_worker_count = current_worker_count
+
+        # 2. Check Customer Requests
+        df_cust = st.session_state.db.fetch_customer_requests()
+        current_cust_count = len(df_cust)
+        
+        # Debug: Log column names once
+        if not st.session_state.get('_cust_cols_logged'):
+            print(f"[NOTIF DEBUG] Customer columns: {list(df_cust.columns)}")
+            st.session_state._cust_cols_logged = True
+        
+        if st.session_state.notif_last_cust_count is not None:
+            if current_cust_count > st.session_state.notif_last_cust_count:
+                new_count = current_cust_count - st.session_state.notif_last_cust_count
+                new_rows = df_cust.tail(new_count)
+                
+                # Smart column detection for customers
+                company_col = find_col(df_cust, ['الشركة', 'المؤسسة', 'شركة', 'مؤسسة', 'Company', 'company'])
+                phone_col = find_col(df_cust, ['موبيل', 'موبايل', 'هاتف', 'جوال', 'Phone', 'phone'])
+                nat_col = find_col(df_cust, ['الجنسية', 'جنسية', 'Nationality'])
+                loc_col = find_col(df_cust, ['موقع', 'مدينة', 'Location', 'location'])
+                job_col = find_col(df_cust, ['طبيعه', 'طبيعة', 'عمل العامل', 'وظيفة', 'Job', 'job'])
+                
+                for _, row in new_rows.iterrows():
+                    company = safe_val(row, company_col)
+                    phone = safe_val(row, phone_col)
+                    nationality = safe_val(row, nat_col)
+                    location = safe_val(row, loc_col)
+                    job_type = safe_val(row, job_col)
+                    
+                    msg = f"🏢 {company}\n📱 {phone}\n🌍 {nationality}\n📍 {location}\n💼 {job_type}"
+                    st.session_state.notifications.append({
+                        'title': "🔔 طلب عميل جديد",
+                        'msg': msg,
+                        'time': datetime.now().strftime("%H:%M")
+                    })
+                    st.toast(f"🔔 طلب جديد: {company} - {phone}", icon="☕")
+                st.session_state.notif_triggered = True
+        st.session_state.notif_last_cust_count = current_cust_count
+
+    except Exception as e:
+        print(f"[DEBUG] Notification check failed: {e}")
+
 def render_top_banner():
     """renders a persistent top banner with user image and welcome message."""
     user = st.session_state.user
     lang = st.session_state.lang
-    
+    notifs = st.session_state.get('notifications', [])
+    notif_count = len(notifs)
+
+    # 1. Global Audio Alert - Using JavaScript Web Audio API (bypasses autoplay block)
+    if st.session_state.get('notif_triggered'):
+        st.components.v1.html("""
+<script>
+(function(){
+    try {
+        var ctx = new (window.AudioContext || window.webkitAudioContext)();
+        function playBell(freq, startTime, dur) {
+            var osc = ctx.createOscillator();
+            var gain = ctx.createGain();
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(freq, ctx.currentTime + startTime);
+            gain.gain.setValueAtTime(0.8, ctx.currentTime + startTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + startTime + dur);
+            osc.start(ctx.currentTime + startTime);
+            osc.stop(ctx.currentTime + startTime + dur);
+        }
+        // Play 3 bell chimes with rising pitch
+        playBell(830, 0.0, 0.6);
+        playBell(1050, 0.3, 0.6);
+        playBell(1320, 0.6, 0.8);
+    } catch(e) { console.log('Audio error:', e); }
+})();
+</script>
+""", height=0, width=0)
+        st.session_state.notif_triggered = False
+
+    # 2. Styling and Content
     if lang == 'ar':
-        f_name = user.get('first_name_ar', '')
-        fa_name = user.get('father_name_ar', '')
-        welcome_prefix = "مرحباً بك،"
-        program_name = "نظام السعيد المتكامل 💎"
+        f_name = user.get('first_name_ar', ''); fa_name = user.get('father_name_ar', '')
+        welcome_prefix = "مرحباً بك،"; program_name = "نظام السعيد المتكامل 💎"
     else:
-        f_name = user.get('first_name_en', '')
-        fa_name = user.get('father_name_en', '')
-        welcome_prefix = "Welcome,"
-        program_name = "Alsaeed Integrated System 💎"
+        f_name = user.get('first_name_en', ''); fa_name = user.get('father_name_en', '')
+        welcome_prefix = "Welcome,"; program_name = "Alsaeed Integrated System 💎"
 
-    full_name = f"{f_name} {fa_name}".strip()
-    if not full_name: full_name = user.get('username', 'User')
-
-    # Get user avatar - Handle legacy base64 or full Data URI
+    full_name = f"{f_name} {fa_name}".strip() or user.get('username', 'User')
     avatar_val = st.session_state.auth.get_avatar(user.get('username', ''))
-    if avatar_val:
-        if str(avatar_val).startswith('data:'):
-            avatar_html = f'<img src="{avatar_val}" class="banner-avatar" />'
-        else:
-            # Legacy fallback
-            avatar_html = f'<img src="data:image/png;base64,{avatar_val}" class="banner-avatar" />'
-    else:
-        avatar_html = '<div class="banner-avatar" style="background:linear-gradient(135deg,#D4AF37,#8B7520);display:flex;align-items:center;justify-content:center;font-size:24px;">👤</div>'
+    avatar_src = avatar_val if str(avatar_val).startswith('data:') else f'data:image/png;base64,{avatar_val}' if avatar_val else None
+    
+    avatar_html = f'<img src="{avatar_src}" class="banner-avatar" />' if avatar_src else '<div class="banner-avatar" style="background:linear-gradient(135deg,#D4AF37,#8B7520);display:flex;align-items:center;justify-content:center;font-size:24px;">👤</div>'
 
-    st.markdown(f"""
-    <div class="persistent-top-banner">
-        <div style="display: flex; align-items: center; gap: 20px;">
-             <div class="banner-user-info">
-                {avatar_html}
-            </div>
-            <div>
-                <p class="banner-welcome-msg">{welcome_prefix} {full_name}</p>
-                <p class="banner-subtext">{program_name}</p>
-            </div>
-        </div>
-        <div style="display: flex; align-items: center; gap: 15px;">
-            <div style="text-align: right;">
-                <p style="color: rgba(255,255,255,0.6); font-size: 0.75rem; margin: 0;">{datetime.now().strftime('%Y-%m-%d')}</p>
-                <p style="color: #D4AF37; font-size: 0.85rem; font-weight: bold; margin: 0;">{t('contract_dashboard', lang)}</p>
-            </div>
-        </div>
+    # 3. Main Container
+    with st.container():
+        # Force horizontal bar layout using Columns
+        c1, c2, c3, c4 = st.columns([2.5, 4, 1, 2])
+        
+        with c1: # Profile
+            st.markdown(f'<div style="display:flex; align-items:center; gap:15px; margin-top:5px;">{avatar_html}<div><p style="margin:0; font-weight:700; color:white;">{welcome_prefix} {full_name}</p><p style="margin:0; font-size:0.75rem; color:#D4AF37;">{program_name}</p></div></div>', unsafe_allow_html=True)
+        
+        with c2: st.write("") # Spacer
+            
+        with c3: # Bell & Badge
+            badge_html = f'<span class="notif-badge">{notif_count}</span>' if notif_count > 0 else ''
+            st.markdown(f'<div class="notif-bell-container" style="margin-top:5px; position:relative;">{badge_html}', unsafe_allow_html=True)
+            if st.button("🔔", key="bell_trig_v2", help="View Notifications"):
+                st.session_state.notif_panel_open = not st.session_state.get('notif_panel_open', False)
+                st.rerun()
+            st.markdown('</div>', unsafe_allow_html=True)
+
+        with c4: # Date/Log
+            st.markdown(f'<div style="text-align:right; border-left:1px solid rgba(212,175,55,0.2); padding-left:15px; margin-top:5px;"><p style="color:rgba(255,255,255,0.6); font-size:0.75rem; margin:0;">{datetime.now().strftime("%Y-%m-%d")}</p><p style="color:#D4AF37; font-size:0.85rem; font-weight:bold; margin:0;">{t("contract_dashboard", lang)}</p></div>', unsafe_allow_html=True)
+
+    # 4. Floating List Overlay
+    if st.session_state.get('notif_panel_open') and notifs:
+        st.markdown(f"""
+<div style="background:rgba(10,14,26,0.98); backdrop-filter:blur(30px); border:1px solid #D4AF37; 
+            border-radius:18px; padding:20px; box-shadow:0 30px 100px rgba(0,0,0,0.95); margin: 0 5%; z-index:99999; direction:rtl; max-height:500px; overflow-y:auto;">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; border-bottom:1px solid rgba(212,175,55,0.2); padding-bottom:10px;">
+        <h4 style="color:#D4AF37; margin:0;">🔔 الإشعارات الواردة</h4>
+        <div style="background:#D4AF37; color:black; border-radius:10px; padding:2px 10px; font-weight:bold;">{notif_count}</div>
     </div>
-    """, unsafe_allow_html=True)
+""", unsafe_allow_html=True)
+        
+        for n in reversed(notifs[-10:]):
+            msg_html = n['msg'].replace('\n', '<br>')
+            st.markdown(f"""
+<div style="background:rgba(255,255,255,0.04); padding:12px 15px; border-radius:12px; margin-bottom:10px; border-right:3px solid #D4AF37; direction:rtl;">
+    <p style="margin:0 0 5px 0; font-weight:700; color:#D4AF37; font-size:0.95rem;">{n['title']}</p>
+    <p style="margin:0 0 5px 0; color:#EEE; font-size:0.85rem; line-height:1.8;">{msg_html}</p>
+    <p style="margin:0; text-align:left; font-size:0.7rem; color:rgba(255,255,255,0.3);">⏰ {n['time']}</p>
+</div>
+""", unsafe_allow_html=True)
+            
+        if st.button("🗑️ مسح الكل", use_container_width=True, key="clear_all_notifs"):
+            st.session_state.notifications = []
+            st.session_state.notif_panel_open = False
+            st.rerun()
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    # Hide the old CSS-based banner to avoid double rendering
+    st.markdown('<style>.persistent-top-banner { display:none !important; }</style>', unsafe_allow_html=True)
+
+    # Optional: Display notifications if there are any
+    if st.session_state.notifications:
+        with st.sidebar.expander("🔔 الإشعارات الجديدة", expanded=False):
+            for n in reversed(st.session_state.notifications[-10:]):
+                sidebar_msg = n['msg'].replace('\n', '<br>')
+                st.markdown(f"""
+<div style="background: rgba(255,255,255,0.05); padding: 10px; border-radius: 10px; margin-bottom: 5px; border-right: 3px solid #D4AF37; direction:rtl;">
+    <p style="margin:0; font-weight:bold; color:#D4AF37; font-size:0.9rem;">{n['title']}</p>
+    <p style="margin:0; font-size:0.8rem; color:#FFF; line-height:1.7;">{sidebar_msg}</p>
+    <p style="margin:0; font-size:0.7rem; color:rgba(255,255,255,0.4); text-align:left;">⏰ {n['time']}</p>
+</div>
+""", unsafe_allow_html=True)
+            if st.button("🗑️ مسح الإشعارات", use_container_width=True):
+                st.session_state.notifications = []
+                st.rerun()
 
 def dashboard():
     user = st.session_state.user
@@ -1731,6 +1958,9 @@ def dashboard():
                 st.success("تم تنظيف الذاكرة وتحديث البيانات!")
                 time.sleep(1)
                 st.rerun()
+
+    # --- Check Notifications first ---
+    check_notifications()
 
     # --- Render Global Top Banner (Persistent) ---
     render_top_banner()

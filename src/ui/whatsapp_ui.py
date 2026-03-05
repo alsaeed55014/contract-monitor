@@ -102,6 +102,7 @@ def render_whatsapp_page():
         'total_pending': "بانتظار الإرسال: {}" if is_ar else "Pending: {}",
         'total_ready': "الإجمالي الجاهز: {}" if is_ar else "Total Ready: {}",
         'uncheck_all': "🔄 إرجاع الكل لقائمة الإرسال" if is_ar else "🔄 Return all to Sending List",
+        'dups_removed': "⚠️ تم حذف {} رقم مكرر من القائمة" if is_ar else "⚠️ Removed {} duplicate numbers",
     }
 
     # 1. Connection Status
@@ -182,7 +183,9 @@ def render_whatsapp_page():
                     st.session_state.wa_data = df
                 
                 xl_col1, xl_col2 = st.columns([3, 1])
-                with xl_col1: st.success(lbl['loaded_count'].format(len(df)))
+                # Show unique count if targets are already processed, otherwise show raw count
+                display_count = len(st.session_state.wa_review_targets) if st.session_state.wa_review_targets else len(df)
+                with xl_col1: st.success(lbl['loaded_count'].format(display_count))
                 with xl_col2:
                     if st.button(lbl['delete_file'], use_container_width=True, key="del_xl"):
                         st.session_state.wa_data = None
@@ -192,7 +195,9 @@ def render_whatsapp_page():
                         st.rerun()
             elif st.session_state.wa_data is not None:
                 xl_col1, xl_col2 = st.columns([3, 1])
-                with xl_col1: st.info(lbl['loaded_count'].format(len(st.session_state.wa_data)))
+                # Show unique count if available
+                display_count = len(st.session_state.wa_review_targets) if st.session_state.wa_review_targets else len(st.session_state.wa_data)
+                with xl_col1: st.info(lbl['loaded_count'].format(display_count))
                 with xl_col2:
                     if st.button(lbl['delete_file'], use_container_width=True, key="del_xl2"):
                         st.session_state.wa_data = None
@@ -204,15 +209,19 @@ def render_whatsapp_page():
         # Build review targets if data changed or list is empty but data exists
         if rebuild_review or (not st.session_state.wa_review_targets and (manual_list or st.session_state.wa_data is not None)):
             new_targets = []
-            seen_in_current_file = set() # To detect duplicates in the current upload
+            seen_in_current_file = set()
+            dups_count = 0
             
             # Manual
             if manual_list:
                 for n in manual_list:
-                    is_dup = n in seen_in_current_file
+                    if n in seen_in_current_file:
+                        dups_count += 1
+                        continue 
+                    
                     new_targets.append({
                         'phone': n, 'name': 'Client', 'cv': '', 
-                        'is_sent': (n in st.session_state.wa_history) or is_dup
+                        'is_sent': (n in st.session_state.wa_history)
                     })
                     seen_in_current_file.add(n)
             # Excel
@@ -232,14 +241,29 @@ def render_whatsapp_page():
                     if not phone: phone = format_phone_number("".join(raw_p.split()))
                     
                     if phone:
-                        is_dup = phone in seen_in_current_file
-                        target_data = {'idx': idx, 'phone': phone}
-                        target_data['name'] = str(row[c_name]).strip() if c_name else "Client"
-                        target_data['cv'] = str(row[c_cv]).strip() if c_cv else ""
-                        target_data['is_sent'] = (phone in st.session_state.wa_history) or is_dup
-                        for col in df_curr.columns: target_data[str(col)] = str(row[col]).strip()
+                        # 1. Check for duplicates within the current input
+                        if phone in seen_in_current_file:
+                            dups_count += 1
+                            continue # Totally remove duplicates as requested
+                            
+                        # 2. Build target data safely (Don't let Excel columns overwrite phone/name/cv)
+                        # Load all columns first
+                        target_data = {str(col): str(row[col]).strip() if pd.notna(row[col]) else "" for col in df_curr.columns}
+                        
+                        # Set essential keys (Overwriting the raw Excel values with cleaned/calculated ones)
+                        target_data['idx'] = idx
+                        target_data['phone'] = phone
+                        target_data['name'] = str(row[c_name]).strip() if c_name else target_data.get('الاسم', "عميل")
+                        target_data['cv'] = str(row[c_cv]).strip() if c_cv else target_data.get('السيرة', "")
+                        
+                        # 3. Check permanent history
+                        target_data['is_sent'] = (phone in st.session_state.wa_history)
+                        
                         new_targets.append(target_data)
                         seen_in_current_file.add(phone)
+            
+            if dups_count > 0:
+                st.toast(lbl['dups_removed'].format(dups_count), icon="✂️")
             
             if new_targets:
                 st.session_state.wa_review_targets = new_targets
@@ -306,9 +330,11 @@ def render_whatsapp_page():
                         if not trg['is_sent']: continue
                         r1, r2, r3, r4 = st.columns([1, 4, 3, 1])
                         # Uncheck to move to pending (becomes false)
-                        if not r1.checkbox("", value=True, key=f"trg_excl_{i}_{trg['phone']}"):
+                        # We use cleaned phone here to ensure history sync works
+                        clean_id = trg['phone']
+                        if not r1.checkbox("", value=True, key=f"trg_excl_{i}_{clean_id}"):
                             st.session_state.wa_review_targets[i]['is_sent'] = False
-                            st.session_state.wa_history.discard(trg['phone'])
+                            st.session_state.wa_history.discard(clean_id)
                             save_wa_history(st.session_state.wa_history)
                             st.rerun()
                         
