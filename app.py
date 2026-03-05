@@ -772,9 +772,18 @@ def style_df(df):
             def get_flag_url(val):
                 if not val: return None
                 s_val = str(val).strip().lower()
-                for key, code in FLAG_MAP.items():
-                    if key in s_val:
-                        return f"https://flagcdn.com/w20/{code}.png"
+                # Sort keys by length (longest first) to match "sri lankan" before "sri"
+                sorted_keys = sorted(FLAG_MAP.keys(), key=len, reverse=True)
+                for key in sorted_keys:
+                    code = FLAG_MAP[key]
+                    # Use boundaries for short keys to avoid false positives (e.g. 'in' in 'Fatima')
+                    if len(key) <= 3:
+                        pattern = r'(?:^|[\s,:;.\-/])' + re.escape(key) + r'(?:[\s,:;.\-/]|$)'
+                        if re.search(pattern, s_val):
+                            return f"https://flagcdn.com/w20/{code}.png"
+                    else:
+                        if key in s_val:
+                            return f"https://flagcdn.com/w20/{code}.png"
                 return None
             
             # Position flag before nationality
@@ -3578,7 +3587,7 @@ def render_customer_requests_content():
     selected_idx = st.selectbox(
         select_label,
         options=list(range(row_count)),
-        format_func=lambda i: f"{'طلب' if lang == 'ar' else 'Request'} #{i + 1}",
+        format_func=lambda i: f"{'طلب' if lang == 'ar' else 'Request'} #{row_count - i}",
         key="matcher_row_select"
     )
 
