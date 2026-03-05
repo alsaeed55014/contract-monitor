@@ -1565,96 +1565,94 @@ def check_notifications():
     if 'db' not in st.session_state or not st.session_state.user:
         return
 
-    # Initialize session state for notifications
-    if 'notifications' not in st.session_state:
-        st.session_state.notifications = []
-    if 'notif_last_worker_count' not in st.session_state:
-        st.session_state.notif_last_worker_count = None
-    if 'notif_last_cust_count' not in st.session_state:
-        st.session_state.notif_last_cust_count = None
-    if 'notif_triggered' not in st.session_state:
-        st.session_state.notif_triggered = False
-        
-    # Throttle: Don't check more than once every 10 seconds per rerun
-    now = time.time()
-    if 'last_background_check' in st.session_state:
-        if now - st.session_state.last_background_check < 10:
-            return
-    st.session_state.last_background_check = now
+    # initialize session state
+    if 'notifications' not in st.session_state: st.session_state.notifications = []
+    if 'notif_last_worker_count' not in st.session_state: st.session_state.notif_last_worker_count = None
+    if 'notif_last_cust_count' not in st.session_state: st.session_state.notif_last_cust_count = None
+    if 'notif_triggered' not in st.session_state: st.session_state.notif_triggered = False
+    
+    # UI sync feedback
+    st.session_state.last_sync_time = datetime.now().strftime("%H:%M:%S")
 
     def find_col(df, keywords):
-        """Smart column finder - searches for columns containing any of the keywords."""
         cols = list(df.columns)
         for kw in keywords:
             for c in cols:
-                if kw in str(c):
+                if kw.strip().lower() in str(c).strip().lower():
                     return c
         return None
 
     def safe_val(row, col_name):
-        """Safely get a value from a row, return empty string if None/NaN/---."""
-        if col_name is None:
-            return '---'
-        val = str(row.get(col_name, '---'))
-        if val in ['nan', 'None', '', 'NaN']:
-            return '---'
+        if col_name is None: return '---'
+        val = str(row.get(col_name, '---')).strip()
+        if val in ['nan', 'None', '', 'NaN']: return '---'
         return val
 
     try:
-        # 1. Check Workers (Main Sheet) - Using NOTIF CACHE
+        # 1. Check Workers (Filling in employee data)
         df_workers = st.session_state.db.fetch_data(is_notif_check=True)
         current_worker_count = len(df_workers)
         
         if st.session_state.notif_last_worker_count is not None:
             if current_worker_count > st.session_state.notif_last_worker_count:
-                new_count = current_worker_count - st.session_state.notif_last_worker_count
-                new_rows = df_workers.tail(new_count)
+                new_rows = df_workers.tail(current_worker_count - st.session_state.notif_last_worker_count)
                 
-                name_col = find_col(df_workers, ['الاسم الكامل', 'الاسم', 'اسم', 'Name', 'name'])
-                nat_col = find_col(df_workers, ['الجنسية', 'جنسية', 'Nationality'])
-                phone_col = find_col(df_workers, ['رقم الهاتف', 'هاتف', 'جوال', 'موبايل', 'Phone', 'phone'])
-                
+                # Requested Fields: Full Name, Nationality, Phone Number, Which job are you looking for, Gender
+                c_name = find_col(df_workers, ['Full Name', 'الاسم'])
+                c_nat = find_col(df_workers, ['Nationality', 'الجنسية'])
+                c_phone = find_col(df_workers, ['Phone Number', 'رقم الهاتف', 'هاتف'])
+                c_job = find_col(df_workers, ['Which job are you looking for', 'الوظيفة', 'عمل'])
+                c_gender = find_col(df_workers, ['Gender', 'الجنس'])
+
                 for _, row in new_rows.iterrows():
-                    name = safe_val(row, name_col)
-                    nat = safe_val(row, nat_col)
-                    phone = safe_val(row, phone_col)
+                    name = safe_val(row, c_name)
+                    nat = safe_val(row, c_nat)
+                    phone = safe_val(row, c_phone)
+                    job = safe_val(row, c_job)
+                    gender = safe_val(row, c_gender)
                     
                     st.session_state.notifications.append({
-                        'title': "🆕 عامل جديد",
-                        'msg': f"👤 {name}\n🌍 {nat}\n📱 {phone}",
+                        'title': "🆕 تسجيل عامل جديد",
+                        'msg': f"👤 {name}\n🌍 {nat}\n📱 {phone}\n💼 {job}\n⚧ {gender}",
                         'time': datetime.now().strftime("%H:%M")
                     })
                     st.toast(f"🆕 عامل جديد: {name}", icon="🔔")
-                st.session_state.notif_triggered = True
+                    st.session_state.notif_triggered = True
         st.session_state.notif_last_worker_count = current_worker_count
 
-        # 2. Check Customer Requests - Using NOTIF CACHE
+        # 2. Check Customer Requests (استقطاب موظفين)
         df_cust = st.session_state.db.fetch_customer_requests(is_notif_check=True)
         current_cust_count = len(df_cust)
         
         if st.session_state.notif_last_cust_count is not None:
             if current_cust_count > st.session_state.notif_last_cust_count:
-                new_count = current_cust_count - st.session_state.notif_last_cust_count
-                new_rows = df_cust.tail(new_count)
+                new_rows = df_cust.tail(current_cust_count - st.session_state.notif_last_cust_count)
                 
-                company_col = find_col(df_cust, ['الشركة', 'المؤسسة', 'شركة', 'مؤسسة', 'Company', 'company'])
-                phone_col = find_col(df_cust, ['موبيل', 'موبايل', 'هاتف', 'جوال', 'Phone', 'phone'])
+                # Requested Fields: اسم الشركه او المؤسسة, رقم الموبيل, أذكر الفئة المطلوبة, الجنسية المطلوبة, موقع العمل
+                c_comp = find_col(df_cust, ['الشركة', 'اسم الشركه', 'المؤسسة', 'Company'])
+                c_phone = find_col(df_cust, ['رقم الموبيل', 'جوال', 'هاتف', 'Mobile', 'Phone'])
+                c_role = find_col(df_cust, ['الفئة المطلوبة', 'نوع العمل', 'Role'])
+                c_nat = find_col(df_cust, ['الجنسية المطلوبة', 'Nationality'])
+                c_loc = find_col(df_cust, ['موقع العمل', 'المدينة', 'Location'])
                 
                 for _, row in new_rows.iterrows():
-                    company = safe_val(row, company_col)
-                    phone = safe_val(row, phone_col)
+                    comp = safe_val(row, c_comp)
+                    phone = safe_val(row, c_phone)
+                    role = safe_val(row, c_role)
+                    nat = safe_val(row, c_nat)
+                    loc = safe_val(row, c_loc)
                     
                     st.session_state.notifications.append({
                         'title': "🔔 طلب عميل جديد",
-                        'msg': f"🏢 {company}\n📱 {phone}",
+                        'msg': f"🏢 {comp}\n📱 {phone}\n💪 {role}\n🌍 {nat}\n📍 {loc}",
                         'time': datetime.now().strftime("%H:%M")
                     })
-                    st.toast(f"🔔 طلب جديد: {company}", icon="☕")
-                st.session_state.notif_triggered = True
+                    st.toast(f"🔔 طلب جديد: {comp}", icon="☕")
+                    st.session_state.notif_triggered = True 
         st.session_state.notif_last_cust_count = current_cust_count
 
     except Exception as e:
-        print(f"[DEBUG] Notification check failed: {e}")
+        print(f"[ERROR] Notification check failed: {e}")
 
 def render_top_banner():
     """renders a persistent top banner with user image and welcome message."""
@@ -1692,34 +1690,51 @@ def render_top_banner():
 """, height=0, width=0)
         st.session_state.notif_triggered = False
 
+    # 1.4 Sound Test Diagnostic (Triggered from settings)
+    if st.session_state.get('test_sound'):
+        st.components.v1.html("""
+<script>
+(function(){
+    try {
+        var ctx = new (window.AudioContext || window.webkitAudioContext)();
+        function playBell(f, s, d) {
+            var o = ctx.createOscillator(); var g = ctx.createGain();
+            o.connect(g); g.connect(ctx.destination);
+            o.type = 'sine'; o.frequency.setValueAtTime(f, ctx.currentTime + s);
+            g.gain.setValueAtTime(0.5, ctx.currentTime + s);
+            g.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + s + d);
+            o.start(ctx.currentTime + s); o.stop(ctx.currentTime + s + d);
+        }
+        playBell(880, 0, 0.5); playBell(1100, 0.2, 0.5);
+    } catch(e) {}
+})();
+</script>
+""", height=0, width=0)
+        st.session_state.test_sound = False
+
     # 1.5 Live Monitor (Silent Auto-Refresh every 30 seconds)
-    # This ensures check_notifications() runs periodically even without user interaction
     st.components.v1.html("""
 <script>
     if (!window.liveMonitorSet) {
         window.liveMonitorSet = true;
-        // Search for the hidden heartbeat button and click it every 30s
+        console.log("[LiveMonitor] Background Service Started.");
+        
         setInterval(function() {
+            if (window.parent.document.visibilityState !== 'visible') return;
             var activeEl = window.parent.document.activeElement;
-            var isTyping = activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA');
+            var isTyping = activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA' || activeEl.isContentEditable);
             
             if (!isTyping) {
-                // Look for the heartbeat button inside the document
                 var buttons = window.parent.document.querySelectorAll('button');
-                var heartbeatBtn = null;
                 for (var i = 0; i < buttons.length; i++) {
                     if (buttons[i].innerText === 'Heartbeat') {
-                        heartbeatBtn = buttons[i];
+                        console.log("[LiveMonitor] Syncing Data...");
+                        buttons[i].click();
                         break;
                     }
                 }
-                
-                if (heartbeatBtn) {
-                    console.log("[LiveMonitor] Triggering Heartbeat...");
-                    heartbeatBtn.click();
-                }
             }
-        }, 30000); // 30 seconds interval
+        }, 10000); 
     }
 </script>
 """, height=0, width=0)
@@ -1784,6 +1799,12 @@ def render_top_banner():
             st.session_state.notifications = []
             st.session_state.notif_panel_open = False
             st.rerun()
+            
+        # Audio Diagnostic Button
+        if st.checkbox("⚙️ تجربة صوت التنبيه", key="cb_test_sound"):
+            st.session_state.test_sound = True
+            st.rerun()
+            
         st.markdown("</div>", unsafe_allow_html=True)
 
     # Hide the old CSS-based banner to avoid double rendering
@@ -2045,12 +2066,28 @@ def dashboard():
             st.session_state.user = None
             st.rerun()
         
-        # --- Hidden Heartbeat for Live Monitor (Silent Refresh) ---
-        # This button is clicked by JavaScript every 30s to trigger check_notifications()
         st.markdown('<div id="live-monitor-trigger" style="display:none;">', unsafe_allow_html=True)
         if st.button("Heartbeat", key="background_heartbeat_btn"):
             st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
+
+        # --- Monitor Status Indicator ---
+        sync_time = st.session_state.get('last_sync_time', '--:--:--')
+        st.markdown(f"""
+        <div style="background:rgba(212,175,55,0.05); border:1px solid rgba(212,175,55,0.1); border-radius:10px; padding:10px; margin-top:20px;">
+            <div style="display:flex; align-items:center; gap:8px; font-size:0.75rem; color:rgba(255,255,255,0.6);">
+                <div style="width:8px; height:8px; background:#4CAF50; border-radius:50%; box-shadow:0 0 10px #4CAF50; animation: pulse 2s infinite;"></div>
+                <span>المراقب المباشر يعمل: {sync_time}</span>
+            </div>
+        </div>
+        <style>
+            @keyframes pulse {{
+                0% {{ transform:scale(0.95); box-shadow:0 0 0 0 rgba(76,175,80,0.7); }}
+                70% {{ transform:scale(1); box-shadow:0 0 0 10px rgba(76,175,80,0); }}
+                100% {{ transform:scale(0.95); box-shadow:0 0 0 0 rgba(76,175,80,0); }}
+            }}
+        </style>
+        """, unsafe_allow_html=True)
         
         # Global Deep Reset Opportunity
         st.sidebar.divider()

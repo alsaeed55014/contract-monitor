@@ -11,7 +11,7 @@ class DBClient:
     _data_caches = {}
     _last_fetches = {}
     CACHE_DURATION = 120  # Reduced to 2 Minutes for better responsiveness
-    NOTIF_CACHE_DURATION = 20  # Short cache for background notification checks
+    NOTIF_CACHE_DURATION = 5  # Very short cache for high-frequency background checks (5s)
 
     def __new__(cls):
         if cls._instance is None:
