@@ -1571,19 +1571,18 @@ def check_notifications():
     if 'notif_last_cust_count' not in st.session_state: st.session_state.notif_last_cust_count = None
     if 'notif_triggered' not in st.session_state: st.session_state.notif_triggered = False
     
-    # UI sync feedback timestamp
     st.session_state.last_sync_time = datetime.now().strftime("%H:%M:%S")
 
     def find_col(df, keywords):
-        """Finds column using fuzzy matching and Arabic normalization (ة/ه)."""
+        """Smart column finder - handles Arabic normalization (ة vs ه)."""
         cols = list(df.columns)
         import re
         for kw in keywords:
+            # Normalize keyword: replace ة with ه pattern for matching
             kw_norm = kw.replace('ة', '[ةه]').replace('ه', '[ةه]')
             pattern = re.compile(kw_norm, re.IGNORECASE)
             for c in cols:
-                if pattern.search(str(c)):
-                    return c
+                if pattern.search(str(c)): return c
         return None
 
     def safe_val(row, col_name):
@@ -1593,56 +1592,55 @@ def check_notifications():
         return val
 
     try:
-        # 1. Check Workers
+        # 1. Check Workers (Filling in employee data)
         df_workers = st.session_state.db.fetch_data(is_notif_check=True)
         current_worker_count = len(df_workers)
         
-        if st.session_state.notif_last_worker_count is not None:
-            if current_worker_count > st.session_state.notif_last_worker_count:
-                new_rows = df_workers.tail(current_worker_count - st.session_state.notif_last_worker_count)
-                c_name = find_col(df_workers, ['Full Name', 'الاسم'])
-                c_nat = find_col(df_workers, ['Nationality', 'الجنسية'])
-                c_phone = find_col(df_workers, ['Phone Number', 'رقم الهاتف', 'هاتف'])
-                c_job = find_col(df_workers, ['Which job are you looking for', 'الوظيفة', 'عمل'])
-                c_gender = find_col(df_workers, ['Gender', 'الجنس'])
+        if st.session_state.notif_last_worker_count is not None and current_worker_count > st.session_state.notif_last_worker_count:
+            new_rows = df_workers.tail(current_worker_count - st.session_state.notif_last_worker_count)
+            c_name = find_col(df_workers, ['Full Name', 'الاسم'])
+            c_nat = find_col(df_workers, ['Nationality', 'الجنسية'])
+            c_phone = find_col(df_workers, ['Phone Number', 'رقم الهاتف', 'هاتف'])
+            c_job = find_col(df_workers, ['Which job are you looking for', 'الوظيفة'])
+            c_gender = find_col(df_workers, ['Gender', 'الجنس'])
 
-                for _, row in new_rows.iterrows():
-                    name = safe_val(row, c_name)
-                    st.session_state.notifications.append({
-                        'title': "🆕 تسجيل عامل جديد",
-                        'msg': f"👤 {name}\n🌍 {safe_val(row, c_nat)}\n📱 {safe_val(row, c_phone)}\n💼 {safe_val(row, c_job)}\n⚧ {safe_val(row, c_gender)}",
-                        'time': datetime.now().strftime("%H:%M")
-                    })
-                    st.toast(f"🆕 عامل جديد: {name}", icon="🔔")
-                    st.session_state.notif_triggered = True
-                    # Force main cache update so the table shows the new worker immediately
-                    st.session_state.db.fetch_data(force=True)
+            for _, row in new_rows.iterrows():
+                name = safe_val(row, c_name)
+                st.session_state.notifications.append({
+                    'title': "🆕 تسجيل عامل جديد",
+                    'msg': f"👤 {name} | 🌍 {safe_val(row, c_nat)}\n📱 {safe_val(row, c_phone)}\n💼 {safe_val(row, c_job)} | ⚧ {safe_val(row, c_gender)}",
+                    'time': datetime.now().strftime("%H:%M")
+                })
+                st.toast(f"🆕 عامل جديد: {name}", icon="🔔")
+                st.session_state.notif_triggered = True
+            st.session_state.db.fetch_data(force=True) # Refresh main worker cache
+
         st.session_state.notif_last_worker_count = current_worker_count
 
-        # 2. Check Customer Requests
+        # 2. Check Customer Requests (استقطاب موظفين)
         df_cust = st.session_state.db.fetch_customer_requests(is_notif_check=True)
         current_cust_count = len(df_cust)
         
-        if st.session_state.notif_last_cust_count is not None:
-            if current_cust_count > st.session_state.notif_last_cust_count:
-                new_rows = df_cust.tail(current_cust_count - st.session_state.notif_last_cust_count)
-                c_comp = find_col(df_cust, ['الشركة', 'اسم الشركه', 'المؤسسة', 'Company'])
-                c_phone = find_col(df_cust, ['رقم الموبيل', 'جوال', 'هاتف', 'Mobile', 'Phone'])
-                c_role = find_col(df_cust, ['الفئة المطلوبة', 'نوع العمل', 'Role'])
-                c_nat = find_col(df_cust, ['الجنسية المطلوبة', 'Nationality'])
-                c_loc = find_col(df_cust, ['موقع العمل', 'المدينة', 'Location'])
-                
-                for _, row in new_rows.iterrows():
-                    comp = safe_val(row, c_comp)
-                    st.session_state.notifications.append({
-                        'title': "🔔 طلب عميل جديد",
-                        'msg': f"🏢 {comp}\n📱 {safe_val(row, c_phone)}\n💪 {safe_val(row, c_role)}\n🌍 {safe_val(row, c_nat)}\n📍 {safe_val(row, c_loc)}",
-                        'time': datetime.now().strftime("%H:%M")
-                    })
-                    st.toast(f"🔔 طلب جديد: {comp}", icon="☕")
-                    st.session_state.notif_triggered = True 
-                    # Force main cache update so the table shows the new request immediately
-                    st.session_state.db.fetch_customer_requests(force=True)
+        if st.session_state.notif_last_cust_count is not None and current_cust_count > st.session_state.notif_last_cust_count:
+            new_rows = df_cust.tail(current_cust_count - st.session_state.notif_last_cust_count)
+            
+            c_comp = find_col(df_cust, ['اسم الشركه', 'المؤسسة', 'الشركة', 'Company'])
+            c_phone = find_col(df_cust, ['الموبيل', 'جوال', 'هاتف', 'Mobile'])
+            c_role = find_col(df_cust, ['الفئة المطلوبة', 'نوع العمل'])
+            c_nat = find_col(df_cust, ['الجنسية المطلوبة'])
+            c_loc = find_col(df_cust, ['موقع العمل', 'المدينة'])
+            
+            for _, row in new_rows.iterrows():
+                comp = safe_val(row, c_comp)
+                st.session_state.notifications.append({
+                    'title': "🔔 طلب عميل جديد",
+                    'msg': f"🏢 {comp} | 📱 {safe_val(row, c_phone)}\n💪 {safe_val(row, c_role)} | 🌍 {safe_val(row, c_nat)}\n📍 {safe_val(row, c_loc)}",
+                    'time': datetime.now().strftime("%H:%M")
+                })
+                st.toast(f"🔔 طلب جديد: {comp}", icon="☕")
+                st.session_state.notif_triggered = True 
+            st.session_state.db.fetch_customer_requests(force=True) # Refresh main customer cache
+        
         st.session_state.notif_last_cust_count = current_cust_count
 
     except Exception as e:
@@ -1655,32 +1653,26 @@ def render_top_banner():
     notifs = st.session_state.get('notifications', [])
     notif_count = len(notifs)
 
-    # 1. Global Audio Alert - Using JavaScript Web Audio API (bypasses autoplay block)
+    # 1. Global Audio Alert - High Reliability Implementation
     if st.session_state.get('notif_triggered'):
         st.components.v1.html("""
 <script>
-(function(){
+(async function(){
     try {
         var AudioContext = window.AudioContext || window.webkitAudioContext;
         var ctx = new AudioContext();
+        if (ctx.state === 'suspended') await ctx.resume();
         
-        async function playBell(freq, startTime, dur) {
-            if (ctx.state === 'suspended') await ctx.resume();
-            var osc = ctx.createOscillator();
-            var gain = ctx.createGain();
-            osc.connect(gain);
-            gain.connect(ctx.destination);
-            osc.type = 'sine';
-            osc.frequency.setValueAtTime(freq, ctx.currentTime + startTime);
-            gain.gain.setValueAtTime(0.8, ctx.currentTime + startTime);
+        function playBell(freq, startTime, dur) {
+            var osc = ctx.createOscillator(); var gain = ctx.createGain();
+            osc.connect(gain); gain.connect(ctx.destination);
+            osc.type = 'sine'; osc.frequency.setValueAtTime(freq, ctx.currentTime + startTime);
+            gain.gain.setValueAtTime(0.5, ctx.currentTime + startTime);
             gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + startTime + dur);
-            osc.start(ctx.currentTime + startTime);
-            osc.stop(ctx.currentTime + startTime + dur);
+            osc.start(ctx.currentTime + startTime); osc.stop(ctx.currentTime + startTime + dur);
         }
-        playBell(830, 0.0, 0.6);
-        playBell(1050, 0.3, 0.6);
-        playBell(1320, 0.6, 0.8);
-    } catch(e) { console.log('Audio error:', e); }
+        playBell(830, 0.0, 0.6); playBell(1050, 0.3, 0.6); playBell(1320, 0.6, 0.8);
+    } catch(e) { console.error('Audio fail:', e); }
 })();
 </script>
 """, height=0, width=0)
