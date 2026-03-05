@@ -173,7 +173,7 @@ AR_TO_EN = {
     "شغالة": ["Housemaid", "Domestic"],
 
     # --- Cities (Arabic → English) ---
-    "الرياض": ["Riyadh"], "الخرج": ["Al Kharj", "Al-Kharj", "Kharj"],
+    "الرياض": ["Riyadh", "Riyad", "Reyadh", "Ar Riyad"], "الخرج": ["Al Kharj", "Al-Kharj", "Kharj"],
     "الدوادمي": ["Al Dawadmi"], "الزلفي": ["Al Zulfi", "Zulfi"],
     "شقراء": ["Shaqra"], "المجمعة": ["Al Majmaah", "Majmaah"],
     "وادي الدواسر": ["Wadi Al Dawasir"], "الأفلاج": ["Al Aflaj"],
@@ -348,16 +348,18 @@ def _resolve_region(location_text):
     Determine if the location is a region or a specific city.
     Returns: (is_region: bool, region_key: str or None, target_cities_ar: list, target_cities_en: list)
     """
-    loc_norm = _normalize(location_text)
-    loc_lower = str(location_text).lower().strip()
+    loc_norm = f" {_normalize(location_text)} "
+    loc_lower = f" {str(location_text).lower().strip()} "
 
     # Check if it matches a region alias
     for region_key, data in REGION_MAP.items():
         for alias in data["aliases_ar"]:
-            if _normalize(alias) == loc_norm or loc_norm in _normalize(alias) or _normalize(alias) in loc_norm:
+            alias_norm = f" {_normalize(alias)} "
+            if alias_norm == loc_norm or loc_norm in alias_norm or alias_norm in loc_norm:
                 return True, region_key, data["cities_ar"], data["cities_en"]
         for alias in data["aliases_en"]:
-            if alias == loc_lower or loc_lower in alias or alias in loc_lower:
+            alias_lower = f" {alias} "
+            if alias_lower == loc_lower or loc_lower in alias_lower or alias_lower in loc_lower:
                 return True, region_key, data["cities_ar"], data["cities_en"]
 
     # Not a region — it's a specific city
@@ -366,16 +368,50 @@ def _resolve_region(location_text):
 
 def _find_city_region(city_text):
     """Find which region a city belongs to."""
-    city_norm = _normalize(city_text)
-    city_lower = str(city_text).lower().strip()
+    city_norm = f" {_normalize(city_text)} "
+    city_lower = f" {str(city_text).lower().strip()} "
     for region_key, data in REGION_MAP.items():
         for c in data["cities_ar"]:
-            if _normalize(c) == city_norm or city_norm in _normalize(c) or _normalize(c) in city_norm:
+            c_norm = f" {_normalize(c)} "
+            if c_norm == city_norm or city_norm in c_norm or c_norm in city_norm:
                 return region_key
         for c in data["cities_en"]:
-            if c == city_lower or city_lower in c or c in city_lower:
+            c_lower = f" {c} "
+            if c_lower == city_lower or city_lower in c_lower or c_lower in city_lower:
                 return region_key
     return None
+
+
+# ─────────────────────────────────────────
+def _get_canonical_city(val):
+    """Map variations like 'riyadh', 'Riyad', 'Riyadh city' to canonical 'الرياض'."""
+    if not val or pd.isna(val) or str(val).strip().lower() == "nan":
+        return str(val)
+    v_norm = f" {_normalize(str(val))} "
+    v_lower = f" {str(val).lower().strip()} "
+    
+    # Identify canonical city by checking AR_TO_EN aliases
+    for ar_key, en_aliases in AR_TO_EN.items():
+        is_city = False
+        for data in REGION_MAP.values():
+            if ar_key in data["cities_ar"]:
+                is_city = True
+                break
+        if not is_city:
+            continue
+            
+        ar_pad = f" {_normalize(ar_key)} "
+        if ar_pad in v_norm or v_norm in ar_pad:
+            return ar_key
+            
+        for en_t in en_aliases:
+            en_pad = f" {en_t.lower()} "
+            if en_pad in v_lower or v_lower in en_pad:
+                return ar_key
+                
+    # Fallback
+    s = str(val).strip()
+    return s.title() if s.isascii() else s
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -389,18 +425,21 @@ NATIONALITY_KEYWORDS = [
 
 GENDER_KEYWORDS = [
     "Gender", "الجنس", "جنس", "gender", "Are you male or female",
-    "Male or Female", "ذكر أم أنثى", "النوع"
+    "Male or Female", "ذكر أم أنثى", "النوع", "Specify the required category",
+    "الفئة المطلوبة", "فئة"
 ]
 
 CITY_KEYWORDS = [
     "City", "المدينة", "مدينة", "city", "In which city",
-    "Which city", "مدينتك", "المنطقة", "اي مدينة", "في أي مدينة"
+    "Which city", "مدينتك", "المنطقة", "اي مدينة", "في أي مدينة",
+    "Work location", "موقع العمل"
 ]
 
 JOB_KEYWORDS = [
     "Job", "الوظيفة", "وظيفة", "المسمى الوظيفي", "job", "profession",
     "What is your job", "المهنة", "مهنة", "عملك", "ماهي وظيفتك",
-    "What is your current job", "Your job"
+    "What is your current job", "Your job",
+    "Nature of the worker's work", "طبيعة عمل العامل", "طبيعة العمل"
 ]
 
 SKILLS_KEYWORDS = [
@@ -549,10 +588,12 @@ class CandidateMatcher:
         def city_match(val):
             if not val or str(val).strip() == "" or str(val).strip().lower() == "nan":
                 return False
-            v_norm = _normalize(str(val))
-            v_lower = str(val).lower().strip()
+            v_norm = f" {_normalize(str(val))} "
+            v_lower = f" {str(val).lower().strip()} "
             for t in all_targets:
-                if t in v_norm or v_norm in t or t in v_lower or v_lower in t:
+                t_padded = f" {t} "
+                # STRICT EQUALITY MATCH ONLY (to avoid Riyadh matching Riyadh Al Khabra)
+                if t_padded == v_norm or t_padded == v_lower:
                     return True
             return False
 
@@ -625,7 +666,7 @@ class CandidateMatcher:
             else:
                 ordered_regions = list(REGION_MAP.keys())
 
-        results = []
+        raw_results = []
         for region_key in ordered_regions:
             region_data = REGION_MAP[region_key]
             region_cities_ar = region_data["cities_ar"]
@@ -633,17 +674,36 @@ class CandidateMatcher:
 
             region_df = self._filter_by_location(base_df, region_cities_ar, region_cities_en)
             if not region_df.empty:
-                # Group by city
-                for city_val in region_df[city_col].unique():
-                    city_candidates = region_df[region_df[city_col] == city_val]
-                    results.append({
-                        "city": str(city_val),
+                # Group by canonical city
+                df_temp = region_df.copy()
+                df_temp['__canon_city'] = df_temp[city_col].apply(_get_canonical_city)
+                
+                for canon_city in df_temp['__canon_city'].unique():
+                    city_candidates = df_temp[df_temp['__canon_city'] == canon_city].drop(columns=['__canon_city'])
+                    raw_results.append({
+                        "city": str(canon_city),
                         "region": region_key,
                         "count": len(city_candidates),
                         "candidates": city_candidates,
                     })
 
-        return results
+        # --- POST-PROCESSING: CONSOLDATE AND SUM EQUAL CITIES ---
+        # If the same city appeared in multiple regions (unlikely with strict match, but good for safety)
+        # or if multiple variations mapped to same canon city.
+        consolidated = {}
+        for item in raw_results:
+            city_key = item["city"]
+            if city_key in consolidated:
+                # Sum the counts and merge candidates
+                consolidated[city_key]["count"] += item["count"]
+                consolidated[city_key]["candidates"] = pd.concat(
+                    [consolidated[city_key]["candidates"], item["candidates"]], 
+                    ignore_index=True
+                )
+            else:
+                consolidated[city_key] = item
+
+        return list(consolidated.values())
 
     # ─────────────────────────────────────────
     # Main Match Function (All 5 Steps)
@@ -748,26 +808,33 @@ def format_match_result(result, lang="ar"):
         else:
             status_text = f"✅ **Results:** Found **{count}** candidate(s) (matched via: {source_label})"
 
-        return summary, status_text, result["local_results"]
+        return summary, status_text, "", result["local_results"]
 
     elif status == "found_expanded":
-        if lang == "ar":
-            status_text = "⚠️ **لا توجد نتائج في الموقع المطلوب — أقرب البدائل المتاحة:**"
-        else:
-            status_text = "⚠️ **No results in requested location — Nearest alternatives:**"
+        total_count = sum(item["count"] for item in result["expanded_results"])
 
-        alt_lines = []
+        if lang == "ar":
+            status_text = f"⚠️ **لا توجد نتائج في الموقع المطلوب — أقرب البدائل المتاحة:**\n\n**إجمالي عدد المرشحين المتاحين: {total_count}**\n"
+            table_header = "| المدينة | المنطقة | عدد المرشحين |\n|---|---|---|"
+        else:
+            status_text = f"⚠️ **No results in requested location — Nearest alternatives:**\n\n**Total available candidates: {total_count}**\n"
+            table_header = "| City | Region | Candidates |\n|---|---|---|"
+
+        alt_lines = [table_header]
         for item in result["expanded_results"]:
-            if lang == "ar":
-                alt_lines.append(f"→ **{item['city']}** ({item['region']}) — عدد المرشحين: **{item['count']}**")
-            else:
-                alt_lines.append(f"→ **{item['city']}** ({item['region']}) — Candidates: **{item['count']}**")
+            alt_lines.append(f"| {item['city']} | {item['region']} | {item['count']} |")
+
+        # Add total row at the bottom as well for clarity
+        if lang == "ar":
+            alt_lines.append(f"| **الإجمالي** | | **{total_count}** |")
+        else:
+            alt_lines.append(f"| **Total** | | **{total_count}** |")
 
         alt_text = "\n".join(alt_lines)
         # Combine all expanded candidates into one df for display
         all_expanded = pd.concat([item["candidates"] for item in result["expanded_results"]], ignore_index=True)
 
-        return summary, status_text + "\n" + alt_text, all_expanded
+        return summary, status_text, alt_text, all_expanded
 
     else:
         if lang == "ar":
@@ -775,4 +842,4 @@ def format_match_result(result, lang="ar"):
         else:
             status_text = "❌ **No candidates currently match these specifications.**"
 
-        return summary, status_text, pd.DataFrame()
+        return summary, status_text, "", pd.DataFrame()

@@ -717,15 +717,84 @@ def get_css():
     </style>
     """
 
+# --- Icon Mappings ---
+FLAG_MAP = {
+    # Arabic
+    "هندي": "🇮🇳", "هندية": "🇮🇳", "الهند": "🇮🇳",
+    "فلبيني": "🇵🇭", "فلبينية": "🇵🇭", "الفلبين": "🇵🇭",
+    "نيبالي": "🇳🇵", "نيبالية": "🇳🇵", "نيبال": "🇳🇵",
+    "بنجلاديشي": "🇧🇩", "بنجالية": "🇧🇩", "بنجلاديش": "🇧🇩", "بنقالي": "🇧🇩",
+    "باكستاني": "🇵🇰", "باكستانية": "🇵🇰", "باكستان": "🇵🇰",
+    "مصري": "🇪🇬", "مصرية": "🇪🇬", "مصر": "🇪🇬",
+    "سوداني": "🇸🇩", "سودانية": "🇸🇩", "السودان": "🇸🇩",
+    "سيريلانكي": "🇱🇰", "سيريلانكية": "🇱🇰", "سيريلانكا": "🇱🇰",
+    "كيني": "🇰🇪", "كينية": "🇰🇪", "كينيا": "🇰🇪",
+    "اوغندي": "🇺🇬", "اوغندية": "🇺🇬", "اوغندا": "🇺🇬",
+    "اثيوبي": "🇪🇹", "اثيوبية": "🇪🇹", "اثيوبيا": "🇪🇹",
+    "مغربي": "🇲🇦", "مغربية": "🇲🇦", "المغرب": "🇲🇦",
+    "يمني": "🇾🇪", "يمنية": "🇾🇪", "اليمن": "🇾🇪",
+    # English
+    "indian": "🇮🇳", "filipino": "🇵🇭", "nepi": "🇳🇵", "nepali": "🇳🇵", "nepal": "🇳🇵",
+    "bangla": "🇧🇩", "bangladeshi": "🇧🇩", "pakistan": "🇵🇰", "pakistani": "🇵🇰",
+    "egypt": "🇪🇬", "egyptian": "🇪🇬", "sudan": "🇸🇩", "sudanese": "🇸🇩",
+    "sri lanka": "🇱🇰", "sri lankan": "🇱🇰", "kenya": "🇰🇪", "kenyan": "🇰🇪",
+    "uganda": "🇺🇬", "ugandan": "🇺🇬", "ethiopia": "🇪🇹", "ethiopian": "🇪🇹"
+}
+
+GENDER_MAP = {
+    "ذكر": "🚹", "male": "🚹",
+    "أنثى": "🚺", "female": "🚺"
+}
+
 def style_df(df):
     """
     Applies custom styling to DataFrames.
-    - Text Color: Green (#4CAF50)
-    - Background: Transparent/Dark
+    - Adds icons to specific columns based on content
+    - Colors rows/cells dynamically (Gender: Blue/Pink, Default: Green)
     """
-    if isinstance(df, pd.DataFrame):
-        return df.style.map(lambda _: "color: #4CAF50;")
-    return df
+    if not isinstance(df, pd.DataFrame):
+        return df
+
+    styled_df = df.copy()
+    
+    # Identify key columns
+    nat_cols = [c for c in styled_df.columns if any(kw in str(c).lower() for kw in ["nationality", "الجنسية"])]
+    gen_cols = [c for c in styled_df.columns if any(kw in str(c).lower() for kw in ["gender", "الجنس"]) and str(c).lower() != "الجنسية"]
+
+    # 1. Inject Icons
+    for col in nat_cols:
+        def add_flag(val):
+            if not val: return val
+            s_val = str(val).strip().lower()
+            for key, icon in FLAG_MAP.items():
+                if key in s_val:
+                    return f"{icon} {val}"
+            return val
+        styled_df[col] = styled_df[col].apply(add_flag)
+
+    for col in gen_cols:
+        def add_gender_icon(val):
+            if not val: return val
+            s_val = str(val).strip().lower()
+            for key, icon in GENDER_MAP.items():
+                if key == s_val:
+                    return f"{icon} {val}"
+            return val
+        styled_df[col] = styled_df[col].apply(add_gender_icon)
+
+    # 2. Apply Dynamic Styling (Colors)
+    def apply_colors(val):
+        s_val = str(val).lower()
+        # Blue for Male
+        if any(k in s_val for k in ["🚹", "ذكر", "male"]):
+            return "color: #3498db; font-weight: bold;" # Soft Blue
+        # Pink/Red for Female
+        if any(k in s_val for k in ["🚺", "أنثى", "female"]):
+            return "color: #e91e63; font-weight: bold;" # Pink/Magenta
+        # Default Green
+        return "color: #4CAF50;"
+
+    return styled_df.style.map(apply_colors)
 
 def clean_date_display(df):
     """
@@ -1779,7 +1848,7 @@ def render_dashboard_content():
             xl_data = create_pasha_whatsapp_excel(pd.DataFrame(stats['urgent']))
             if xl_data:
                 xl_buf, xl_df = xl_data
-                render_pasha_export_button(xl_df, "📤 تصدير للواتساب", "Urgent_WhatsApp.xlsx", "المرشحين_العاجل")
+                render_pasha_export_button(xl_df, "📤 تصدير للواتساب", "Urgent_WhatsApp.xlsx", "المرشحين_العاجل", key="btn_exp_urgent")
         show(stats['urgent'], "urgent")
         
     with t2: 
@@ -1788,7 +1857,7 @@ def render_dashboard_content():
             xl_data = create_pasha_whatsapp_excel(pd.DataFrame(stats['expired']))
             if xl_data:
                 xl_buf, xl_df = xl_data
-                render_pasha_export_button(xl_df, "📤 تصدير للواتساب", "Expired_WhatsApp.xlsx", "المرشحين_المنتهية")
+                render_pasha_export_button(xl_df, "📤 تصدير للواتساب", "Expired_WhatsApp.xlsx", "المرشحين_المنتهية", key="btn_exp_expired")
         show(stats['expired'], "expired")
         
     with t3: 
@@ -1797,7 +1866,7 @@ def render_dashboard_content():
             xl_data = create_pasha_whatsapp_excel(pd.DataFrame(stats['active']))
             if xl_data:
                 xl_buf, xl_df = xl_data
-                render_pasha_export_button(xl_df, "📤 تصدير للواتساب", "Active_WhatsApp.xlsx", "المرشحين_الفواعل")
+                render_pasha_export_button(xl_df, "📤 تصدير للواتساب", "Active_WhatsApp.xlsx", "المرشحين_الفواعل", key="btn_exp_active")
         show(stats['active'], "active")
 
 def render_search_content():
@@ -2094,7 +2163,7 @@ def render_search_content():
             # Use on_select to capture row selection
             df_height = min((len(res_display) + 1) * 35 + 40, 600)
             event = st.dataframe(
-                res_display, 
+                style_df(res_display), 
                 use_container_width=True,
                 on_select="rerun",
                 selection_mode="single-row",
@@ -3206,7 +3275,7 @@ def render_order_processing_content():
                         # Use selection
                         df_city_height = min((len(city_df) + 1) * 35 + 40, 500)
                         event_city = st.dataframe(
-                            city_df.drop(columns=["__uid"]),
+                            style_df(city_df.drop(columns=["__uid"])),
                             use_container_width=True,
                             hide_index=True,
                             on_select="rerun",
@@ -3248,7 +3317,7 @@ def render_order_processing_content():
                         
                         df_other_height = min((len(other_df) + 1) * 35 + 40, 500)
                         event_other = st.dataframe(
-                            other_df.drop(columns=["__uid"]),
+                            style_df(other_df.drop(columns=["__uid"])),
                             use_container_width=True,
                             hide_index=True,
                             on_select="rerun",
@@ -3292,6 +3361,10 @@ def render_customer_requests_content():
     try:
         # Fetch data using the specific method
         df = st.session_state.db.fetch_customer_requests()
+        
+        # Reverse the order so the newest requests are at the top
+        if not df.empty:
+            df = df[::-1].reset_index(drop=True)
     except Exception as e:
         loading_placeholder.empty()
         import traceback
@@ -3330,6 +3403,93 @@ def render_customer_requests_content():
         return
 
     loading_placeholder.empty()
+
+    # ────── Advanced Filters for Matching ──────
+    lbl_age = t("age", lang)
+    lbl_contract = t("contract_end", lang)
+    lbl_reg = t("registration_date", lang)
+    lbl_enable = "تفعيل" if lang == "ar" else "Activate"
+    
+    with st.expander(t("advanced_filters", lang) if t("advanced_filters", lang) != "advanced_filters" else "تصفية متقدمة", expanded=False):
+        
+        # Row 1: Date & Range Filters
+        st.markdown(f'<div class="premium-filter-label">📅 {t("filter_dates_group", lang)}</div>', unsafe_allow_html=True)
+        c1, c2, c3 = st.columns(3)
+        
+        with c1:
+            use_age = st.checkbox(f" {lbl_enable} {lbl_age}", key="cr_use_age_filter")
+            if use_age:
+                age_range = st.slider(lbl_age, 18, 60, (20, 45), key="cr_age_slider")
+            else: age_range = (18, 60)
+
+        with c2:
+            use_contract = st.checkbox(f" {lbl_enable} {lbl_contract}", key="cr_use_contract_filter")
+            if use_contract:
+                contract_range = st.date_input("Contract Range", (datetime.now().date(), datetime.now().date() + timedelta(days=30)), label_visibility="collapsed", key="cr_contract_range")
+            else: contract_range = []
+
+        with c3:
+            use_reg = st.checkbox(f" {lbl_enable} {lbl_reg}", key="cr_use_reg_filter")
+            if use_reg:
+                reg_range = st.date_input("Registration Range", (datetime.now().date().replace(day=1), datetime.now().date()), label_visibility="collapsed", key="cr_reg_range")
+            else: reg_range = []
+
+        st.markdown("<br>", unsafe_allow_html=True)
+        st.markdown(f'<div class="premium-filter-label">⚙️ {t("filter_advanced_group", lang)}</div>', unsafe_allow_html=True)
+        
+        # Row 2: Status & Dropdown Filters
+        c2_1, c2_2, c2_3 = st.columns(3)
+        
+        with c2_1:
+            use_expired = st.checkbox(t("expired", lang), key="cr_use_expired_filter")
+            if use_expired:
+                st.caption("⚠️ " + ("ترتيب من الأقدم" if lang == "ar" else "Sorting Oldest first"))
+        
+        with c2_2:
+            use_not_working = st.checkbox("No (هل يعمل حالياً؟)" if lang == "ar" else "Not Working (No)", key="cr_use_not_working_filter")
+            
+        with c2_3:
+            transfer_options = {
+                "": f"— {t('transfer_all', lang)} —",
+                "First time": t("transfer_1", lang),
+                "Second time": t("transfer_2", lang),
+                "The third time": t("transfer_3", lang),
+                "More than three": t("transfer_more", lang)
+            }
+            selected_transfer_label = st.selectbox(
+                t("transfer_count_label", lang),
+                options=list(transfer_options.values()),
+                key="cr_transfer_count_dropdown"
+            )
+            selected_transfer_key = [k for k, v in transfer_options.items() if v == selected_transfer_label][0]
+        
+        # Row 3: Huroob & Outside City Filters
+        st.markdown("<br>", unsafe_allow_html=True)
+        c3_1, c3_2 = st.columns(2)
+        with c3_1:
+            use_no_huroob = st.checkbox(t("no_huroob", lang), key="cr_use_no_huroob_filter")
+        with c3_2:
+            use_work_outside = st.checkbox(t("work_outside_city", lang), key="cr_use_work_outside_filter")
+
+    # Gather Filters
+    filters = {}
+    if use_age:
+        filters['age_enabled'] = True
+        filters['age_min'] = age_range[0]
+        filters['age_max'] = age_range[1]
+    if use_contract and len(contract_range) == 2:
+        filters['contract_enabled'] = True
+        filters['contract_end_start'] = contract_range[0]
+        filters['contract_end_end'] = contract_range[1]
+    if use_reg and len(reg_range) == 2:
+        filters['date_enabled'] = True
+        filters['date_start'] = reg_range[0]
+        filters['date_end'] = reg_range[1]
+    if use_expired: filters['expired_only'] = True
+    if use_not_working: filters['not_working_only'] = True
+    if use_no_huroob: filters['no_huroob'] = True
+    if use_work_outside: filters['work_outside_city'] = True
+    if selected_transfer_key: filters['transfer_count'] = selected_transfer_key
 
     if df.empty:
         st.warning(t("no_data", lang))
@@ -3395,9 +3555,44 @@ def render_customer_requests_content():
                 continue
             st.markdown(f"**{t_col(col_name, lang)}:** {val}")
 
-    # Match button
-    match_btn_label = "🚀 بحث ومطابقة المرشحين" if lang == "ar" else "🚀 Search & Match Candidates"
-    if st.button(match_btn_label, key="run_matcher_btn", use_container_width=True, type="primary"):
+    # Row management (Delete & Match)
+    st.markdown("<br>", unsafe_allow_html=True)
+    c_m1, c_m2 = st.columns([1, 1])
+    
+    with c_m1:
+        # Match button
+        match_btn_label = "🚀 بحث ومطابقة المرشحين" if lang == "ar" else "🚀 Search & Match Candidates"
+        run_match = st.button(match_btn_label, key="run_matcher_btn", use_container_width=True, type="primary")
+
+    with c_m2:
+        # Deletion logic
+        del_label = "🗑️ حذف هذا الطلب" if lang == "ar" else "🗑️ Delete this Request"
+        confirm_label = "⚠️ تأكيد الحذف النهائي" if lang == "ar" else "⚠️ Confirm Perm. Deletion"
+        
+        if st.session_state.get(f"confirm_delete_{selected_idx}"):
+            if st.button(confirm_label, key=f"btn_confirm_del_{selected_idx}", use_container_width=True):
+                # Execute deletion
+                sheet_url = "https://docs.google.com/spreadsheets/d/1ZlLGXqbFSnKrr2J-PRnxRhxykwrNOgOE6Mb34Zei_FU/edit"
+                row_to_del = selected_row.get("__sheet_row")
+                if row_to_del:
+                    with st.spinner("جارِ الحذف..." if lang == "ar" else "Deleting..."):
+                        success = st.session_state.db.delete_row(row_to_del, url=sheet_url)
+                        if success:
+                            st.success("تم الحذف بنجاح" if lang == "ar" else "Deleted successfully")
+                            st.session_state.pop(f"confirm_delete_{selected_idx}")
+                            time.sleep(1)
+                            st.rerun()
+                        else:
+                            st.error("فشل في الحذف" if lang == "ar" else "Failed to delete")
+            if st.button("إلغاء" if lang == "ar" else "Cancel", key=f"btn_cancel_del_{selected_idx}", use_container_width=True):
+                st.session_state[f"confirm_delete_{selected_idx}"] = False
+                st.rerun()
+        else:
+            if st.button(del_label, key=f"btn_del_req_{selected_idx}", use_container_width=True):
+                st.session_state[f"confirm_delete_{selected_idx}"] = True
+                st.rerun()
+
+    if run_match:
         with st.spinner("جارٍ البحث عن مرشحين مطابقين..." if lang == "ar" else "Searching for matching candidates..."):
             try:
                 # Fetch candidates (main workers database)
@@ -3406,12 +3601,24 @@ def render_customer_requests_content():
                 if candidates_df is None or candidates_df.empty:
                     st.error("❌ " + ("لا توجد بيانات مرشحين في قاعدة البيانات" if lang == "ar" else "No candidate data in the database"))
                 else:
+                    # Pre-filter using SmartSearchEngine if any filters are active
+                    if filters:
+                        eng = SmartSearchEngine(candidates_df)
+                        filtered_df = eng.search("", filters=filters)
+                        # Handle potential empty results from filters
+                        if filtered_df.empty:
+                            st.warning("⚠️ " + ("لا توجد مرشحين يطابقون التصفية المتقدمة. يرجى تخفيف الشروط." if lang == "ar" else "No candidates match the advanced filters. Please broaden your criteria."))
+                            return
+                        candidates_to_match = filtered_df
+                    else:
+                        candidates_to_match = candidates_df
+
                     # Run the matcher
-                    matcher = CandidateMatcher(candidates_df)
+                    matcher = CandidateMatcher(candidates_to_match)
                     result = matcher.match(selected_row)
 
                     # Format and display
-                    summary_md, status_md, result_df = format_match_result(result, lang)
+                    summary_md, status_md, alt_table_md, result_df = format_match_result(result, lang)
 
                     st.markdown("---")
                     st.markdown(summary_md)
@@ -3444,6 +3651,9 @@ def render_customer_requests_content():
                             hide_index=True,
                             key="matcher_results_table"
                         )
+                        
+                    if alt_table_md:
+                        st.markdown(alt_table_md)
 
                     # Debug info (collapsible)
                     with st.expander("🛠️ " + ("معلومات التشخيص" if lang == "ar" else "Debug Info")):
@@ -3673,7 +3883,7 @@ def render_bengali_supply_content():
                             "صاحب العمل": e_info.get("name", w.get("employer")),
                             "التاريخ": w.get("timestamp", "")
                         })
-                    st.dataframe(pd.DataFrame(df_g), use_container_width=True, hide_index=True)
+                    st.dataframe(style_df(pd.DataFrame(df_g)), use_container_width=True, hide_index=True)
                     
                     st.markdown("---")
                     for w in sorted(results, key=lambda x: x.get("timestamp", ""), reverse=True):

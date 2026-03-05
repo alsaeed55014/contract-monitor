@@ -124,17 +124,22 @@ class SmartSearchEngine:
                             found_match_for_bundle = False
                             for syn in bundle:
                                 syn_norm = self.translator._normalize_query_word(syn)
+                                
+                                # Create a flexible version of the synonym (ignore hyphens and spaces)
+                                syn_flex = re.sub(r'[\s\-]', '', syn_norm)
+                                row_text_flex = re.sub(r'[\s\-]', '', row_text_norm)
+                                
                                 # Use word-boundary matching for short terms to avoid
                                 # substring false positives (e.g. "male" in "female")
-                                if len(syn_norm) <= 6:
+                                if len(syn_norm) <= 4: # Reduced from 6 to be more precise
                                     # Word boundary match
                                     pattern = r'(?:^|[\s,:;.\-/])' + re.escape(syn_norm) + r'(?:[\s,:;.\-/]|$)'
                                     if re.search(pattern, row_text_norm):
                                         found_match_for_bundle = True
                                         break
                                 else:
-                                    # Longer terms: substring match is safe
-                                    if syn_norm in row_text_norm:
+                                    # Longer terms: flexible match (ignore spaces/hyphens)
+                                    if syn_flex in row_text_flex:
                                         found_match_for_bundle = True
                                         break
                             
