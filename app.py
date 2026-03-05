@@ -733,12 +733,18 @@ FLAG_MAP = {
     "اثيوبي": "et", "اثيوبية": "et", "اثيوبيا": "et",
     "مغربي": "ma", "مغربية": "ma", "المغرب": "ma",
     "يمني": "ye", "يمنية": "ye", "اليمن": "ye",
+    "اندونيسي": "id", "اندونيسية": "id", "اندونيسيا": "id", "اندونيسا": "id",
+    "رواندي": "rw", "رواندية": "rw", "رواندا": "rw", "روندا": "rw", "روندي": "rw", "روندية": "rw",
+    "افغاني": "af", "افغانية": "af", "افغانستان": "af", "افغان": "af",
+    "نيجيري": "ng", "نيجيرية": "ng", "نيجيريا": "ng", "نيجريا": "ng", "نيجري": "ng", "نيجرية": "ng",
     # English
     "indian": "in", "filipino": "ph", "nepi": "np", "nepali": "np", "nepal": "np",
     "bangla": "bd", "bangladeshi": "bd", "pakistan": "pk", "pakistani": "pk",
     "egypt": "eg", "egyptian": "eg", "sudan": "sd", "sudanese": "sd",
     "sri lanka": "lk", "sri lankan": "lk", "kenya": "ke", "kenyan": "ke",
-    "uganda": "ug", "ugandan": "ug", "ethiopia": "et", "ethiopian": "et"
+    "uganda": "ug", "ugandan": "ug", "ethiopia": "et", "ethiopian": "et",
+    "indonesian": "id", "indonesia": "id", "rwandan": "rw", "rwanda": "rw",
+    "afghan": "af", "afghanistan": "af", "nigerian": "ng", "nigeria": "ng"
 }
 
 GENDER_MAP = {
@@ -768,7 +774,7 @@ def style_df(df):
                 s_val = str(val).strip().lower()
                 for key, code in FLAG_MAP.items():
                     if key in s_val:
-                        return f"https://flagcdn.com/w40/{code}.png"
+                        return f"https://flagcdn.com/w20/{code}.png"
                 return None
             
             # Position flag before nationality
@@ -796,7 +802,10 @@ def style_df(df):
             return "color: #e91e63; font-weight: bold;"
         return "color: #4CAF50;"
 
-    return styled_df.style.map(apply_colors)
+    return styled_df.style.map(
+        apply_colors, 
+        subset=[c for c in styled_df.columns if not str(c).startswith("🚩_")]
+    )
 
 def clean_date_display(df):
     """
@@ -1829,7 +1838,7 @@ def render_dashboard_content():
         # Flag Image Configuration
         for col in d_final.columns:
             if any(kw in str(col).lower() for kw in ["nationality", "الجنسية"]):
-                final_cfg[f"🚩_{col}"] = st.column_config.ImageColumn("", width="small")
+                final_cfg[f"🚩_{col}"] = st.column_config.ImageColumn(" ", width="small")
 
         # Apply Green Text Styling
         styled_final = style_df(d_final)
@@ -2162,7 +2171,7 @@ def render_search_content():
             # Flag Image Configuration
             for col in res_display.columns:
                 if any(kw in str(col).lower() for kw in ["nationality", "الجنسية"]):
-                    column_config[f"🚩_{col}"] = st.column_config.ImageColumn("", width="small")
+                    column_config[f"🚩_{col}"] = st.column_config.ImageColumn(" ", width="small")
 
             # --- EXPORT BUTTON FOR SEARCH ---
             c_s_1, c_s_2 = st.columns([4, 1])
@@ -3288,7 +3297,7 @@ def render_order_processing_content():
                         col_cfg_city = {}
                         for col in city_df.columns:
                             if any(kw in str(col).lower() for kw in ["nationality", "الجنسية"]):
-                                col_cfg_city[f"🚩_{col}"] = st.column_config.ImageColumn("", width="small")
+                                col_cfg_city[f"🚩_{col}"] = st.column_config.ImageColumn(" ", width="small")
 
                         # Use selection
                         df_city_height = min((len(city_df) + 1) * 35 + 40, 500)
@@ -3338,7 +3347,7 @@ def render_order_processing_content():
                         col_cfg_other = {}
                         for col in other_df.columns:
                             if any(kw in str(col).lower() for kw in ["nationality", "الجنسية"]):
-                                col_cfg_other[f"🚩_{col}"] = st.column_config.ImageColumn("", width="small")
+                                col_cfg_other[f"🚩_{col}"] = st.column_config.ImageColumn(" ", width="small")
 
                         df_other_height = min((len(other_df) + 1) * 35 + 40, 500)
                         event_other = st.dataframe(
@@ -3675,7 +3684,7 @@ def render_customer_requests_content():
                         col_cfg_match = {}
                         for col in display_df.columns:
                             if any(kw in str(col).lower() for kw in ["nationality", "الجنسية"]):
-                                col_cfg_match[f"🚩_{col}"] = st.column_config.ImageColumn("", width="small")
+                                col_cfg_match[f"🚩_{col}"] = st.column_config.ImageColumn(" ", width="small")
 
                         st.dataframe(
                             style_df(display_df),
@@ -3920,7 +3929,7 @@ def render_bengali_supply_content():
                     col_cfg_b = {}
                     for col in df_bengali_search.columns:
                         if any(kw in str(col).lower() for kw in ["nationality", "الجنسية"]):
-                            col_cfg_b[f"🚩_{col}"] = st.column_config.ImageColumn("", width="small")
+                            col_cfg_b[f"🚩_{col}"] = st.column_config.ImageColumn(" ", width="small")
                     
                     st.dataframe(style_df(df_bengali_search), use_container_width=True, hide_index=True, column_config=col_cfg_b)
                     
