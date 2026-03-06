@@ -190,7 +190,6 @@ def get_base64_image(image_path):
     with open(image_path, "rb") as img_file:
         return base64.b64encode(img_file.read()).decode()
 
-@st.cache_data(ttl=3600)
 def get_css():
     return """
     <style>
@@ -376,10 +375,14 @@ def get_css():
             border: 1px solid var(--luxury-gold) !important;
         }
 
-        /* WhatsApp Export Button Styling Reverted (Default Luxury) */
+        /* WhatsApp Export Button - Red Text */
         .whatsapp-export-btn .stButton button,
         .whatsapp-export-btn .stDownloadButton button {
-            /* Inherits default luxury styles */
+            color: #FF0000 !important;
+        }
+        .whatsapp-export-btn .stButton button:hover,
+        .whatsapp-export-btn .stDownloadButton button:hover {
+            color: #FF0000 !important;
         }
 
         /* 6) Table & Data Presentation - WHITE NEON STYLE (For DataFrames) */
@@ -827,7 +830,8 @@ def get_css():
                 display: none !important;
             }
 
-            /* 13) STYLED GOLD SIDEBAR TOGGLE (Updated from Red to Gold for clarity) */
+            /* 13) STYLED NEON RED SIDEBAR TOGGLE (Updated to Red) */
+            /* This target works for BOTH "Open" and "Close" states */
             button[data-testid="stSidebarCollapse"],
             button[aria-label*="sidebar"],
             .st-emotion-cache-not-found button[kind="headerNoPadding"] {
@@ -835,24 +839,36 @@ def get_css():
                 visibility: visible !important;
                 position: fixed !important;
                 top: 10px !important;
-                right: 15px !important;
-                left: auto !important;
+                left: 15px !important;
                 z-index: 9999999 !important;
-                background-color: #D4AF37 !important; /* Luxury Gold */
-                border: 2px solid #FFFFFF !important;
+                background-color: #FF0000 !important; /* Neon Red */
+                border: 2px solid #8B0000 !important;
                 border-radius: 50% !important;
-                box-shadow: 0 0 15px rgba(212, 175, 55, 0.8) !important;
+                box-shadow: 0 0 15px #FF0000, 0 0 30px rgba(255, 0, 0, 0.4) !important;
                 width: 44px !important;
                 height: 44px !important;
                 opacity: 1 !important;
             }
 
+            /* Ensure the icon inside is White and clearly visible */
             button[aria-label*="sidebar"] svg,
             button[data-testid="stSidebarCollapse"] svg {
-                fill: #000000 !important; /* High contrast black icon on gold */
-                color: #000000 !important;
+                fill: #FFFFFF !important;
+                color: #FFFFFF !important;
                 width: 26px !important;
                 height: 26px !important;
+                stroke: #FFFFFF !important;
+                stroke-width: 0.5px;
+            }
+
+            /* Pulse animation for Neon Red effect */
+            button[data-testid="stSidebarCollapse"] {
+                animation: neon-red-pulse 2s infinite alternate;
+            }
+
+            @keyframes neon-red-pulse {
+                0% { box-shadow: 0 0 10px #FF0000, 0 0 20px rgba(255, 0, 0, 0.4); }
+                100% { box-shadow: 0 0 20px #FF0000, 0 0 40px rgba(255, 0, 0, 0.8); }
             }
 
             /* 14) Log Message Cards */
@@ -924,15 +940,19 @@ def get_css():
                 filter: drop-shadow(0 0 6px rgba(255, 0, 0, 0.6)) !important;
             }
 
-            /* === MOBILE: WhatsApp export button (Explicit Luxury Gold) === */
+            /* === MOBILE RED: WhatsApp export button === */
             .stDownloadButton button,
-            .stDownloadButton button div,
-            .stDownloadButton button p {
-                background: linear-gradient(135deg, #1A1A1A 0%, #262626 100%) !important;
-                color: #D4AF37 !important;
-                border: 1px solid #D4AF37 !important;
-                border-radius: 12px !important;
-                box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5) !important;
+            .stDownloadButton button span {
+                background: linear-gradient(135deg, #1A0000 0%, #330000 100%) !important;
+                color: #FF0000 !important;
+                border: 1.5px solid rgba(255, 0, 0, 0.6) !important;
+                box-shadow: 0 0 15px rgba(255, 0, 0, 0.3) !important;
+            }
+            .stDownloadButton button:hover {
+                background: #FF0000 !important;
+                color: #FFFFFF !important;
+                border-color: #FF0000 !important;
+                box-shadow: 0 0 25px rgba(255, 0, 0, 0.7) !important;
             }
 
             /* === MOBILE RED: Selectbox / Dropdown arrows === */
@@ -950,9 +970,12 @@ def get_css():
             .stExpander summary svg,
             .status-error { background: rgba(255, 49, 49, 0.1) !important; color: #FF3131 !important; border: 1px solid rgba(255, 49, 49, 0.2) !important; }
 
-            /* Table Translator Button - Mobile (Follow Luxury Style) */
+            /* Table Translator Button - Mobile (Red) */
             .table-translator-btn button {
-                /* Inherits from global luxury button style */
+                background: linear-gradient(135deg, #FF0000 0%, #8B0000 100%) !important;
+                color: #FFFFFF !important;
+                border: 2px solid #FF3131 !important;
+                box-shadow: 0 0 15px rgba(255, 0, 0, 0.4) !important;
             }
         }
 
@@ -969,31 +992,6 @@ def get_css():
             box-shadow: 0 0 25px rgba(255, 255, 255, 0.6) !important;
         }
     </style>
-    <script>
-        const doc = window.parent.document;
-        
-        function closeSidebar() {
-            const sidebar = doc.querySelector('section[data-testid="stSidebar"]');
-            if (sidebar && sidebar.getAttribute('aria-expanded') === 'true') {
-                const closeBtn = doc.querySelector('button[data-testid="stSidebarCollapse"]');
-                if (closeBtn) closeBtn.click();
-            }
-        }
-
-        doc.addEventListener('click', (e) => {
-            if (window.innerWidth <= 768) {
-                const sidebar = doc.querySelector('section[data-testid="stSidebar"]');
-                
-                // 1. Sidebar Stay Open (Removed Auto-close on nav)
-                
-                // 2. Close on click outside (main content area only)
-                const mainArea = doc.querySelector('section.main');
-                if (mainArea && mainArea.contains(e.target)) {
-                    closeSidebar();
-                }
-            }
-        }, true);
-    </script>
     """
 
 # --- Icon Mappings ---
@@ -1031,37 +1029,11 @@ GENDER_MAP = {
     "أنثى": "🚺", "female": "🚺"
 }
 
-@st.cache_data(ttl=600)
-def get_flag_url(val):
-    if not val: return None
-    s_val = str(val).strip().lower()
-    # Sort keys by length (longest first) to match "sri lankan" before "sri"
-    sorted_keys = sorted(FLAG_MAP.keys(), key=len, reverse=True)
-    for key in sorted_keys:
-        code = FLAG_MAP[key]
-        if len(key) <= 3:
-            pattern = r'(?:^|[\s,:;.\-/])' + re.escape(key) + r'(?:[\s,:;.\-/]|$)'
-            if re.search(pattern, s_val):
-                return f"https://flagcdn.com/w20/{code}.png"
-        else:
-            if key in s_val:
-                return f"https://flagcdn.com/w20/{code}.png"
-    return None
-
-@st.cache_data(ttl=600)
-def add_gender_icon(val):
-    if not val: return val
-    s_val = str(val).strip().lower()
-    for key, icon in GENDER_MAP.items():
-        if key == s_val:
-            return f"{icon} {val}"
-    return val
-
 def style_df(df):
     """
     Applies custom styling to DataFrames.
     - Injects Flag URLs for nationality
-    - Colors rows/cells dynamically
+    - Colors rows/cells dynamically (Gender: Blue/Pink, Default: Green)
     """
     if not isinstance(df, pd.DataFrame):
         return df
@@ -1071,8 +1043,26 @@ def style_df(df):
     # 1. Flag Image Injection
     nat_cols = [c for c in styled_df.columns if any(kw in str(c).lower() for kw in ["nationality", "الجنسية"])]
     for col in nat_cols:
+        # Avoid double flags if re-running
         flag_col = f"🚩_{col}"
         if flag_col not in styled_df.columns:
+            def get_flag_url(val):
+                if not val: return None
+                s_val = str(val).strip().lower()
+                # Sort keys by length (longest first) to match "sri lankan" before "sri"
+                sorted_keys = sorted(FLAG_MAP.keys(), key=len, reverse=True)
+                for key in sorted_keys:
+                    code = FLAG_MAP[key]
+                    # Use boundaries for short keys to avoid false positives (e.g. 'in' in 'Fatima')
+                    if len(key) <= 3:
+                        pattern = r'(?:^|[\s,:;.\-/])' + re.escape(key) + r'(?:[\s,:;.\-/]|$)'
+                        if re.search(pattern, s_val):
+                            return f"https://flagcdn.com/w20/{code}.png"
+                    else:
+                        if key in s_val:
+                            return f"https://flagcdn.com/w20/{code}.png"
+                return None
+            
             # Position flag before nationality
             idx = list(styled_df.columns).index(col)
             styled_df.insert(idx, flag_col, styled_df[col].apply(get_flag_url))
@@ -1080,6 +1070,13 @@ def style_df(df):
     # 2. Gender Icon Injection
     gen_cols = [c for c in styled_df.columns if any(kw in str(c).lower() for kw in ["gender", "الجنس"]) and str(c).lower() != "الجنسية"]
     for col in gen_cols:
+        def add_gender_icon(val):
+            if not val: return val
+            s_val = str(val).strip().lower()
+            for key, icon in GENDER_MAP.items():
+                if key == s_val:
+                    return f"{icon} {val}"
+            return val
         styled_df[col] = styled_df[col].apply(add_gender_icon)
 
     # 3. Apply Dynamic Styling (Colors)
@@ -1140,7 +1137,7 @@ def clean_date_display(df):
 def render_table_translator(df, key_prefix="table"):
     """
     Renders side-by-side translation buttons (Arabic and Tagalog) above tables.
-    Uses Session State for persistence and mobile reliability.
+    Translates Requested Job, Other Skills, and Iqama Profession columns.
     """
     if df is None or df.empty:
         return df
@@ -1152,45 +1149,38 @@ def render_table_translator(df, key_prefix="table"):
     if not cols_to_translate:
         return df
 
-    # Create a state per table to persist translations
-    state_key = f"df_trans_state_{key_prefix}"
-    if state_key not in st.session_state:
-        st.session_state[state_key] = df.copy()
-
     from src.core.translation import TranslationManager
     tm = TranslationManager()
 
+    st.markdown('<div class="table-translator-container">', unsafe_allow_html=True)
     ct1, ct2 = st.columns(2)
     
     with ct1:
         st.markdown('<div class="table-translator-btn">', unsafe_allow_html=True)
         if st.button("🇸🇦 الترجمة للعربية", key=f"btn_ar_{key_prefix}", use_container_width=True):
             with st.spinner("جارِ الترجمة للعربية..."):
-                current_df = st.session_state[state_key]
                 for col in cols_to_translate:
-                    unique_vals = [v for v in current_df[col].unique() if v and isinstance(v, str)]
+                    unique_vals = [v for v in df[col].unique() if v and isinstance(v, str)]
                     if unique_vals:
                         translations = {val: tm.translate_full_text(val, target_lang='ar') for val in unique_vals}
-                        current_df[col] = current_df[col].map(translations).fillna(current_df[col])
-                st.session_state[state_key] = current_df
-                st.rerun()
+                        df[col] = df[col].map(translations).fillna(df[col])
+                st.success("✅ تم")
         st.markdown('</div>', unsafe_allow_html=True)
 
     with ct2:
         st.markdown('<div class="table-translator-btn">', unsafe_allow_html=True)
         if st.button("🇵🇭 Isalin sa Tagalog", key=f"btn_tl_{key_prefix}", use_container_width=True):
             with st.spinner("Isinasalin sa Tagalog..."):
-                current_df = st.session_state[state_key]
                 for col in cols_to_translate:
-                    unique_vals = [v for v in current_df[col].unique() if v and isinstance(v, str)]
+                    unique_vals = [v for v in df[col].unique() if v and isinstance(v, str)]
                     if unique_vals:
                         translations = {val: tm.translate_full_text(val, target_lang='tl') for val in unique_vals}
-                        current_df[col] = current_df[col].map(translations).fillna(current_df[col])
-                st.session_state[state_key] = current_df
-                st.rerun()
+                        df[col] = df[col].map(translations).fillna(df[col])
+                st.success("✅ Tapos na")
         st.markdown('</div>', unsafe_allow_html=True)
+    st.markdown('</div>', unsafe_allow_html=True)
     
-    return st.session_state[state_key]
+    return df
 
 def show_toast(message, typ="success", duration=5, container=None):
     """
@@ -1347,33 +1337,31 @@ st.set_page_config(
 # 5. Apply Styles
 st.markdown(get_css(), unsafe_allow_html=True)
 
-# 6. Initialize Core (With Persisted Session State)
+# 6. Initialize Core (With Force Re-init for Updates)
 if 'auth' not in st.session_state or not hasattr(st.session_state.auth, 'v10_marker'):
+    # Show a brief initial loader for a premium feel
+    loading = show_loading_hourglass()
+    time.sleep(0.4)
     st.session_state.auth = AuthManager(USERS_FILE)
-    st.session_state.auth.v10_marker = True 
-    st.session_state.db = DBClient()
+    st.session_state.auth.v10_marker = True # Marker with get_avatar/update_avatar support
+    st.session_state.db = DBClient() # Force DB re-init as well
+    loading.empty()
 
 # Report DB Load Errors to User
 if hasattr(st.session_state.auth, 'load_error'):
     st.error(f"⚠️ Error Loading User Database: {st.session_state.auth.load_error}")
 
-# Initialize Managers in session state if not already there
-if 'bm' not in st.session_state:
-    st.session_state.bm = BengaliDataManager()
-if 'cm' not in st.session_state:
-    st.session_state.cm = ContractManager()
+if 'db' not in st.session_state or not hasattr(st.session_state.db, 'fetch_customer_requests'):
+    st.session_state.db = DBClient()
+
+# Initialize TranslationManager if not already in session state
 if 'tm' not in st.session_state:
     try:
         from src.core.translation import TranslationManager
         st.session_state.tm = TranslationManager()
-    except:
+    except Exception as e:
+        print(f"[ERROR] Failed to init TranslationManager: {e}")
         st.session_state.tm = None
-if 'search_engine' not in st.session_state:
-    try:
-        from src.core.search import SmartSearchEngine
-        st.session_state.search_engine = SmartSearchEngine(st.session_state.db)
-    except:
-        st.session_state.search_engine = None
 
 # 7. Session State Defaults
 if 'user' not in st.session_state:
@@ -3820,24 +3808,7 @@ def render_order_processing_content():
                 if time_part:
                     info_html += info_cell("⏰", "وقت الطلب" if lang == 'ar' else "Order Time", time_part)
             
-            # --- Work Location side-by-side Translation ---
-            loc_val = str(customer_row.get(c_location, ""))
-            try:
-                from src.core.translation import TranslationManager
-                tm = TranslationManager()
-                trans_loc = tm.translate_word(loc_val)
-                # If we got a list of synonyms, take the first one; otherwise use the string
-                if isinstance(trans_loc, list): trans_loc = trans_loc[0]
-                
-                # Check if it was actually translated (different from original)
-                if trans_loc and str(trans_loc).lower() != loc_val.lower():
-                    loc_display = f"{loc_val} - {trans_loc}"
-                else:
-                    loc_display = loc_val
-            except:
-                loc_display = loc_val
-
-            info_html += info_cell("📍", t('work_location', lang), loc_display)
+            info_html += info_cell("📍", t('work_location', lang), str(customer_row.get(c_location, "")))
             info_html += info_cell("💼", t('work_nature', lang), str(customer_row.get(c_work_nature, "")))
             info_html += info_cell("👤", t('responsible_name', lang), responsible_val)
             info_html += info_cell("👥", t('required_category', lang), str(customer_row.get(c_category, "")))
