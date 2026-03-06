@@ -827,8 +827,7 @@ def get_css():
                 display: none !important;
             }
 
-            /* 13) STYLED NEON RED SIDEBAR TOGGLE (Updated to Red) */
-            /* This target works for BOTH "Open" and "Close" states */
+            /* 13) STYLED GOLD SIDEBAR TOGGLE (Updated from Red to Gold for clarity) */
             button[data-testid="stSidebarCollapse"],
             button[aria-label*="sidebar"],
             .st-emotion-cache-not-found button[kind="headerNoPadding"] {
@@ -836,37 +835,24 @@ def get_css():
                 visibility: visible !important;
                 position: fixed !important;
                 top: 10px !important;
-                right: 15px !important; /* Positioned Top-Right for RTL */
+                right: 15px !important;
                 left: auto !important;
                 z-index: 9999999 !important;
-                background-color: #FF0000 !important; /* Neon Red */
-                border: 2px solid #8B0000 !important;
+                background-color: #D4AF37 !important; /* Luxury Gold */
+                border: 2px solid #FFFFFF !important;
                 border-radius: 50% !important;
-                box-shadow: 0 0 15px #FF0000, 0 0 30px rgba(255, 0, 0, 0.4) !important;
+                box-shadow: 0 0 15px rgba(212, 175, 55, 0.8) !important;
                 width: 44px !important;
                 height: 44px !important;
                 opacity: 1 !important;
             }
 
-            /* Ensure the icon inside is White and clearly visible */
             button[aria-label*="sidebar"] svg,
             button[data-testid="stSidebarCollapse"] svg {
-                fill: #FFFFFF !important;
-                color: #FFFFFF !important;
+                fill: #000000 !important; /* High contrast black icon on gold */
+                color: #000000 !important;
                 width: 26px !important;
                 height: 26px !important;
-                stroke: #FFFFFF !important;
-                stroke-width: 0.5px;
-            }
-
-            /* Pulse animation for Neon Red effect */
-            button[data-testid="stSidebarCollapse"] {
-                animation: neon-red-pulse 2s infinite alternate;
-            }
-
-            @keyframes neon-red-pulse {
-                0% { box-shadow: 0 0 10px #FF0000, 0 0 20px rgba(255, 0, 0, 0.4); }
-                100% { box-shadow: 0 0 20px #FF0000, 0 0 40px rgba(255, 0, 0, 0.8); }
             }
 
             /* 14) Log Message Cards */
@@ -938,10 +924,15 @@ def get_css():
                 filter: drop-shadow(0 0 6px rgba(255, 0, 0, 0.6)) !important;
             }
 
-            /* === MOBILE: WhatsApp export button (Follow Luxury Style) === */
+            /* === MOBILE: WhatsApp export button (Explicit Luxury Gold) === */
             .stDownloadButton button,
-            .stDownloadButton button span {
-                /* Inherits from global luxury button style */
+            .stDownloadButton button div,
+            .stDownloadButton button p {
+                background: linear-gradient(135deg, #1A1A1A 0%, #262626 100%) !important;
+                color: #D4AF37 !important;
+                border: 1px solid #D4AF37 !important;
+                border-radius: 12px !important;
+                box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5) !important;
             }
 
             /* === MOBILE RED: Selectbox / Dropdown arrows === */
@@ -993,19 +984,9 @@ def get_css():
             if (window.innerWidth <= 768) {
                 const sidebar = doc.querySelector('section[data-testid="stSidebar"]');
                 
-                // 1. Auto-close on Sidebar common button click
-                if (sidebar && sidebar.contains(e.target)) {
-                    const btn = e.target.closest('button');
-                    if (btn) {
-                        const btnText = btn.innerText || "";
-                        // Exclude "تنظيف شامل" and "Deep Reset"
-                        if (!btnText.includes("تنظيف شامل") && !btnText.includes("Deep Reset")) {
-                            setTimeout(closeSidebar, 500);
-                        }
-                    }
-                }
+                // 1. Sidebar Stay Open (Removed Auto-close on nav)
                 
-                // 2. Close on click outside (main content area)
+                // 2. Close on click outside (main content area only)
                 const mainArea = doc.querySelector('section.main');
                 if (mainArea && mainArea.contains(e.target)) {
                     closeSidebar();
