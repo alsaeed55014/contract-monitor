@@ -375,14 +375,10 @@ def get_css():
             border: 1px solid var(--luxury-gold) !important;
         }
 
-        /* WhatsApp Export Button - Red Text */
+        /* WhatsApp Export Button Styling Reverted (Default Luxury) */
         .whatsapp-export-btn .stButton button,
         .whatsapp-export-btn .stDownloadButton button {
-            color: #FF0000 !important;
-        }
-        .whatsapp-export-btn .stButton button:hover,
-        .whatsapp-export-btn .stDownloadButton button:hover {
-            color: #FF0000 !important;
+            /* Inherits default luxury styles */
         }
 
         /* 6) Table & Data Presentation - WHITE NEON STYLE (For DataFrames) */
@@ -1137,7 +1133,7 @@ def clean_date_display(df):
 def render_table_translator(df, key_prefix="table"):
     """
     Renders side-by-side translation buttons (Arabic and Tagalog) above tables.
-    Translates Requested Job, Other Skills, and Iqama Profession columns.
+    Uses Session State for persistence and mobile reliability.
     """
     if df is None or df.empty:
         return df
@@ -1149,38 +1145,45 @@ def render_table_translator(df, key_prefix="table"):
     if not cols_to_translate:
         return df
 
+    # Create a state per table to persist translations
+    state_key = f"df_trans_state_{key_prefix}"
+    if state_key not in st.session_state:
+        st.session_state[state_key] = df.copy()
+
     from src.core.translation import TranslationManager
     tm = TranslationManager()
 
-    st.markdown('<div class="table-translator-container">', unsafe_allow_html=True)
     ct1, ct2 = st.columns(2)
     
     with ct1:
         st.markdown('<div class="table-translator-btn">', unsafe_allow_html=True)
         if st.button("🇸🇦 الترجمة للعربية", key=f"btn_ar_{key_prefix}", use_container_width=True):
             with st.spinner("جارِ الترجمة للعربية..."):
+                current_df = st.session_state[state_key]
                 for col in cols_to_translate:
-                    unique_vals = [v for v in df[col].unique() if v and isinstance(v, str)]
+                    unique_vals = [v for v in current_df[col].unique() if v and isinstance(v, str)]
                     if unique_vals:
                         translations = {val: tm.translate_full_text(val, target_lang='ar') for val in unique_vals}
-                        df[col] = df[col].map(translations).fillna(df[col])
-                st.success("✅ تم")
+                        current_df[col] = current_df[col].map(translations).fillna(current_df[col])
+                st.session_state[state_key] = current_df
+                st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
 
     with ct2:
         st.markdown('<div class="table-translator-btn">', unsafe_allow_html=True)
         if st.button("🇵🇭 Isalin sa Tagalog", key=f"btn_tl_{key_prefix}", use_container_width=True):
             with st.spinner("Isinasalin sa Tagalog..."):
+                current_df = st.session_state[state_key]
                 for col in cols_to_translate:
-                    unique_vals = [v for v in df[col].unique() if v and isinstance(v, str)]
+                    unique_vals = [v for v in current_df[col].unique() if v and isinstance(v, str)]
                     if unique_vals:
                         translations = {val: tm.translate_full_text(val, target_lang='tl') for val in unique_vals}
-                        df[col] = df[col].map(translations).fillna(df[col])
-                st.success("✅ Tapos na")
+                        current_df[col] = current_df[col].map(translations).fillna(current_df[col])
+                st.session_state[state_key] = current_df
+                st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
-    st.markdown('</div>', unsafe_allow_html=True)
     
-    return df
+    return st.session_state[state_key]
 
 def show_toast(message, typ="success", duration=5, container=None):
     """
@@ -3808,7 +3811,24 @@ def render_order_processing_content():
                 if time_part:
                     info_html += info_cell("⏰", "وقت الطلب" if lang == 'ar' else "Order Time", time_part)
             
-            info_html += info_cell("📍", t('work_location', lang), str(customer_row.get(c_location, "")))
+            # --- Work Location side-by-side Translation ---
+            loc_val = str(customer_row.get(c_location, ""))
+            try:
+                from src.core.translation import TranslationManager
+                tm = TranslationManager()
+                trans_loc = tm.translate_word(loc_val)
+                # If we got a list of synonyms, take the first one; otherwise use the string
+                if isinstance(trans_loc, list): trans_loc = trans_loc[0]
+                
+                # Check if it was actually translated (different from original)
+                if trans_loc and str(trans_loc).lower() != loc_val.lower():
+                    loc_display = f"{loc_val} - {trans_loc}"
+                else:
+                    loc_display = loc_val
+            except:
+                loc_display = loc_val
+
+            info_html += info_cell("📍", t('work_location', lang), loc_display)
             info_html += info_cell("💼", t('work_nature', lang), str(customer_row.get(c_work_nature, "")))
             info_html += info_cell("👤", t('responsible_name', lang), responsible_val)
             info_html += info_cell("👥", t('required_category', lang), str(customer_row.get(c_category, "")))
