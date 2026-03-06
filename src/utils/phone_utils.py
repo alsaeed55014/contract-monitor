@@ -120,6 +120,7 @@ def render_pasha_export_button(df, label, filename, base_save_name, key=None):
     Renders either a Desktop Save button (for local PC) or a Download button (for others).
     This prevents duplicate downloads in the 'Downloads' folder on PC.
     """
+    st.markdown('<div class="whatsapp-export-btn">', unsafe_allow_html=True)
     if is_local_windows_pc():
         if st.button(label, key=key, use_container_width=True):
             path = save_to_local_desktop(df, base_save_name)
@@ -141,6 +142,7 @@ def render_pasha_export_button(df, label, filename, base_save_name, key=None):
             key=key,
             use_container_width=True
         )
+    st.markdown('</div>', unsafe_allow_html=True)
 
 def validate_numbers(raw_text):
     if not raw_text:

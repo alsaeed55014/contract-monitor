@@ -375,6 +375,16 @@ def get_css():
             border: 1px solid var(--luxury-gold) !important;
         }
 
+        /* WhatsApp Export Button - Red Text */
+        .whatsapp-export-btn .stButton button,
+        .whatsapp-export-btn .stDownloadButton button {
+            color: #FF0000 !important;
+        }
+        .whatsapp-export-btn .stButton button:hover,
+        .whatsapp-export-btn .stDownloadButton button:hover {
+            color: #FF0000 !important;
+        }
+
         /* 6) Table & Data Presentation - WHITE NEON STYLE (For DataFrames) */
         [data-testid="stDataFrame"], [data-testid="stTable"], .neon-white-table {
             background: rgba(255, 255, 255, 1) !important;
@@ -820,7 +830,7 @@ def get_css():
                 display: none !important;
             }
 
-            /* 13) STYLED NEON WHITE SIDEBAR TOGGLE */
+            /* 13) STYLED NEON RED SIDEBAR TOGGLE (Updated to Red) */
             /* This target works for BOTH "Open" and "Close" states */
             button[data-testid="stSidebarCollapse"],
             button[aria-label*="sidebar"],
@@ -831,34 +841,34 @@ def get_css():
                 top: 10px !important;
                 left: 15px !important;
                 z-index: 9999999 !important;
-                background-color: #FFFFFF !important; /* Neon White */
-                border: 2px solid #D4AF37 !important;
+                background-color: #FF0000 !important; /* Neon Red */
+                border: 2px solid #8B0000 !important;
                 border-radius: 50% !important;
-                box-shadow: 0 0 15px #FFFFFF, 0 0 30px rgba(212, 175, 55, 0.6) !important;
+                box-shadow: 0 0 15px #FF0000, 0 0 30px rgba(255, 0, 0, 0.4) !important;
                 width: 44px !important;
                 height: 44px !important;
                 opacity: 1 !important;
             }
 
-            /* Ensure the icon inside is Gold/Black and clearly visible */
+            /* Ensure the icon inside is White and clearly visible */
             button[aria-label*="sidebar"] svg,
             button[data-testid="stSidebarCollapse"] svg {
-                fill: #1A1A1A !important;
-                color: #1A1A1A !important;
+                fill: #FFFFFF !important;
+                color: #FFFFFF !important;
                 width: 26px !important;
                 height: 26px !important;
-                stroke: #D4AF37 !important;
+                stroke: #FFFFFF !important;
                 stroke-width: 0.5px;
             }
 
-            /* Pulse animation for Neon effect */
+            /* Pulse animation for Neon Red effect */
             button[data-testid="stSidebarCollapse"] {
-                animation: neon-white-pulse 2s infinite alternate;
+                animation: neon-red-pulse 2s infinite alternate;
             }
 
-            @keyframes neon-white-pulse {
-                0% { box-shadow: 0 0 10px #FFF, 0 0 20px rgba(212, 175, 55, 0.4); }
-                100% { box-shadow: 0 0 20px #FFF, 0 0 40px rgba(212, 175, 55, 0.8); }
+            @keyframes neon-red-pulse {
+                0% { box-shadow: 0 0 10px #FF0000, 0 0 20px rgba(255, 0, 0, 0.4); }
+                100% { box-shadow: 0 0 20px #FF0000, 0 0 40px rgba(255, 0, 0, 0.8); }
             }
 
             /* 14) Log Message Cards */
@@ -919,6 +929,67 @@ def get_css():
             }
             .status-success { background: rgba(0, 255, 65, 0.1) !important; color: #00FF41 !important; border: 1px solid rgba(0, 255, 65, 0.2) !important; }
             .status-error { background: rgba(255, 49, 49, 0.1) !important; color: #FF3131 !important; border: 1px solid rgba(255, 49, 49, 0.2) !important; }
+
+            /* === MOBILE RED ICONS: Table toolbar icons (fullscreen, search, download) === */
+            [data-testid="stElementToolbar"] button,
+            [data-testid="stElementToolbar"] svg,
+            [data-testid="stDataFrame"] [data-testid="stElementToolbar"] button,
+            [data-testid="stDataFrame"] [data-testid="stElementToolbar"] svg {
+                color: #FF0000 !important;
+                fill: #FF0000 !important;
+                filter: drop-shadow(0 0 6px rgba(255, 0, 0, 0.6)) !important;
+            }
+
+            /* === MOBILE RED: WhatsApp export button === */
+            .stDownloadButton button,
+            .stDownloadButton button span {
+                background: linear-gradient(135deg, #1A0000 0%, #330000 100%) !important;
+                color: #FF0000 !important;
+                border: 1.5px solid rgba(255, 0, 0, 0.6) !important;
+                box-shadow: 0 0 15px rgba(255, 0, 0, 0.3) !important;
+            }
+            .stDownloadButton button:hover {
+                background: #FF0000 !important;
+                color: #FFFFFF !important;
+                border-color: #FF0000 !important;
+                box-shadow: 0 0 25px rgba(255, 0, 0, 0.7) !important;
+            }
+
+            /* === MOBILE RED: Selectbox / Dropdown arrows === */
+            div[data-baseweb="select"] svg,
+            div[data-baseweb="select"] [data-testid="stSelectboxChevron"],
+            .stSelectbox svg,
+            .stSelectbox [role="combobox"] svg,
+            div[data-baseweb="popover"] svg {
+                color: #FF0000 !important;
+                fill: #FF0000 !important;
+                filter: drop-shadow(0 0 4px rgba(255, 0, 0, 0.5)) !important;
+            }
+
+            /* === MOBILE RED: Expander toggle arrows === */
+            .stExpander summary svg,
+            .status-error { background: rgba(255, 49, 49, 0.1) !important; color: #FF3131 !important; border: 1px solid rgba(255, 49, 49, 0.2) !important; }
+
+            /* Table Translator Button - Mobile (Red) */
+            .table-translator-btn button {
+                background: linear-gradient(135deg, #FF0000 0%, #8B0000 100%) !important;
+                color: #FFFFFF !important;
+                border: 2px solid #FF3131 !important;
+                box-shadow: 0 0 15px rgba(255, 0, 0, 0.4) !important;
+            }
+        }
+
+        /* Table Translator Button - Desktop/Tablet (White) */
+        .table-translator-btn button {
+            background: linear-gradient(135deg, #FFFFFF 0%, #E0E0E0 100%) !important;
+            color: #000000 !important;
+            border: 2px solid #FFFFFF !important;
+            box-shadow: 0 0 15px rgba(255, 255, 255, 0.3) !important;
+            font-weight: 700 !important;
+        }
+        .table-translator-btn button:hover {
+            transform: scale(1.05) !important;
+            box-shadow: 0 0 25px rgba(255, 255, 255, 0.6) !important;
         }
     </style>
     """
@@ -1062,6 +1133,55 @@ def clean_date_display(df):
     return df
 
 # 2.4 Global Premium Popup Helper
+
+def render_table_translator(df, key_prefix="table"):
+    """
+    Renders side-by-side translation buttons (Arabic and Tagalog) above tables.
+    Translates Requested Job, Other Skills, and Iqama Profession columns.
+    """
+    if df is None or df.empty:
+        return df
+
+    # Search for target columns
+    target_keywords = ["الوظيفة المطلوبة", "Requested Job", "مهارات أخرى", "Other Skills", "المهنة في الإقامة", "Iqama Profession"]
+    cols_to_translate = [c for c in df.columns if any(kw.lower() in str(c).lower() for kw in target_keywords)]
+
+    if not cols_to_translate:
+        return df
+
+    from src.core.translation import TranslationManager
+    tm = TranslationManager()
+
+    st.markdown('<div class="table-translator-container">', unsafe_allow_html=True)
+    ct1, ct2 = st.columns(2)
+    
+    with ct1:
+        st.markdown('<div class="table-translator-btn">', unsafe_allow_html=True)
+        if st.button("🇸🇦 الترجمة للعربية", key=f"btn_ar_{key_prefix}", use_container_width=True):
+            with st.spinner("جارِ الترجمة للعربية..."):
+                for col in cols_to_translate:
+                    unique_vals = [v for v in df[col].unique() if v and isinstance(v, str)]
+                    if unique_vals:
+                        translations = {val: tm.translate_full_text(val, target_lang='ar') for val in unique_vals}
+                        df[col] = df[col].map(translations).fillna(df[col])
+                st.success("✅ تم")
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    with ct2:
+        st.markdown('<div class="table-translator-btn">', unsafe_allow_html=True)
+        if st.button("🇵🇭 Isalin sa Tagalog", key=f"btn_tl_{key_prefix}", use_container_width=True):
+            with st.spinner("Isinasalin sa Tagalog..."):
+                for col in cols_to_translate:
+                    unique_vals = [v for v in df[col].unique() if v and isinstance(v, str)]
+                    if unique_vals:
+                        translations = {val: tm.translate_full_text(val, target_lang='tl') for val in unique_vals}
+                        df[col] = df[col].map(translations).fillna(df[col])
+                st.success("✅ Tapos na")
+        st.markdown('</div>', unsafe_allow_html=True)
+    st.markdown('</div>', unsafe_allow_html=True)
+    
+    return df
+
 def show_toast(message, typ="success", duration=5, container=None):
     """
     Renders a floating luxury notification (popup) centered on the screen.
@@ -1274,6 +1394,17 @@ def render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search", 
             worker_name = worker_row[nk]
             break
             
+    # NEW: Calculate a unique ID for this worker to isolate translation state
+    worker_id = worker_uid
+    if not worker_id:
+        sheet_row = worker_row.get('__sheet_row', worker_row.get('__sheet_row_backup'))
+        if sheet_row:
+            worker_id = f"row_{sheet_row}"
+        else:
+            import hashlib
+            w_name_fallback = str(worker_row.get("Full Name:", worker_row.get("الاسم الكامل", worker_name)))
+            worker_id = hashlib.md5(w_name_fallback.encode()).hexdigest()[:10]
+
     # Dynamically find CV column
     cv_col = None
     for c in worker_row.index:
@@ -1285,8 +1416,8 @@ def render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search", 
     
     # --- AUTO SCROLL LOGIC ---
     scroll_key = f"last_scroll_{key_prefix}"
-    if scroll_key not in st.session_state or st.session_state[scroll_key] != selected_idx:
-        st.session_state[scroll_key] = selected_idx
+    if scroll_key not in st.session_state or st.session_state[scroll_key] != worker_id:
+        st.session_state[scroll_key] = worker_id
         st.components.v1.html(
             f"""
             <script>
@@ -1316,93 +1447,81 @@ def render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search", 
                    letter-spacing: 2px;
                    text-transform: uppercase;
                    font-size: 1.8rem;">
-            \U0001F464 {worker_name}
+            👤 {worker_name}
         </h2>
     </div>
     """, unsafe_allow_html=True)
     
     col_a, col_b = st.columns([1, 1])
-    with col_a:
-        if st.button(f"✨ {t('translate_cv_btn', lang)}", use_container_width=True, type="primary", key=f"btn_trans_{key_prefix}_{selected_idx}"):
-            if cv_url and str(cv_url).startswith("http"):
-                from src.core.file_translator import FileTranslator
-                
-                trans_loader = show_loading_hourglass(t("extracting", lang))
-                try:
-                    import requests
-                    file_id = None
-                    if "drive.google.com" in cv_url:
-                        if "id=" in cv_url: file_id = cv_url.split("id=")[1].split("&")[0]
-                        elif "/d/" in cv_url: file_id = cv_url.split("/d/")[1].split("/")[0]
+    
+    translate_configs = [
+        {"lang_code": "ar", "label": t('translate_cv_btn', lang), "key_suffix": "ar", "target": "ar"},
+        {"lang_code": "tl", "label": "✨ Isalin ang CV (Filipino)", "key_suffix": "tl", "target": "tl"}
+    ]
 
-                    # 1. Download full content
-                    session = requests.Session()
-                    session.headers.update({"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"})
+    for idx, config in enumerate(translate_configs):
+        with col_a if idx == 0 else col_b:
+            if st.button(config["label"], use_container_width=True, type="primary" if idx == 0 else "secondary", key=f"btn_trans_{key_prefix}_{worker_id}_{config['key_suffix']}"):
+                if cv_url and str(cv_url).startswith("http"):
+                    from src.core.file_translator import FileTranslator
                     
-                    if file_id:
-                        dl_url = f"https://docs.google.com/uc?export=download&id={file_id}"
-                        resp = session.get(dl_url, stream=True, timeout=15)
+                    trans_loader = show_loading_hourglass(t("extracting", lang))
+                    try:
+                        import requests
+                        file_id = None
+                        if "drive.google.com" in cv_url:
+                            if "id=" in cv_url: file_id = cv_url.split("id=")[1].split("&")[0]
+                            elif "/d/" in cv_url: file_id = cv_url.split("/d/")[1].split("/")[0]
+
+                        session = requests.Session()
+                        session.headers.update({"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"})
                         
-                        # Handle Drive Virus Warning
-                        token = None
-                        for k, v in resp.cookies.items():
-                            if k.startswith('download_warning'): token = v; break
-                        if token:
-                            dl_url = f"https://docs.google.com/uc?export=download&confirm={token}&id={file_id}"
+                        if file_id:
+                            dl_url = f"https://docs.google.com/uc?export=download&id={file_id}"
                             resp = session.get(dl_url, stream=True, timeout=15)
-                        
-                        if resp.status_code >= 500:
-                            resp = requests.get(cv_url, timeout=15)
-                    else:
-                        resp = requests.get(cv_url, timeout=15)
-                    
-                    if resp.status_code == 200:
-                        content = resp.content
-                        
-                        # 2. Determine file type from content or header
-                        # Try to get extension from 'Content-Disposition' or original text
-                        content_type = resp.headers.get('Content-Type', '').lower()
-                        filename_from_header = ""
-                        cd = resp.headers.get('Content-Disposition', '')
-                        if 'filename=' in cd:
-                            filename_from_header = cd.split('filename=')[1].strip('"')
-                        
-                        # Fallback extension detection
-                        ext = ".pdf" # Default
-                        if "word" in content_type or filename_from_header.endswith(".docx"): ext = ".docx"
-                        elif "image" in content_type: 
-                            if "png" in content_type: ext = ".png"
-                            else: ext = ".jpg"
-                        elif filename_from_header.endswith(".bdf"): ext = ".bdf"
-                        elif content.startswith(b"%PDF"): ext = ".pdf"
-                        elif content.startswith(b"PK\x03\x04"): ext = ".docx" # Zip/Docx signature
-                        
-                        # 3. Translate using the new Engine
-                        ft = FileTranslator(source_lang="auto", target_lang="ar")
-                        
-                        # Mock a filename if not found
-                        virtual_filename = filename_from_header if filename_from_header else f"file{ext}"
-                        
-                        result = ft.translate(content, virtual_filename)
-                        
-                        if result.get("success"):
-                            st.session_state[f"trans_{key_prefix}_{selected_idx}"] = {
-                                "orig": result.get("original_text", ""), 
-                                "trans": result.get("translated_text", ""),
-                                "output": result.get("output_bytes"),
-                                "out_filename": result.get("output_filename")
-                            }
-                            st.rerun()
+                            token = next((v for k, v in resp.cookies.items() if k.startswith('download_warning')), None)
+                            if token:
+                                dl_url = f"https://docs.google.com/uc?export=download&confirm={token}&id={file_id}"
+                                resp = session.get(dl_url, stream=True, timeout=15)
+                            if resp.status_code >= 500: resp = requests.get(cv_url, timeout=15)
                         else:
-                            st.error(f"❌ {result.get('error', 'Unknown Error')}")
-                    else:
-                        st.error(f"خطأ في الوصول للملف: (HTTP {resp.status_code}). جرب فتح الرابط يدوياً.")
-                except Exception as e: 
-                    st.error(f"Error Processing File: {str(e)}")
-                finally:
-                    trans_loader.empty()
-            else: 
-                st.warning("رابط السيرة الذاتية غير موجود أو غير صالح.")
+                            resp = requests.get(cv_url, timeout=15)
+                        
+                        if resp.status_code == 200:
+                            content = resp.content
+                            content_type = resp.headers.get('Content-Type', '').lower()
+                            filename_from_header = ""
+                            cd = resp.headers.get('Content-Disposition', '')
+                            if 'filename=' in cd: filename_from_header = cd.split('filename=')[1].strip('"')
+                            
+                            ext = ".pdf"
+                            if "word" in content_type or filename_from_header.endswith(".docx"): ext = ".docx"
+                            elif "image" in content_type: ext = ".png" if "png" in content_type else ".jpg"
+                            elif filename_from_header.endswith(".bdf"): ext = ".bdf"
+                            elif content.startswith(b"%PDF"): ext = ".pdf"
+                            elif content.startswith(b"PK\x03\x04"): ext = ".docx"
+                            
+                            ft = FileTranslator(source_lang="auto", target_lang=config["target"])
+                            virtual_filename = filename_from_header if filename_from_header else f"file{ext}"
+                            result = ft.translate(content, virtual_filename)
+                            
+                            if result.get("success"):
+                                # Store with language-specific key
+                                st.session_state[f"trans_{key_prefix}_{worker_id}_{config['key_suffix']}"] = {
+                                    "orig": result.get("original_text", ""), 
+                                    "trans": result.get("translated_text", ""),
+                                    "output": result.get("output_bytes"),
+                                    "out_filename": result.get("output_filename"),
+                                    "target_label": "Arabic" if config["target"] == "ar" else "Filipino"
+                                }
+                                st.rerun()
+                            else:
+                                st.error(f"❌ {result.get('error', 'Unknown Error')}")
+                        else:
+                            st.error(f"خطأ في الوصول للملف: (HTTP {resp.status_code})")
+                    except Exception as e: st.error(f"Error: {str(e)}")
+                    finally: trans_loader.empty()
+                else: st.warning("رابط السيرة الذاتية غير موجود أو غير صالح.")
 
     # Permanent Deletion with Confirmation
     sheet_row = worker_row.get('__sheet_row')
@@ -1422,7 +1541,7 @@ def render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search", 
         # For Order Processing: Replace Delete with Hide
         if worker_uid:
             if st.button("🚫 " + ("إخفاء هذا العامل" if lang == 'ar' else "Hide this worker"), 
-                         use_container_width=True, key=f"hide_worker_{key_prefix}_{selected_idx}"):
+                         use_container_width=True, key=f"hide_worker_{key_prefix}_{worker_id}"):
                 st.session_state.op_hidden_workers.add(worker_uid)
                 st.rerun()
         else:
@@ -1432,7 +1551,7 @@ def render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search", 
         if sheet_row:
             with st.popover(f"🗑️ {t('delete_btn', lang)}", use_container_width=True):
                 st.warning(t("confirm_delete_msg", lang))
-                if st.button(t("confirm_btn", lang), type="primary", use_container_width=True, key=f"del_confirm_{key_prefix}_{selected_idx}"):
+                if st.button(t("confirm_btn", lang), type="primary", use_container_width=True, key=f"del_confirm_{key_prefix}_{worker_id}"):
                     with st.spinner("⏳ جارٍ الحذف النهائي..."):
                         success = st.session_state.db.delete_row(sheet_row)
                         if success == True:
@@ -1447,36 +1566,40 @@ def render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search", 
             st.error(f"⚠️ {t('delete_error', lang)} (ID Missing)")
             c1, c2 = st.columns(2)
             with c1:
-                if st.button(t("fix_ids", lang), key=f"fix_id_{key_prefix}_{selected_idx}", use_container_width=True):
+                if st.button(t("fix_ids", lang), key=f"fix_id_{key_prefix}_{worker_id}", use_container_width=True):
                     st.session_state.db.fetch_data(force=True); st.rerun()
             with c2:
-                if st.button(t("deep_reset", lang), key=f"reset_all_{key_prefix}_{selected_idx}", use_container_width=True):
+                if st.button(t("deep_reset", lang), key=f"reset_all_{key_prefix}_{worker_id}", use_container_width=True):
                     # Clear all tab data and cache
                     for k in list(st.session_state.keys()):
                         if k.startswith("dash_table_") or k.startswith("last_scroll_"): del st.session_state[k]
                     st.session_state.db.fetch_data(force=True); st.rerun()
 
-    trans_key = f"trans_{key_prefix}_{selected_idx}"
-    if trans_key in st.session_state:
-        t_data = st.session_state[trans_key]
-        c1, c2 = st.columns(2)
-        with c1:
-            st.caption("English (Original)")
-            st.text_area("Orig", t_data["orig"], height=300, key=f"orig_area_{key_prefix}_{selected_idx}")
-        with c2:
-            st.caption("العربية (المترجمة)")
-            st.text_area("Trans", t_data["trans"], height=300, key=f"trans_area_{key_prefix}_{selected_idx}")
-        
-        # Download Button for the Translated File itself
-        if t_data.get("output"):
-            st.download_button(
-                f"⬇️ {t('download_trans', lang)}",
-                data=t_data["output"],
-                file_name=t_data.get("out_filename", "translated_file"),
-                mime="application/octet-stream",
-                use_container_width=True,
-                key=f"dl_trans_file_{key_prefix}_{selected_idx}"
-            )
+    display_langs = ["ar", "tl"]
+    for d_lang in display_langs:
+        trans_key = f"trans_{key_prefix}_{worker_id}_{d_lang}"
+        if trans_key in st.session_state:
+            t_data = st.session_state[trans_key]
+            target_label = t_data.get("target_label", "Translated")
+            
+            with st.expander(f"✨ CV Translation ({target_label})", expanded=True):
+                c1, c2 = st.columns(2)
+                with c1:
+                    st.caption("English (Original)")
+                    st.text_area(f"Orig_{d_lang}", t_data["orig"], height=300, key=f"orig_area_{key_prefix}_{worker_id}_{d_lang}")
+                with c2:
+                    st.caption(f"{target_label} (المترجمة)")
+                    st.text_area(f"Trans_{d_lang}", t_data["trans"], height=300, key=f"trans_area_{key_prefix}_{worker_id}_{d_lang}")
+                
+                if t_data.get("output"):
+                    st.download_button(
+                        f"⬇️ {t('download_trans', lang)} ({target_label})",
+                        data=t_data["output"],
+                        file_name=t_data.get("out_filename", f"translated_{d_lang}"),
+                        mime="application/octet-stream",
+                        use_container_width=True,
+                        key=f"dl_trans_file_{key_prefix}_{worker_id}_{d_lang}"
+                    )
     
     st.markdown(f"#### 🔎 {t('preview_cv', lang)}")
     if cv_url and str(cv_url).startswith("http"):
@@ -2285,6 +2408,9 @@ def render_dashboard_content():
             if any(kw in str(col).lower() for kw in ["nationality", "الجنسية"]):
                 final_cfg[f"🚩_{col}"] = st.column_config.ImageColumn(" ", width="small")
 
+        # Smart Translator Button
+        d_final = render_table_translator(d_final, key_prefix=f"dash_{tab_id}")
+
         # Apply Green Text Styling
         styled_final = style_df(d_final)
         
@@ -2424,6 +2550,12 @@ def render_search_content():
     # Search Button - Robust Full-width / Centered
     search_clicked = st.button(t("search_btn", lang), key="main_search_btn", use_container_width=True, type="primary")
     
+    # NEW: Detect search trigger (Button OR Enter) and increment session ID to reset table selection
+    current_search_hash = f"{query}_{str(st.session_state.get('use_age_filter'))}_{str(st.session_state.get('use_contract_filter'))}"
+    if search_clicked or (query and st.session_state.get('last_search_hash') != current_search_hash):
+        st.session_state.search_entry_count = st.session_state.get('search_entry_count', 0) + 1
+        st.session_state.last_search_hash = current_search_hash
+
     # Notification placeholder right below the button
     search_notif = st.empty()
     st.markdown('</div>', unsafe_allow_html=True)
@@ -2632,6 +2764,9 @@ def render_search_content():
                     xl_buf_search, _ = xl_result_search
                     st.download_button("📤 تصدير للواتساب", xl_buf_search, f"Search_WhatsApp_{datetime.now().strftime('%M%S')}.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
             
+            # Smart Translator Button
+            res_display = render_table_translator(res_display, key_prefix="search_res")
+            
             # Use on_select to capture row selection
             df_height = min((len(res_display) + 1) * 35 + 40, 600)
             event = st.dataframe(
@@ -2641,7 +2776,7 @@ def render_search_content():
                 selection_mode="single-row",
                 hide_index=True,
                 column_config=column_config,
-                key="search_results_table",
+                key=f"search_results_table_{st.session_state.get('search_entry_count', 0)}",
                 height=df_height
             )
 
@@ -2650,7 +2785,16 @@ def render_search_content():
                 selected_idx = event.selection["rows"][0]
                 if 0 <= selected_idx < len(res):
                     worker_row = res.iloc[selected_idx]
-                    render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search")
+                    
+                    # Generate unique UID for search mode to pass to panel
+                    # Use original column names if possible or translated ones
+                    name_col = t_col("Full Name:", lang)
+                    phone_col = t_col("Phone", lang)
+                    w_name = str(worker_row.get(name_col, worker_row.get("Full Name:", worker_row.get("الاسم الكامل", "Worker"))))
+                    w_phone = str(worker_row.get(phone_col, worker_row.get("Phone", "")))
+                    worker_uid = hashlib.md5(f"{w_name}{w_phone}".encode()).hexdigest()
+                    
+                    render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search", worker_uid=worker_uid)
                 else:
                     st.toast("⚠️ Selection out of bounds. Please refresh search." if lang == 'en' else "⚠️ التحديد خارج النطاق. يرجى تحديث البحث.")
 
@@ -3781,6 +3925,9 @@ def render_order_processing_content():
                             if any(kw in str(col).lower() for kw in ["nationality", "الجنسية"]):
                                 col_cfg_city[f"🚩_{col}"] = st.column_config.ImageColumn(" ", width="small")
 
+                        # Smart Translator Button
+                        city_df = render_table_translator(city_df, key_prefix=f"op_city_{idx}")
+
                         # Use selection
                         df_city_height = min((len(city_df) + 1) * 35 + 40, 500)
                         event_city = st.dataframe(
@@ -3830,6 +3977,9 @@ def render_order_processing_content():
                         for col in other_df.columns:
                             if any(kw in str(col).lower() for kw in ["nationality", "الجنسية"]):
                                 col_cfg_other[f"🚩_{col}"] = st.column_config.ImageColumn(" ", width="small")
+
+                        # Smart Translator Button
+                        other_df = render_table_translator(other_df, key_prefix=f"op_other_{idx}")
 
                         df_other_height = min((len(other_df) + 1) * 35 + 40, 500)
                         event_other = st.dataframe(
@@ -4042,6 +4192,9 @@ def render_customer_requests_content():
     for int_col in ["__sheet_row", "__sheet_row_backup"]:
         if int_col in res_display.columns:
             res_display = res_display.drop(columns=[int_col])
+    # Smart Translator Button
+    res_display = render_table_translator(res_display, key_prefix="customer_req")
+
     # White Neon Glow Frame around Customer Requests Table
     st.dataframe(
         style_df(res_display), 
@@ -4164,6 +4317,9 @@ def render_customer_requests_content():
                         for col in display_df.columns:
                             if any(kw in str(col).lower() for kw in ["nationality", "الجنسية"]):
                                 col_cfg_match[f"🚩_{col}"] = st.column_config.ImageColumn(" ", width="small")
+
+                        # Smart Translator Button
+                        display_df = render_table_translator(display_df, key_prefix="match_res")
 
                         st.dataframe(
                             style_df(display_df),
