@@ -190,6 +190,7 @@ def get_base64_image(image_path):
     with open(image_path, "rb") as img_file:
         return base64.b64encode(img_file.read()).decode()
 
+@st.cache_data(ttl=3600)
 def get_css():
     return """
     <style>
@@ -835,7 +836,8 @@ def get_css():
                 visibility: visible !important;
                 position: fixed !important;
                 top: 10px !important;
-                left: 15px !important;
+                right: 15px !important; /* Positioned Top-Right for RTL */
+                left: auto !important;
                 z-index: 9999999 !important;
                 background-color: #FF0000 !important; /* Neon Red */
                 border: 2px solid #8B0000 !important;
@@ -936,19 +938,10 @@ def get_css():
                 filter: drop-shadow(0 0 6px rgba(255, 0, 0, 0.6)) !important;
             }
 
-            /* === MOBILE RED: WhatsApp export button === */
+            /* === MOBILE: WhatsApp export button (Follow Luxury Style) === */
             .stDownloadButton button,
             .stDownloadButton button span {
-                background: linear-gradient(135deg, #1A0000 0%, #330000 100%) !important;
-                color: #FF0000 !important;
-                border: 1.5px solid rgba(255, 0, 0, 0.6) !important;
-                box-shadow: 0 0 15px rgba(255, 0, 0, 0.3) !important;
-            }
-            .stDownloadButton button:hover {
-                background: #FF0000 !important;
-                color: #FFFFFF !important;
-                border-color: #FF0000 !important;
-                box-shadow: 0 0 25px rgba(255, 0, 0, 0.7) !important;
+                /* Inherits from global luxury button style */
             }
 
             /* === MOBILE RED: Selectbox / Dropdown arrows === */
@@ -966,12 +959,9 @@ def get_css():
             .stExpander summary svg,
             .status-error { background: rgba(255, 49, 49, 0.1) !important; color: #FF3131 !important; border: 1px solid rgba(255, 49, 49, 0.2) !important; }
 
-            /* Table Translator Button - Mobile (Red) */
+            /* Table Translator Button - Mobile (Follow Luxury Style) */
             .table-translator-btn button {
-                background: linear-gradient(135deg, #FF0000 0%, #8B0000 100%) !important;
-                color: #FFFFFF !important;
-                border: 2px solid #FF3131 !important;
-                box-shadow: 0 0 15px rgba(255, 0, 0, 0.4) !important;
+                /* Inherits from global luxury button style */
             }
         }
 
@@ -988,6 +978,41 @@ def get_css():
             box-shadow: 0 0 25px rgba(255, 255, 255, 0.6) !important;
         }
     </style>
+    <script>
+        const doc = window.parent.document;
+        
+        function closeSidebar() {
+            const sidebar = doc.querySelector('section[data-testid="stSidebar"]');
+            if (sidebar && sidebar.getAttribute('aria-expanded') === 'true') {
+                const closeBtn = doc.querySelector('button[data-testid="stSidebarCollapse"]');
+                if (closeBtn) closeBtn.click();
+            }
+        }
+
+        doc.addEventListener('click', (e) => {
+            if (window.innerWidth <= 768) {
+                const sidebar = doc.querySelector('section[data-testid="stSidebar"]');
+                
+                // 1. Auto-close on Sidebar common button click
+                if (sidebar && sidebar.contains(e.target)) {
+                    const btn = e.target.closest('button');
+                    if (btn) {
+                        const btnText = btn.innerText || "";
+                        // Exclude "تنظيف شامل" and "Deep Reset"
+                        if (!btnText.includes("تنظيف شامل") && !btnText.includes("Deep Reset")) {
+                            setTimeout(closeSidebar, 500);
+                        }
+                    }
+                }
+                
+                // 2. Close on click outside (main content area)
+                const mainArea = doc.querySelector('section.main');
+                if (mainArea && mainArea.contains(e.target)) {
+                    closeSidebar();
+                }
+            }
+        }, true);
+    </script>
     """
 
 # --- Icon Mappings ---
@@ -1025,11 +1050,37 @@ GENDER_MAP = {
     "أنثى": "🚺", "female": "🚺"
 }
 
+@st.cache_data(ttl=600)
+def get_flag_url(val):
+    if not val: return None
+    s_val = str(val).strip().lower()
+    # Sort keys by length (longest first) to match "sri lankan" before "sri"
+    sorted_keys = sorted(FLAG_MAP.keys(), key=len, reverse=True)
+    for key in sorted_keys:
+        code = FLAG_MAP[key]
+        if len(key) <= 3:
+            pattern = r'(?:^|[\s,:;.\-/])' + re.escape(key) + r'(?:[\s,:;.\-/]|$)'
+            if re.search(pattern, s_val):
+                return f"https://flagcdn.com/w20/{code}.png"
+        else:
+            if key in s_val:
+                return f"https://flagcdn.com/w20/{code}.png"
+    return None
+
+@st.cache_data(ttl=600)
+def add_gender_icon(val):
+    if not val: return val
+    s_val = str(val).strip().lower()
+    for key, icon in GENDER_MAP.items():
+        if key == s_val:
+            return f"{icon} {val}"
+    return val
+
 def style_df(df):
     """
     Applies custom styling to DataFrames.
     - Injects Flag URLs for nationality
-    - Colors rows/cells dynamically (Gender: Blue/Pink, Default: Green)
+    - Colors rows/cells dynamically
     """
     if not isinstance(df, pd.DataFrame):
         return df
@@ -1039,26 +1090,8 @@ def style_df(df):
     # 1. Flag Image Injection
     nat_cols = [c for c in styled_df.columns if any(kw in str(c).lower() for kw in ["nationality", "الجنسية"])]
     for col in nat_cols:
-        # Avoid double flags if re-running
         flag_col = f"🚩_{col}"
         if flag_col not in styled_df.columns:
-            def get_flag_url(val):
-                if not val: return None
-                s_val = str(val).strip().lower()
-                # Sort keys by length (longest first) to match "sri lankan" before "sri"
-                sorted_keys = sorted(FLAG_MAP.keys(), key=len, reverse=True)
-                for key in sorted_keys:
-                    code = FLAG_MAP[key]
-                    # Use boundaries for short keys to avoid false positives (e.g. 'in' in 'Fatima')
-                    if len(key) <= 3:
-                        pattern = r'(?:^|[\s,:;.\-/])' + re.escape(key) + r'(?:[\s,:;.\-/]|$)'
-                        if re.search(pattern, s_val):
-                            return f"https://flagcdn.com/w20/{code}.png"
-                    else:
-                        if key in s_val:
-                            return f"https://flagcdn.com/w20/{code}.png"
-                return None
-            
             # Position flag before nationality
             idx = list(styled_df.columns).index(col)
             styled_df.insert(idx, flag_col, styled_df[col].apply(get_flag_url))
@@ -1066,13 +1099,6 @@ def style_df(df):
     # 2. Gender Icon Injection
     gen_cols = [c for c in styled_df.columns if any(kw in str(c).lower() for kw in ["gender", "الجنس"]) and str(c).lower() != "الجنسية"]
     for col in gen_cols:
-        def add_gender_icon(val):
-            if not val: return val
-            s_val = str(val).strip().lower()
-            for key, icon in GENDER_MAP.items():
-                if key == s_val:
-                    return f"{icon} {val}"
-            return val
         styled_df[col] = styled_df[col].apply(add_gender_icon)
 
     # 3. Apply Dynamic Styling (Colors)
@@ -1340,31 +1366,33 @@ st.set_page_config(
 # 5. Apply Styles
 st.markdown(get_css(), unsafe_allow_html=True)
 
-# 6. Initialize Core (With Force Re-init for Updates)
+# 6. Initialize Core (With Persisted Session State)
 if 'auth' not in st.session_state or not hasattr(st.session_state.auth, 'v10_marker'):
-    # Show a brief initial loader for a premium feel
-    loading = show_loading_hourglass()
-    time.sleep(0.4)
     st.session_state.auth = AuthManager(USERS_FILE)
-    st.session_state.auth.v10_marker = True # Marker with get_avatar/update_avatar support
-    st.session_state.db = DBClient() # Force DB re-init as well
-    loading.empty()
+    st.session_state.auth.v10_marker = True 
+    st.session_state.db = DBClient()
 
 # Report DB Load Errors to User
 if hasattr(st.session_state.auth, 'load_error'):
     st.error(f"⚠️ Error Loading User Database: {st.session_state.auth.load_error}")
 
-if 'db' not in st.session_state or not hasattr(st.session_state.db, 'fetch_customer_requests'):
-    st.session_state.db = DBClient()
-
-# Initialize TranslationManager if not already in session state
+# Initialize Managers in session state if not already there
+if 'bm' not in st.session_state:
+    st.session_state.bm = BengaliDataManager()
+if 'cm' not in st.session_state:
+    st.session_state.cm = ContractManager()
 if 'tm' not in st.session_state:
     try:
         from src.core.translation import TranslationManager
         st.session_state.tm = TranslationManager()
-    except Exception as e:
-        print(f"[ERROR] Failed to init TranslationManager: {e}")
+    except:
         st.session_state.tm = None
+if 'search_engine' not in st.session_state:
+    try:
+        from src.core.search import SmartSearchEngine
+        st.session_state.search_engine = SmartSearchEngine(st.session_state.db)
+    except:
+        st.session_state.search_engine = None
 
 # 7. Session State Defaults
 if 'user' not in st.session_state:
