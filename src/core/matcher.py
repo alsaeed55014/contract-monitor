@@ -710,14 +710,10 @@ class CandidateMatcher:
     # ─────────────────────────────────────────
     def match(self, request_row):
         """
-        Execute the full 5-step matching algorithm.
-        Returns a dict with:
-          - criteria: extracted search criteria
-          - geo_scope: geographic scope info
-          - local_results: DataFrame of local matches (may be empty)
-          - local_source: 'job', 'skills', or 'none'
-          - expanded_results: list of dicts with alternative cities (if no local results)
-          - status: 'found_local', 'found_expanded', 'not_found'
+        Execute the full matching algorithm with proximity-based prioritization.
+        1. Exact City match
+        2. Same Region (other cities)
+        3. Surrounding Regions (ordered by proximity)
         """
         self.debug_info = {}
 
@@ -728,45 +724,94 @@ class CandidateMatcher:
         location = criteria["location"]
         job = criteria["job"]
 
-        # Step 2: Resolve geo scope
-        geo = self.resolve_geo_scope(location)
-
-        # Step 3: Filter
-        basic_df = self._filter_basic(nationality, gender)
-        local_df = self._filter_by_location(basic_df, geo["target_cities_ar"], geo["target_cities_en"])
-        local_results, local_source = self._filter_by_job(local_df, job)
-
-        if not local_results.empty:
+        # Step 2: Base Filter (Nationality + Gender + Job)
+        base_df = self._filter_basic(nationality, gender)
+        base_df, local_source = self._filter_by_job(base_df, job)
+        
+        if base_df.empty:
             return {
                 "criteria": criteria,
-                "geo_scope": geo,
-                "local_results": local_results,
-                "local_source": local_source,
-                "expanded_results": [],
-                "status": "found_local",
-            }
-
-        # Step 4: Geographic expansion
-        expanded = self._expand_geo(nationality, gender, job, geo["region_key"], location)
-
-        if expanded:
-            return {
-                "criteria": criteria,
-                "geo_scope": geo,
                 "local_results": pd.DataFrame(),
                 "local_source": "none",
-                "expanded_results": expanded,
-                "status": "found_expanded",
+                "expanded_results": [],
+                "status": "not_found",
             }
 
-        # No results at all
+        # Step 3: Resolve Geo Scope
+        geo = self.resolve_geo_scope(location)
+        is_region = geo["is_region"]
+        region_key = geo["region_key"]
+        if not is_region and location:
+            region_key = _find_city_region(location)
+
+        # A. Local matches (Target City or Target Region)
+        local_df = self._filter_by_location(base_df, geo["target_cities_ar"], geo["target_cities_en"])
+        
+        # B. Expansion (Find everything else and rank it)
+        remaining_pool = base_df[~base_df.index.isin(local_df.index)]
+        expanded_results = []
+        
+        if not remaining_pool.empty:
+            city_col = _find_col(remaining_pool, CITY_KEYWORDS)
+            if city_col:
+                # 1. Same Region (if a specific city was searched)
+                if not is_region and region_key:
+                    r_data = REGION_MAP[region_key]
+                    r_df = self._filter_by_location(remaining_pool, r_data["cities_ar"], r_data["cities_en"])
+                    if not r_df.empty:
+                        r_df = r_df.copy()
+                        r_df['__canon'] = r_df[city_col].apply(_get_canonical_city)
+                        for city_name in r_df['__canon'].unique():
+                            city_items = r_df[r_df['__canon'] == city_name].drop(columns=['__canon'])
+                            expanded_results.append({
+                                "city": city_name,
+                                "region": region_key,
+                                "tier": 1,
+                                "count": len(city_items),
+                                "candidates": city_items
+                            })
+                        remaining_pool = remaining_pool[~remaining_pool.index.isin(r_df.index)]
+
+                # 2. Other Regions (by proximity)
+                if region_key and region_key in REGION_PROXIMITY:
+                    ordered_others = REGION_PROXIMITY[region_key]
+                else:
+                    # Fallback to all regions if no proximity defined
+                    ordered_others = [k for k in REGION_MAP.keys() if k != region_key]
+
+                for idx, r_name in enumerate(ordered_others, start=2):
+                    if r_name == region_key: continue
+                    r_data = REGION_MAP[r_name]
+                    r_df = self._filter_by_location(remaining_pool, r_data["cities_ar"], r_data["cities_en"])
+                    if not r_df.empty:
+                        r_df = r_df.copy()
+                        r_df['__canon'] = r_df[city_col].apply(_get_canonical_city)
+                        for city_name in r_df['__canon'].unique():
+                            city_items = r_df[r_df['__canon'] == city_name].drop(columns=['__canon'])
+                            expanded_results.append({
+                                "city": city_name,
+                                "region": r_name,
+                                "tier": idx,
+                                "count": len(city_items),
+                                "candidates": city_items
+                            })
+                        remaining_pool = remaining_pool[~remaining_pool.index.isin(r_df.index)]
+
+        # Final Status
+        if not local_df.empty:
+            status = "found_local"
+        elif expanded_results:
+            status = "found_expanded"
+        else:
+            status = "not_found"
+
         return {
             "criteria": criteria,
             "geo_scope": geo,
-            "local_results": pd.DataFrame(),
-            "local_source": "none",
-            "expanded_results": [],
-            "status": "not_found",
+            "local_results": local_df,
+            "local_source": local_source,
+            "expanded_results": expanded_results,
+            "status": status,
         }
 
 
@@ -798,41 +843,61 @@ def format_match_result(result, lang="ar"):
 - **Job:** {c['job'] or 'N/A'}"""
 
     if status == "found_local":
-        count = len(result["local_results"])
+        count_local = len(result["local_results"])
+        count_expanded = sum(item["count"] for item in result["expanded_results"])
         source_label = "الوظيفة" if result["local_source"] == "job" else "المهارات"
         if lang != "ar":
             source_label = "Job" if result["local_source"] == "job" else "Skills"
 
+        loc_name = geo['original_location']
+        
         if lang == "ar":
-            status_text = f"✅ **نتائج البحث:** تم العثور على **{count}** مرشح/مرشحة (مطابقة عبر: {source_label})"
+            status_text = f"✅ **تم العثور على {count_local} مرشح في {loc_name}**"
+            if count_expanded > 0:
+                status_text += f"\n\n💡 تم العثور أيضاً على **{count_expanded}** مرشحين إضافيين في المناطق القريبة مرتبين حسب الأقرب."
+            status_text += f"\n(مطابقة عبر: {source_label})"
         else:
-            status_text = f"✅ **Results:** Found **{count}** candidate(s) (matched via: {source_label})"
+            status_text = f"✅ **Found {count_local} candidate(s) in {loc_name}**"
+            if count_expanded > 0:
+                status_text += f"\n\n💡 Also found **{count_expanded}** additional candidates in surrounding areas sorted by proximity."
+            status_text += f"\n(Matched via: {source_label})"
 
-        return summary, status_text, "", result["local_results"]
+        # Combine everything
+        all_dfs = [result["local_results"]]
+        alt_lines = []
+        
+        if count_expanded > 0:
+            if lang == "ar":
+                alt_lines = ["\n### 🌍 بدائل في مناطق أخرى قريبة:", "| المدينة | المنطقة | البعد |", "|---|---|---|"]
+            else:
+                alt_lines = ["\n### 🌍 Alternatives in surrounding areas:", "| City | Region | Priority |", "|---|---|---|"]
+                
+            for item in result["expanded_results"]:
+                all_dfs.append(item["candidates"])
+                alt_lines.append(f"| {item['city']} | {item['region']} | {item['tier']} |")
+
+        final_df = pd.concat(all_dfs, ignore_index=True)
+        return summary, status_text, "\n".join(alt_lines) if alt_lines else "", final_df
 
     elif status == "found_expanded":
         total_count = sum(item["count"] for item in result["expanded_results"])
+        loc_name = geo['original_location']
 
         if lang == "ar":
-            status_text = f"⚠️ **لا توجد نتائج في الموقع المطلوب — أقرب البدائل المتاحة:**\n\n**إجمالي عدد المرشحين المتاحين: {total_count}**\n"
-            table_header = "| المدينة | المنطقة | عدد المرشحين |\n|---|---|---|"
+            status_text = f"⚠️ **لا يوجد نتائج مباشرة في {loc_name}**\n\nتم البحث تلقائياً في المناطق المحيطة ووجدنا **{total_count}** مرشحين متاحين مرتبين حسب القرب:\n"
+            table_header = "| المدينة | المنطقة | الأولوية |\n|---|---|---|"
         else:
-            status_text = f"⚠️ **No results in requested location — Nearest alternatives:**\n\n**Total available candidates: {total_count}**\n"
-            table_header = "| City | Region | Candidates |\n|---|---|---|"
+            status_text = f"⚠️ **No direct results in {loc_name}**\n\nAutomatically searched surrounding areas and found **{total_count}** available candidates sorted by proximity:\n"
+            table_header = "| City | Region | Priority |\n|---|---|---|"
 
         alt_lines = [table_header]
+        all_dfs = []
         for item in result["expanded_results"]:
-            alt_lines.append(f"| {item['city']} | {item['region']} | {item['count']} |")
-
-        # Add total row at the bottom as well for clarity
-        if lang == "ar":
-            alt_lines.append(f"| **الإجمالي** | | **{total_count}** |")
-        else:
-            alt_lines.append(f"| **Total** | | **{total_count}** |")
+            alt_lines.append(f"| {item['city']} | {item['region']} | {item['tier']} |")
+            all_dfs.append(item["candidates"])
 
         alt_text = "\n".join(alt_lines)
-        # Combine all expanded candidates into one df for display
-        all_expanded = pd.concat([item["candidates"] for item in result["expanded_results"]], ignore_index=True)
+        all_expanded = pd.concat(all_dfs, ignore_index=True)
 
         return summary, status_text, alt_text, all_expanded
 

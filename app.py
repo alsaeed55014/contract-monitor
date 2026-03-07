@@ -27,7 +27,7 @@ try:
     from src.core.contracts import ContractManager
     from src.data.bengali_manager import BengaliDataManager
     from src.utils.phone_utils import create_pasha_whatsapp_excel, format_phone_number, save_to_local_desktop, render_pasha_export_button
-    from src.core.matcher import CandidateMatcher, format_match_result
+    from src.core.matcher import CandidateMatcher, format_match_result, _find_city_region, _fuzzy_match, REGION_PROXIMITY, REGION_MAP
 except ImportError:
     # Fallback for different environment path configurations
     from core.contracts import ContractManager
@@ -2693,8 +2693,12 @@ def render_search_content():
                 status_key = 'حالة العقد' if lang == 'ar' else 'Contract Status'
                 res[status_key] = status_list
                 res['__days_sort'] = sort_list
-                # Sort Results
-                res = res.sort_values(by='__days_sort', ascending=True)
+                
+                # Sort Results: Primary = Geo Tier (Proximity), Secondary = Days Sort
+                sort_cols = []
+                if '__geo_tier' in res.columns: sort_cols.append('__geo_tier')
+                sort_cols.append('__days_sort')
+                res = res.sort_values(by=sort_cols, ascending=True)
             else:
                 # FALLBACK SORT BY TIMESTAMP (REGISTRATION DATE)
                 ts_col = next((c for c in res_cols if any(kw in clean_col(c) for kw in ["timestamp", "طابع", "تاريخ التسجيل"])), None)
@@ -2702,7 +2706,15 @@ def render_search_content():
                     try:
                         # Temporary numeric sort
                         res['__ts_sort'] = pd.to_datetime(res[ts_col], errors='coerce')
-                        res = res.sort_values(by='__ts_sort', ascending=False)
+                        sort_cols = []
+                        asc_list = []
+                        if '__geo_tier' in res.columns:
+                            sort_cols.append('__geo_tier')
+                            asc_list.append(True)
+                        sort_cols.append('__ts_sort')
+                        asc_list.append(False) # Newest first for timestamp
+                        
+                        res = res.sort_values(by=sort_cols, ascending=asc_list)
                         res = res.drop(columns=['__ts_sort'])
                     except:
                         pass
@@ -3581,39 +3593,16 @@ def render_order_processing_content():
                     return True
         return False
     
-    def match_city(customer_location, worker_city):
-        c_loc = str(customer_location).strip()
-        w_city_val = normalize(worker_city)
-        if not c_loc or not w_city_val: return True
-        
-        tm = st.session_state.get('tm')
-        search_terms = {normalize(c_loc)}
-        if tm:
-            bundles = tm.analyze_query(c_loc)
-            for b in bundles:
-                for s in b:
-                    search_terms.add(normalize(s))
-                    
-        for term in search_terms:
-            if not term: continue
-            if term in w_city_val or w_city_val in term:
-                return True
-            parts = re.split(r'[\s|,،\-–]+', term)
-            for p in parts:
-                p = p.strip()
-                if len(p) > 1 and (p in w_city_val or w_city_val in p):
-                    return True
-        return False
-    
     def find_matching_workers(customer_row):
-        """Find workers. Returns (all_matches, all_scores, city_count)."""
+        """Find workers. Returns (all_matches, all_scores, city_count, region_count)."""
         city_matches, city_scores = [], []
+        region_matches, region_scores = [], []
         other_matches, other_scores = [], []
         
         for _, worker in workers_df.iterrows():
             score = 0
             total_criteria = 0
-            city_matched = False
+            geo_tier = 99 # 0=City, 1=Region, 2+=Proximity Regions, 99=Other
             
             if c_category and w_gender_col:
                 cv = str(customer_row.get(c_category, ""))
@@ -3645,40 +3634,63 @@ def render_order_processing_content():
                 wv = str(worker.get(w_city_col, ""))
                 if cv.strip():
                     total_criteria += 1
-                    if match_city(cv, wv):
+                    
+                    # Hierarchical Geographic Matching
+                    if _fuzzy_match(wv, cv):
+                        geo_tier = 0
+                    else:
+                        target_reg = _find_city_region(cv)
+                        worker_reg = _find_city_region(wv)
+                        if target_reg and worker_reg and target_reg == worker_reg:
+                            geo_tier = 1
+                        elif target_reg and target_reg in REGION_PROXIMITY:
+                            ordered = REGION_PROXIMITY[target_reg]
+                            if worker_reg in ordered:
+                                geo_tier = 2 + ordered.index(worker_reg)
+                    
+                    if geo_tier < 99:
                         score += 1
-                        city_matched = True
             
             if total_criteria > 0 and score >= 1:
                 pct = int((score / total_criteria) * 100)
-                if city_matched:
+                if geo_tier == 0:
                     city_matches.append(worker)
                     city_scores.append(pct)
+                elif geo_tier == 1:
+                    region_matches.append(worker)
+                    region_scores.append(pct)
                 else:
-                    other_matches.append(worker)
+                    # Store geo_tier temporarily for sorting
+                    worker_copy = worker.copy()
+                    worker_copy['__geo_tier'] = geo_tier
+                    other_matches.append(worker_copy)
                     other_scores.append(pct)
         
-        # Sort each group by: 1. Score (desc), 2. Timestamp (desc)
+        # Sort each group by: 1. Score (desc), 2. Geo Tier (for others), 3. Timestamp (desc)
         def get_sort_key(score, worker):
             ts_val = pd.NaT
             if w_timestamp_col:
                 raw_ts = str(worker.get(w_timestamp_col, ""))
                 clean_ts = raw_ts.replace('م', 'PM').replace('ص', 'AM')
                 ts_val = pd.to_datetime(clean_ts, errors='coerce')
-            return (-score, -ts_val.timestamp() if pd.notnull(ts_val) else 0)
-
-        if city_matches:
-            # zip(scores, workers) -> sort by get_sort_key
-            items = sorted(zip(city_scores, city_matches), key=lambda x: get_sort_key(x[0], x[1]))
-            city_scores = [it[0] for it in items]
-            city_matches = [it[1] for it in items]
             
-        if other_matches:
-            items = sorted(zip(other_scores, other_matches), key=lambda x: get_sort_key(x[0], x[1]))
-            other_scores = [it[0] for it in items]
-            other_matches = [it[1] for it in items]
+            gt = worker.get('__geo_tier', 0)
+            return (-score, gt, -ts_val.timestamp() if pd.notnull(ts_val) else 0)
+
+        sorted_results = []
+        for matches, scores in [(city_matches, city_scores), (region_matches, region_scores), (other_matches, other_scores)]:
+            if matches:
+                 items = sorted(zip(scores, matches), key=lambda x: get_sort_key(x[0], x[1]))
+                 sorted_results.append(([it[1] for it in items], [it[0] for it in items]))
+            else:
+                 sorted_results.append(([], []))
         
-        return city_matches + other_matches, city_scores + other_scores, len(city_matches)
+        f_city, f_city_scores = sorted_results[0]
+        f_region, f_region_scores = sorted_results[1]
+        f_other, f_other_scores = sorted_results[2]
+        
+        return f_city + f_region + f_other, f_city_scores + f_region_scores + f_other_scores, len(f_city), len(f_region)
+
 
     # --- Initialize session state ---
     if 'op_hidden_clients' not in st.session_state:
@@ -3912,135 +3924,142 @@ def render_order_processing_content():
             st.markdown("</div>", unsafe_allow_html=True)
 
             # --- Workers ---
-            matches, scores, city_count = find_matching_workers(customer_row)
+            matches, scores, city_count, region_count = find_matching_workers(customer_row)
             
             if not matches:
                 st.warning("⚠️ " + t('no_matching_workers', lang))
             else:
                 city_list = matches[:city_count]
-                other_list = matches[city_count:]
+                region_list = matches[city_count : city_count + region_count]
+                other_list = matches[city_count + region_count :]
+                
                 city_scores = scores[:city_count]
-                other_scores = scores[city_count:]
+                region_scores = scores[city_count : city_count + region_count]
+                other_scores = scores[city_count + region_count :]
+
+                # Segment Header Helper
+                def render_segment_header(label, count, color="#D4AF37", explainer=None):
+                    st.markdown(f"""<div style="color: {color}; font-weight: 700; margin: 15px 5px 5px 5px; font-family: 'Cairo', sans-serif;">{label} — {count}</div>""", unsafe_allow_html=True)
+                    if explainer:
+                        st.markdown(f"""<div style="font-size: 0.85rem; color: #888; margin-top: -5px; margin-bottom: 10px; margin-left: 10px; font-family: 'Cairo', sans-serif;">{explainer}</div>""", unsafe_allow_html=True)
 
                 # Same City Table
                 if city_list:
                     city_df, city_idx_map = build_worker_table(city_list, city_scores)
                     if not city_df.empty:
-                        # --- EXPORT FOR ORDER PROCESSING ---
-                        c_op_1, c_op_2 = st.columns([4, 1])
+                        # Export
+                        c_op_2 = st.columns([4, 1])[1]
                         with c_op_2:
                             xl_data_op = create_pasha_whatsapp_excel(city_df)
                             if xl_data_op:
-                                xl_buf_op, xl_df_op = xl_data_op
+                                _, xl_df_op = xl_data_op
                                 render_pasha_export_button(xl_df_op, "📤 تصدير للواتساب", f"Matched_Workers_City_{idx+1}.xlsx", 
                                                           f"Matched_Workers_City_{idx+1}", key=f"dl_op_city_{idx}")
                         
                         loc_val = str(customer_row.get(c_location, ""))
-                        regional_keywords = [
-                            "عسير", "الجنوب", "الشمال", "الشرقية", "منطقة", 
-                            "الوسطى", "الغربية", "نجد", "الحجاز",
-                            "region", "south", "north", "east", "asir", "central", "western"
-                        ]
-                        is_regional = any(kw in loc_val.lower() for kw in regional_keywords)
+                        label = f"📍 عمال في نفس المدينة ({loc_val})" if lang == 'ar' else f"📍 Workers in the same city ({loc_val})"
+                        render_segment_header(label, len(city_df), color="#D4AF37")
                         
-                        if is_regional:
-                            label = f"🗺️ عمال في منطقة {loc_val}" if lang == 'ar' else f"🗺️ Workers in {loc_val} Region"
-                            color = "#D4AF37"
-                            explainer = f"""<div style="font-size: 0.85rem; color: #888; margin-top: -8px; margin-bottom: 10px; margin-left: 10px; font-family: 'Cairo', sans-serif;">
-                                {'هؤلاء العمال مناسبون لأن مدنهم تتبع لمنطقة ' if lang == 'ar' else 'These workers are matches because their cities belong to '} {loc_val}
-                            </div>"""
-                        else:
-                            label = f"📍 عمال في نفس المدينة ({loc_val})" if lang == 'ar' else f"📍 Workers in the same city ({loc_val})"
-                            color = "#D4AF37"
-                            explainer = ""
-
-                        st.markdown(f"""<div style="color: {color}; font-weight: 700; margin: 10px 5px;">{label} — {len(city_df)}</div>""", unsafe_allow_html=True)
-                        if explainer: st.markdown(explainer, unsafe_allow_html=True)
+                        city_df = render_table_translator(city_df, key_prefix=f"op_city_{idx}")
                         
-                        # Configure Image columns
                         col_cfg_city = {}
                         for col in city_df.columns:
                             if any(kw in str(col).lower() for kw in ["nationality", "الجنسية"]):
                                 col_cfg_city[f"🚩_{col}"] = st.column_config.ImageColumn(" ", width="small")
 
-                        # Smart Translator Button
-                        city_df = render_table_translator(city_df, key_prefix=f"op_city_{idx}")
-
-                        # Use selection
                         df_city_height = min((len(city_df) + 1) * 35 + 40, 500)
                         event_city = st.dataframe(
                             style_df(city_df.drop(columns=["__uid"])),
-                            use_container_width=True,
-                            hide_index=True,
-                            on_select="rerun",
-                            selection_mode="single-row",
-                            column_config=col_cfg_city,
-                            key=f"op_city_table_{idx}",
-                            height=df_city_height
+                            use_container_width=True, hide_index=True, on_select="rerun",
+                            selection_mode="single-row", column_config=col_cfg_city,
+                            key=f"op_city_table_{idx}", height=df_city_height
                         )
                         
                         if event_city.selection and event_city.selection.get("rows"):
-                            sel_row_idx = event_city.selection["rows"][0]
-                            original_idx = city_idx_map[sel_row_idx]
-                            worker_row = city_list[original_idx]
-                            worker_uid = city_df.iloc[sel_row_idx]["__uid"]
-                            
-                            # Detail Panel
-                            render_cv_detail_panel(worker_row, sel_row_idx, lang, key_prefix=f"op_city_{idx}", worker_uid=worker_uid)
+                            sel_idx = event_city.selection["rows"][0]
+                            worker_row = city_list[city_idx_map[sel_idx]]
+                            worker_uid = city_df.iloc[sel_idx]["__uid"]
+                            render_cv_detail_panel(worker_row, sel_idx, lang, key_prefix=f"op_city_{idx}", worker_uid=worker_uid)
+
+                # --- Same Region Table ---
+                if region_list:
+                    reg_df, reg_idx_map = build_worker_table(region_list, region_scores)
+                    if not reg_df.empty:
+                        # Export
+                        c_reg_2 = st.columns([4, 1])[1]
+                        with c_reg_2:
+                            xl_reg = create_pasha_whatsapp_excel(reg_df)
+                            if xl_reg:
+                                _, xl_df_reg = xl_reg
+                                render_pasha_export_button(xl_df_reg, "📤 تصدير للواتساب", f"Region_Match_{idx+1}.xlsx", 
+                                                          f"Region_Match_{idx+1}", key=f"dl_op_reg_{idx}")
+                        
+                        loc_val = str(customer_row.get(c_location, ""))
+                        target_region_name = _find_city_region(loc_val) or loc_val
+                        label = f"🏘️ عمال في المنطقة ({target_region_name})" if lang == 'ar' else f"🏘️ Workers in the Region ({target_region_name})"
+                        explainer = f"{'هؤلاء العمال في مدن تتبع لنفس المنطقة ولاكن في مدن اخرى' if lang == 'ar' else 'These workers are in other cities within the same region'}"
+                        render_segment_header(label, len(reg_df), color="#D4AF37", explainer=explainer)
+
+                        reg_df = render_table_translator(reg_df, key_prefix=f"op_reg_{idx}")
+
+                        col_cfg_reg = {}
+                        for col in reg_df.columns:
+                            if any(kw in str(col).lower() for kw in ["nationality", "الجنسية"]):
+                                col_cfg_reg[f"🚩_{col}"] = st.column_config.ImageColumn(" ", width="small")
+
+                        df_reg_h = min((len(reg_df) + 1) * 35 + 40, 400)
+                        ev_reg = st.dataframe(
+                            style_df(reg_df.drop(columns=["__uid"])),
+                            use_container_width=True, hide_index=True, on_select="rerun",
+                            selection_mode="single-row", column_config=col_cfg_reg,
+                            key=f"op_reg_table_{idx}", height=df_reg_h
+                        )
+                        if ev_reg.selection and ev_reg.selection.get("rows"):
+                             sel_idx = ev_reg.selection["rows"][0]
+                             w_row = region_list[reg_idx_map[sel_idx]]
+                             w_uid = reg_df.iloc[sel_idx]["__uid"]
+                             render_cv_detail_panel(w_row, sel_idx, lang, key_prefix=f"op_reg_{idx}", worker_uid=w_uid)
 
                 # Other Cities Table
                 if other_list:
                     other_df, other_idx_map = build_worker_table(other_list, other_scores)
                     if not other_df.empty:
-                        # --- EXPORT FOR OTHER WORKERS ---
-                        c_op2_1, c_op2_2 = st.columns([4, 1])
-                        with c_op2_2:
-                            xl_data_other = create_pasha_whatsapp_excel(other_df)
-                            if xl_data_other:
-                                xl_buf_other, xl_df_other = xl_data_other
-                                render_pasha_export_button(xl_df_other, "📤 تصدير للواتساب", f"Matched_Workers_Other_{idx+1}.xlsx", 
-                                                          f"مرشحين_مطابقين_{idx+1}", key=f"dl_op_other_{idx}")
+                        # Export
+                        c_oth_2 = st.columns([4, 1])[1]
+                        with c_oth_2:
+                            xl_oth = create_pasha_whatsapp_excel(other_df)
+                            if xl_oth:
+                                _, xl_df_oth = xl_oth
+                                render_pasha_export_button(xl_df_oth, "📤 تصدير للواتساب", f"Other_Match_{idx+1}.xlsx", 
+                                                          f"مرشحين_مدن_اخرى_{idx+1}", key=f"dl_op_other_{idx}")
                         
-                        label_other = "🌍 عمال في مدن أخرى مناسبين" if lang == 'ar' else f"🌍 Workers in other cities ({len(other_df)})"
-                        st.markdown(f"""
-                            <div style="background: rgba(255,255,255,0.02); padding: 5px 15px; border-radius: 8px; border-left: 3px solid #666; margin: 15px 0 5px 0;">
-                                <h5 style="color: #F4F4F4; margin: 0; font-family: 'Cairo', sans-serif;">{label_other} — {len(other_df)}</h5>
-                            </div>
-                        """, unsafe_allow_html=True)
+                        label_other = "🌍 عمال في مدن أخرى (مرتبين حسب القرب)" if lang == 'ar' else f"🌍 Workers in other cities (sorted by proximity)"
+                        render_segment_header(label_other, len(other_df), color="#FFFFFF")
                         
-                        column_config_other = {}
+                        other_df = render_table_translator(other_df, key_prefix=f"op_other_{idx}")
                         
-                        # Configure Image columns
-                        col_cfg_other = {}
+                        col_cfg_oth = {}
                         for col in other_df.columns:
                             if any(kw in str(col).lower() for kw in ["nationality", "الجنسية"]):
-                                col_cfg_other[f"🚩_{col}"] = st.column_config.ImageColumn(" ", width="small")
+                                col_cfg_oth[f"🚩_{col}"] = st.column_config.ImageColumn(" ", width="small")
 
-                        # Smart Translator Button
-                        other_df = render_table_translator(other_df, key_prefix=f"op_other_{idx}")
-
-                        df_other_height = min((len(other_df) + 1) * 35 + 40, 500)
+                        df_other_h = min((len(other_df) + 1) * 35 + 40, 500)
                         event_other = st.dataframe(
                             style_df(other_df.drop(columns=["__uid"])),
-                            use_container_width=True,
-                            hide_index=True,
-                            on_select="rerun",
-                            selection_mode="single-row",
-                            column_config=col_cfg_other,
-                            key=f"op_other_table_{idx}",
-                            height=df_other_height
+                            use_container_width=True, hide_index=True, on_select="rerun",
+                            selection_mode="single-row", column_config=col_cfg_oth,
+                            key=f"op_other_table_{idx}", height=df_other_h
                         )
                         
                         if event_other.selection and event_other.selection.get("rows"):
-                            sel_row_idx = event_other.selection["rows"][0]
-                            original_idx = other_idx_map[sel_row_idx]
-                            worker_row = other_list[original_idx]
-                            worker_uid = other_df.iloc[sel_row_idx]["__uid"]
-                            
-                            # Detail Panel
-                            render_cv_detail_panel(worker_row, sel_row_idx, lang, key_prefix=f"op_other_{idx}", worker_uid=worker_uid)
+                            sel_idx = event_other.selection["rows"][0]
+                            worker_row = other_list[other_idx_map[sel_idx]]
+                            worker_uid = other_df.iloc[sel_idx]["__uid"]
+                            render_cv_detail_panel(worker_row, sel_idx, lang, key_prefix=f"op_other_{idx}", worker_uid=worker_uid)
+
                 
                 if (not city_list or build_worker_table(city_list, city_scores)[0].empty) and \
+                   (not region_list or build_worker_table(region_list, region_scores)[0].empty) and \
                    (not other_list or build_worker_table(other_list, other_scores)[0].empty):
                     st.info("تم إخفاء جميع العمال المطابقين لهذا الطلب.")
 
