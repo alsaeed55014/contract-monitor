@@ -57,6 +57,16 @@ class SmartSearchEngine:
         # Clean query
         query_clean = str(query).strip() if query else ""
         
+        # New: Auto-clean phone numbers from edges (User Request 2026-03-07)
+        # Removes anything not a digit or '+' from the beginning and end of the query
+        if query_clean:
+            temp_clean = re.sub(r'^[^\d+]+', '', query_clean)
+            temp_clean = re.sub(r'[^\d]+$', '', temp_clean)
+            
+            # Switch to the purified query only if it represents a valid phone number search
+            if temp_clean and self.is_phone_query(temp_clean):
+                query_clean = temp_clean
+
         # 1. Text Search
         if query_clean:
             if self.is_phone_query(query_clean):
