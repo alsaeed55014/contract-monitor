@@ -385,20 +385,17 @@ def get_css():
             color: #FF0000 !important;
         }
 
-        /* 6) Table & Data Presentation - WHITE NEON STYLE (For DataFrames) */
+        /* 6) Table & Data Presentation - Fixed Visibility & Theme Support */
         [data-testid="stDataFrame"], [data-testid="stTable"], .neon-white-table {
-            background: rgba(255, 255, 255, 1) !important;
-            border: 2px solid #FFFFFF !important;
+            background: transparent !important;
+            border: 1.5px solid rgba(255, 255, 255, 0.2) !important;
             border-radius: 12px !important;
-            box-shadow: 0 0 30px rgba(255, 255, 255, 0.8), 
-                        inset 0 0 15px rgba(255, 255, 255, 0.5) !important;
             margin: 20px 0 !important;
-            color: #000000; /* Removed !important to allow selective overrides */
         }
         
+        /* Ensure readable text weight */
         [data-testid="stDataFrame"] *, [data-testid="stTable"] *, .neon-white-table * {
-            color: #000000; /* Removed !important to allow selective overrides */
-            font-weight: 500 !important;
+            font-weight: 500;
         }
 
         /* FIX: White Icons for Data Table Toolbars (Fullscreen, Search, Download) */
@@ -1088,6 +1085,7 @@ def style_df(df):
         def add_gender_icon(val):
             if not val: return val
             s_val = str(val).strip().lower()
+            if "🚹" in s_val or "🚺" in s_val: return val
             for key, icon in GENDER_MAP.items():
                 if key == s_val:
                     return f"{icon} {val}"
@@ -1098,10 +1096,10 @@ def style_df(df):
     def apply_colors(val):
         s_val = str(val).lower()
         if any(k in s_val for k in ["🚹", "ذكر", "male"]):
-            return "color: #3498db !important; font-weight: bold !important;" 
+            return "color: #4da3ff !important; font-weight: 700 !important;" 
         if any(k in s_val for k in ["🚺", "أنثى", "female"]):
-            return "color: #e91e63 !important; font-weight: bold !important;"
-        return "color: #4CAF50;"
+            return "color: #ff4d94 !important; font-weight: 700 !important;"
+        return ""
 
     return styled_df.style.map(
         apply_colors, 
