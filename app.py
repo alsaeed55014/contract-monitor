@@ -385,17 +385,20 @@ def get_css():
             color: #FF0000 !important;
         }
 
-        /* 6) Table & Data Presentation - Fixed Visibility & Theme Support */
+        /* 6) Table & Data Presentation - WHITE NEON STYLE (For DataFrames) */
         [data-testid="stDataFrame"], [data-testid="stTable"], .neon-white-table {
-            background: transparent !important;
-            border: 1.5px solid rgba(255, 255, 255, 0.2) !important;
+            background: rgba(255, 255, 255, 1) !important;
+            border: 2px solid #FFFFFF !important;
             border-radius: 12px !important;
+            box-shadow: 0 0 30px rgba(255, 255, 255, 0.8), 
+                        inset 0 0 15px rgba(255, 255, 255, 0.5) !important;
             margin: 20px 0 !important;
+            color: #000000 !important;
         }
         
-        /* Ensure readable text weight */
         [data-testid="stDataFrame"] *, [data-testid="stTable"] *, .neon-white-table * {
-            font-weight: 500;
+            color: #000000; /* Removed !important to allow selective overrides */
+            font-weight: 500 !important;
         }
 
         /* FIX: White Icons for Data Table Toolbars (Fullscreen, Search, Download) */
@@ -1085,7 +1088,6 @@ def style_df(df):
         def add_gender_icon(val):
             if not val: return val
             s_val = str(val).strip().lower()
-            if "🚹" in s_val or "🚺" in s_val: return val
             for key, icon in GENDER_MAP.items():
                 if key == s_val:
                     return f"{icon} {val}"
@@ -1096,10 +1098,10 @@ def style_df(df):
     def apply_colors(val):
         s_val = str(val).lower()
         if any(k in s_val for k in ["🚹", "ذكر", "male"]):
-            return "color: #4da3ff !important; font-weight: 700 !important;" 
+            return "color: #3498db; font-weight: bold;" 
         if any(k in s_val for k in ["🚺", "أنثى", "female"]):
-            return "color: #ff4d94 !important; font-weight: 700 !important;"
-        return ""
+            return "color: #e91e63; font-weight: bold;"
+        return "color: #4CAF50;"
 
     return styled_df.style.map(
         apply_colors, 
@@ -1750,11 +1752,13 @@ def login_screen():
         
         st.markdown('</div>', unsafe_allow_html=True)
 
-@st.fragment(run_every="40s")
+@st.fragment(run_every="20s")
 def silent_notification_monitor():
     """
     MODERN BACKGROUND MONITOR:
-    Increased interval to 40s for better mobile performance.
+    This runs every 20 seconds in a 'fragment' context. 
+    It checks for data updates WITHOUT refreshing the entire page.
+    Your scroll position and input values will NOT be affected.
     """
     if st.session_state.get('user'):
         check_notifications()
@@ -2285,29 +2289,17 @@ def render_dashboard_content():
     st.markdown('<div class="programmer-signature-neon">By: Alsaeed Alwazzan (v2.1)</div>', unsafe_allow_html=True)
     st.title(f" {t('contract_dashboard', lang)}")
     
-    # SILENT CACHE CHECK: Don't show the intrusive hourglass if we already have valid data
-    db = st.session_state.db
-    url = "https://docs.google.com/spreadsheets/d/1u87sScIve_-xT_jDG56EKFMXegzAxOqwVJCh3Irerrw/edit"
-    cache_key = f"cache_{hashlib.md5(url.encode()).hexdigest()}"
-    last_fetch_key = f"last_fetch_{hashlib.md5(url.encode()).hexdigest()}"
-    
+    # Show loader while fetching data
+    loading_placeholder = show_loading_hourglass()
     start_time = time.time()
-    current_time = start_time
-    has_valid_cache = (cache_key in getattr(db, '_data_caches', {}) and 
-                       (current_time - getattr(db, '_last_fetches', {}).get(last_fetch_key, 0) < db.CACHE_DURATION))
-
-    loading_placeholder = st.empty()
-    if not has_valid_cache:
-        loading_placeholder = show_loading_hourglass()
     
     try:
-        df = db.fetch_data()
+        df = st.session_state.db.fetch_data()
     except Exception as e:
         loading_placeholder.empty()
         st.error(f"{t('error', lang)}: {e}")
         return
 
-    loading_placeholder.empty()
     if df.empty:
         loading_placeholder.empty()
         st.warning(t("no_data", lang))
