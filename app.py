@@ -393,7 +393,7 @@ def get_css():
             box-shadow: 0 0 30px rgba(255, 255, 255, 0.8), 
                         inset 0 0 15px rgba(255, 255, 255, 0.5) !important;
             margin: 20px 0 !important;
-            color: #000000 !important;
+            color: #000000; /* Removed !important to allow selective overrides */
         }
         
         [data-testid="stDataFrame"] *, [data-testid="stTable"] *, .neon-white-table * {
@@ -1045,6 +1045,16 @@ def style_df(df):
 
     styled_df = df.copy()
     
+    # 0. Global Auto-Translation for English UI
+    lang = st.session_state.lang
+    if lang == 'en':
+        for col in styled_df.columns:
+            # We skip columns starting with flags or images
+            if not str(col).startswith("🚩_"):
+                # Optimize: only apply to object/string columns
+                if styled_df[col].dtype == 'object':
+                    styled_df[col] = styled_df[col].apply(lambda x: auto_translate(x, target_lang='en'))
+
     # 1. Flag Image Injection
     nat_cols = [c for c in styled_df.columns if any(kw in str(c).lower() for kw in ["nationality", "الجنسية"])]
     for col in nat_cols:
@@ -1088,9 +1098,9 @@ def style_df(df):
     def apply_colors(val):
         s_val = str(val).lower()
         if any(k in s_val for k in ["🚹", "ذكر", "male"]):
-            return "color: #3498db; font-weight: bold;" 
+            return "color: #3498db !important; font-weight: bold !important;" 
         if any(k in s_val for k in ["🚺", "أنثى", "female"]):
-            return "color: #e91e63; font-weight: bold;"
+            return "color: #e91e63 !important; font-weight: bold !important;"
         return "color: #4CAF50;"
 
     return styled_df.style.map(
@@ -1147,8 +1157,13 @@ def render_table_translator(df, key_prefix="table"):
     if df is None or df.empty:
         return df
 
-    # Search for target columns
-    target_keywords = ["الوظيفة المطلوبة", "Requested Job", "مهارات أخرى", "Other Skills", "المهنة في الإقامة", "Iqama Profession"]
+    # Search for target columns (Arabic, Original Sheet names, and English translations)
+    target_keywords = [
+        "الوظيفة المطلوبة", "Requested Job", "Job Requested", "Which job are you looking for",
+        "مهارات أخرى", "Other Skills", "What other jobs can you do",
+        "المهنة في الإقامة", "Iqama Profession", "What is the occupation listed on your Iqama",
+        "Iqama Job", "occupation listed on your Iqama"
+    ]
     cols_to_translate = [c for c in df.columns if any(kw.lower() in str(c).lower() for kw in target_keywords)]
 
     if not cols_to_translate:
@@ -1186,6 +1201,55 @@ def render_table_translator(df, key_prefix="table"):
     st.markdown('</div>', unsafe_allow_html=True)
     
     return df
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def get_cached_translation(val, target_lang):
+    try:
+        if not val: return val
+        from src.core.translation import TranslationManager
+        tm = TranslationManager()
+        return tm.translate_full_text(val, target_lang=target_lang)
+    except:
+        return val
+
+def auto_translate(val, target_lang='en'):
+    """
+    Automatically translates Arabic text to the target language if the current UI language 
+    matches that target and the text contains Arabic characters.
+    """
+    if not val or not isinstance(val, (str, object)):
+        return val
+    
+    val_str = str(val).strip()
+    if not val_str:
+        return val
+    
+    # Only translate if ui lang matches target (usually 'en') and val has Arabic
+    curr_lang = st.session_state.get('lang', 'ar')
+    if curr_lang != target_lang:
+        return val
+        
+    # Check for Arabic characters
+    has_ar = any('\u0600' <= char <= '\u06FF' for char in val_str)
+    if not has_ar:
+        return val
+
+    try:
+        if 'tm' not in st.session_state or st.session_state.tm is None:
+            from src.core.translation import TranslationManager
+            st.session_state.tm = TranslationManager()
+        
+        tm = st.session_state.tm
+        # Optimization: use dictionary for short tokens
+        if len(val_str.split()) <= 2:
+            translated = tm.translate_word(val_str)
+            if isinstance(translated, list): translated = translated[0]
+            if translated != val_str: return translated
+            
+        # Fallback to cached full text translation
+        return get_cached_translation(val_str, target_lang)
+    except:
+        return val
 
 def show_toast(message, typ="success", duration=5, container=None):
     """
@@ -1688,6 +1752,15 @@ def login_screen():
         
         st.markdown('</div>', unsafe_allow_html=True)
 
+@st.fragment(run_every="40s")
+def silent_notification_monitor():
+    """
+    MODERN BACKGROUND MONITOR:
+    Increased interval to 40s for better mobile performance.
+    """
+    if st.session_state.get('user'):
+        check_notifications()
+
 def check_notifications():
     """Checks for new worker entries or customer requests and synchronizes UI data."""
     if 'db' not in st.session_state or not st.session_state.user:
@@ -1698,8 +1771,6 @@ def check_notifications():
     if 'notif_last_worker_count' not in st.session_state: st.session_state.notif_last_worker_count = None
     if 'notif_last_cust_count' not in st.session_state: st.session_state.notif_last_cust_count = None
     if 'notif_triggered' not in st.session_state: st.session_state.notif_triggered = False
-    
-    st.session_state.last_sync_time = datetime.now().strftime("%H:%M:%S")
 
     def find_col(df, keywords):
         """Smart column finder - handles Arabic normalization (ة vs ه)."""
@@ -1791,15 +1862,23 @@ def render_top_banner():
         var ctx = new AudioContext();
         if (ctx.state === 'suspended') await ctx.resume();
         
-        function playBell(freq, startTime, dur) {
+        function playTone(freq, type, startTime, dur, vol) {
             var osc = ctx.createOscillator(); var gain = ctx.createGain();
             osc.connect(gain); gain.connect(ctx.destination);
-            osc.type = 'sine'; osc.frequency.setValueAtTime(freq, ctx.currentTime + startTime);
-            gain.gain.setValueAtTime(0.5, ctx.currentTime + startTime);
-            gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + startTime + dur);
+            osc.type = type; osc.frequency.setValueAtTime(freq, ctx.currentTime + startTime);
+            gain.gain.setValueAtTime(vol, ctx.currentTime + startTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + startTime + dur);
             osc.start(ctx.currentTime + startTime); osc.stop(ctx.currentTime + startTime + dur);
         }
-        playBell(830, 0.0, 0.6); playBell(1050, 0.3, 0.6); playBell(1320, 0.6, 0.8);
+        // Strong "Luxury Alert" Sequence
+        // 1. Foundation tone
+        playTone(523.25, 'sine', 0.0, 0.8, 0.6); 
+        // 2. Bright chime
+        playTone(1046.50, 'triangle', 0.1, 0.5, 0.4); 
+        // 3. Success triple-beep
+        playTone(1318.51, 'sine', 0.4, 0.3, 0.3);
+        playTone(1567.98, 'sine', 0.5, 0.3, 0.3);
+        playTone(2093.00, 'sine', 0.6, 0.4, 0.2);
     } catch(e) { console.error('Audio fail:', e); }
 })();
 </script>
@@ -1827,33 +1906,6 @@ def render_top_banner():
 </script>
 """, height=0, width=0)
         st.session_state.test_sound = False
-
-    # 1.5 Live Monitor (Silent Auto-Refresh every 30 seconds)
-    st.components.v1.html("""
-<script>
-    if (!window.liveMonitorSet) {
-        window.liveMonitorSet = true;
-        console.log("[LiveMonitor] Background Service Started.");
-        
-        setInterval(function() {
-            if (window.parent.document.visibilityState !== 'visible') return;
-            var activeEl = window.parent.document.activeElement;
-            var isTyping = activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA' || activeEl.isContentEditable);
-            
-            if (!isTyping) {
-                var buttons = window.parent.document.querySelectorAll('button');
-                for (var i = 0; i < buttons.length; i++) {
-                    if (buttons[i].innerText === 'Heartbeat') {
-                        console.log("[LiveMonitor] Syncing Data...");
-                        buttons[i].click();
-                        break;
-                    }
-                }
-            }
-        }, 10000); 
-    }
-</script>
-""", height=0, width=0)
 
     # 2. Styling and Content
     if lang == 'ar':
@@ -2182,29 +2234,6 @@ def dashboard():
             st.session_state.user = None
             st.rerun()
         
-        st.markdown('<div id="live-monitor-trigger" style="display:none;">', unsafe_allow_html=True)
-        if st.button("Heartbeat", key="background_heartbeat_btn"):
-            st.rerun()
-        st.markdown('</div>', unsafe_allow_html=True)
-
-        # --- Monitor Status Indicator ---
-        sync_time = st.session_state.get('last_sync_time', '--:--:--')
-        st.markdown(f"""
-        <div style="background:rgba(212,175,55,0.05); border:1px solid rgba(212,175,55,0.1); border-radius:10px; padding:10px; margin-top:20px;">
-            <div style="display:flex; align-items:center; gap:8px; font-size:0.75rem; color:rgba(255,255,255,0.6);">
-                <div style="width:8px; height:8px; background:#4CAF50; border-radius:50%; box-shadow:0 0 10px #4CAF50; animation: pulse 2s infinite;"></div>
-                <span>المراقب المباشر يعمل: {sync_time}</span>
-            </div>
-        </div>
-        <style>
-            @keyframes pulse {{
-                0% {{ transform:scale(0.95); box-shadow:0 0 0 0 rgba(76,175,80,0.7); }}
-                70% {{ transform:scale(1); box-shadow:0 0 0 10px rgba(76,175,80,0); }}
-                100% {{ transform:scale(0.95); box-shadow:0 0 0 0 rgba(76,175,80,0); }}
-            }}
-        </style>
-        """, unsafe_allow_html=True)
-        
         # Global Deep Reset Opportunity
         st.sidebar.divider()
         with st.sidebar.expander(t("deep_reset", lang)):
@@ -2258,17 +2287,28 @@ def render_dashboard_content():
     st.markdown('<div class="programmer-signature-neon">By: Alsaeed Alwazzan (v2.1)</div>', unsafe_allow_html=True)
     st.title(f" {t('contract_dashboard', lang)}")
     
-    # Show loader while fetching data
-    loading_placeholder = show_loading_hourglass()
-    start_time = time.time()
+    # SILENT CACHE CHECK: Don't show the intrusive hourglass if we already have valid data
+    db = st.session_state.db
+    url = "https://docs.google.com/spreadsheets/d/1u87sScIve_-xT_jDG56EKFMXegzAxOqwVJCh3Irerrw/edit"
+    cache_key = f"cache_{hashlib.md5(url.encode()).hexdigest()}"
+    last_fetch_key = f"last_fetch_{hashlib.md5(url.encode()).hexdigest()}"
+    
+    current_time = time.time()
+    has_valid_cache = (cache_key in getattr(db, '_data_caches', {}) and 
+                       (current_time - getattr(db, '_last_fetches', {}).get(last_fetch_key, 0) < db.CACHE_DURATION))
+
+    loading_placeholder = st.empty()
+    if not has_valid_cache:
+        loading_placeholder = show_loading_hourglass()
     
     try:
-        df = st.session_state.db.fetch_data()
+        df = db.fetch_data()
     except Exception as e:
         loading_placeholder.empty()
         st.error(f"{t('error', lang)}: {e}")
         return
 
+    loading_placeholder.empty()
     if df.empty:
         loading_placeholder.empty()
         st.warning(t("no_data", lang))
@@ -3732,7 +3772,9 @@ def render_order_processing_content():
     def info_cell(icon, label_text, value, color="#F4F4F4", min_width="200px"):
         if not value or str(value).strip().lower() in ["nan", "none", ""]:
             return ""
-        return f'<div style="background: rgba(255,255,255,0.04); padding: 12px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.06); margin: 5px; flex: 1 1 {min_width}; min-height: 80px; display: flex; flex-direction: column; justify-content: center;"><span style="color: #888; font-size: 0.8rem;">{label_text}</span><span style="color: {color}; font-size: 1.1rem; font-weight: 600; margin-top: 4px;">{icon} {value}</span></div>'
+        # Auto translate Arabic values to English if in English interface
+        disp_val = auto_translate(str(value), target_lang='en')
+        return f'<div style="background: rgba(255,255,255,0.04); padding: 12px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.06); margin: 5px; flex: 1 1 {min_width}; min-height: 80px; display: flex; flex-direction: column; justify-content: center;"><span style="color: #888; font-size: 0.8rem;">{label_text}</span><span style="color: {color}; font-size: 1.1rem; font-weight: 600; margin-top: 4px;">{icon} {disp_val}</span></div>'
 
     # --- Timestamp column lookup ---
     c_timestamp = find_cust_col(["timestamp"]) or find_cust_col(["الطابع"]) or find_cust_col(["تاريخ"])
@@ -4011,13 +4053,14 @@ def render_order_processing_content():
                    (not other_list or build_worker_table(other_list, other_scores)[0].empty):
                     st.info("تم إخفاء جميع العمال المطابقين لهذا الطلب.")
 
-            # --- Hide Request Button ---
-            col_h1, col_h2 = st.columns([1, 4])
-            with col_h1:
-                if st.button("🚫 " + ("إخفاء هذا الطلب" if lang == 'ar' else "Hide this request"), 
-                             key=f"hide_client_btn_{idx}"):
-                    st.session_state.op_hidden_clients.add(client_key)
-                    st.rerun()
+            # --- Hide Request Button (Admin Only) ---
+            if user_role == "admin":
+                col_h1, col_h2 = st.columns([1, 4])
+                with col_h1:
+                    if st.button("🚫 " + ("إخفاء هذا الطلب" if lang == 'ar' else "Hide this request"), 
+                                 key=f"hide_client_btn_{idx}"):
+                        st.session_state.op_hidden_clients.add(client_key)
+                        st.rerun()
 
             st.markdown("<div style='height: 40px;'></div>", unsafe_allow_html=True)
             st.divider()
@@ -4232,9 +4275,9 @@ def render_customer_requests_content():
     selected_row = df.iloc[selected_idx]
     with st.expander("📋 " + ("تفاصيل الطلب المحدد" if lang == "ar" else "Selected Request Details"), expanded=False):
         for col_name, val in selected_row.items():
-            if str(col_name).startswith("__"):
-                continue
-            st.markdown(f"**{t_col(col_name, lang)}:** {val}")
+            # Auto translate values in details view for English interface
+            disp_val = auto_translate(val, target_lang='en')
+            st.markdown(f"**{t_col(col_name, lang)}:** {disp_val}")
 
     # Row management (Delete & Match)
     st.markdown("<br>", unsafe_allow_html=True)
@@ -4725,4 +4768,6 @@ def render_bengali_supply_content():
 if not st.session_state.user:
     login_screen()
 else:
+    # Call the silent monitor once - it will handle its own background loop
+    silent_notification_monitor()
     dashboard()
