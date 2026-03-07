@@ -2293,7 +2293,8 @@ def render_dashboard_content():
     cache_key = f"cache_{hashlib.md5(url.encode()).hexdigest()}"
     last_fetch_key = f"last_fetch_{hashlib.md5(url.encode()).hexdigest()}"
     
-    current_time = time.time()
+    start_time = time.time()
+    current_time = start_time
     has_valid_cache = (cache_key in getattr(db, '_data_caches', {}) and 
                        (current_time - getattr(db, '_last_fetches', {}).get(last_fetch_key, 0) < db.CACHE_DURATION))
 
