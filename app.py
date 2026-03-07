@@ -941,18 +941,23 @@ def get_css():
             }
 
             /* === MOBILE RED: WhatsApp export button === */
-            .stDownloadButton button,
-            .stDownloadButton button span {
-                background: linear-gradient(135deg, #1A0000 0%, #330000 100%) !important;
-                color: #FF0000 !important;
-                border: 1.5px solid rgba(255, 0, 0, 0.6) !important;
-                box-shadow: 0 0 15px rgba(255, 0, 0, 0.3) !important;
+            /* WhatsApp Export Button - Mobile (Unified Luxury Style) */
+            .whatsapp-export-btn .stButton button,
+            .whatsapp-export-btn .stDownloadButton button,
+            .stDownloadButton button {
+                background: linear-gradient(135deg, #0a0e1a 0%, #06080f 100%) !important;
+                color: #D4AF37 !important;
+                border: 1.5px solid #D4AF37 !important;
+                box-shadow: 0 0 10px rgba(212, 175, 55, 0.2) !important;
+                text-shadow: 0 0 5px rgba(212, 175, 55, 0.3) !important;
             }
+            .whatsapp-export-btn .stButton button:hover,
+            .whatsapp-export-btn .stDownloadButton button:hover,
             .stDownloadButton button:hover {
-                background: #FF0000 !important;
-                color: #FFFFFF !important;
-                border-color: #FF0000 !important;
-                box-shadow: 0 0 25px rgba(255, 0, 0, 0.7) !important;
+                background: #D4AF37 !important;
+                color: #000000 !important;
+                border-color: #D4AF37 !important;
+                box-shadow: 0 0 20px rgba(212, 175, 55, 0.5) !important;
             }
 
             /* === MOBILE RED: Selectbox / Dropdown arrows === */
