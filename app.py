@@ -1099,7 +1099,7 @@ def style_df(df):
                             return f"https://flagcdn.com/w20/{code}.png"
                 return None
             
-            # Position flag before nationality
+            # Position flag after nationality (which is 'before' in RTL)
             idx = list(styled_df.columns).index(col)
             styled_df.insert(idx, flag_col, styled_df[col].apply(get_flag_url))
 
@@ -2330,6 +2330,50 @@ def dashboard():
     elif page == "bengali_supply": render_bengali_supply_content()
     elif page == "whatsapp_marketing": render_whatsapp_page()
 
+
+def __apply_pinned_columns(df_or_style, cfg=None):
+    if cfg is None: cfg = {}
+    import streamlit as st
+    pin_keywords = [
+        "حالة العقد", "contract status", "status",
+        "وقت", "طابع", "timestamp", "registration",
+        "الاسم", "name", 
+        "جنسية", "nationality", "🚩",
+        "جنس", "gender", "النوع"
+    ]
+    
+    # Handle both DataFrame and Styler
+    if hasattr(df_or_style, 'data'):
+        cols = df_or_style.data.columns
+    elif hasattr(df_or_style, 'columns'):
+        cols = df_or_style.columns
+    else:
+        return cfg
+        
+    for col in cols:
+        col_str = str(col).lower()
+        should_pin = any(kw in col_str for kw in pin_keywords)
+        if should_pin:
+            if col not in cfg:
+                cfg[col] = st.column_config.Column(pinned=True)
+            else:
+                try:
+                    # Modify existing column config safely
+                    existing = cfg[col]
+                    if isinstance(existing, dict):
+                        existing["pinned"] = True
+                    else:
+                        # For streamlit object like ImageColumn
+                        existing_dict = getattr(existing, "__dict__", {})
+                        if "pinned" in existing_dict or hasattr(existing, "pinned"):
+                            existing.pinned = True
+                        else:
+                            # Recreate if setting fails
+                            pass
+                except:
+                    pass
+    return cfg
+
 def render_dashboard_content():
     lang = st.session_state.lang
     st.markdown('<div class="programmer-signature-neon">By: Alsaeed Alwazzan (v2.1)</div>', unsafe_allow_html=True)
@@ -2499,7 +2543,7 @@ def render_dashboard_content():
         event = st.dataframe(
             styled_final, 
             use_container_width=True, 
-            column_config=final_cfg,
+            column_config=__apply_pinned_columns(styled_final, final_cfg),
             on_select="rerun",
             selection_mode="single-row",
             hide_index=True,
@@ -2871,7 +2915,7 @@ def render_search_content():
                 on_select="rerun",
                 selection_mode="single-row",
                 hide_index=True,
-                column_config=column_config,
+                column_config=__apply_pinned_columns(style_df(res_display), column_config),
                 key=f"search_results_table_{st.session_state.get('search_entry_count', 0)}",
                 height=df_height
             )
@@ -3408,7 +3452,7 @@ def render_permissions_content():
     
     # Stylized DataFrame
     df_users = pd.DataFrame(table_data)
-    st.dataframe(style_df(df_users), use_container_width=True)
+    st.dataframe(style_df(df_users), use_container_width=True, column_config=__apply_pinned_columns(style_df(df_users)))
 
 def render_order_processing_content():
     """Order Processing: Matches Customer Requests with available Workers."""
@@ -4037,7 +4081,7 @@ def render_order_processing_content():
                         event_city = st.dataframe(
                             style_df(city_df.drop(columns=["__uid"])),
                             use_container_width=True, hide_index=True, on_select="rerun",
-                            selection_mode="single-row", column_config=col_cfg_city,
+                            selection_mode="single-row", column_config=__apply_pinned_columns(city_df, col_cfg_city),
                             key=f"op_city_table_{idx}", height=df_city_height
                         )
                         
@@ -4084,7 +4128,7 @@ def render_order_processing_content():
                         ev_reg = st.dataframe(
                             style_df(reg_df.drop(columns=["__uid"])),
                             use_container_width=True, hide_index=True, on_select="rerun",
-                            selection_mode="single-row", column_config=col_cfg_reg,
+                            selection_mode="single-row", column_config=__apply_pinned_columns(reg_df, col_cfg_reg),
                             key=f"op_reg_table_{idx}", height=df_reg_h
                         )
                         if ev_reg.selection and ev_reg.selection.get("rows"):
@@ -4121,7 +4165,7 @@ def render_order_processing_content():
                         event_other = st.dataframe(
                             style_df(other_df.drop(columns=["__uid"])),
                             use_container_width=True, hide_index=True, on_select="rerun",
-                            selection_mode="single-row", column_config=col_cfg_oth,
+                            selection_mode="single-row", column_config=__apply_pinned_columns(other_df, col_cfg_oth),
                             key=f"op_other_table_{idx}", height=df_other_h
                         )
                         
@@ -4699,7 +4743,7 @@ def render_bengali_supply_content():
                         if any(kw in str(col).lower() for kw in ["nationality", "الجنسية"]):
                             col_cfg_b[f"🚩_{col}"] = st.column_config.ImageColumn(" ", width="small")
                     
-                    st.dataframe(style_df(df_bengali_search), use_container_width=True, hide_index=True, column_config=col_cfg_b)
+                    st.dataframe(style_df(df_bengali_search), use_container_width=True, hide_index=True, column_config=__apply_pinned_columns(df_bengali_search, col_cfg_b))
                     
                     st.markdown("---")
                     for w in sorted(results, key=lambda x: x.get("timestamp", ""), reverse=True):
