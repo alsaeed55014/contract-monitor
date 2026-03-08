@@ -1078,38 +1078,37 @@ def style_df(df):
                 if styled_df[col].dtype == 'object':
                     styled_df[col] = styled_df[col].apply(lambda x: auto_translate(x, target_lang='en'))
 
-    # 1. Flag Emoji Injection (uniform size, no image loading)
+    # 1. Flag Image Injection (using flagsapi.com for uniform high-quality icons)
     nat_cols = [c for c in styled_df.columns if any(kw in str(c).lower() for kw in ["nationality", "الجنسية"])]
     for col in nat_cols:
-        # Remove old image columns if they exist
         flag_col = f"🚩_{col}"
-        if flag_col in styled_df.columns:
-            styled_df.drop(columns=[flag_col], inplace=True)
-        
-        def get_flag_emoji(val):
-            if not val: return val
-            # Avoid double injection if already has emoji (Regional Indicator Symbols)
-            if any(0x1F1E6 <= ord(c) <= 0x1F1FF for c in str(val)[:2]):
-                return val
+        if flag_col not in styled_df.columns:
+            def get_flag_url(val):
+                if not val: return None
+                s_val = str(val).strip().lower()
+                sorted_keys = sorted(FLAG_MAP.keys(), key=len, reverse=True)
+                for key in sorted_keys:
+                    code = FLAG_MAP[key]
+                    if len(key) <= 3:
+                        pattern = r'(?:^|[\s,:;.\-/])' + re.escape(key) + r'(?:[\s,:;.\-/]|$)'
+                        if re.search(pattern, s_val):
+                            return f"https://flagsapi.com/{code.upper()}/flat/64.png"
+                    else:
+                        if key in s_val:
+                            return f"https://flagsapi.com/{code.upper()}/flat/64.png"
+                return None
             
-            s_val = str(val).strip().lower()
-            # Sort keys by length (longest first) to match "sri lankan" before "sri"
-            sorted_keys = sorted(FLAG_MAP.keys(), key=len, reverse=True)
-            for key in sorted_keys:
-                code = FLAG_MAP[key]
-                if len(key) <= 3:
-                    pattern = r'(?:^|[\s,:;.\-/])' + re.escape(key) + r'(?:[\s,:;.\-/]|$)'
-                    if re.search(pattern, s_val):
-                        # Convert country code to flag emoji (e.g. 'ph' -> 🇵🇭)
-                        emoji = ''.join(chr(0x1F1E6 + ord(c) - ord('a')) for c in code.lower())
-                        return f"{emoji} {val}"
-                else:
-                    if key in s_val:
-                        emoji = ''.join(chr(0x1F1E6 + ord(c) - ord('a')) for c in code.lower())
-                        return f"{emoji} {val}"
-            return val
+            # Position flag after nationality
+            idx = list(styled_df.columns).index(col)
+            styled_df.insert(idx, flag_col, styled_df[col].apply(get_flag_url))
         
-        styled_df[col] = styled_df[col].apply(get_flag_emoji)
+        # Cleanup original column if it was modified with emojis previously
+        # (This is just in case old data remains in session state)
+        def clean_val(v):
+            if not v: return v
+            # Remove any existing flag emojis (RI symbols)
+            return re.sub(r'[\U0001F1E6-\U0001F1FF]{2}\s*', '', str(v))
+        styled_df[col] = styled_df[col].apply(clean_val)
 
     # 2. Gender Icon Injection
     gen_cols = [c for c in styled_df.columns if any(kw in str(c).lower() for kw in ["gender", "الجنس"]) and str(c).lower() != "الجنسية"]
@@ -2346,7 +2345,7 @@ def __apply_pinned_columns(df_or_style, cfg=None):
         "حالة العقد", "contract status", "status",
         "وقت", "طابع", "timestamp", "registration",
         "الاسم", "name", 
-        "جنسية", "nationality",
+        "جنسية", "nationality", "🚩",
         "جنس", "gender", "النوع"
     ]
     
@@ -2536,6 +2535,11 @@ def render_dashboard_content():
             rem_key_display,
             format="%d يوم" if lang == 'ar' else "%d Days"
         )
+        
+        # Flag Image Configuration
+        for col in d_final.columns:
+            if any(kw in str(col).lower() for kw in ["nationality", "الجنسية"]):
+                final_cfg[f"🚩_{col}"] = st.column_config.ImageColumn(" ", width="small")
         
         
         # Smart Translator Button
@@ -2894,6 +2898,11 @@ def render_search_content():
                 rem_key_search,
                 format="%d يوم" if lang == 'ar' else "%d Days"
             )
+
+            # Flag Image Configuration
+            for col in res_display.columns:
+                if any(kw in str(col).lower() for kw in ["nationality", "الجنسية"]):
+                    column_config[f"🚩_{col}"] = st.column_config.ImageColumn(" ", width="small")
 
 
 
@@ -4071,9 +4080,10 @@ def render_order_processing_content():
                         label = f"📍 عمال في نفس المدينة ({loc_val})" if lang == 'ar' else f"📍 Workers in the same city ({loc_val})"
                         render_segment_header(label, len(city_df), color="#D4AF37")
                         
-                        city_df = render_table_translator(city_df, key_prefix=f"op_city_{idx}")
-                        
                         col_cfg_city = {}
+                        for col in city_df.columns:
+                            if any(kw in str(col).lower() for kw in ["nationality", "الجنسية"]):
+                                col_cfg_city[f"🚩_{col}"] = st.column_config.ImageColumn(" ", width="small")
 
 
                         df_city_height = min((len(city_df) + 1) * 35 + 40, 500)
@@ -4117,8 +4127,11 @@ def render_order_processing_content():
                         render_segment_header(label, len(reg_df), color="#D4AF37", explainer=explainer)
 
                         reg_df = render_table_translator(reg_df, key_prefix=f"op_reg_{idx}")
-
+                        
                         col_cfg_reg = {}
+                        for col in reg_df.columns:
+                            if any(kw in str(col).lower() for kw in ["nationality", "الجنسية"]):
+                                col_cfg_reg[f"🚩_{col}"] = st.column_config.ImageColumn(" ", width="small")
 
 
                         df_reg_h = min((len(reg_df) + 1) * 35 + 40, 400)
@@ -4154,6 +4167,9 @@ def render_order_processing_content():
                         other_df = render_table_translator(other_df, key_prefix=f"op_other_{idx}")
                         
                         col_cfg_oth = {}
+                        for col in other_df.columns:
+                            if any(kw in str(col).lower() for kw in ["nationality", "الجنسية"]):
+                                col_cfg_oth[f"🚩_{col}"] = st.column_config.ImageColumn(" ", width="small")
 
 
                         df_other_h = min((len(other_df) + 1) * 35 + 40, 500)
@@ -4486,6 +4502,9 @@ def render_customer_requests_content():
 
                         # Configure columns
                         col_cfg_match = {}
+                        for col in display_df.columns:
+                            if any(kw in str(col).lower() for kw in ["nationality", "الجنسية"]):
+                                col_cfg_match[f"🚩_{col}"] = st.column_config.ImageColumn(" ", width="small")
 
                         # Smart Translator Button
                         display_df = render_table_translator(display_df, key_prefix="match_res")
@@ -4732,6 +4751,9 @@ def render_bengali_supply_content():
                         })
                     df_bengali_search = pd.DataFrame(df_g)
                     col_cfg_b = {}
+                for col in df_bengali_search.columns:
+                    if any(kw in str(col).lower() for kw in ["nationality", "الجنسية"]):
+                        col_cfg_b[f"🚩_{col}"] = st.column_config.ImageColumn(" ", width="small")
 
                     
                     st.dataframe(style_df(df_bengali_search), use_container_width=True, hide_index=True, column_config=__apply_pinned_columns(df_bengali_search, col_cfg_b))
