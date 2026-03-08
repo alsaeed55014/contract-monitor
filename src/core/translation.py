@@ -11,6 +11,9 @@ except ImportError:
 
 
 class TranslationManager:
+    # Cache for Google Translate results to avoid repeated API calls
+    _google_cache = {}
+
     def __init__(self):
 
         # -------------------------
@@ -37,8 +40,15 @@ class TranslationManager:
             "بدكير": ["Pedicure", "Technician"],
             "منكير": ["Manicure", "Technician"],
             "حلاق": "Barber",
+            "حلاقة": "Barber",
             "كوافير": ["Hairdresser", "Hair Stylist"],
-            "مصففة": ["Hairdresser", "Hair Stylist"],
+            "كوافيرة": ["Hairdresser", "Hair Stylist"],
+            "مصفف": ["Hairdresser", "Hair Stylist", "Stylist"],
+            "مصففة": ["Hairdresser", "Hair Stylist", "Stylist"],
+            "مصفف شعر": ["Hairdresser", "Hair Stylist"],
+            "مصففة شعر": ["Hairdresser", "Hair Stylist"],
+            "تجميل": ["Beauty", "Beautician", "Salon"],
+            "صالون": ["Salon", "Beauty"],
             "بشرة": "Skin",
             "بروتين": "Protein",
             "شعر": "Hair",
@@ -293,6 +303,32 @@ class TranslationManager:
                 return v
         return word
 
+    def _is_arabic(self, text):
+        """Check if text contains Arabic characters."""
+        return bool(re.search(r'[\u0600-\u06FF]', str(text)))
+
+    def _google_translate_fallback(self, word):
+        """Use Google Translate as fallback for words not in local dictionary."""
+        if not HAS_DEPS:
+            return None
+        if not self._is_arabic(word):
+            return None
+        
+        # Check cache first
+        cache_key = word.strip().lower()
+        if cache_key in TranslationManager._google_cache:
+            return TranslationManager._google_cache[cache_key]
+        
+        try:
+            translator = GoogleTranslator(source='ar', target='en')
+            result = translator.translate(word)
+            if result and result.lower() != word.lower():
+                TranslationManager._google_cache[cache_key] = result
+                return result
+        except Exception:
+            pass
+        return None
+
     # ---------------------------------
     # Query Analyzer
     # ---------------------------------
@@ -305,7 +341,24 @@ class TranslationManager:
         clean_query = query.lower().strip()
         ignore_words = ["جميع", "كل", "دول", "دولة", "قارة", "قاره"]
 
-        # Split by spaces and common separators like commas
+        # --- Step 0: Check full query as compound phrase FIRST ---
+        compound_trans = self.translate_word(clean_query)
+        compound_found = False
+        if isinstance(compound_trans, list):
+            compound_found = True
+        elif compound_trans and compound_trans.lower() != clean_query.lower():
+            compound_found = True
+        
+        if compound_found:
+            # The full query matched a compound entry (e.g. "مصفف شعر" -> "Hairdresser")
+            synonyms = {clean_query}
+            if isinstance(compound_trans, list):
+                for t in compound_trans: synonyms.add(t)
+            else:
+                synonyms.add(compound_trans)
+            return [list(synonyms)]
+
+        # --- Step 1: Split and translate word by word ---
         words = re.split(r'[\s,،/\\|]+', clean_query)
         bundle_list = []
 
@@ -316,23 +369,38 @@ class TranslationManager:
             # Use a Set to avoid duplicates
             synonyms = {word}
             
-            # 1. Direct translation
+            # 1. Direct translation from local dictionary
             trans = self.translate_word(word)
+            found_local = False
             
             if isinstance(trans, list):
                 for t in trans: synonyms.add(t)
+                found_local = True
             elif trans and trans.lower() != word.lower():
                 synonyms.add(trans)
+                found_local = True
                 
             # 2. Check for compound word matches in dictionary keys
-            # (Simple heuristic: if word is part of a key, add the value)
             norm_word = self.normalize_text(word)
             for k, v in self.dictionary.items():
                 if norm_word in self.normalize_text(k) and len(k.split()) > 1:
                      if isinstance(v, list):
                          for t in v: synonyms.add(t)
+                         found_local = True
                      else:
                          synonyms.add(v)
+                         found_local = True
+
+            # 3. Google Translate fallback for Arabic words NOT found locally
+            if not found_local and self._is_arabic(word):
+                google_result = self._google_translate_fallback(word)
+                if google_result:
+                    synonyms.add(google_result)
+                    # Also try the full query as a phrase via Google
+                    if len(words) > 1:
+                        full_google = self._google_translate_fallback(clean_query)
+                        if full_google:
+                            synonyms.add(full_google)
 
             bundle_list.append(list(synonyms))
 
