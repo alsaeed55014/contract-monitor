@@ -557,10 +557,92 @@ def get_css(lang='ar'):
             white-space: nowrap !important;
         }}
 
-        /* Login Screen Special Centering */
+        /* Login Screen Special Centering - FIXED HANGING VERSION */
         .login-screen-wrapper {{
-            margin-top: 0vh !important;
+            margin-top: 20px !important;
             text-align: center;
+        }}
+
+        /* Target the Streamlit Form - REMOVED GOLD BORDER */
+        div[data-testid="stForm"] {{
+            background: rgba(10, 10, 10, 0.4) !important;
+            backdrop-filter: blur(25px) !important;
+            border: none !important; /* NO BORDER */
+            border-radius: 25px !important;
+            padding: 2rem !important;
+            box-shadow: 0 15px 50px rgba(0, 0, 0, 0.8) !important;
+            width: 100% !important;
+            max-width: 500px !important;
+            margin: 0 auto 40px auto !important;
+        }}
+
+        /* White Neon Text Effect */
+        div[data-testid="stForm"] h3, 
+        div[data-testid="stForm"] label,
+        .neon-text {{
+            color: #FFFFFF !important;
+            text-shadow: 0 0 5px #FFF, 0 0 10px #FFF, 0 0 20px #FFF !important;
+            text-align: center !important;
+            font-weight: bold !important;
+        }}
+
+        /* Neon Glow Around Inputs - ENHANCED HALO EFFECT */
+        div[data-testid="stForm"] div[data-baseweb="input"] {{
+            background: rgba(255, 255, 255, 0.05) !important;
+            border: 1px solid rgba(255, 255, 255, 0.4) !important;
+            border-radius: 12px !important;
+            /* Layered shadows for a 'halo' light effect */
+            box-shadow: 0 0 15px rgba(255, 255, 255, 0.2), 
+                        0 0 30px rgba(255, 255, 255, 0.1), 
+                        inset 0 0 5px rgba(255, 255, 255, 0.1) !important;
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) !important;
+        }}
+
+        div[data-testid="stForm"] div[data-baseweb="input"]:focus-within {{
+            box-shadow: 0 0 25px rgba(255, 255, 255, 0.7), 
+                        0 0 45px rgba(255, 255, 255, 0.3), 
+                        inset 0 0 10px rgba(255, 255, 255, 0.1) !important;
+            border-color: #FFFFFF !important;
+            transform: scale(1.01) !important;
+        }}
+
+        div[data-testid="stForm"] .stTextInput input {{
+            text-align: center !important;
+            background: transparent !important;
+            border: none !important;
+            color: white !important;
+            text-shadow: 0 0 2px rgba(255, 255, 255, 0.5) !important;
+        }}
+
+        /* Checkbox Neon Alignment */
+        div[data-testid="stForm"] .stCheckbox label p {{
+            color: #FFFFFF !important;
+            text-shadow: 0 0 8px #FFF !important;
+            font-size: 0.95rem !important;
+        }}
+
+        /* Buttons Neon Halo - LARGE WHITE GLOW */
+        div[data-testid="stForm"] button {{
+            background: rgba(255, 255, 255, 0.1) !important;
+            border: 1.5px solid rgba(255, 255, 255, 0.4) !important;
+            color: white !important;
+            border-radius: 15px !important;
+            /* Large Layered halo effect */
+            box-shadow: 0 0 15px rgba(255, 255, 255, 0.2), 
+                        0 0 35px rgba(255, 255, 255, 0.1), 
+                        inset 0 0 10px rgba(255, 255, 255, 0.05) !important;
+            transition: all 0.4s ease-out !important;
+            font-weight: bold !important;
+            text-shadow: 0 0 5px #FFF !important;
+        }}
+
+        div[data-testid="stForm"] button:hover {{
+            background: rgba(255, 255, 255, 0.2) !important;
+            box-shadow: 0 0 25px rgba(255, 255, 255, 0.8), 
+                        0 0 60px rgba(255, 255, 255, 0.4), 
+                        inset 0 0 15px rgba(255, 255, 255, 0.1) !important;
+            border-color: #FFFFFF !important;
+            transform: translateY(-2px) scale(1.02) !important;
         }}
         
         /* Metric Styling with White Neon Glow */
@@ -1711,53 +1793,41 @@ def render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search", 
         st.components.v1.iframe(preview_url, height=600, scrolling=True)
     else: st.info("لا يتوفر رابط معاينة لهذا العامل.")
 
-# 11. Logic Functions
 def login_screen():
     lang = st.session_state.lang
     
-    # 2026 Luxury Flag Icons (Ensures consistent rendering on Windows)
+    # 2026 Luxury Flag Icons
     sa_icon = '<img src="https://flagcdn.com/w40/sa.png" style="width:24px; vertical-align:middle; border-radius:3px; margin:0 4px; box-shadow:0 0 8px rgba(0,0,0,0.4);">'
     ph_icon = '<img src="https://flagcdn.com/w40/ph.png" style="width:24px; vertical-align:middle; border-radius:3px; margin:0 4px; box-shadow:0 0 8px rgba(0,0,0,0.4);">'
     
-    # Define Bilingual Titles with Flag Icons
     if lang == "ar":
         title_text = f'برنامج توريد العمالة الفلبينية {ph_icon} {sa_icon}'
     else:
         title_text = f'Philippines Recruitment Program {ph_icon} {sa_icon}'
     
-    col1, col2, col3 = st.columns([1.5, 2.2, 1.5]) 
-    with col2:
-        # 1. Giant Luxury Title at Absolute Top
-        st.markdown(f'<div class="luxury-main-title">{title_text}</div>', unsafe_allow_html=True)
-        
-        st.markdown('<div class="login-screen-wrapper" style="margin-top: -20px !important;">', unsafe_allow_html=True)
-        
-        with st.form("login"):
-            # 2. Horizontal Profile + Welcome Message Row
-            ic1, ic2 = st.columns([1.2, 3]) # Adjust alignment for better proportion
-            
-            with ic1: # The Branding Column (Image -> EN/AR Name)
+    # Absolute Top Main Title
+    st.markdown(f'<div class="luxury-main-title">{title_text}</div>', unsafe_allow_html=True)
+    
+    def render_login_box(suffix):
+        with st.form(f"login_form_{suffix}"):
+            # Row 1: Profile Image next to Welcome Text
+            head_col1, head_col2 = st.columns([1, 2])
+            with head_col2:
+                welcome_text = t('welcome_back', lang)
+                st.markdown(f'<h3 style="margin-top: 25px;">{welcome_text}</h3>', unsafe_allow_html=True)
+            with head_col1:
                 if os.path.exists(IMG_PATH):
                     b64 = get_base64_image(IMG_PATH)
-                    st.markdown(f'<img src="data:image/jpeg;base64,{b64}" class="profile-img-circular">', unsafe_allow_html=True)
-                
-                st.markdown('<div style="margin-top: 10px;"></div>', unsafe_allow_html=True)
-                if lang == "ar":
-                    st.markdown('<div class="signature-under-img">Alsaeed Alwazzan</div>', unsafe_allow_html=True)
-                    st.markdown('<div class="signature-under-img" style="font-family:\'Cairo\', sans-serif; font-size: 0.8rem; margin-top: 2px;">برمجة السعيد الوزان</div>', unsafe_allow_html=True)
-                else:
-                    st.markdown('<div class="signature-under-img">Alsaeed Alwazzan</div>', unsafe_allow_html=True)
-                    st.markdown('<div class="signature-under-img" style="font-size: 0.75rem; color:#888;">Lead Programmer</div>', unsafe_allow_html=True)
-
-            with ic2: # The Welcome text & Username Field
-                welcome_text = t('welcome_back', lang)
-                st.markdown(f"<h3 style='margin:5px 0 10px 0; font-family:\"Cairo\", sans-serif; font-size: 1.1rem; text-align:right; color:#D4AF37;'>{welcome_text}</h3>", unsafe_allow_html=True)
-                u = st.text_input(t("username", lang), label_visibility="collapsed", placeholder=t("username", lang))
-
-            # 3. Password Field
-            p = st.text_input(t("password", lang), type="password", label_visibility="collapsed", placeholder=t("password", lang))
+                    st.markdown(f'<div style="text-align:right;"><img src="data:image/jpeg;base64,{b64}" class="profile-img-circular" style="width:80px; height:80px; border:2px solid #FFF; box-shadow: 0 0 15px #FFF;"></div>', unsafe_allow_html=True)
             
-            # 4. Buttons (Login and Language)
+            # Inputs
+            u = st.text_input(t("username", lang), label_visibility="collapsed", placeholder=t("username", lang), key=f"user_{suffix}")
+            p = st.text_input(t("password", lang), type="password", label_visibility="collapsed", placeholder=t("password", lang), key=f"pass_{suffix}")
+            
+            # Persistent check - White Neon Label
+            persist_txt = "هل تريد حفظ الدخول" if lang == 'ar' else "Do you want to stay logged in?"
+            st.checkbox(persist_txt, value=True, key=f"persist_{suffix}")
+            
             submit = st.form_submit_button(t("login_btn", lang), use_container_width=True)
             lang_toggle = st.form_submit_button("En" if lang == "ar" else "عربي", use_container_width=True)
 
@@ -1766,12 +1836,9 @@ def login_screen():
                     st.error(t("invalid_creds", lang))
                 else:
                     login_loader = show_loading_hourglass()
-                    p_norm = p.strip()
-                    user = st.session_state.auth.authenticate(u, p_norm)
+                    user = st.session_state.auth.authenticate(u, p.strip())
                     login_loader.empty()
                     if user:
-                        # Save the CANONICAL lowercase username to session state
-                        # This prevents case-sensitivity bugs on mobile avatar sync
                         user['username'] = u.lower().strip()
                         st.session_state.user = user
                         st.session_state.show_welcome = True
@@ -1782,8 +1849,12 @@ def login_screen():
             if lang_toggle:
                 toggle_lang()
                 st.rerun()
+
+    # Layout with columns to center the single form
+    col1, col2, col3 = st.columns([0.5, 2, 0.5]) 
+    with col2:
+        render_login_box("main")
         
-        st.markdown('</div>', unsafe_allow_html=True)
 
 @st.fragment(run_every="20s")
 def silent_notification_monitor():
