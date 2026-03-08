@@ -12,6 +12,7 @@ import re
 # 1. Ensure project root is in path (Robust Injection)
 # Get the absolute path of the directory containing app.py
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+PERSIST_FILE = os.path.join(BASE_DIR, 'src', '.persist_login.json')
 if BASE_DIR not in sys.path:
     sys.path.insert(0, BASE_DIR)
 
@@ -182,6 +183,30 @@ class AuthManager:
         """Get the base64-encoded profile photo for the user, or None."""
         target = str(username).lower().strip()
         return self.users.get(target, {}).get("avatar", None)
+
+def load_saved_credentials():
+    if os.path.exists(PERSIST_FILE):
+        try:
+            with open(PERSIST_FILE, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except:
+            return None
+    return None
+
+def save_credentials(u, p):
+    try:
+        os.makedirs(os.path.dirname(PERSIST_FILE), exist_ok=True)
+        with open(PERSIST_FILE, 'w', encoding='utf-8') as f:
+            json.dump({"u": u, "p": p}, f)
+    except Exception as e:
+        print(f"Error saving credentials: {e}")
+
+def clear_credentials():
+    if os.path.exists(PERSIST_FILE):
+        try:
+            os.remove(PERSIST_FILE)
+        except:
+            pass
 
 def get_base64_image(image_path):
     with open(image_path, "rb") as img_file:
@@ -1809,6 +1834,10 @@ def login_screen():
     st.markdown(f'<div class="luxury-main-title">{title_text}</div>', unsafe_allow_html=True)
     
     def render_login_box(suffix):
+        saved = load_saved_credentials()
+        saved_u = saved.get("u", "") if saved else ""
+        saved_p = saved.get("p", "") if saved else ""
+        
         with st.form(f"login_form_{suffix}"):
             # Row 1: Profile Image next to Welcome Text
             head_col1, head_col2 = st.columns([1, 2])
@@ -1820,13 +1849,13 @@ def login_screen():
                     b64 = get_base64_image(IMG_PATH)
                     st.markdown(f'<div style="text-align:right;"><img src="data:image/jpeg;base64,{b64}" class="profile-img-circular" style="width:80px; height:80px; border:2px solid #FFF; box-shadow: 0 0 15px #FFF;"></div>', unsafe_allow_html=True)
             
-            # Inputs
-            u = st.text_input(t("username", lang), label_visibility="collapsed", placeholder=t("username", lang), key=f"user_{suffix}")
-            p = st.text_input(t("password", lang), type="password", label_visibility="collapsed", placeholder=t("password", lang), key=f"pass_{suffix}")
+            # Inputs - Pre-fill with saved data if available
+            u = st.text_input(t("username", lang), value=saved_u, label_visibility="collapsed", placeholder=t("username", lang), key=f"user_{suffix}")
+            p = st.text_input(t("password", lang), value=saved_p, type="password", label_visibility="collapsed", placeholder=t("password", lang), key=f"pass_{suffix}")
             
             # Persistent check - White Neon Label
             persist_txt = "هل تريد حفظ الدخول" if lang == 'ar' else "Do you want to stay logged in?"
-            st.checkbox(persist_txt, value=True, key=f"persist_{suffix}")
+            st.checkbox(persist_txt, value=(True if saved else False), key=f"persist_{suffix}")
             
             submit = st.form_submit_button(t("login_btn", lang), use_container_width=True)
             lang_toggle = st.form_submit_button("En" if lang == "ar" else "عربي", use_container_width=True)
@@ -1839,6 +1868,13 @@ def login_screen():
                     user = st.session_state.auth.authenticate(u, p.strip())
                     login_loader.empty()
                     if user:
+                        # Handle Persistence Logic
+                        should_persist = st.session_state.get(f"persist_{suffix}", False)
+                        if should_persist:
+                            save_credentials(u, p.strip())
+                        else:
+                            clear_credentials()
+                            
                         user['username'] = u.lower().strip()
                         st.session_state.user = user
                         st.session_state.show_welcome = True
