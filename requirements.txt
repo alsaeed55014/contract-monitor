@@ -14,3 +14,4 @@ openpyxl
 easyocr
 opencv-python-headless
 pytesseract
+streamlit-cropper
