@@ -1981,11 +1981,15 @@ def render_top_banner():
 
     # 4. Floating List Overlay
     if st.session_state.get('notif_panel_open') and notifs:
+        dir_style = "rtl" if lang == 'ar' else "ltr"
+        align_style = "right" if lang == 'ar' else "left"
+        border_side = "right" if lang == 'ar' else "left"
+        notif_title = "الإشعارات الواردة" if lang == 'ar' else "Incoming Notifications"
         st.markdown(f"""
 <div style="background:rgba(10,14,26,0.98); backdrop-filter:blur(30px); border:1px solid #D4AF37; 
-            border-radius:18px; padding:20px; box-shadow:0 30px 100px rgba(0,0,0,0.95); margin: 0 5%; z-index:99999; direction:rtl; max-height:500px; overflow-y:auto;">
+            border-radius:18px; padding:20px; box-shadow:0 30px 100px rgba(0,0,0,0.95); margin: 0 5%; z-index:99999; direction:{dir_style}; max-height:500px; overflow-y:auto;">
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; border-bottom:1px solid rgba(212,175,55,0.2); padding-bottom:10px;">
-        <h4 style="color:#D4AF37; margin:0;">🔔 الإشعارات الواردة</h4>
+        <h4 style="color:#D4AF37; margin:0;">🔔 {notif_title}</h4>
         <div style="background:#D4AF37; color:black; border-radius:10px; padding:2px 10px; font-weight:bold;">{notif_count}</div>
     </div>
 """, unsafe_allow_html=True)
@@ -1993,20 +1997,22 @@ def render_top_banner():
         for n in reversed(notifs[-10:]):
             msg_html = n['msg'].replace('\n', '<br>')
             st.markdown(f"""
-<div style="background:rgba(255,255,255,0.04); padding:12px 15px; border-radius:12px; margin-bottom:10px; border-right:3px solid #D4AF37; direction:rtl;">
+<div style="background:rgba(255,255,255,0.04); padding:12px 15px; border-radius:12px; margin-bottom:10px; border-{border_side}:3px solid #D4AF37; direction:{dir_style};">
     <p style="margin:0 0 5px 0; font-weight:700; color:#D4AF37; font-size:0.95rem;">{n['title']}</p>
     <p style="margin:0 0 5px 0; color:#EEE; font-size:0.85rem; line-height:1.8;">{msg_html}</p>
-    <p style="margin:0; text-align:left; font-size:0.7rem; color:rgba(255,255,255,0.3);">⏰ {n['time']}</p>
+    <p style="margin:0; text-align:{align_style}; font-size:0.7rem; color:rgba(255,255,255,0.3);">⏰ {n['time']}</p>
 </div>
 """, unsafe_allow_html=True)
             
-        if st.button("🗑️ مسح الكل", use_container_width=True, key="clear_all_notifs"):
+        btn_clear = "🗑️ مسح الكل" if lang == 'ar' else "🗑️ Clear All"
+        if st.button(btn_clear, use_container_width=True, key="clear_all_notifs"):
             st.session_state.notifications = []
             st.session_state.notif_panel_open = False
             st.rerun()
             
         # Audio Diagnostic Button
-        if st.checkbox("⚙️ تجربة صوت التنبيه", key="cb_test_sound"):
+        btn_test = "⚙️ تجربة صوت التنبيه" if lang == 'ar' else "⚙️ Test Notification Sound"
+        if st.checkbox(btn_test, key="cb_test_sound"):
             st.session_state.test_sound = True
             st.rerun()
             
@@ -2017,17 +2023,22 @@ def render_top_banner():
 
     # Optional: Display notifications if there are any
     if st.session_state.notifications:
-        with st.sidebar.expander("🔔 الإشعارات الجديدة", expanded=False):
+        exp_title = "🔔 الإشعارات الجديدة" if lang == 'ar' else "🔔 New Notifications"
+        with st.sidebar.expander(exp_title, expanded=False):
+            dir_style = "rtl" if lang == 'ar' else "ltr"
+            align_style = "right" if lang == 'ar' else "left"
+            border_side = "right" if lang == 'ar' else "left"
             for n in reversed(st.session_state.notifications[-10:]):
                 sidebar_msg = n['msg'].replace('\n', '<br>')
                 st.markdown(f"""
-<div style="background: rgba(255,255,255,0.05); padding: 10px; border-radius: 10px; margin-bottom: 5px; border-right: 3px solid #D4AF37; direction:rtl;">
+<div style="background: rgba(255,255,255,0.05); padding: 10px; border-radius: 10px; margin-bottom: 5px; border-{border_side}: 3px solid #D4AF37; direction:{dir_style};">
     <p style="margin:0; font-weight:bold; color:#D4AF37; font-size:0.9rem;">{n['title']}</p>
     <p style="margin:0; font-size:0.8rem; color:#FFF; line-height:1.7;">{sidebar_msg}</p>
-    <p style="margin:0; font-size:0.7rem; color:rgba(255,255,255,0.4); text-align:left;">⏰ {n['time']}</p>
+    <p style="margin:0; font-size:0.7rem; color:rgba(255,255,255,0.4); text-align:{align_style};">⏰ {n['time']}</p>
 </div>
 """, unsafe_allow_html=True)
-            if st.button("🗑️ مسح الإشعارات", use_container_width=True):
+            btn_clear_side = "🗑️ مسح الإشعارات" if lang == 'ar' else "🗑️ Clear Notifications"
+            if st.button(btn_clear_side, use_container_width=True):
                 st.session_state.notifications = []
                 st.rerun()
 
@@ -2506,7 +2517,8 @@ def render_dashboard_content():
             xl_data = create_pasha_whatsapp_excel(pd.DataFrame(stats['urgent']))
             if xl_data:
                 xl_buf, xl_df = xl_data
-                render_pasha_export_button(xl_df, "📤 تصدير للواتساب", "Urgent_WhatsApp.xlsx", "المرشحين_العاجل", key="btn_exp_urgent")
+                btn_text = "📤 " + ("تصدير للواتساب" if lang == 'ar' else "Export to WhatsApp")
+                render_pasha_export_button(xl_df, btn_text, "Urgent_WhatsApp.xlsx", "المرشحين_العاجل", key="btn_exp_urgent")
         show(stats['urgent'], "urgent")
         
     with t2: 
@@ -2515,7 +2527,8 @@ def render_dashboard_content():
             xl_data = create_pasha_whatsapp_excel(pd.DataFrame(stats['expired']))
             if xl_data:
                 xl_buf, xl_df = xl_data
-                render_pasha_export_button(xl_df, "📤 تصدير للواتساب", "Expired_WhatsApp.xlsx", "المرشحين_المنتهية", key="btn_exp_expired")
+                btn_text = "📤 " + ("تصدير للواتساب" if lang == 'ar' else "Export to WhatsApp")
+                render_pasha_export_button(xl_df, btn_text, "Expired_WhatsApp.xlsx", "المرشحين_المنتهية", key="btn_exp_expired")
         show(stats['expired'], "expired")
         
     with t3: 
@@ -3430,7 +3443,8 @@ def render_order_processing_content():
         return
 
     # --- NEW: Advanced Filtering Panel (Matching Image) ---
-    st.markdown('<div style="color: #D4AF37; font-weight: 600; margin-bottom: 5px; font-family: \'Cairo\', sans-serif;">(AI) البحث الذكي</div>', unsafe_allow_html=True)
+    ai_title = "(AI) البحث الذكي" if lang == 'ar' else "Smart Search (AI)"
+    st.markdown(f'<div style="color: #D4AF37; font-weight: 600; margin-bottom: 5px; font-family: \'Cairo\', sans-serif;">{ai_title}</div>', unsafe_allow_html=True)
     
     with st.expander("🔍 " + ("تصفية متقدمة" if lang == 'ar' else "Advanced Filtering"), expanded=False):
         # 1. Row: Scheduling & Dates
@@ -4004,7 +4018,8 @@ def render_order_processing_content():
                             xl_data_op = create_pasha_whatsapp_excel(city_df)
                             if xl_data_op:
                                 _, xl_df_op = xl_data_op
-                                render_pasha_export_button(xl_df_op, "📤 تصدير للواتساب", f"Matched_Workers_City_{idx+1}.xlsx", 
+                                btn_exp = "📤 " + ("تصدير للواتساب" if lang == 'ar' else "Export to WhatsApp")
+                                render_pasha_export_button(xl_df_op, btn_exp, f"Matched_Workers_City_{idx+1}.xlsx", 
                                                           f"Matched_Workers_City_{idx+1}", key=f"dl_op_city_{idx}")
                         
                         loc_val = str(customer_row.get(c_location, ""))
@@ -4042,11 +4057,18 @@ def render_order_processing_content():
                             xl_reg = create_pasha_whatsapp_excel(reg_df)
                             if xl_reg:
                                 _, xl_df_reg = xl_reg
-                                render_pasha_export_button(xl_df_reg, "📤 تصدير للواتساب", f"Region_Match_{idx+1}.xlsx", 
+                                btn_exp = "📤 " + ("تصدير للواتساب" if lang == 'ar' else "Export to WhatsApp")
+                                render_pasha_export_button(xl_df_reg, btn_exp, f"Region_Match_{idx+1}.xlsx", 
                                                           f"Region_Match_{idx+1}", key=f"dl_op_reg_{idx}")
                         
                         loc_val = str(customer_row.get(c_location, ""))
                         target_region_name = _find_city_region(loc_val) or loc_val
+                        if lang != "ar":
+                            target_region_name = {
+                                "الشمالية": "Northern Region", "الغربية": "Western Region",
+                                "الشرقية": "Eastern Province", "الوسطى": "Central Region",
+                                "الجنوبية": "Southern Region"
+                            }.get(target_region_name, target_region_name)
                         label = f"🏘️ عمال في المنطقة ({target_region_name})" if lang == 'ar' else f"🏘️ Workers in the Region ({target_region_name})"
                         explainer = f"{'هؤلاء العمال في مدن تتبع لنفس المنطقة ولاكن في مدن اخرى' if lang == 'ar' else 'These workers are in other cities within the same region'}"
                         render_segment_header(label, len(reg_df), color="#D4AF37", explainer=explainer)
@@ -4081,7 +4103,8 @@ def render_order_processing_content():
                             xl_oth = create_pasha_whatsapp_excel(other_df)
                             if xl_oth:
                                 _, xl_df_oth = xl_oth
-                                render_pasha_export_button(xl_df_oth, "📤 تصدير للواتساب", f"Other_Match_{idx+1}.xlsx", 
+                                btn_exp = "📤 " + ("تصدير للواتساب" if lang == 'ar' else "Export to WhatsApp")
+                                render_pasha_export_button(xl_df_oth, btn_exp, f"Other_Match_{idx+1}.xlsx", 
                                                           f"مرشحين_مدن_اخرى_{idx+1}", key=f"dl_op_other_{idx}")
                         
                         label_other = "🌍 عمال في مدن أخرى (مرتبين حسب القرب)" if lang == 'ar' else f"🌍 Workers in other cities (sorted by proximity)"
@@ -4635,8 +4658,8 @@ def render_bengali_supply_content():
         
         # --- TAB 1: WORKERS ---
         with m_tab1:
-            st.markdown("#### 🔍 البحث الموحد في كل بيانات العمال")
-            st.caption("⌨️ اكتب أي اسم (عامل، مورد، عميل) أو رقم واضغط Enter")
+            st.markdown("#### 🔍 " + ("البحث الموحد في كل بيانات العمال" if lang == 'ar' else "Unified Global Worker Search"))
+            st.caption("⌨️ " + ("اكتب أي اسم (عامل، مورد، عميل) أو رقم واضغط Enter" if lang == 'ar' else "Type any name (worker, supplier, customer) or number and press Enter"))
             g_search = st.text_input("البحث الشامل", label_visibility="collapsed", key="bengali_global_search")
             
             workers_all = bm.get_workers()
@@ -4656,18 +4679,19 @@ def render_bengali_supply_content():
                            q in normalize_ar(w.get("id", ""))]
                 
                 if results:
-                    st.success(f"تم العثور على {len(results)} نتائج")
+                    st.success(f"تم العثور على {len(results)} نتائج" if lang == 'ar' else f"Found {len(results)} results")
                     df_g = []
                     for w in sorted(results, key=lambda x: x.get("timestamp", ""), reverse=True):
                         s_info = s_lookup.get(w.get("supplier"), {})
                         e_info = e_lookup.get(w.get("employer"), {})
+                        
                         df_g.append({
-                            "اسم العامل": w.get("name", ""),
-                            "جوال العامل": w.get("mobile", ""),
-                            "الهوية": w.get("id", ""),
-                            "المورد": s_info.get("name", w.get("supplier")),
-                            "صاحب العمل": e_info.get("name", w.get("employer")),
-                            "التاريخ": w.get("timestamp", "")
+                            ("اسم العامل" if lang == 'ar' else "Worker Name"): w.get("name", ""),
+                            ("جوال العامل" if lang == 'ar' else "Mobile"): w.get("mobile", ""),
+                            ("الهوية" if lang == 'ar' else "ID/Passport"): w.get("id", ""),
+                            ("المورد" if lang == 'ar' else "Supplier"): s_info.get("name", w.get("supplier")),
+                            ("صاحب العمل" if lang == 'ar' else "Employer"): e_info.get("name", w.get("employer")),
+                            ("التاريخ" if lang == 'ar' else "Date"): w.get("timestamp", "")
                         })
                     df_bengali_search = pd.DataFrame(df_g)
                     col_cfg_b = {}
@@ -4686,22 +4710,22 @@ def render_bengali_supply_content():
                             e_info = e_lookup.get(w.get("employer"), {})
 
                             with c1:
-                                st.markdown("**👤 بيانات العامل**")
-                                st.write(f"الاسم: {w.get('name')}")
-                                st.write(f"الجوال: {w.get('mobile')}")
-                                st.write(f"الهوية: {w.get('id')}")
+                                st.markdown("**👤 " + ("بيانات العامل" if lang == 'ar' else "Worker Details") + "**")
+                                st.write(f"{'الاسم' if lang == 'ar' else 'Name'}: {w.get('name')}")
+                                st.write(f"{'الجوال' if lang == 'ar' else 'Mobile'}: {w.get('mobile')}")
+                                st.write(f"{'الهوية' if lang == 'ar' else 'ID'}: {w.get('id')}")
                             with c2:
-                                st.markdown("**🏢 صاحب العمل**")
-                                st.write(f"الاسم: {e_info.get('name', 'N/A')}")
-                                st.write(f"المقهى: {e_info.get('cafe', 'N/A')}")
+                                st.markdown("**🏢 " + ("صاحب العمل" if lang == 'ar' else "Employer") + "**")
+                                st.write(f"{'الاسم' if lang == 'ar' else 'Name'}: {e_info.get('name', 'N/A')}")
+                                st.write(f"{'المقهى' if lang == 'ar' else 'Cafe'}: {e_info.get('cafe', 'N/A')}")
                             with c3:
-                                st.markdown("**📦 المورد**")
-                                st.write(f"الاسم: {s_info.get('name', 'N/A')}")
+                                st.markdown("**📦 " + ("المورد" if lang == 'ar' else "Supplier") + "**")
+                                st.write(f"{'الاسم' if lang == 'ar' else 'Name'}: {s_info.get('name', 'N/A')}")
                             
                             # Images
                             saved_files = w.get("files", [])
                             if saved_files:
-                                st.markdown("#### 📎 المرفقات")
+                                st.markdown("#### 📎 " + ("المرفقات" if lang == 'ar' else "Attachments"))
                                 img_cols = st.columns(2)
                                 for i, sf in enumerate(saved_files):
                                     ic = img_cols[i % 2]
@@ -4713,16 +4737,16 @@ def render_bengali_supply_content():
                             if can_delete:
                                 ec1, ec2 = st.columns(2)
                                 with ec1:
-                                    if st.button("🗑️ حذف العامل", key=f"del_worker_{w_uuid}", use_container_width=True):
+                                    if st.button("🗑️ " + ("حذف العامل" if lang == 'ar' else "Delete Worker"), key=f"del_worker_{w_uuid}", use_container_width=True):
                                         if bm.delete_worker(w_uuid):
-                                            st.session_state['_notif_m_worker'] = ("success", "تم حذف العامل بنجاح ✅")
+                                            st.session_state['_notif_m_worker'] = ("success", "تم حذف العامل بنجاح ✅" if lang == 'ar' else "Worker deleted successfully ✅")
                                             st.rerun()
                                 with ec2:
-                                    show_edit = st.toggle("📝 تعديل البيانات", key=f"tog_edit_{w_uuid}")
+                                    show_edit = st.toggle("📝 " + ("تعديل البيانات" if lang == 'ar' else "Edit Details"), key=f"tog_edit_{w_uuid}")
                                 
                                 if show_edit:
                                     with st.form(f"edit_worker_form_{w_uuid}"):
-                                        st.markdown("### 📝 تعديل بيانات العامل")
+                                        st.markdown("### 📝 " + ("تعديل بيانات العامل" if lang == 'ar' else "Edit Worker Details"))
                                         en = st.text_input("Name", w.get("name", ""))
                                         em = st.text_input("Mobile", w.get("mobile", ""))
                                         ei = st.text_input("ID/Passport", w.get("id", ""))
@@ -4737,7 +4761,7 @@ def render_bengali_supply_content():
                                         es = st.selectbox("Supplier", cur_s_opts, index=idx_s)
                                         ee = st.selectbox("Employer", cur_e_opts, index=idx_e)
                                         
-                                        if st.form_submit_button("💾 حفظ التعديلات", use_container_width=True):
+                                        if st.form_submit_button("💾 " + ("حفظ التعديلات" if lang == 'ar' else "Save Changes"), use_container_width=True):
                                             updated_w = {
                                                 "name": en,
                                                 "mobile": em,
@@ -4750,13 +4774,13 @@ def render_bengali_supply_content():
                                                 "timestamp": w.get("timestamp", "")
                                             }
                                             if bm.update_worker(w_uuid, updated_w):
-                                                st.session_state['_notif_m_worker'] = ("success", "تم تحديث بيانات العامل بنجاح ✅")
+                                                st.session_state['_notif_m_worker'] = ("success", "تم تحديث بيانات العامل بنجاح ✅" if lang == 'ar' else "Worker updated successfully ✅")
                                                 st.rerun()
                 else:
-                    st.warning("لم يتم العثور على نتائج")
+                    st.warning("لم يتم العثور على نتائج" if lang == 'ar' else "No results found")
             else:
-                st.info("💡 ابحث عن عامل بالاسم أو الرقم")
-                st.metric("👷 إجمالي العمال المسجلين", len(workers_all))
+                st.info("💡 " + ("ابحث عن عامل بالاسم أو الرقم" if lang == 'ar' else "Search for a worker by name or number"))
+                st.metric("👷 " + ("إجمالي العمال المسجلين" if lang == 'ar' else "Total Registered Workers"), len(workers_all))
             
             w_m_notif = st.empty()
             if st.session_state.get('_notif_m_worker'):
@@ -4765,10 +4789,10 @@ def render_bengali_supply_content():
 
         # --- TAB 2: SUPPLIERS ---
         with m_tab2:
-            st.markdown("#### 📦 إدارة الموردين")
+            st.markdown("#### 📦 " + ("إدارة الموردين" if lang == 'ar' else "Manage Suppliers"))
             all_suppliers = bm.get_suppliers()
             if not all_suppliers:
-                st.info("لا يوجد موردين مسجلين حالياً.")
+                st.info("لا يوجد موردين مسجلين حالياً." if lang == 'ar' else "No registered suppliers currently.")
             else:
                 for s in all_suppliers:
                     with st.expander(f"📦 {s['name']}"):
@@ -4776,17 +4800,17 @@ def render_bengali_supply_content():
                             new_name = st.text_input("Name", s['name'])
                             new_phone = st.text_input("Phone", s['phone'])
                             c_edit, c_del = st.columns(2)
-                            if c_edit.form_submit_button("💾 حفظ التعديلات", use_container_width=True):
+                            if c_edit.form_submit_button("💾 " + ("حفظ التعديلات" if lang == 'ar' else "Save Changes"), use_container_width=True):
                                 bm.update_supplier(s['id'], {"name": new_name, "phone": new_phone})
-                                st.session_state['_notif_m_sup'] = ("success", f"تم تحديث المورد {new_name}")
+                                st.session_state['_notif_m_sup'] = ("success", f"تم تحديث المورد {new_name}" if lang == 'ar' else f"Supplier updated: {new_name}")
                                 st.rerun()
-                            if c_del.form_submit_button("🗑️ حذف المورد", use_container_width=True):
+                            if c_del.form_submit_button("🗑️ " + ("حذف المورد" if lang == 'ar' else "Delete Supplier"), use_container_width=True):
                                 if can_delete:
                                     bm.delete_supplier(s['id'])
-                                    st.session_state['_notif_m_sup'] = ("success", "تم حذف المورد بنجاح")
+                                    st.session_state['_notif_m_sup'] = ("success", "تم حذف المورد بنجاح" if lang == 'ar' else "Supplier deleted successfully")
                                     st.rerun()
                                 else:
-                                    st.error("ليس لديك صلاحية الحذف")
+                                    st.error("ليس لديك صلاحية الحذف" if lang == 'ar' else "You don't have delete permission")
                 
                 s_m_notif = st.empty()
                 if st.session_state.get('_notif_m_sup'):
@@ -4795,10 +4819,10 @@ def render_bengali_supply_content():
 
         # --- TAB 3: EMPLOYERS ---
         with m_tab3:
-            st.markdown("#### 🏢 إدارة أصحاب العمل")
+            st.markdown("#### 🏢 " + ("إدارة أصحاب العمل" if lang == 'ar' else "Manage Employers"))
             all_employers = bm.get_employers()
             if not all_employers:
-                st.info("لا يوجد أصحاب عمل مسجلين حالياً.")
+                st.info("لا يوجد أصحاب عمل مسجلين حالياً." if lang == 'ar' else "No registered employers currently.")
             else:
                 for e in all_employers:
                     with st.expander(f"🏢 {e['name']} - {e.get('cafe', '')}"):
@@ -4808,17 +4832,17 @@ def render_bengali_supply_content():
                             em = st.text_input("Mobile", e.get('mobile', ''))
                             ect = st.text_input("City", e.get('city', ''))
                             c_edit, c_del = st.columns(2)
-                            if c_edit.form_submit_button("💾 حفظ التعديلات", use_container_width=True):
+                            if c_edit.form_submit_button("💾 " + ("حفظ التعديلات" if lang == 'ar' else "Save Changes"), use_container_width=True):
                                 bm.update_employer(e['id'], {"name": en, "cafe": ec, "mobile": em, "city": ect})
-                                st.session_state['_notif_m_emp'] = ("success", "تم تحديث البيانات")
+                                st.session_state['_notif_m_emp'] = ("success", "تم تحديث البيانات" if lang == 'ar' else "Details updated")
                                 st.rerun()
-                            if c_del.form_submit_button("🗑️ حذف صاحب العمل", use_container_width=True):
+                            if c_del.form_submit_button("🗑️ " + ("حذف صاحب العمل" if lang == 'ar' else "Delete Employer"), use_container_width=True):
                                 if can_delete:
                                     bm.delete_employer(e['id'])
-                                    st.session_state['_notif_m_emp'] = ("success", "تم الحذف")
+                                    st.session_state['_notif_m_emp'] = ("success", "تم الحذف" if lang == 'ar' else "Deleted")
                                     st.rerun()
                                 else:
-                                    st.error("ليس لديك صلاحية")
+                                    st.error("ليس لديك صلاحية" if lang == 'ar' else "No permission")
                 
                 e_m_notif = st.empty()
                 if st.session_state.get('_notif_m_emp'):
