@@ -141,7 +141,7 @@ TRANSLATIONS = {
     "total_matches": {"ar": "إجمالي النتائج", "en": "Total Matches"},
     "transfer_days_after": {"ar": "نقل الكفالة بعد (يوم)", "en": "Transfer Days After"},
     "working_hours": {"ar": "ساعات العمل", "en": "Working Hours"},
-    "weekly_holiday": {"ar": "إجازة أسبوعية", "en": "Weekly Holiday"},
+    "weekly_holiday": {"ar": "هل توجد إجازة أسبوعية؟", "en": "Is there a weekly day off?"},
     "additional_notes": {"ar": "ملاحظات إضافية", "en": "Additional Notes"},
     
     # User Roles & Confirmation
