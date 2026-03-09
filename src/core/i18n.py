@@ -22,6 +22,7 @@ TRANSLATIONS = {
     "order_processing": {"ar": "معالجة الطلبات", "en": "Order Processing"},
     "permissions": {"ar": "الصلاحيات", "en": "Permissions"},
     "whatsapp_marketing": {"ar": "واتساب ماركتنج (2026)", "en": "WhatsApp Marketing (2026)"},
+    "duplicate_remover": {"ar": "حذف المكرر", "en": "Duplicate Remover"},
     "logout": {"ar": "تسجيل خروج", "en": "Logout"},
     "debug": {"ar": "فحص الأخطاء", "en": "Debug"},
     "test_db": {"ar": "فحص قاعدة البيانات", "en": "Test DB"},

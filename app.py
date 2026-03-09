@@ -24,13 +24,13 @@ if SRC_DIR not in sys.path:
 try:
     from src.core.contracts import ContractManager
     from src.data.bengali_manager import BengaliDataManager
-    from src.utils.phone_utils import create_pasha_whatsapp_excel, format_phone_number, save_to_local_desktop, render_pasha_export_button
+    from src.utils.phone_utils import create_pasha_whatsapp_excel, format_phone_number, save_to_local_desktop, render_pasha_export_button, is_local_windows_pc
     from src.core.matcher import CandidateMatcher, format_match_result, _find_city_region, _fuzzy_match, REGION_PROXIMITY, REGION_MAP
 except ImportError:
     # Fallback for different environment path configurations
     from core.contracts import ContractManager
     from data.bengali_manager import BengaliDataManager
-    from utils.phone_utils import create_pasha_whatsapp_excel, format_phone_number, save_to_local_desktop, render_pasha_export_button
+    from utils.phone_utils import create_pasha_whatsapp_excel, format_phone_number, save_to_local_desktop, render_pasha_export_button, is_local_windows_pc
     from core.matcher import CandidateMatcher, format_match_result
 
 # 2. Local Auth Class to prevent Import/Sync Errors
@@ -1542,13 +1542,9 @@ st.set_page_config(
 
 # 6. Initialize Core (With Force Re-init for Updates)
 if 'auth' not in st.session_state or not hasattr(st.session_state.auth, 'v10_marker'):
-    # Show a brief initial loader for a premium feel
-    loading = show_loading_hourglass()
-    time.sleep(0.4)
     st.session_state.auth = AuthManager(USERS_FILE)
-    st.session_state.auth.v10_marker = True # Marker with get_avatar/update_avatar support
-    st.session_state.db = DBClient() # Force DB re-init as well
-    loading.empty()
+    st.session_state.auth.v10_marker = True 
+    st.session_state.db = DBClient() 
 
 # Report DB Load Errors to User
 if hasattr(st.session_state.auth, 'load_error'):
@@ -1878,6 +1874,11 @@ def login_screen():
                         user['username'] = u.lower().strip()
                         st.session_state.user = user
                         st.session_state.show_welcome = True
+                        
+                        # Immediate UI clearing for faster feeling
+                        st.markdown("<style>div[data-testid='stForm'] { display: none !important; }</style>", unsafe_allow_html=True)
+                        st.success("جاري الدخول... | Loading..." if lang == 'ar' else "Loading... | Entering")
+                        
                         st.rerun()
                     else:
                         st.error(t("invalid_creds", lang))
@@ -2364,6 +2365,11 @@ def dashboard():
             st.session_state.page = "whatsapp_marketing"
             st.rerun()
         
+        # Duplicate Remover Button
+        if st.button("🗑️ " + t("duplicate_remover", lang), use_container_width=True):
+            st.session_state.page = "duplicate_remover"
+            st.rerun()
+        
         # Determine Bengali Supply Visibility
         user_perms = user.get("permissions", [])
         if "all" in user_perms or "bengali_supply" in user_perms:
@@ -2410,8 +2416,8 @@ def dashboard():
                 time.sleep(1)
                 st.rerun()
 
-    # --- Check Notifications first ---
-    check_notifications()
+    # --- Background Notifications (Handled by Fragment) ---
+    # check_notifications() - Removed direct blocking call for faster UI render
 
     # --- Render Global Top Banner (Persistent) ---
     render_top_banner()
@@ -2443,6 +2449,8 @@ def dashboard():
     elif page == "permissions": render_permissions_content()
     elif page == "bengali_supply": render_bengali_supply_content()
     elif page == "whatsapp_marketing": render_whatsapp_page()
+    elif page == "duplicate_remover": render_duplicate_remover_content()
+
 
 
 def __apply_pinned_columns(df_or_style, cfg=None):
@@ -2493,8 +2501,11 @@ def render_dashboard_content():
     st.markdown('<div class="programmer-signature-neon">By: Alsaeed Alwazzan (v2.1)</div>', unsafe_allow_html=True)
     st.title(f" {t('contract_dashboard', lang)}")
     
-    # Show loader while fetching data
-    loading_placeholder = show_loading_hourglass()
+    # Show loader while fetching data - Moved after title for immediate UI recognition
+    loading_placeholder = st.empty()
+    with loading_placeholder:
+        show_loading_hourglass(container=loading_placeholder)
+    
     start_time = time.time()
     
     try:
@@ -2673,7 +2684,7 @@ def render_dashboard_content():
     with t1: 
         c_exp_1, c_exp_2 = st.columns([4, 1])
         with c_exp_2:
-            xl_data = create_pasha_whatsapp_excel(pd.DataFrame(stats['urgent']))
+            xl_data = create_pasha_whatsapp_excel(pd.DataFrame(stats['urgent']), lang=lang)
             if xl_data:
                 xl_buf, xl_df = xl_data
                 btn_text = "📤 " + ("تصدير للواتساب" if lang == 'ar' else "Export to WhatsApp")
@@ -2683,7 +2694,7 @@ def render_dashboard_content():
     with t2: 
         c_exp_1, c_exp_2 = st.columns([4, 1])
         with c_exp_2:
-            xl_data = create_pasha_whatsapp_excel(pd.DataFrame(stats['expired']))
+            xl_data = create_pasha_whatsapp_excel(pd.DataFrame(stats['expired']), lang=lang)
             if xl_data:
                 xl_buf, xl_df = xl_data
                 btn_text = "📤 " + ("تصدير للواتساب" if lang == 'ar' else "Export to WhatsApp")
@@ -2693,7 +2704,7 @@ def render_dashboard_content():
     with t3: 
         c_exp_1, c_exp_2 = st.columns([4, 1])
         with c_exp_2:
-            xl_data = create_pasha_whatsapp_excel(pd.DataFrame(stats['active']))
+            xl_data = create_pasha_whatsapp_excel(pd.DataFrame(stats['active']), lang=lang)
             if xl_data:
                 xl_buf, xl_df = xl_data
                 render_pasha_export_button(xl_df, "📤 تصدير للواتساب", "Active_WhatsApp.xlsx", "المرشحين_الفواعل", key="btn_exp_active")
@@ -3016,10 +3027,11 @@ def render_search_content():
             # --- EXPORT BUTTON FOR SEARCH ---
             c_s_1, c_s_2 = st.columns([4, 1])
             with c_s_2:
-                xl_result_search = create_pasha_whatsapp_excel(res)
+                xl_result_search = create_pasha_whatsapp_excel(res, lang=lang)
                 if xl_result_search:
-                    xl_buf_search, _ = xl_result_search
-                    st.download_button("📤 تصدير للواتساب", xl_buf_search, f"Search_WhatsApp_{datetime.now().strftime('%M%S')}.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
+                    xl_buf_search, xl_df_search = xl_result_search
+                    btn_text = "📤 " + ("تصدير للواتساب" if lang == 'ar' else "Export to WhatsApp")
+                    render_pasha_export_button(xl_df_search, btn_text, f"Search_WhatsApp_{datetime.now().strftime('%M%S')}.xlsx", "البحث_الذكي_واتساب", key="btn_exp_search")
             
             # Smart Translator Button
             res_display = render_table_translator(res_display, key_prefix="search_res")
@@ -4176,7 +4188,7 @@ def render_order_processing_content():
                         # Export
                         c_op_2 = st.columns([4, 1])[1]
                         with c_op_2:
-                            xl_data_op = create_pasha_whatsapp_excel(city_df)
+                            xl_data_op = create_pasha_whatsapp_excel(city_df, lang=lang)
                             if xl_data_op:
                                 _, xl_df_op = xl_data_op
                                 btn_exp = "📤 " + ("تصدير للواتساب" if lang == 'ar' else "Export to WhatsApp")
@@ -4214,7 +4226,7 @@ def render_order_processing_content():
                         # Export
                         c_reg_2 = st.columns([4, 1])[1]
                         with c_reg_2:
-                            xl_reg = create_pasha_whatsapp_excel(reg_df)
+                            xl_reg = create_pasha_whatsapp_excel(reg_df, lang=lang)
                             if xl_reg:
                                 _, xl_df_reg = xl_reg
                                 btn_exp = "📤 " + ("تصدير للواتساب" if lang == 'ar' else "Export to WhatsApp")
@@ -4261,7 +4273,7 @@ def render_order_processing_content():
                         # Export
                         c_oth_2 = st.columns([4, 1])[1]
                         with c_oth_2:
-                            xl_oth = create_pasha_whatsapp_excel(other_df)
+                            xl_oth = create_pasha_whatsapp_excel(other_df, lang=lang)
                             if xl_oth:
                                 _, xl_df_oth = xl_oth
                                 btn_exp = "📤 " + ("تصدير للواتساب" if lang == 'ar' else "Export to WhatsApp")
@@ -4636,6 +4648,116 @@ def render_customer_requests_content():
                 st.error(f"❌ {'خطأ في المطابقة' if lang == 'ar' else 'Matching Error'}: {match_err}")
                 with st.expander("تفاصيل الخطأ"):
                     st.code(traceback.format_exc())
+
+
+def render_duplicate_remover_content():
+    lang = st.session_state.lang
+    st.markdown('<div class="programmer-signature-neon">By: Alsaeed Alwazzan</div>', unsafe_allow_html=True)
+    st.title("🗑️ " + t('duplicate_remover', lang))
+    
+    st.markdown(f"""
+    <div style="background: rgba(255,255,255,0.05); padding: 20px; border-radius: 15px; border: 1px solid rgba(212,175,55,0.3); margin-bottom: 25px;">
+        <h4 style="color: #D4AF37; margin-top: 0;">{'تعليمات الأداة' if lang == 'ar' else 'Tool Instructions'}</h4>
+        <p style="color: #EEE;">
+            {'1. قم برفع ملف واحد أو أكثر من ملفات الإكسل.' if lang == 'ar' else '1. Upload one or more Excel files.'}<br>
+            {'2. ستقوم الأداة بدمج الملفات وحذف الصفوف المكررة بناءً على "رقم الإقامة".' if lang == 'ar' else '2. The tool will merge files and remove duplicate rows based on "Iqama ID number".'}<br>
+            {'3. سيتم أيضاً حذف أي صف لا يحتوي على رقم إقامة.' if lang == 'ar' else '3. Any row without an Iqama ID will also be removed.'}<br>
+            {'4. يمكنك تحميل النسخة المنقحة كملف إكسل واحد.' if lang == 'ar' else '4. You can download the cleaned version as a single Excel file.'}
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    uploaded_files = st.file_uploader(
+        t("upload_file_label", lang),
+        type=["xlsx"],
+        accept_multiple_files=True,
+        key="duplicate_remover_uploader"
+    )
+
+    if uploaded_files:
+        if st.button("🚀 " + ("بدء المعالجة" if lang == 'ar' else "Start Processing"), type="primary", use_container_width=True):
+            all_dfs = []
+            with st.spinner("جارِ معالجة الملفات..." if lang == 'ar' else "Processing files..."):
+                for uploaded_file in uploaded_files:
+                    try:
+                        df = pd.read_excel(uploaded_file)
+                        all_dfs.append(df)
+                    except Exception as e:
+                        st.error(f"Error reading {uploaded_file.name}: {e}")
+                
+                if all_dfs:
+                    merged_df = pd.concat(all_dfs, ignore_index=True)
+                    total_initial = len(merged_df)
+                    
+                    # Search for Iqama ID column
+                    iqama_col = None
+                    possible_names = ["رقم الإقامة", "iqama id number", "iqama", "رقم الاقامه", "رقم الهوية", "iqama id", "رقم الإقامه"]
+                    for col in merged_df.columns:
+                        if str(col).strip().lower() in possible_names:
+                            iqama_col = col
+                            break
+                    
+                    if not iqama_col:
+                        # Fallback: look for "iqama" in column name
+                        for col in merged_df.columns:
+                            if "iqama" in str(col).lower() or "إقامة" in str(col) or "اقامه" in str(col):
+                                iqama_col = col
+                                break
+                    
+                    if iqama_col:
+                        # 1. Basic cleaning: remove empty and NaN
+                        merged_df = merged_df.dropna(subset=[iqama_col])
+                        
+                        # 2. Advanced cleaning: Keep only rows where Iqama ID is purely numeric
+                        # Convert to string, remove potential '.0' from float conversions, and strip spaces
+                        merged_df[iqama_col] = merged_df[iqama_col].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
+                        
+                        # Apply the numeric-only filter (isdigit)
+                        merged_df = merged_df[merged_df[iqama_col].str.isdigit()]
+                        
+                        # Final check for empty strings just in case
+                        merged_df = merged_df[merged_df[iqama_col] != ""]
+                        
+                        after_missing = len(merged_df)
+                        
+                        # Remove duplicates
+                        merged_df = merged_df.drop_duplicates(subset=[iqama_col], keep='first')
+                        
+                        after_dupes = len(merged_df)
+                        
+                        # Results display
+                        st.success("✅ " + ("تمت المعالجة بنجاح!" if lang == 'ar' else "Processing complete!"))
+                        
+                        # Auto-save immediately to desktop in PC mode:
+                        if is_local_windows_pc():
+                            path = save_to_local_desktop(merged_df, "الملف_المنقح")
+                            if path:
+                                st.success(f"✅ تم الحفظ التلقائي في سطح المكتب: {os.path.basename(path)}")
+                                st.toast(f"تم الحفظ التلقائي في مجلد المرشحين", icon='📁')
+                        
+                        dupes_removed = after_missing - after_dupes
+                        
+                        c1, c2, c3, c4 = st.columns(4)
+                        with c1:
+                            st.metric(("إجمالي الصفوف" if lang == 'ar' else "Initial Total"), total_initial)
+                        with c2:
+                            st.metric(("بدون رقم إقامة" if lang == 'ar' else "No Iqama"), total_initial - after_missing)
+                        with c3:
+                            st.metric(("المكرر المحذوف" if lang == 'ar' else "Duplicates Removed"), dupes_removed, delta=-dupes_removed if dupes_removed > 0 else 0)
+                        with c4:
+                            st.metric(("الصفوف المتبقية" if lang == 'ar' else "Final Rows"), after_dupes)
+                        
+                        # Preview
+                        st.subheader(("معاينة البيانات (أول 100 صف)" if lang == 'ar' else "Data Preview (First 100 rows)"))
+                        st.dataframe(style_df(merged_df.head(100)), use_container_width=True)
+                        # Export / Save
+                        btn_label = "📥 " + ("حفظ / تحميل الملف المنقح" if lang == 'ar' else "Save / Download Cleaned File")
+                        render_pasha_export_button(merged_df, btn_label, f"Cleaned_Iqama_Data_{datetime.now().strftime('%M%S')}.xlsx", "الملف_المنقح", key="btn_exp_dupes")
+                        
+                    else:
+                        st.error("❌ " + ("لم يتم العثور على عمود 'رقم الإقامة'. يرجى التأكد من أسماء الأعمدة." if lang == 'ar' else "Could not find 'Iqama ID number' column. Please check column names."))
+                        st.info(("الأعمدة الموجودة: " if lang == 'ar' else "Available columns: ") + ", ".join(merged_df.columns))
+
 
 
 def render_bengali_supply_content():

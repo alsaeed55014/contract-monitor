@@ -122,13 +122,14 @@ def render_pasha_export_button(df, label, filename, base_save_name, key=None):
     """
     st.markdown('<div class="whatsapp-export-btn">', unsafe_allow_html=True)
     if is_local_windows_pc():
-        if st.button(label, key=key, use_container_width=True):
+        def do_save():
             path = save_to_local_desktop(df, base_save_name)
             if path:
-                st.success(f"✅ تم الحفظ في سطح المكتب: {os.path.basename(path)}")
                 st.toast(f"تم الحفظ في مجلد المرشحين", icon='📁')
-            else:
-                st.error("❌ فشل الحفظ في سطح المكتب")
+        
+        if st.button(label, key=key, use_container_width=True, on_click=do_save):
+            st.success("✅ " + ("تم الحفظ بنجاح" if st.session_state.get('lang') == 'ar' else "Saved Successfully"))
+
     else:
         # Fallback to standard download for mobile/cloud
         towrite = io.BytesIO()
@@ -171,7 +172,7 @@ def validate_numbers(raw_text):
             
     return valid_all, [], invalid
 
-def create_pasha_whatsapp_excel(df):
+def create_pasha_whatsapp_excel(df, lang='ar'):
     """
     Creates a specialized Excel for Pasha's WhatsApp Broadcast.
     Includes all requested fields for full data context.
@@ -180,31 +181,63 @@ def create_pasha_whatsapp_excel(df):
     if df.empty:
         return None
     
+    # 2026 Premium Localization Update
+    is_ar = lang == 'ar'
+    iqama_header = "رقم الإقامة" if is_ar else "Iqama ID number"
+    name_header = "الاسم" if is_ar else "Candidate Name"
+    phone_header = "رقم الجوال" if is_ar else "Mobile Number"
+    cv_header = "السيرة الذاتية" if is_ar else "CV / Resume"
+    nat_header = "الجنسيه" if is_ar else "Nationality"
+    gender_header = "الجنس" if is_ar else "Gender"
+    age_header = "العمر" if is_ar else "Age"
+    city_header = "المدينة" if is_ar else "City"
+    job_header = "الوظيفه المطلوبه" if is_ar else "Requested Job"
+    field_exp_header = "الخبرة في هذا المجال" if is_ar else "Field Experience"
+    skills_header = "مهارات اخرى" if is_ar else "Other Skills"
+    outside_header = "هل يمكنك العمل خارج المدينة" if is_ar else "Work Outside City"
+    ready_header = "هل انت جاهز للعمل فورا" if is_ar else "Ready Immediately"
+    family_header = "هل معك عائلته" if is_ar else "With Family"
+    transfer_header = "عدد مرات نقل الكفالة" if is_ar else "Transfer Count"
+    other_jobs_header = "ما هي الوظائف الأخرى التي يمكنك القيام بها" if is_ar else "What other jobs can you do"
+    
     # Mapping for all requested fields
     mapping = {
-        "الاسم": ["الاسم الكامل", "full name", "worker name", "الاسم", "name"],
-        "رقم الجوال": ["رقم الهاتف", "whatsapp", "phone", "mobile", "جوال"],
-        "السيرة الذاتية": ["سيرة الذاتية", "cv", "resume", "link", "سيرة"],
-        "الجنسيه": ["الجنسيه", "nationality", "country"],
-        "الجنس": ["الجنس", "gender", "sex"],
-        "العمر": ["العمر", "age"],
-        "المدينة": ["المدينة", "city", "location"],
-        "الوظيفه المطلوبه": ["الوظيفه المطلوبه", "job", "position", "role", "المهنة"],
-        "الخبرة في هذا المجال": ["الخبرة في هذا المجال", "field experience"],
-        "مهارات اخرى": ["مهارات اخرى", "other skills", "skills"],
-        "الخبرة": ["الخبرة", "experience", "years"],
-        "هل يمكنك العمل خارج المدينة": ["العمل خارج المدينة", "work outside city", "travel"],
-        "هل انت جاهز للعمل فورا": ["جاهز للعمل", "ready for work", "immediately"],
-        "هل معك عائلته": ["مع عائلته", "with family"],
-        "رقم الاقامة": ["رقم الاقامة", "iqama", "residency"],
-        "عدد مرات نقل الكفالة": ["نقل الكفالة", "transfer count"]
+        name_header: ["الاسم الكامل", "full name", "worker name", "الاسم", "name", "candidate name"],
+        phone_header: ["رقم الهاتف", "whatsapp", "phone", "mobile", "جوال", "mobile number"],
+        cv_header: ["سيرة الذاتية", "cv", "resume", "link", "سيرة", "resume link"],
+        nat_header: ["الجنسيه", "nationality", "country"],
+        gender_header: ["الجنس", "gender", "sex"],
+        age_header: ["العمر", "age"],
+        city_header: ["المدينة", "city", "location"],
+        job_header: ["الوظيفه المطلوبه", "job", "position", "role", "المهنة", "requested job"],
+        field_exp_header: ["الخبرة في هذا المجال", "field experience"],
+        skills_header: ["مهارات اخرى", "other skills", "skills"],
+        outside_header: ["العمل خارج المدينة", "work outside city", "travel", "work outside city"],
+        ready_header: ["جاهز للعمل", "ready for work", "immediately", "ready immediately"],
+        family_header: ["مع عائلته", "with family"],
+        iqama_header: ["رقم الاقامة", "رقم الإقامة", "iqama", "residency", "iqama id number", "iqama id"],
+        transfer_header: ["نقل الكفالة", "transfer count"],
+        other_jobs_header: [
+            "وظائف أخرى", "وظائف اخرى", "الوظائف الأخرى", "الوظائف الاخرى", "other jobs", "other job",
+            "ما هي الوظائف الأخرى التي يمكنك القيام بها", "ما هي الوظائف", "ماهي الوظائف", "وظايف اخرى",
+            "what other jobs can you do"
+        ]
     }
 
     def find_actual_col(keywords):
+        def strict_norm(t):
+            t = str(t).lower()
+            for k, v in [("أ","ا"), ("إ","ا"), ("آ","ا"), ("ة","ه"), ("ي","ى"), ("ئ","ي"), ("ؤ","و"), ("ء","")]:
+                t = t.replace(k, v)
+            for p in ["؟", "?", " ", "_", "-", ".", ","]:
+                t = t.replace(p, "")
+            return t
+            
         for col in df.columns:
-            c_lower = str(col).lower()
-            if any(kw.lower() in c_lower for kw in keywords):
-                return col
+            c_norm = strict_norm(col)
+            for kw in keywords:
+                if strict_norm(kw) in c_norm:
+                    return col
         return None
 
     # Identify actual columns from the dataframe
@@ -216,29 +249,28 @@ def create_pasha_whatsapp_excel(df):
 
     export_data = []
     # Identify the key columns for essential logic
-    phone_col = actual_cols_map.get("رقم الجوال")
+    phone_col = actual_cols_map.get(phone_header)
     
     for _, row in df.iterrows():
-        raw_phone = str(row[phone_col]).strip() if phone_col else ""
+        raw_phone = str(row[phone_col]).strip() if phone_col and phone_col in row else ""
         clean_phone = format_phone_number(raw_phone)
         if not clean_phone:
             clean_phone = format_phone_number("".join(raw_phone.split()))
             
         if clean_phone:
             entry = {}
-            for standard_name, actual_col in actual_cols_map.items():
-                val = str(row[actual_col]).strip() if actual_col in row else ""
-                if standard_name == "رقم الجوال":
-                    entry[standard_name] = clean_phone
-                else:
-                    entry[standard_name] = val
-            
-            
-            # Ensure at least Name and Phone exist even if mapping failed for some
-            if "رقم الجوال" not in entry: entry["رقم الجوال"] = clean_phone
-            if "الاسم" not in entry: 
-                name_col = actual_cols_map.get("الاسم")
-                entry["الاسم"] = str(row[name_col]).strip() if name_col else "عميل"
+            # Keep all original columns from the dataframe to fulfill "Download full excel file"
+            for k, v in row.items():
+                if not str(k).startswith("__"):  # Hide internal tracking columns
+                    val = str(v).strip() if pd.notna(v) else ""
+                    if str(val).lower() == 'nan': val = ""
+                    entry[k] = val
+                    
+            # Ensure the phone is cleaned
+            if phone_col:
+                entry[phone_col] = clean_phone
+            else:
+                entry[phone_header] = clean_phone
                 
             export_data.append(entry)
             
