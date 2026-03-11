@@ -1112,7 +1112,24 @@ def get_css(lang='ar'):
                 border: 2px solid #FF3131 !important;
                 box-shadow: 0 0 15px rgba(255, 0, 0, 0.4) !important;
             }}
+
+            /* Login Input Fields Mobile Overrides (Black text on Light background) */
+            div[data-testid="stForm"] div[data-baseweb="input"] {{
+                background: rgba(255, 255, 255, 0.95) !important;
+                border-color: #FFFFFF !important;
+                box-shadow: 0 0 15px rgba(255, 255, 255, 0.5) !important;
+            }}
+            div[data-testid="stForm"] .stTextInput input {{
+                color: #000000 !important;
+                text-shadow: none !important;
+                font-weight: bold !important;
+            }}
+            div[data-testid="stForm"] label p {{
+                color: #FFFFFF !important;
+                text-shadow: 0 0 8px rgba(255, 255, 255, 0.8) !important;
+            }}
         }}
+
 
         /* Table Translator Button - Desktop/Tablet (White) */
         .table-translator-btn button {{
