@@ -1574,6 +1574,8 @@ if 'lang' not in st.session_state:
     st.session_state.lang = 'ar'
 if 'last_login_time' not in st.session_state:
     st.session_state.last_login_time = 0
+if 'notifications' not in st.session_state:
+    st.session_state.notifications = []
 
 # 5. Apply Dynamic Styles Based on Language
 st.markdown(get_css(st.session_state.lang), unsafe_allow_html=True)
