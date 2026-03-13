@@ -1951,12 +1951,11 @@ def check_notifications():
         return val
 
     def mask_phone(phone_str):
-        """Masks phone number for viewers (e.g., 055****123)."""
+        """Masks entire phone number for viewers with stars (**********)."""
         p = str(phone_str).strip()
         if p == '---' or not p: return '---'
-        if len(p) < 7: return "****"
-        # Keep first 3 and last 3 digits, mask middle
-        return f"{p[:3]}****{p[-3:]}"
+        # Replace all digits and characters with stars
+        return "*" * len(p)
 
     def get_flag(nat_name):
         """Converts nationality name to emoji flag."""
