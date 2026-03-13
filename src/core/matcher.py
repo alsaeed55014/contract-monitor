@@ -836,11 +836,11 @@ def format_match_result(result, lang="ar"):
 - **موقع العمل:** {geo['original_location'] or 'غير محدد'} {'(منطقة)' if geo['is_region'] else '(مدينة)'}
 - **طبيعة العمل:** {c['job'] or 'غير محدد'}"""
     else:
-        summary = f"""📌 **Request Summary:**
-- **Nationality:** {c['nationality'] or 'N/A'}
-- **Gender:** {c['gender'] or 'N/A'}
-- **Location:** {geo['original_location'] or 'N/A'} {'(Region)' if geo['is_region'] else '(City)'}
-- **Job:** {c['job'] or 'N/A'}"""
+        summary = f"""📌 **ملخص الطلب:**
+- **الجنسية:** {c['nationality'] or 'غير محدد'}
+- **الجنس:** {c['gender'] or 'غير محدد'}
+- **موقع العمل:** {geo['original_location'] or 'غير محدد'} {'(منطقة)' if geo['is_region'] else '(مدينة)'}
+- **طبيعة العمل:** {c['job'] or 'غير محدد'}"""
 
     if status == "found_local":
         count_local = len(result["local_results"])
@@ -868,10 +868,10 @@ def format_match_result(result, lang="ar"):
         
         if count_expanded > 0:
             if lang == "ar":
-                alt_lines = ["\n### 🌍 بدائل في مناطق أخرى قريبة:", "| المدينة | المنطقة | البعد |", "|---|---|---|"]
+                alt_lines = ["\n### 🌍 بدائل في مناطق أخرى قريبة:", "| المدينة | المنطقة | الأولوية |", "|---|---|---|"]
             else:
                 alt_lines = ["\n### 🌍 Alternatives in surrounding areas:", "| City | Region | Priority |", "|---|---|---|"]
-                
+            
             for item in result["expanded_results"]:
                 all_dfs.append(item["candidates"])
                 alt_lines.append(f"| {item['city']} | {item['region']} | {item['tier']} |")

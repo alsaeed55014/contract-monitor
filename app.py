@@ -1950,13 +1950,46 @@ def check_notifications():
         if val in ['nan', 'None', '', 'NaN']: return '---'
         return val
 
+    def get_flag(nat_name):
+        """Converts nationality name to emoji flag."""
+        nat_name = str(nat_name).lower().strip()
+        flags = {
+            'مصر': '🇪🇬', 'مصري': '🇪🇬', 'egypt': '🇪🇬',
+            'السودان': '🇸🇩', 'سوداني': '🇸🇩', 'sudan': '🇸🇩',
+            'باكستان': '🇵🇰', 'باكستاني': '🇵🇰', 'pakistan': '🇵🇰',
+            'الهند': '🇮🇳', 'هندي': '🇮🇳', 'india': '🇮🇳',
+            'اليمن': '🇾🇪', 'يمني': '🇾🇪', 'yemen': '🇾🇪',
+            'بنجلاديش': '🇧🇩', 'بنجالي': '🇧🇩', 'bangladesh': '🇧🇩',
+            'الفلبين': '🇵🇭', 'فلبيني': '🇵🇭', 'philippines': '🇵🇭',
+            'كينيا': '🇰🇪', 'كيني': '🇰🇪', 'kenya': '🇰🇪',
+            'أوغندا': '🇺🇬', 'أوغندي': '🇺🇬', 'uganda': '🇺🇬',
+            'إثيوبيا': '🇪🇹', 'إثيوبي': '🇪🇹', 'ethiopia': '🇪🇹',
+        }
+        for k, v in flags.items():
+            if k in nat_name: return v
+        return '🏁'
+
     try:
+        # Load persistent state to catch up with offline changes
+        STATE_FILE = os.path.join(BASE_DIR, "state.json")
+        disk_state = {}
+        if os.path.exists(STATE_FILE):
+            try:
+                with open(STATE_FILE, "r") as f:
+                    disk_state = json.load(f)
+            except: pass
+
         # 1. Check Workers (Filling in employee data)
         df_workers = st.session_state.db.fetch_data(is_notif_check=True)
         current_worker_count = len(df_workers)
         
-        if st.session_state.notif_last_worker_count is not None and current_worker_count > st.session_state.notif_last_worker_count:
-            new_rows = df_workers.tail(current_worker_count - st.session_state.notif_last_worker_count)
+        # Use disk state if session state is missing (first run of app)
+        last_worker_count = st.session_state.get('notif_last_worker_count')
+        if last_worker_count is None:
+            last_worker_count = disk_state.get('last_row_candidates')
+            
+        if last_worker_count is not None and current_worker_count > last_worker_count:
+            new_rows = df_workers.tail(current_worker_count - last_worker_count)
             c_name = find_col(df_workers, ['Full Name', 'الاسم'])
             c_nat = find_col(df_workers, ['Nationality', 'الجنسية'])
             c_phone = find_col(df_workers, ['Phone Number', 'رقم الهاتف', 'هاتف'])
@@ -1965,14 +1998,20 @@ def check_notifications():
 
             for _, row in new_rows.iterrows():
                 name = safe_val(row, c_name)
+                nat = safe_val(row, c_nat)
+                flag = get_flag(nat)
                 st.session_state.notifications.append({
                     'title': "🆕 تسجيل عامل جديد",
-                    'msg': f"👤 {name} | 🌍 {safe_val(row, c_nat)}\n📱 {safe_val(row, c_phone)}\n💼 {safe_val(row, c_job)} | ⚧ {safe_val(row, c_gender)}",
+                    'msg': f"👤 {name} | {flag} الجنسية: {nat}\n📱 {safe_val(row, c_phone)}\n💼 {safe_val(row, c_job)} | ⚧ {safe_val(row, c_gender)}",
                     'time': datetime.now().strftime("%H:%M")
                 })
                 st.toast(f"🆕 عامل جديد: {name}", icon="🔔")
                 st.session_state.notif_triggered = True
             st.session_state.db.fetch_data(force=True) # Refresh main worker cache
+            
+            # Sync back to disk
+            disk_state['last_row_candidates'] = current_worker_count
+            with open(STATE_FILE, "w") as f: json.dump(disk_state, f, indent=4)
 
         st.session_state.notif_last_worker_count = current_worker_count
 
@@ -1980,25 +2019,36 @@ def check_notifications():
         df_cust = st.session_state.db.fetch_customer_requests(is_notif_check=True)
         current_cust_count = len(df_cust)
         
-        if st.session_state.notif_last_cust_count is not None and current_cust_count > st.session_state.notif_last_cust_count:
-            new_rows = df_cust.tail(current_cust_count - st.session_state.notif_last_cust_count)
+        # Use disk state if session state is missing
+        last_cust_count = st.session_state.get('notif_last_cust_count')
+        if last_cust_count is None:
+            last_cust_count = disk_state.get('last_row_customer_requests')
+        
+        if last_cust_count is not None and current_cust_count > last_cust_count:
+            new_rows = df_cust.tail(current_cust_count - last_cust_count)
             
             c_comp = find_col(df_cust, ['اسم الشركه', 'المؤسسة', 'الشركة', 'Company'])
             c_phone = find_col(df_cust, ['الموبيل', 'جوال', 'هاتف', 'Mobile'])
-            c_role = find_col(df_cust, ['الفئة المطلوبة', 'نوع العمل'])
-            c_nat = find_col(df_cust, ['الجنسية المطلوبة'])
+            c_salary = find_col(df_cust, ['الراتب المتوقع', 'Expected salary', 'الراتب'])
+            c_nat = find_col(df_cust, ['الجنسية المطلوبة', 'Required nationality', 'الجنسية'])
             c_loc = find_col(df_cust, ['موقع العمل', 'المدينة'])
             
             for _, row in new_rows.iterrows():
                 comp = safe_val(row, c_comp)
+                nat = safe_val(row, c_nat)
+                flag = get_flag(nat)
                 st.session_state.notifications.append({
                     'title': "🔔 طلب عميل جديد",
-                    'msg': f"🏢 {comp} | 📱 {safe_val(row, c_phone)}\n💪 {safe_val(row, c_role)} | 🌍 {safe_val(row, c_nat)}\n📍 {safe_val(row, c_loc)}",
+                    'msg': f"🏢 {comp} | 📱 {safe_val(row, c_phone)}\n💰 الراتب المتوقع: {safe_val(row, c_salary)} | {flag} الجنسية المطلوبة: {nat}\n📍 {safe_val(row, c_loc)}",
                     'time': datetime.now().strftime("%H:%M")
                 })
                 st.toast(f"🔔 طلب جديد: {comp}", icon="☕")
                 st.session_state.notif_triggered = True 
             st.session_state.db.fetch_customer_requests(force=True) # Refresh main customer cache
+            
+            # Sync back to disk
+            disk_state['last_row_customer_requests'] = current_cust_count
+            with open(STATE_FILE, "w") as f: json.dump(disk_state, f, indent=4)
         
         st.session_state.notif_last_cust_count = current_cust_count
 
