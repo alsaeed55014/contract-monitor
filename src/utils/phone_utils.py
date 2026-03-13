@@ -98,22 +98,40 @@ def save_to_local_desktop(df, base_filename="المرشحين"):
         target_dir = os.path.join(desktop, folder_name)
         if not os.path.exists(target_dir):
             os.makedirs(target_dir)
-            
-        # 3. Save file with timestamp
-        timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M")
-        final_path = os.path.join(target_dir, f"{base_filename}_{timestamp}.xlsx")
         
-        df.to_excel(final_path, index=False, engine='openpyxl')
-        return final_path
-    except Exception:
+        # 3. Save File
+        timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M")
+        filename = f"{base_filename}_{timestamp}.xlsx"
+        filepath = os.path.join(target_dir, filename)
+        
+        df.to_excel(filepath, index=False)
+        return filepath
+    except Exception as e:
+        print(f"Error saving to desktop: {e}")
         return None
 
 def is_local_windows_pc():
-    """Checks if the app is likely running on a local Windows PC."""
+    """Detects if we're on a local Windows machine vs Cloud."""
     is_windows = os.name == 'nt'
     # Streamlit Cloud usually mounts code in /mount/
     is_cloud = "/mount/" in __file__.replace("\\", "/") 
     return is_windows and not is_cloud
+
+def normalize_ar(text):
+    if not text or not isinstance(text, str): return ""
+    text = text.strip()
+    # Basic Arabic normalization
+    text = re.sub(r'[أإآا]', 'ا', text)
+    text = re.sub(r'ة', 'ه', text)
+    text = re.sub(r'ى', 'ي', text)
+    return text.lower()
+
+def mask_phone(phone_str):
+    """Masks entire phone number for viewers with stars (**********)."""
+    p = str(phone_str).strip()
+    if p == '---' or not p: return '---'
+    # Replace all digits and characters with stars
+    return "*" * len(p)
 
 def render_pasha_export_button(df, label, filename, base_save_name, key=None):
     """
@@ -144,33 +162,6 @@ def render_pasha_export_button(df, label, filename, base_save_name, key=None):
             use_container_width=True
         )
     st.markdown('</div>', unsafe_allow_html=True)
-
-def validate_numbers(raw_text):
-    if not raw_text:
-        return [], [], []
-
-    parts = re.split(r'[,\n\r]+', raw_text)
-    valid_all = []
-    invalid = []
-    seen = set()
-    
-    for p in parts:
-        p = p.strip()
-        if not p: continue
-        
-        formatted = format_phone_number(p)
-        if not formatted:
-            p_no_space = "".join(p.split())
-            formatted = format_phone_number(p_no_space)
-            
-        if formatted:
-            if formatted not in seen:
-                valid_all.append(formatted)
-                seen.add(formatted)
-        else:
-            invalid.append(p)
-            
-    return valid_all, [], invalid
 
 def create_pasha_whatsapp_excel(df, lang='ar'):
     """
@@ -225,22 +216,11 @@ def create_pasha_whatsapp_excel(df, lang='ar'):
     }
 
     def find_actual_col(keywords):
-        def strict_norm(t):
-            t = str(t).lower()
-            for k, v in [("أ","ا"), ("إ","ا"), ("آ","ا"), ("ة","ه"), ("ي","ى"), ("ئ","ي"), ("ؤ","و"), ("ء","")]:
-                t = t.replace(k, v)
-            for p in ["؟", "?", " ", "_", "-", ".", ","]:
-                t = t.replace(p, "")
-            return t
-            
-        for col in df.columns:
-            c_norm = strict_norm(col)
-            for kw in keywords:
-                if strict_norm(kw) in c_norm:
-                    return col
+        for c in df.columns:
+            if any(k in str(c).lower() for k in keywords):
+                return c
         return None
 
-    # Identify actual columns from the dataframe
     actual_cols_map = {}
     for standard_name, keywords in mapping.items():
         found = find_actual_col(keywords)
@@ -248,7 +228,6 @@ def create_pasha_whatsapp_excel(df, lang='ar'):
             actual_cols_map[standard_name] = found
 
     export_data = []
-    # Identify the key columns for essential logic
     phone_col = actual_cols_map.get(phone_header)
     
     for _, row in df.iterrows():
@@ -259,14 +238,12 @@ def create_pasha_whatsapp_excel(df, lang='ar'):
             
         if clean_phone:
             entry = {}
-            # Keep all original columns from the dataframe to fulfill "Download full excel file"
             for k, v in row.items():
-                if not str(k).startswith("__"):  # Hide internal tracking columns
+                if not str(k).startswith("__"):
                     val = str(v).strip() if pd.notna(v) else ""
                     if str(val).lower() == 'nan': val = ""
                     entry[k] = val
                     
-            # Ensure the phone is cleaned
             if phone_col:
                 entry[phone_col] = clean_phone
             else:
@@ -279,8 +256,33 @@ def create_pasha_whatsapp_excel(df, lang='ar'):
     if export_df.empty:
         return None
         
-    # Generate Excel buffer
     towrite = io.BytesIO()
     export_df.to_excel(towrite, index=False, engine='openpyxl')
     towrite.seek(0)
     return towrite, export_df
+
+def validate_numbers(text):
+    """
+    Parses a block of text and extracts valid phone numbers.
+    Returns (valid_list, invalid_count, total_count).
+    """
+    if not text:
+        return [], 0, 0
+    
+    # Split by common delimiters: newline, comma, semicolon, space
+    raw_entries = re.split(r'[\n,; ]+', str(text).strip())
+    
+    valid_numbers = []
+    invalid_count = 0
+    
+    for entry in raw_entries:
+        entry = entry.strip()
+        if not entry: continue
+        
+        formatted = format_phone_number(entry)
+        if formatted:
+            valid_numbers.append(formatted)
+        else:
+            invalid_count += 1
+            
+    return valid_numbers, invalid_count, len(raw_entries)

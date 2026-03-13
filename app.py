@@ -12,6 +12,7 @@ import re
 # 1. Ensure project root is in path (Robust Injection)
 # Get the absolute path of the directory containing app.py
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+ROOT_DIR = BASE_DIR
 PERSIST_FILE = os.path.join(BASE_DIR, 'src', '.persist_login.json')
 if BASE_DIR not in sys.path:
     sys.path.insert(0, BASE_DIR)
@@ -208,10 +209,12 @@ def clear_credentials():
         except:
             pass
 
+@st.cache_data(ttl=3600, show_spinner=False)
 def get_base64_image(image_path):
     with open(image_path, "rb") as img_file:
         return base64.b64encode(img_file.read()).decode()
 
+@st.cache_data(ttl=600, show_spinner=False)
 def get_css(lang='ar'):
     direction = 'rtl' if lang == 'ar' else 'ltr'
     toggle_side = 'right' if lang == 'ar' else 'left'
@@ -1181,77 +1184,69 @@ GENDER_MAP = {
     "أنثى": "🚺", "female": "🚺"
 }
 
+@st.cache_data(ttl=600, show_spinner=False)
+def _get_flag_url_cached(val):
+    if not val: return None
+    s_val = str(val).strip().lower()
+    # Pre-sort keys by length descending for best match (done once at module level)
+    # For now, just use the global FLAG_MAP
+    for key, code in FLAG_MAP_SORTED:
+        if len(key) <= 3:
+            pattern = rf'(?:^|[\s,:;.\-/]){re.escape(key)}(?:[\s,:;.\-/]|$)'
+            if re.search(pattern, s_val):
+                return f"https://flagsapi.com/{code.upper()}/flat/64.png"
+        else:
+            if key in s_val:
+                return f"https://flagsapi.com/{code.upper()}/flat/64.png"
+    return None
+
+# Pre-sort FLAG_MAP keys once at startup
+FLAG_MAP_SORTED = sorted(FLAG_MAP.items(), key=lambda x: len(x[0]), reverse=True)
+
 def style_df(df):
     """
-    Applies custom styling to DataFrames.
-    - Injects Flag URLs for nationality
-    - Colors rows/cells dynamically (Gender: Blue/Pink, Default: Green)
+    Applies custom styling to DataFrames (Optimized for 2026 Speed).
     """
-    if not isinstance(df, pd.DataFrame):
+    if not isinstance(df, pd.DataFrame) or df.empty:
         return df
 
     styled_df = df.copy()
-    
-    # 0. Global Auto-Translation for English UI
     lang = st.session_state.lang
+    
+    # 0. Selective Auto-Translation for English UI
     if lang == 'en':
+        # Only translate columns likely to have Arabic content
+        trans_keywords = ["job", "skill", "city", "location", "profession", "الوظيفة", "مهارات", "المدينة", "المهنة"]
         for col in styled_df.columns:
-            # We skip columns starting with flags or images
-            if not str(col).startswith("🚩_"):
-                # Optimize: only apply to object/string columns
+            col_lower = str(col).lower()
+            if any(kw in col_lower for kw in trans_keywords):
                 if styled_df[col].dtype == 'object':
                     styled_df[col] = styled_df[col].apply(lambda x: auto_translate(x, target_lang='en'))
 
-    # 1. Flag Image Injection (using flagsapi.com for uniform high-quality icons)
+    # 1. Flag Image Injection (Optimized)
     nat_cols = [c for c in styled_df.columns if any(kw in str(c).lower() for kw in ["nationality", "الجنسية"])]
     for col in nat_cols:
         flag_col = f"🚩_{col}"
         if flag_col not in styled_df.columns:
-            def get_flag_url(val):
-                if not val: return None
-                s_val = str(val).strip().lower()
-                sorted_keys = sorted(FLAG_MAP.keys(), key=len, reverse=True)
-                for key in sorted_keys:
-                    code = FLAG_MAP[key]
-                    if len(key) <= 3:
-                        pattern = r'(?:^|[\s,:;.\-/])' + re.escape(key) + r'(?:[\s,:;.\-/]|$)'
-                        if re.search(pattern, s_val):
-                            return f"https://flagsapi.com/{code.upper()}/flat/64.png"
-                    else:
-                        if key in s_val:
-                            return f"https://flagsapi.com/{code.upper()}/flat/64.png"
-                return None
-            
-            # Position flag after nationality
             idx = list(styled_df.columns).index(col)
-            styled_df.insert(idx, flag_col, styled_df[col].apply(get_flag_url))
+            styled_df.insert(idx, flag_col, styled_df[col].apply(_get_flag_url_cached))
         
-        # Cleanup original column if it was modified with emojis previously
-        # (This is just in case old data remains in session state)
-        def clean_val(v):
-            if not v: return v
-            # Remove any existing flag emojis (RI symbols)
-            return re.sub(r'[\U0001F1E6-\U0001F1FF]{2}\s*', '', str(v))
-        styled_df[col] = styled_df[col].apply(clean_val)
+        # Fast cleanup
+        styled_df[col] = styled_df[col].astype(str).str.replace(r'[\U0001F1E6-\U0001F1FF]{2}\s*', '', regex=True)
 
-    # 2. Gender Icon Injection
+    # 2. Gender Icon Injection (Fast Vectorized replacement)
     gen_cols = [c for c in styled_df.columns if any(kw in str(c).lower() for kw in ["gender", "الجنس"]) and str(c).lower() != "الجنسية"]
     for col in gen_cols:
-        def add_gender_icon(val):
-            if not val: return val
-            s_val = str(val).strip().lower()
-            for key, icon in GENDER_MAP.items():
-                if key == s_val:
-                    return f"{icon} {val}"
-            return val
-        styled_df[col] = styled_df[col].apply(add_gender_icon)
+        for key, icon in GENDER_MAP.items():
+            mask = styled_df[col].astype(str).str.strip().str.lower() == key
+            styled_df.loc[mask, col] = icon + " " + styled_df.loc[mask, col].astype(str)
 
-    # 3. Apply Dynamic Styling (Colors)
+    # 3. Apply Dynamic Styling (Optimized Styler)
     def apply_colors(val):
         s_val = str(val).lower()
-        if any(k in s_val for k in ["🚹", "ذكر", "male"]):
+        if '🚹' in s_val or 'ذكر' in s_val or 'male' in s_val:
             return "color: #3498db; font-weight: bold;" 
-        if any(k in s_val for k in ["🚺", "أنثى", "female"]):
+        if '🚺' in s_val or 'أنثى' in s_val or 'female' in s_val:
             return "color: #e91e63; font-weight: bold;"
         return "color: #4CAF50;"
 
@@ -1260,42 +1255,40 @@ def style_df(df):
         subset=[c for c in styled_df.columns if not str(c).startswith("🚩_")]
     )
 
+@st.cache_data(ttl=3600, show_spinner=False)
+def _parse_to_date_str_cached(val):
+    if val is None or str(val).strip() == '': return ""
+    try:
+        from dateutil import parser as dateutil_parser
+        val_str = str(val).strip()
+        # Arabic to Western Numerals
+        a_to_w = str.maketrans('٠١٢٣٤٥٦٧٨٩', '0123456789')
+        val_str = val_str.translate(a_to_w)
+        # Remove Arabic AM/PM
+        clean_s = re.sub(r'[صم]', '', val_str).strip()
+        dt = dateutil_parser.parse(clean_s, dayfirst=False)
+        return dt.strftime('%Y-%m-%d')
+    except:
+        # Fallback to pandas
+        try:
+            dt = pd.to_datetime(val, errors='coerce')
+            if pd.isna(dt): return str(val)
+            return dt.strftime('%Y-%m-%d')
+        except:
+            return str(val)
+
 def clean_date_display(df):
     """
-    Finds date-like columns, parses them, and formats them to DATE ONLY (no time).
-    Ensures they are sorted if a primary date column is found.
+    Finds date-like columns and formats them (Cached & Optimized).
     """
     if not isinstance(df, pd.DataFrame) or df.empty:
         return df
         
-    import re
-    from dateutil import parser as dateutil_parser
-    
-    def _parse_to_date_str(val):
-        if val is None or str(val).strip() == '': return ""
-        try:
-            val_str = str(val).strip()
-            # Arabic to Western Numerals
-            a_to_w = str.maketrans('٠١٢٣٤٥٦٧٨٩', '0123456789')
-            val_str = val_str.translate(a_to_w)
-            # Remove Arabic AM/PM
-            clean_s = re.sub(r'[صم]', '', val_str).strip()
-            dt = dateutil_parser.parse(clean_s, dayfirst=False)
-            return dt.strftime('%Y-%m-%d')
-        except:
-            # Fallback to pandas
-            try:
-                dt = pd.to_datetime(val, errors='coerce')
-                if pd.isna(dt): return str(val)
-                return dt.strftime('%Y-%m-%d')
-            except:
-                return str(val)
-
     date_keywords = ["date", "time", "تاريخ", "طابع", "التسجيل", "expiry", "end", "متى"]
     for col in df.columns:
         col_lower = str(col).lower()
         if any(kw in col_lower for kw in date_keywords):
-            df[col] = df[col].apply(_parse_to_date_str)
+            df[col] = df[col].apply(_parse_to_date_str_cached)
             
     return df
 
@@ -1366,32 +1359,27 @@ def get_cached_translation(val, target_lang):
 
 def auto_translate(val, target_lang='en'):
     """
-    Automatically translates Arabic text to the target language if the current UI language 
-    matches that target and the text contains Arabic characters.
+    Automatically translates Arabic text to the target language (Optimized).
     """
     if not val or not isinstance(val, (str, object)):
         return val
     
     val_str = str(val).strip()
-    if not val_str:
+    if not val_str or len(val_str) < 2:
         return val
     
-    # Only translate if ui lang matches target (usually 'en') and val has Arabic
-    curr_lang = st.session_state.get('lang', 'ar')
-    if curr_lang != target_lang:
-        return val
-        
-    # Check for Arabic characters
-    has_ar = any('\u0600' <= char <= '\u06FF' for char in val_str)
-    if not has_ar:
+    # Check for Arabic characters (Fast check)
+    if not any('\u0600' <= char <= '\u06FF' for char in val_str):
         return val
 
     try:
-        if 'tm' not in st.session_state or st.session_state.tm is None:
+        # Get TM from session state (initialized at startup)
+        tm = st.session_state.get('tm')
+        if not tm:
             from src.core.translation import TranslationManager
             st.session_state.tm = TranslationManager()
+            tm = st.session_state.tm
         
-        tm = st.session_state.tm
         # Optimization: use dictionary for short tokens
         if len(val_str.split()) <= 2:
             translated = tm.translate_word(val_str)
@@ -1500,7 +1488,7 @@ def show_loading_hourglass(text=None, container=None):
                 flex-direction: column;
                 align-items: center;
                 justify-content: center;
-                pointer-events: all;
+                pointer-events: none;
             ">
                 <svg class="modern-hourglass-svg" viewBox="0 0 100 100" style="
                     width: 100px; height: 100px;
@@ -1584,6 +1572,8 @@ if 'user' not in st.session_state:
     st.session_state.user = None
 if 'lang' not in st.session_state:
     st.session_state.lang = 'ar'
+if 'last_login_time' not in st.session_state:
+    st.session_state.last_login_time = 0
 
 # 5. Apply Dynamic Styles Based on Language
 st.markdown(get_css(st.session_state.lang), unsafe_allow_html=True)
@@ -1821,14 +1811,24 @@ def render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search", 
                     )
     
     st.markdown(f"#### 🔎 {t('preview_cv', lang)}")
+    
     if cv_url and str(cv_url).startswith("http"):
-        preview_url = cv_url
-        if "drive.google.com" in cv_url:
-            f_id = None
-            if "id=" in cv_url: f_id = cv_url.split("id=")[1].split("&")[0]
-            elif "/d/" in cv_url: f_id = cv_url.split("/d/")[1].split("/")[0]
-            if f_id: preview_url = f"https://drive.google.com/file/d/{f_id}/preview"
-        st.components.v1.iframe(preview_url, height=600, scrolling=True)
+        # NEW: Defer iframe loading to improve selection speed
+        preview_key = f"show_preview_{key_prefix}_{worker_id}"
+        if st.checkbox("👁️ " + ("عرض المعاينة المباشرة" if lang == 'ar' else "Show Live Preview"), key=preview_key):
+            preview_url = cv_url
+            if "drive.google.com" in cv_url:
+                f_id = None
+                if "id=" in cv_url: f_id = cv_url.split("id=")[1].split("&")[0]
+                elif "/d/" in cv_url: f_id = cv_url.split("/d/")[1].split("/")[0]
+                if f_id: preview_url = f"https://drive.google.com/file/d/{f_id}/preview"
+            
+            with st.spinner("⏳ " + ("جاري تحميل المعاينة..." if lang == 'ar' else "Loading Preview...")):
+                st.components.v1.iframe(preview_url, height=600, scrolling=True)
+        else:
+            st.info("💡 " + ("اضغط على المربع أعلاه لعرض السيرة الذاتية هنا." if lang == 'ar' else "Click the checkbox above to view the CV here."))
+            if st.button("🔗 " + ("فتح في نافذة جديدة" if lang == 'ar' else "Open in New Tab"), key=f"open_new_{worker_id}"):
+                st.markdown(f'<a href="{cv_url}" target="_blank">Click here to open</a>', unsafe_allow_html=True)
     else: st.info("لا يتوفر رابط معاينة لهذا العامل.")
 
 def login_screen():
@@ -1890,11 +1890,8 @@ def login_screen():
                             
                         user['username'] = u.lower().strip()
                         st.session_state.user = user
+                        st.session_state.last_login_time = time.time()
                         st.session_state.show_welcome = True
-                        
-                        # Immediate UI clearing for faster feeling
-                        st.markdown("<style>div[data-testid='stForm'] { display: none !important; }</style>", unsafe_allow_html=True)
-                        st.success("جاري الدخول... | Loading..." if lang == 'ar' else "Loading... | Entering")
                         
                         st.rerun()
                     else:
@@ -1914,12 +1911,15 @@ def login_screen():
 def silent_notification_monitor():
     """
     MODERN BACKGROUND MONITOR:
-    This runs every 20 seconds in a 'fragment' context. 
-    It checks for data updates WITHOUT refreshing the entire page.
-    Your scroll position and input values will NOT be affected.
+    Runs every 20 seconds in a fragment context. 
+    Skips the very first run to ensure main dashboard loads instantly.
     """
     if st.session_state.get('user'):
-        check_notifications()
+        # Only run if we've been logged in for at least a few seconds
+        # to prevent blocking the initial dashboard load
+        if 'last_login_time' in st.session_state:
+            if time.time() - st.session_state.last_login_time > 5:
+                check_notifications()
 
 def check_notifications():
     """Checks for new worker entries or customer requests and synchronizes UI data."""
@@ -2612,8 +2612,9 @@ def render_dashboard_content():
     
     date_col = next((c for c in cols if any(kw in clean_col(c) for kw in ["contract end", "انتهاء العقد", "contract expiry"])), None)
     if not date_col:
+        loading_placeholder.empty() # CLEAR LOADER BEFORE RETURN!
         visible_cols = [c for c in cols if not str(c).startswith('__')]
-        st.error(f"?? Error: Could not find the 'Contract End' column. Please check your spreadsheet headers. Available columns: {visible_cols}")
+        st.error(f"⚠️ Error: Could not find the 'Contract End' column. Please check your spreadsheet headers. Available columns: {visible_cols}")
         return
 
     stats = {'urgent': [], 'expired': [], 'active': []}
@@ -5223,6 +5224,6 @@ def render_bengali_supply_content():
 if not st.session_state.user:
     login_screen()
 else:
-    # Call the silent monitor once - it will handle its own background loop
-    silent_notification_monitor()
     dashboard()
+    # Call the silent monitor AFTER dashboard to ensure fast initial load
+    silent_notification_monitor()

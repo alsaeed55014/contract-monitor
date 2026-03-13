@@ -7,7 +7,6 @@ import time
 import logging
 from pathlib import Path
 from threading import Thread
-from win10toast import ToastNotifier
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 

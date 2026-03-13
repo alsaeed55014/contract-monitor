@@ -1,52 +1,55 @@
 # --------- setup_notification.ps1 ---------
-# تجاوز سياسة التنفيذ
+# Set Execution Policy for the current process
 Set-ExecutionPolicy Bypass -Scope Process -Force
 
-# تحديد مسار المشروع
-$ProjectPath = "c:\Users\ا\Desktop\non2"
+# Use PSScriptRoot for robustness with non-ASCII paths
+$ProjectPath = $PSScriptRoot
+if (-Not $ProjectPath) { $ProjectPath = Get-Location }
+
 $ScriptFile = Join-Path $ProjectPath "antigravity_notification.py"
 $RequirementsFile = Join-Path $ProjectPath "requirements.txt"
 
-# -------------------------
-# 1️⃣ تثبيت المكتبات المطلوبة
-# -------------------------
-$packages = @("win10toast","gspread","oauth2client")
+Write-Output "Project Path: $ProjectPath"
 
-# إنشاء requirements.txt إذا لم يكن موجود
-if (-Not (Test-Path $RequirementsFile)) {
-    New-Item -ItemType File -Path $RequirementsFile -Force
-}
+# -------------------------
+# 1️⃣ Install required packages
+# -------------------------
+$packages = @("gspread", "oauth2client", "pandas", "openpyxl")
 
 foreach ($pkg in $packages) {
-    if (-Not (Get-Content $RequirementsFile | Select-String $pkg)) {
-        Add-Content $RequirementsFile $pkg
-    }
-    Write-Output "تثبيت $pkg ..."
-    pip install $pkg
+    Write-Output "Installing $pkg ..."
+    & pip install $pkg
 }
 
 # -------------------------
-# 2️⃣ التأكد من وجود السكربت
+# 2️⃣ Verify script exists
 # -------------------------
 if (-Not (Test-Path $ScriptFile)) {
-    Write-Output "تحذير: السكربت $ScriptFile غير موجود. يرجى التأكد من وجوده."
+    Write-Error "Error: Script $ScriptFile not found."
+    exit 1
 }
 
 # -------------------------
-# 3️⃣ إعداد Task Scheduler لتشغيل السكربت عند تسجيل الدخول
+# 3️⃣ Setup Task Scheduler (User Level)
 # -------------------------
-$TaskName = "Antigravity Notification"
-$PythonPath = (Get-Command python).Source  # الحصول على المسار الكامل لـ Python
+$TaskName = "AntigravityNotification"
+$PythonPath = (Get-Command python).Source
 
-# حذف المهمة إذا كانت موجودة مسبقًا
-if (Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue) {
-    Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false
+# Check if task exists and remove it
+$existingTask = schtasks /query /tn $TaskName /error 0 2>$null
+if ($null -ne $existingTask) {
+    schtasks /delete /tn $TaskName /f
 }
 
-# إنشاء مهمة جديدة
-$Action = New-ScheduledTaskAction -Execute $PythonPath -Argument "`"$ScriptFile`"" -WorkingDirectory $ProjectPath
-$Trigger = New-ScheduledTaskTrigger -AtLogOn
-$Settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -Hidden -ExecutionTimeLimit 0
-Register-ScheduledTask -TaskName $TaskName -Action $Action -Trigger $Trigger -Settings $Settings
+# Create new task using schtasks.exe (often more reliable for encoding)
+# /sc ONLOGON: Run at logon
+# /tr: Task run command
+# /it: Interactive (needed for toast notifications)
+$taskCommand = "`"$PythonPath`" `"$ScriptFile`""
+schtasks /create /tn $TaskName /tr "$taskCommand" /sc ONLOGON /it /f
 
-Write-Output "تم إنشاء Task Scheduler بنجاح. سيعمل البرنامج الآن في الخلفية عند فتح الجهاز."
+if ($LASTEXITCODE -eq 0) {
+    Write-Output "Task created successfully. It will run at next logon."
+} else {
+    Write-Error "Failed to create task. You might need to run this as Administrator."
+}

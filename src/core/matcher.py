@@ -260,19 +260,20 @@ def _translate_ar_to_en(text):
 
 
 # ═══════════════════════════════════════════════════════════════
-# Helper Functions
+# Helper Functions (Optimized)
 # ═══════════════════════════════════════════════════════════════
 
 def _normalize(text):
-    """Normalize Arabic text for fuzzy matching."""
-    if not text:
+    """Normalize Arabic text for fuzzy matching (Fast)."""
+    if not text or not isinstance(text, str):
         return ""
-    t = str(text).lower().strip()
-    t = t.replace("أ", "ا").replace("إ", "ا").replace("آ", "ا")
-    t = t.replace("ة", "ه").replace("ى", "ي")
-    t = t.replace("ئ", "ي").replace("ؤ", "و").replace("ء", "")
+    t = text.lower().strip()
+    # Chain replacements for speed
+    t = t.translate(str.maketrans("أإآةىئؤ", "اااهييي"))
+    t = t.replace("ء", "")
     # Remove common prefixes
-    t = re.sub(r'^(ال)', '', t) if len(t) > 4 else t
+    if len(t) > 4 and t.startswith("ال"):
+        t = t[2:]
     return t.strip()
 
 

@@ -1,6 +1,8 @@
 # src/core/translation.py
 import re
 import io
+import streamlit as st
+import hashlib
 
 try:
     import pdfplumber
@@ -9,9 +11,8 @@ try:
 except ImportError:
     HAS_DEPS = False
 
-
 class TranslationManager:
-    # Cache for Google Translate results to avoid repeated API calls
+    # Use class-level cache to persist across re-initializations
     _google_cache = {}
 
     def __init__(self):
@@ -431,6 +432,14 @@ class TranslationManager:
         if not text:
             return ""
 
+        # Global Cache check
+        cache_key = f"{target_lang}_{hashlib.md5(str(text).strip().encode()).hexdigest()}"
+        if 'translation_cache' not in st.session_state:
+            st.session_state.translation_cache = {}
+        
+        if cache_key in st.session_state.translation_cache:
+            return st.session_state.translation_cache[cache_key]
+
         try:
             chunks = [text[i:i+4000] for i in range(0, len(text), 4000)]
             translated_text = ""
@@ -439,6 +448,8 @@ class TranslationManager:
             for chunk in chunks:
                 translated_text += translator.translate(chunk) + "\n"
 
+            # Save to session cache
+            st.session_state.translation_cache[cache_key] = translated_text
             return translated_text
 
         except Exception as e:
