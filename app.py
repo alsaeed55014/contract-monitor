@@ -2280,14 +2280,14 @@ def dashboard():
 
         @keyframes wFadeIn {{
             0%   {{ opacity:0; }}
-            12%  {{ opacity:1; }}
-            78%  {{ opacity:1; }}
+            20%  {{ opacity:1; }}
+            80%  {{ opacity:1; }}
             100% {{ opacity:0; pointer-events:none; }}
         }}
         @keyframes wSlideUp {{
             0%   {{ transform:translateY(40px) scale(0.95); opacity:0; }}
-            12%  {{ transform:translateY(0)    scale(1);    opacity:1; }}
-            78%  {{ transform:translateY(0)    scale(1);    opacity:1; }}
+            20%  {{ transform:translateY(0)    scale(1);    opacity:1; }}
+            80%  {{ transform:translateY(0)    scale(1);    opacity:1; }}
             100% {{ transform:translateY(-16px) scale(0.97); opacity:0; }}
         }}
         @keyframes wShimmer {{
@@ -2311,12 +2311,12 @@ def dashboard():
         #lux-welcome {{
             position: fixed; inset:0;
             z-index:2147483647;
-            background:rgba(4,7,16,0.87);
-            backdrop-filter:blur(16px);
-            -webkit-backdrop-filter:blur(16px);
+            background:rgba(4,7,16,0.8);
+            backdrop-filter:blur(10px);
+            -webkit-backdrop-filter:blur(10px);
             display:flex; align-items:center; justify-content:center;
-            animation: wFadeIn 3.2s cubic-bezier(.4,0,.2,1) forwards;
-            pointer-events:all;
+            animation: wFadeIn 1.2s cubic-bezier(.4,0,.2,1) forwards;
+            pointer-events:none;
         }}
         #lux-welcome-card {{
             background:linear-gradient(160deg,#0d1220,#090e1d,#0e1428);
@@ -2326,7 +2326,7 @@ def dashboard():
             max-width:520px; width:90%; min-width: 290px;
             text-align:center;
             position:relative; overflow:hidden;
-            animation:wSlideUp 3.2s cubic-bezier(.4,0,.2,1) forwards;
+            animation:wSlideUp 1.2s cubic-bezier(.4,0,.2,1) forwards;
             box-shadow:0 40px 120px rgba(0,0,0,0.75), 0 0 60px rgba(212,175,55,0.06);
         }}
         #lux-welcome-card::before {{
@@ -2389,10 +2389,10 @@ def dashboard():
             var el = document.getElementById('lux-welcome');
             if (el) {{
                 el.style.opacity = '0';
-                el.style.transition = 'opacity 0.6s ease';
-                setTimeout(function() {{ if (el.parentNode) el.parentNode.removeChild(el); }}, 600);
+                el.style.transition = 'opacity 0.4s ease';
+                setTimeout(function() {{ if (el.parentNode) el.parentNode.removeChild(el); }}, 400);
             }}
-        }}, 3000);
+        }}, 1000);
         </script>
         """, unsafe_allow_html=True)
 
