@@ -23,17 +23,24 @@ class SmartSearchEngine:
         050... -> 50...
         +966 59 422 3552 -> 594223552
         """
-        digits = re.sub(r'\D', '', str(text))
+        arabic_to_western = str.maketrans('٠١٢٣٤٥٦٧٨٩', '0123456789')
+        s = str(text).translate(arabic_to_western)
+        digits = re.sub(r'\D', '', s)
+        if not digits:
+            return ""
+        if digits.startswith('00'):
+            digits = digits[2:]
         if digits.startswith('966'):
             digits = digits[3:]
-        if digits.startswith('0'):
+        while digits.startswith('0'):
             digits = digits[1:]
         return digits
 
     def is_phone_query(self, query):
         """Detects if the query is likely a phone number."""
         # Strip spaces, plus, dashes first
-        clean = re.sub(r'[\s\+\-\(\)]', '', str(query))
+        arabic_to_western = str.maketrans('٠١٢٣٤٥٦٧٨٩', '0123456789')
+        clean = re.sub(r'[\s\+\-\(\)]', '', str(query)).translate(arabic_to_western)
         return clean.isdigit() and len(clean) >= 5
 
     def search(self, query, filters=None):
