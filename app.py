@@ -5223,9 +5223,13 @@ def render_bengali_supply_content():
                     show_toast(m_val, t_val, container=e_m_notif)
 
 # 11. Main Entry
+placeholder = st.empty()
+
 if not st.session_state.user:
-    login_screen()
+    with placeholder.container():
+        login_screen()
 else:
+    placeholder.empty() # Explicitly clear just in case
     dashboard()
     # Call the silent monitor AFTER dashboard to ensure fast initial load
     silent_notification_monitor()
