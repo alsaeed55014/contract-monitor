@@ -1950,6 +1950,14 @@ def check_notifications():
         if val in ['nan', 'None', '', 'NaN']: return '---'
         return val
 
+    def mask_phone(phone_str):
+        """Masks phone number for viewers (e.g., 055****123)."""
+        p = str(phone_str).strip()
+        if p == '---' or not p: return '---'
+        if len(p) < 7: return "****"
+        # Keep first 3 and last 3 digits, mask middle
+        return f"{p[:3]}****{p[-3:]}"
+
     def get_flag(nat_name):
         """Converts nationality name to emoji flag."""
         nat_name = str(nat_name).lower().strip()
@@ -1999,10 +2007,15 @@ def check_notifications():
             for _, row in new_rows.iterrows():
                 name = safe_val(row, c_name)
                 nat = safe_val(row, c_nat)
+                phone = safe_val(row, c_phone)
+                # Masking for viewers
+                if st.session_state.user.get('role') == 'viewer':
+                    phone = mask_phone(phone)
+                
                 flag = get_flag(nat)
                 st.session_state.notifications.append({
                     'title': "🆕 تسجيل عامل جديد",
-                    'msg': f"👤 {name} | {flag} الجنسية: {nat}\n📱 {safe_val(row, c_phone)}\n💼 {safe_val(row, c_job)} | ⚧ {safe_val(row, c_gender)}",
+                    'msg': f"👤 {name} | {flag} الجنسية: {nat}\n📱 {phone}\n💼 {safe_val(row, c_job)} | ⚧ {safe_val(row, c_gender)}",
                     'time': datetime.now().strftime("%H:%M")
                 })
                 st.toast(f"🆕 عامل جديد: {name}", icon="🔔")
@@ -2036,10 +2049,15 @@ def check_notifications():
             for _, row in new_rows.iterrows():
                 comp = safe_val(row, c_comp)
                 nat = safe_val(row, c_nat)
+                phone = safe_val(row, c_phone)
+                # Masking for viewers
+                if st.session_state.user.get('role') == 'viewer':
+                    phone = mask_phone(phone)
+
                 flag = get_flag(nat)
                 st.session_state.notifications.append({
                     'title': "🔔 طلب عميل جديد",
-                    'msg': f"🏢 {comp} | 📱 {safe_val(row, c_phone)}\n💰 الراتب المتوقع: {safe_val(row, c_salary)} | {flag} الجنسية المطلوبة: {nat}\n📍 {safe_val(row, c_loc)}",
+                    'msg': f"🏢 {comp} | 📱 {phone}\n💰 الراتب المتوقع: {safe_val(row, c_salary)} | {flag} الجنسية المطلوبة: {nat}\n📍 {safe_val(row, c_loc)}",
                     'time': datetime.now().strftime("%H:%M")
                 })
                 st.toast(f"🔔 طلب جديد: {comp}", icon="☕")
