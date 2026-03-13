@@ -1979,6 +1979,31 @@ def check_notifications():
         return '🏁'
 
     try:
+        # 0. Sync with background service cache (New Feature)
+        CACHE_FILE = os.path.join(BASE_DIR, "notification_cache.json")
+        if os.path.exists(CACHE_FILE):
+            try:
+                with open(CACHE_FILE, "r") as f:
+                    cached_notifs = json.load(f)
+                
+                if cached_notifs:
+                    # Filter out duplicates if session already has them
+                    existing_msgs = [n['msg'] for n in st.session_state.notifications]
+                    for cn in cached_notifs:
+                        if cn['msg'] not in existing_msgs:
+                            st.session_state.notifications.append({
+                                'title': cn.get('title', '🔔 إشعار'),
+                                'msg': cn['msg'],
+                                'time': cn.get('time', datetime.now().strftime("%H:%M"))
+                            })
+                            st.session_state.notif_triggered = True
+                    
+                    # Clear the cache file after reading to avoid repeated notifications
+                    with open(CACHE_FILE, "w") as f:
+                        json.dump([], f)
+            except Exception as e:
+                print(f"[DEBUG] Cache sync error: {e}")
+
         # Load persistent state to catch up with offline changes
         STATE_FILE = os.path.join(BASE_DIR, "state.json")
         disk_state = {}

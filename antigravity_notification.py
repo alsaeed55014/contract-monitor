@@ -194,10 +194,22 @@ def watch_sheets():
                         logging.info(f"تم العثور على {count} تحديثات في {config['name']}")
                         
                         if count > 5:
-                            send_notification(config["notif_title"], f"لديك {count} تحديثات جديدة.")
+                            msg = f"لديك {count} تحديثات جديدة في {config['name']}"
+                            send_notification(config["notif_title"], msg)
+                            # Save to cache for app.py
+                            cache = load_cached_notifications()
+                            cache.append({
+                                'title': config["notif_title"],
+                                'msg': msg,
+                                'time': time.strftime("%H:%M"),
+                                'type': 'bulk'
+                            })
+                            save_cached_notifications(cache)
                         else:
-                            for row in new_rows:
+                            cache = load_cached_notifications()
+                            for i, row in enumerate(new_rows):
                                 preview = ""
+                                # ... (existing fields logic)
                                 fields = ["الاسم", "Name", "الجنسية", "Nationality", "نوع العمل", "الفئة", "المدينة", "Location"]
                                 for k, v in row.items():
                                     if any(f.lower() in k.lower() for f in fields):
@@ -205,8 +217,20 @@ def watch_sheets():
                                         if "الجنسية" in k or "Nationality" in k:
                                             v = f"{get_flag(v)} {v}"
                                         preview += f"{label}: {v}\n"
-                                send_notification(config["notif_title"], preview or "تحديث جديد.")
+                                
+                                final_msg = preview or "تحديث جديد."
+                                send_notification(config["notif_title"], final_msg)
+                                
+                                # Save to cache for app.py
+                                cache.append({
+                                    'title': config["notif_title"],
+                                    'msg': final_msg,
+                                    'time': time.strftime("%H:%M"),
+                                    'type': 'single'
+                                })
+                                logging.info(f"إرسال إشعار للصف {last_seen + i + 1} في {config['name']}")
                                 time.sleep(2)
+                            save_cached_notifications(cache)
                         
                         data["last_row"] = current_count
                         save_state(sheet_id, current_count)
