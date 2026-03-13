@@ -1979,123 +1979,48 @@ def check_notifications():
         return '🏁'
 
     try:
-        # 0. Sync with background service cache (New Feature)
+        # 0. Sync with background service cache (Per-User Logic)
+        user_id = st.session_state.user.get('username', 'guest')
         CACHE_FILE = os.path.join(BASE_DIR, "notification_cache.json")
+        USER_SEEN_FILE = os.path.join(BASE_DIR, f"notif_seen_{user_id}.json")
+        
+        # Load what this user has already seen/deleted from the global cache
+        user_seen_ids = []
+        if os.path.exists(USER_SEEN_FILE):
+            try:
+                with open(USER_SEEN_FILE, "r") as f:
+                    user_seen_ids = json.load(f)
+            except: pass
+
         if os.path.exists(CACHE_FILE):
             try:
                 with open(CACHE_FILE, "r") as f:
-                    cached_notifs = json.load(f)
+                    global_cache = json.load(f)
                 
-                if cached_notifs:
-                    # Filter out duplicates if session already has them
+                if global_cache:
+                    # Filter: Only add if NOT in user's seen list AND not already in session
                     existing_msgs = [n['msg'] for n in st.session_state.notifications]
-                    for cn in cached_notifs:
-                        if cn['msg'] not in existing_msgs:
+                    new_for_user = False
+                    
+                    for cn in global_cache:
+                        # Create a unique ID for this notification (msg + time)
+                        notif_id = f"{cn['msg']}_{cn.get('time','')}"
+                        if notif_id not in user_seen_ids and cn['msg'] not in existing_msgs:
                             st.session_state.notifications.append({
+                                'id': notif_id,
                                 'title': cn.get('title', '🔔 إشعار'),
                                 'msg': cn['msg'],
                                 'time': cn.get('time', datetime.now().strftime("%H:%M"))
                             })
                             st.session_state.notif_triggered = True
-                    
-                    # Clear the cache file after reading to avoid repeated notifications
-                    with open(CACHE_FILE, "w") as f:
-                        json.dump([], f)
+                            new_for_user = True
             except Exception as e:
                 print(f"[DEBUG] Cache sync error: {e}")
 
-        # Load persistent state to catch up with offline changes
-        STATE_FILE = os.path.join(BASE_DIR, "state.json")
-        disk_state = {}
-        if os.path.exists(STATE_FILE):
-            try:
-                with open(STATE_FILE, "r") as f:
-                    disk_state = json.load(f)
-            except: pass
-
-        # 1. Check Workers (Filling in employee data)
-        df_workers = st.session_state.db.fetch_data(is_notif_check=True)
-        current_worker_count = len(df_workers)
-        
-        # Use disk state if session state is missing (first run of app)
-        last_worker_count = st.session_state.get('notif_last_worker_count')
-        if last_worker_count is None:
-            last_worker_count = disk_state.get('last_row_candidates')
-            
-        if last_worker_count is not None and current_worker_count > last_worker_count:
-            new_rows = df_workers.tail(current_worker_count - last_worker_count)
-            c_name = find_col(df_workers, ['Full Name', 'الاسم'])
-            c_nat = find_col(df_workers, ['Nationality', 'الجنسية'])
-            c_phone = find_col(df_workers, ['Phone Number', 'رقم الهاتف', 'هاتف'])
-            c_job = find_col(df_workers, ['Which job are you looking for', 'الوظيفة'])
-            c_gender = find_col(df_workers, ['Gender', 'الجنس'])
-
-            for _, row in new_rows.iterrows():
-                name = safe_val(row, c_name)
-                nat = safe_val(row, c_nat)
-                phone = safe_val(row, c_phone)
-                # Masking for viewers
-                if st.session_state.user.get('role') == 'viewer':
-                    phone = mask_phone(phone)
-                
-                flag = get_flag(nat)
-                st.session_state.notifications.append({
-                    'title': "🆕 تسجيل عامل جديد",
-                    'msg': f"👤 {name} | {flag} الجنسية: {nat}\n📱 {phone}\n💼 {safe_val(row, c_job)} | ⚧ {safe_val(row, c_gender)}",
-                    'time': datetime.now().strftime("%H:%M")
-                })
-                st.toast(f"🆕 عامل جديد: {name}", icon="🔔")
-                st.session_state.notif_triggered = True
-            st.session_state.db.fetch_data(force=True) # Refresh main worker cache
-            
-            # Sync back to disk
-            disk_state['last_row_candidates'] = current_worker_count
-            with open(STATE_FILE, "w") as f: json.dump(disk_state, f, indent=4)
-
-        st.session_state.notif_last_worker_count = current_worker_count
-
-        # 2. Check Customer Requests (استقطاب موظفين)
-        df_cust = st.session_state.db.fetch_customer_requests(is_notif_check=True)
-        current_cust_count = len(df_cust)
-        
-        # Use disk state if session state is missing
-        last_cust_count = st.session_state.get('notif_last_cust_count')
-        if last_cust_count is None:
-            last_cust_count = disk_state.get('last_row_customer_requests')
-        
-        if last_cust_count is not None and current_cust_count > last_cust_count:
-            new_rows = df_cust.tail(current_cust_count - last_cust_count)
-            
-            c_comp = find_col(df_cust, ['اسم الشركه', 'المؤسسة', 'الشركة', 'Company'])
-            c_phone = find_col(df_cust, ['الموبيل', 'جوال', 'هاتف', 'Mobile'])
-            c_salary = find_col(df_cust, ['الراتب المتوقع', 'Expected salary', 'الراتب'])
-            c_nat = find_col(df_cust, ['الجنسية المطلوبة', 'Required nationality', 'الجنسية'])
-            c_loc = find_col(df_cust, ['موقع العمل', 'المدينة'])
-            
-            for _, row in new_rows.iterrows():
-                comp = safe_val(row, c_comp)
-                nat = safe_val(row, c_nat)
-                phone = safe_val(row, c_phone)
-                # Masking for viewers
-                if st.session_state.user.get('role') == 'viewer':
-                    phone = mask_phone(phone)
-
-                flag = get_flag(nat)
-                st.session_state.notifications.append({
-                    'title': "🔔 طلب عميل جديد",
-                    'msg': f"🏢 {comp} | 📱 {phone}\n💰 الراتب المتوقع: {safe_val(row, c_salary)} | {flag} الجنسية المطلوبة: {nat}\n📍 {safe_val(row, c_loc)}",
-                    'time': datetime.now().strftime("%H:%M")
-                })
-                st.toast(f"🔔 طلب جديد: {comp}", icon="☕")
-                st.session_state.notif_triggered = True 
-            st.session_state.db.fetch_customer_requests(force=True) # Refresh main customer cache
-            
-            # Sync back to disk
-            disk_state['last_row_customer_requests'] = current_cust_count
-            with open(STATE_FILE, "w") as f: json.dump(disk_state, f, indent=4)
-        
-        st.session_state.notif_last_cust_count = current_cust_count
-
+        # Note: The background service handles row counting and caching notifications globally.
+        # This app only reads that cache to ensure per-user persistence.
+        # Redundant row-count checks are removed here to prevent cross-user interference.
+        return
     except Exception as e:
         print(f"[ERROR] Notification check failed: {e}")
 
@@ -2220,18 +2145,41 @@ def render_top_banner():
     </div>
 """, unsafe_allow_html=True)
         
-        for n in reversed(notifs[-10:]):
+        for n in reversed(notifs[-20:]):
             msg_html = n['msg'].replace('\n', '<br>')
             st.markdown(f"""
 <div style="background:rgba(255,255,255,0.04); padding:12px 15px; border-radius:12px; margin-bottom:10px; border-{border_side}:3px solid #D4AF37; direction:{dir_style};">
-    <p style="margin:0 0 5px 0; font-weight:700; color:#D4AF37; font-size:0.95rem;">{n['title']}</p>
-    <p style="margin:0 0 5px 0; color:#EEE; font-size:0.85rem; line-height:1.8;">{msg_html}</p>
-    <p style="margin:0; text-align:{align_style}; font-size:0.7rem; color:rgba(255,255,255,0.3);">⏰ {n['time']}</p>
+    <div style="display:flex; justify-content:space-between; align-items:start;">
+        <p style="margin:0; font-weight:700; color:#D4AF37; font-size:0.95rem;">{n['title']}</p>
+        <p style="margin:0; font-size:0.7rem; color:rgba(255,255,255,0.3);">⏰ {n['time']}</p>
+    </div>
+    <p style="margin:8px 0 0 0; color:#EEE; font-size:0.85rem; line-height:1.8;">{msg_html}</p>
 </div>
 """, unsafe_allow_html=True)
             
         btn_clear = "🗑️ مسح الكل" if lang == 'ar' else "🗑️ Clear All"
         if st.button(btn_clear, use_container_width=True, key="clear_all_notifs"):
+            # Mark all current notifications as seen for THIS user
+            user_id = st.session_state.user.get('username', 'guest')
+            USER_SEEN_FILE = os.path.join(BASE_DIR, f"notif_seen_{user_id}.json")
+            
+            seen_ids = []
+            if os.path.exists(USER_SEEN_FILE):
+                try:
+                    with open(USER_SEEN_FILE, "r") as f:
+                        seen_ids = json.load(f)
+                except: pass
+            
+            # Add current notification IDs to seen list
+            for n in st.session_state.notifications:
+                n_id = n.get('id')
+                if n_id and n_id not in seen_ids:
+                    seen_ids.append(n_id)
+            
+            # Save back to user-specific file
+            with open(USER_SEEN_FILE, "w") as f:
+                json.dump(seen_ids, f)
+
             st.session_state.notifications = []
             st.session_state.notif_panel_open = False
             st.rerun()
@@ -2265,14 +2213,36 @@ def render_top_banner():
 """, unsafe_allow_html=True)
             btn_clear_side = "🗑️ مسح الإشعارات" if lang == 'ar' else "🗑️ Clear Notifications"
             if st.button(btn_clear_side, use_container_width=True):
+                # Mark all current notifications as seen for THIS user
+                user_id = st.session_state.user.get('username', 'guest')
+                USER_SEEN_FILE = os.path.join(BASE_DIR, f"notif_seen_{user_id}.json")
+                
+                seen_ids = []
+                if os.path.exists(USER_SEEN_FILE):
+                    try:
+                        with open(USER_SEEN_FILE, "r") as f:
+                            seen_ids = json.load(f)
+                    except: pass
+                
+                for n in st.session_state.notifications:
+                    n_id = n.get('id')
+                    if n_id and n_id not in seen_ids:
+                        seen_ids.append(n_id)
+                
+                with open(USER_SEEN_FILE, "w") as f:
+                    json.dump(seen_ids, f)
+
                 st.session_state.notifications = []
                 st.rerun()
 
 def dashboard():
     user = st.session_state.user
     lang = st.session_state.lang
+
+    # --- 1. Silent Notification Check (First thing in Dashboard) ---
+    check_notifications()
     
-    # Welcome Message - Premium Luxury Overlay (2026 Style, JS auto-remove)
+    # --- 2. Welcome Message ---
     if st.session_state.get('show_welcome'):
         if lang == 'ar':
             f_name = user.get('first_name_ar', '')

@@ -33,7 +33,7 @@ def send_notification(title, message):
         
         command = f"""
         [Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime] | Out-Null
-        $Template = [Windows.UI.Notifications.ToastNotificationManager]::GetTemplateContent([Windows.UI.Notifications.ToastTemplateType]::ToastText02)
+        $Template = [Windows.UI.Notifications.ToastNotificationManager]::GetTemplateContent([Windows.UI.Notifications.ToastNotificationManager]::GetTemplateContent([Windows.UI.Notifications.ToastTemplateType]::ToastText02))
         $textNodes = $Template.GetElementsByTagName("text")
         $textNodes.Item(0).InnerText = "{safe_title}"
         $textNodes.Item(1).InnerText = "{safe_message}"
@@ -90,6 +90,7 @@ def get_sheet(url):
 # تخزين الحالة
 # -------------------------
 STATE_FILE = Path("state.json")
+CACHE_FILE = Path("notification_cache.json")
 
 def load_all_states():
     if STATE_FILE.exists():
@@ -110,6 +111,21 @@ def save_state(sheet_id, last_row):
     states = load_all_states()
     states[f"last_row_{sheet_id}"] = last_row
     save_all_states(states)
+
+def load_cached_notifications():
+    if CACHE_FILE.exists():
+        with open(CACHE_FILE, "r") as f:
+            try:
+                content = json.load(f)
+                if isinstance(content, list): return content
+            except: pass
+    return []
+
+def save_cached_notifications(notifications):
+    # Keep only the last 50 notifications to prevent file bloat
+    trimmed = notifications[-50:]
+    with open(CACHE_FILE, "w") as f:
+        json.dump(trimmed, f)
 
 def get_safe_records(sheet):
     """جلب البيانات من الجدول ومعالجة الرؤوس المكررة."""
@@ -140,6 +156,7 @@ def get_safe_records(sheet):
         return []
 
 def get_flag(nat_name):
+    if not nat_name: return '🏁'
     nat_name = str(nat_name).lower().strip()
     flags = {
         'مصر': '🇪🇬', 'مصري': '🇪🇬', 'egypt': '🇪🇬',
@@ -148,10 +165,15 @@ def get_flag(nat_name):
         'الهند': '🇮🇳', 'هندي': '🇮🇳', 'india': '🇮🇳',
         'اليمن': '🇾🇪', 'يمني': '🇾🇪', 'yemen': '🇾🇪',
         'بنجلاديش': '🇧🇩', 'بنجالي': '🇧🇩', 'bangladesh': '🇧🇩',
-        'الفلبين': '🇵🇭', 'فلبيني': '🇵🇭', 'philippines': '🇵🇭',
+        'الفلبين': '🇵🇭', 'فلبيني': '🇵🇭', 'filipino': '🇵🇭', 'philippines': '🇵🇭',
         'كينيا': '🇰🇪', 'كيني': '🇰🇪', 'kenya': '🇰🇪',
         'أوغندا': '🇺🇬', 'أوغندي': '🇺🇬', 'uganda': '🇺🇬',
         'إثيوبيا': '🇪🇹', 'إثيوبي': '🇪🇹', 'ethiopia': '🇪🇹',
+        'المغرب': '🇲🇦', 'مغربي': '🇲🇦', 'morocco': '🇲🇦',
+        'تونس': '🇹🇳', 'تونسي': '🇹🇳', 'tunisia': '🇹🇳',
+        'الجزائر': '🇩🇿', 'جزائري': '🇩🇿', 'algeria': '🇩🇿',
+        'نيجيريا': '🇳🇬', 'نيجيري': '🇳🇬', 'nigeria': '🇳🇬',
+        'إندونيسيا': '🇮🇩', 'إندونيسي': '🇮🇩', 'indonesia': '🇮🇩',
     }
     for k, v in flags.items():
         if k in nat_name: return v
@@ -193,44 +215,81 @@ def watch_sheets():
                         count = len(new_rows)
                         logging.info(f"تم العثور على {count} تحديثات في {config['name']}")
                         
+                        cache = load_cached_notifications()
                         if count > 5:
-                            msg = f"لديك {count} تحديثات جديدة في {config['name']}"
-                            send_notification(config["notif_title"], msg)
-                            # Save to cache for app.py
-                            cache = load_cached_notifications()
+                            msg_ar = f"لديك {count} تحديثات جديدة في {config['name']}"
+                            msg_en = f"You have {count} new updates in {config['name']}"
+                            final_msg = f"{msg_ar}\n{msg_en}"
+                            send_notification(config["notif_title"], final_msg)
                             cache.append({
                                 'title': config["notif_title"],
-                                'msg': msg,
+                                'msg': final_msg,
                                 'time': time.strftime("%H:%M"),
                                 'type': 'bulk'
                             })
-                            save_cached_notifications(cache)
                         else:
-                            cache = load_cached_notifications()
-                            for i, row in enumerate(new_rows):
+                            for row in new_rows:
+                                # Helper to find value by partial header match
+                                def get_val(keywords, default="---"):
+                                    for k, v in row.items():
+                                        k_clean = str(k).lower().strip()
+                                        if any(kw.lower() in k_clean for kw in keywords):
+                                            return v
+                                    return default
+
                                 preview = ""
-                                # ... (existing fields logic)
-                                fields = ["الاسم", "Name", "الجنسية", "Nationality", "نوع العمل", "الفئة", "المدينة", "Location"]
-                                for k, v in row.items():
-                                    if any(f.lower() in k.lower() for f in fields):
-                                        label = k
-                                        if "الجنسية" in k or "Nationality" in k:
-                                            v = f"{get_flag(v)} {v}"
-                                        preview += f"{label}: {v}\n"
-                                
-                                final_msg = preview or "تحديث جديد."
-                                send_notification(config["notif_title"], final_msg)
-                                
-                                # Save to cache for app.py
+                                if sheet_id == "customer_requests":
+                                    logging.info(f"Processing customer request. Row keys: {list(row.keys())}")
+                                    
+                                    name = get_val(["اسم الشركه", "المؤسسة", "Company", "الشركة"])
+                                    pic = get_val(["المسئول", "Contact Person", "Person in charge"], "")
+                                    gender_val = get_val(["الفئة المطلوبة", "الجنس", "Gender"])
+                                    nat = get_val(["الجنسية المطلوبة", "الجنسية", "Nationality"])
+                                    loc = get_val(["موقع العمل", "الموقع", "Location", "المدينة"])
+                                    salary = get_val(["الراتب", "Salary", "Expected salary"])
+                                    
+                                    # Gender Icon
+                                    g_clean = str(gender_val).lower()
+                                    g_icon = "🚻"
+                                    if any(x in g_clean for x in ["رجال", "ذكر", "male"]): g_icon = "🚹"
+                                    elif any(x in g_clean for x in ["نساء", "أنثى", "female", "بنت"]): g_icon = "🚺"
+                                    
+                                    flag = get_flag(nat)
+                                    
+                                    preview = f"الشركة : {name} 🏢\n"
+                                    if pic: preview += f"المسؤول : {pic} 👤\n"
+                                    preview += (
+                                        f"الجنس : {gender_val} {g_icon}\n"
+                                        f"الجنسية : {nat} {flag}\n"
+                                        f"الموقع : {loc} 📍\n"
+                                        f"الراتب : {salary} 💰"
+                                    )
+                                    title = "🔔 طلب عميل جديد"
+                                else:
+                                    # Candidates
+                                    name = get_val(["الاسم", "Name", "Full Name"])
+                                    nat = get_val(["الجنسية", "Nationality"])
+                                    job = get_val(["نوع العمل", "الوظيفة", "Job"])
+                                    loc = get_val(["المدينة", "Location", "City"])
+                                    
+                                    flag = get_flag(nat)
+                                    preview = (
+                                        f"الاسم : {name} 👤\n"
+                                        f"الجنسية : {nat} {flag}\n"
+                                        f"الوظيفة : {job} 💼\n"
+                                        f"المدينة : {loc} 📍"
+                                    )
+                                    title = "🆕 تسجيل عامل جديد"
+
+                                send_notification(title, preview)
                                 cache.append({
-                                    'title': config["notif_title"],
-                                    'msg': final_msg,
+                                    'title': title,
+                                    'msg': preview,
                                     'time': time.strftime("%H:%M"),
                                     'type': 'single'
                                 })
-                                logging.info(f"إرسال إشعار للصف {last_seen + i + 1} في {config['name']}")
                                 time.sleep(2)
-                            save_cached_notifications(cache)
+                        save_cached_notifications(cache)
                         
                         data["last_row"] = current_count
                         save_state(sheet_id, current_count)
