@@ -162,7 +162,7 @@ def get_flag(nat_name):
         'مصر': '🇪🇬', 'مصري': '🇪🇬', 'egypt': '🇪🇬',
         'السودان': '🇸🇩', 'سوداني': '🇸🇩', 'sudan': '🇸🇩',
         'باكستان': '🇵🇰', 'باكستاني': '🇵🇰', 'pakistan': '🇵🇰',
-        'الهند': '🇮🇳', 'هندي': '🇮🇳', 'india': '🇮🇳',
+        'الهند': '🇮🇳', 'هندي': '🇮🇳', 'india': '🇮🇳', 'indian': '🇮🇳',
         'اليمن': '🇾🇪', 'يمني': '🇾🇪', 'yemen': '🇾🇪',
         'بنجلاديش': '🇧🇩', 'بنجالي': '🇧🇩', 'bangladesh': '🇧🇩',
         'الفلبين': '🇵🇭', 'فلبيني': '🇵🇭', 'filipino': '🇵🇭', 'philippines': '🇵🇭',
@@ -178,6 +178,46 @@ def get_flag(nat_name):
     for k, v in flags.items():
         if k in nat_name: return v
     return '🏁'
+
+def translate_value(val, to_lang='ar'):
+    """Simple mapper for common values like Gender and Nationality."""
+    if not val: return "---"
+    v = str(val).lower().strip()
+    
+    # If it's a bilingual string like "Riyadh | الرياض", split it
+    if '|' in str(val):
+        parts = [p.strip() for p in str(val).split('|')]
+        # Usually Arabic is the one with non-ascii characters
+        for p in parts:
+            has_arabic = any(u'\u0600' <= c <= u'\u06FF' for c in p)
+            if to_lang == 'ar' and has_arabic: return p
+            if to_lang == 'en' and not has_arabic: return p
+        return parts[0] # Fallback
+
+    mapping = {
+        # Gender
+        'male': {'ar': 'رجال', 'en': 'Male'},
+        'رجال': {'ar': 'رجال', 'en': 'Male'},
+        'ذكر': {'ar': 'رجال', 'en': 'Male'},
+        'female': {'ar': 'نساء', 'en': 'Female'},
+        'نساء': {'ar': 'نساء', 'en': 'Female'},
+        'أنثى': {'ar': 'نساء', 'en': 'Female'},
+        'بنت': {'ar': 'نساء', 'en': 'Female'},
+        # Common Nationalities
+        'filipino': {'ar': 'فلبيني', 'en': 'Filipino'},
+        'فلبيني': {'ar': 'فلبيني', 'en': 'Filipino'},
+        'indian': {'ar': 'هندي', 'en': 'Indian'},
+        'هندي': {'ar': 'هندي', 'en': 'Indian'},
+        'pakistani': {'ar': 'باكستاني', 'en': 'Pakistani'},
+        'باكستاني': {'ar': 'باكستاني', 'en': 'Pakistani'},
+        'egyptian': {'ar': 'مصري', 'en': 'Egyptian'},
+        'مصري': {'ar': 'مصري', 'en': 'Egyptian'},
+    }
+    
+    for k, trans in mapping.items():
+        if k in v:
+            return trans[to_lang]
+    return val # Return original if no mapping found
 
 def watch_sheets():
     logging.info("بدء مراقبة الجداول...")
@@ -248,7 +288,7 @@ def watch_sheets():
                                     loc = get_val(["موقع العمل", "الموقع", "Location", "المدينة"])
                                     salary = get_val(["الراتب", "Salary", "Expected salary"])
                                     
-                                    # Gender Icon
+                                    # Gender Icons
                                     g_clean = str(gender_val).lower()
                                     g_icon = "🚻"
                                     if any(x in g_clean for x in ["رجال", "ذكر", "male"]): g_icon = "🚹"
@@ -256,28 +296,31 @@ def watch_sheets():
                                     
                                     flag = get_flag(nat)
                                     
-                                    preview = f"الشركة : {name} 🏢\n"
-                                    if pic: preview += f"المسؤول : {pic} 👤\n"
+                                    # Pure Arabic Part (No English words inside)
+                                    preview = "🔔 طلب عميل جديد\n"
+                                    preview += f"الشركة : {translate_value(name, 'ar')} 🏢\n"
+                                    if pic: preview += f"المسؤول : {translate_value(pic, 'ar')} 👤\n"
                                     preview += (
-                                        f"الجنس : {gender_val} {g_icon}\n"
-                                        f"الجنسية : {nat} {flag}\n"
-                                        f"الموقع : {loc} 📍\n"
+                                        f"الجنس : {translate_value(gender_val, 'ar')} {g_icon}\n"
+                                        f"الجنسية : {translate_value(nat, 'ar')} {flag}\n"
+                                        f"الموقع : {translate_value(loc, 'ar')} 📍\n"
                                         f"الراتب : {salary} 💰"
                                     )
                                     title = "🔔 طلب عميل جديد"
                                 else:
-                                    # Candidates
+                                    # Candidates - Pure Arabic
                                     name = get_val(["الاسم", "Name", "Full Name"])
                                     nat = get_val(["الجنسية", "Nationality"])
                                     job = get_val(["نوع العمل", "الوظيفة", "Job"])
                                     loc = get_val(["المدينة", "Location", "City"])
                                     
                                     flag = get_flag(nat)
-                                    preview = (
-                                        f"الاسم : {name} 👤\n"
-                                        f"الجنسية : {nat} {flag}\n"
-                                        f"الوظيفة : {job} 💼\n"
-                                        f"المدينة : {loc} 📍"
+                                    preview = "🆕 تسجيل عامل جديد\n"
+                                    preview += (
+                                        f"الاسم : {translate_value(name, 'ar')} 👤\n"
+                                        f"الجنسية : {translate_value(nat, 'ar')} {flag}\n"
+                                        f"الوظيفة : {translate_value(job, 'ar')} 💼\n"
+                                        f"المدينة : {translate_value(loc, 'ar')} 📍"
                                     )
                                     title = "🆕 تسجيل عامل جديد"
 
