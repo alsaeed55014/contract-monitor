@@ -4407,14 +4407,28 @@ def render_order_processing_content():
                         render_segment_header(label, len(city_df), color="#D4AF37")
                         
                         col_cfg_city = {}
+                        nat_col_city = None
                         for col in city_df.columns:
                             if any(kw in str(col).lower() for kw in ["nationality", "الجنسية"]):
+                                nat_col_city = col
                                 col_cfg_city[f"🚩_{col}"] = st.column_config.ImageColumn(" ", width="small")
 
+                        # Apply style and reorder columns to put flag before nationality
+                        city_styled = style_df(city_df.drop(columns=["__uid"]))
+                        
+                        # Reorder columns: put flag before nationality
+                        if nat_col_city and f"🚩_{nat_col_city}" in city_styled.data.columns:
+                            cols = list(city_styled.data.columns)
+                            nat_idx = cols.index(nat_col_city)
+                            flag_col = f"🚩_{nat_col_city}"
+                            # Remove flag from current position and insert before nationality
+                            cols.remove(flag_col)
+                            cols.insert(nat_idx, flag_col)
+                            city_styled = city_styled.data[cols].style
 
                         df_city_height = min((len(city_df) + 1) * 35 + 40, 500)
                         event_city = st.dataframe(
-                            style_df(city_df.drop(columns=["__uid"])),
+                            city_styled,
                             use_container_width=True, hide_index=True, on_select="rerun",
                             selection_mode="single-row", column_config=__apply_pinned_columns(city_df, col_cfg_city),
                             key=f"op_city_table_{idx}", height=df_city_height
@@ -4455,14 +4469,28 @@ def render_order_processing_content():
                         reg_df = render_table_translator(reg_df, key_prefix=f"op_reg_{idx}")
                         
                         col_cfg_reg = {}
+                        nat_col_reg = None
                         for col in reg_df.columns:
                             if any(kw in str(col).lower() for kw in ["nationality", "الجنسية"]):
+                                nat_col_reg = col
                                 col_cfg_reg[f"🚩_{col}"] = st.column_config.ImageColumn(" ", width="small")
 
+                        # Apply style and reorder columns to put flag before nationality
+                        reg_styled = style_df(reg_df.drop(columns=["__uid"]))
+                        
+                        # Reorder columns: put flag before nationality
+                        if nat_col_reg and f"🚩_{nat_col_reg}" in reg_styled.data.columns:
+                            cols = list(reg_styled.data.columns)
+                            nat_idx = cols.index(nat_col_reg)
+                            flag_col = f"🚩_{nat_col_reg}"
+                            # Remove flag from current position and insert before nationality
+                            cols.remove(flag_col)
+                            cols.insert(nat_idx, flag_col)
+                            reg_styled = reg_styled.data[cols].style
 
                         df_reg_h = min((len(reg_df) + 1) * 35 + 40, 400)
                         ev_reg = st.dataframe(
-                            style_df(reg_df.drop(columns=["__uid"])),
+                            reg_styled,
                             use_container_width=True, hide_index=True, on_select="rerun",
                             selection_mode="single-row", column_config=__apply_pinned_columns(reg_df, col_cfg_reg),
                             key=f"op_reg_table_{idx}", height=df_reg_h
@@ -4493,14 +4521,28 @@ def render_order_processing_content():
                         other_df = render_table_translator(other_df, key_prefix=f"op_other_{idx}")
                         
                         col_cfg_oth = {}
+                        nat_col_oth = None
                         for col in other_df.columns:
                             if any(kw in str(col).lower() for kw in ["nationality", "الجنسية"]):
+                                nat_col_oth = col
                                 col_cfg_oth[f"🚩_{col}"] = st.column_config.ImageColumn(" ", width="small")
 
+                        # Apply style and reorder columns to put flag before nationality
+                        other_styled = style_df(other_df.drop(columns=["__uid"]))
+                        
+                        # Reorder columns: put flag before nationality
+                        if nat_col_oth and f"🚩_{nat_col_oth}" in other_styled.data.columns:
+                            cols = list(other_styled.data.columns)
+                            nat_idx = cols.index(nat_col_oth)
+                            flag_col = f"🚩_{nat_col_oth}"
+                            # Remove flag from current position and insert before nationality
+                            cols.remove(flag_col)
+                            cols.insert(nat_idx, flag_col)
+                            other_styled = other_styled.data[cols].style
 
                         df_other_h = min((len(other_df) + 1) * 35 + 40, 500)
                         event_other = st.dataframe(
-                            style_df(other_df.drop(columns=["__uid"])),
+                            other_styled,
                             use_container_width=True, hide_index=True, on_select="rerun",
                             selection_mode="single-row", column_config=__apply_pinned_columns(other_df, col_cfg_oth),
                             key=f"op_other_table_{idx}", height=df_other_h
