@@ -1240,6 +1240,17 @@ def style_df(df):
             idx = list(styled_df.columns).index(col)
             # Insert flag column at the same position (shifts nationality to right)
             styled_df.insert(idx, flag_col, styled_df[col].apply(_get_flag_url_cached))
+        else:
+            # Ensure it's in the correct position if it already exists
+            cols = list(styled_df.columns)
+            flag_idx = cols.index(flag_col)
+            nat_idx = cols.index(col)
+            if flag_idx != nat_idx - 1:
+                cols.remove(flag_col)
+                # Re-calculate index after removal
+                new_nat_idx = cols.index(col)
+                cols.insert(new_nat_idx, flag_col)
+                styled_df = styled_df[cols]
         
         # Fast cleanup - remove emoji flags from text
         styled_df[col] = styled_df[col].astype(str).str.replace(r'[\U0001F1E6-\U0001F1FF]{2}\s*', '', regex=True)
@@ -2666,7 +2677,7 @@ def __apply_pinned_columns(df_or_style, cfg=None):
         "حالة العقد", "contract status", "status",
         "وقت", "طابع", "timestamp", "registration",
         "الاسم", "name", 
-        "جنسية", "nationality", "🚩",
+        "جنسية", "nationality", "🚩", "دولة", "country",
         "جنس", "gender", "النوع"
     ]
     
@@ -2685,19 +2696,19 @@ def __apply_pinned_columns(df_or_style, cfg=None):
             if col not in cfg:
                 cfg[col] = st.column_config.Column(pinned=True)
             else:
+                # Robust pinning update for any column config object
                 try:
-                    # Modify existing column config safely
                     existing = cfg[col]
+                    if hasattr(existing, 'pinned'):
+                        # Streamlit column config objects are immutable in some versions
+                        # Try to set it, or just use it as is if it's already pinned
+                        pass 
+                    # The safest way is to ensure the config has pinned=True if it's a dict
                     if isinstance(existing, dict):
                         existing["pinned"] = True
-                    else:
-                        # For streamlit object like ImageColumn
-                        existing_dict = getattr(existing, "__dict__", {})
-                        if "pinned" in existing_dict or hasattr(existing, "pinned"):
-                            existing.pinned = True
-                        else:
-                            # Recreate if setting fails
-                            pass
+                    # If it's a Streamlit object, we hope it was created with pinned=True 
+                    # or we try to wrap it if possible. But better to just call this 
+                    # before creating complex configs if possible.
                 except:
                     pass
     return cfg
@@ -2864,7 +2875,7 @@ def render_dashboard_content():
         # Flag Image Configuration
         for col in d_final.columns:
             if any(kw in str(col).lower() for kw in ["nationality", "الجنسية"]):
-                final_cfg[f"🚩_{col}"] = st.column_config.ImageColumn(t("country_label", lang), width="small")
+                final_cfg[f"🚩_{col}"] = st.column_config.ImageColumn(t("country_label", lang), width="small", pinned=True)
         
         
         # Smart Translator Button
@@ -3227,7 +3238,7 @@ def render_search_content():
             # Flag Image Configuration
             for col in res_display.columns:
                 if any(kw in str(col).lower() for kw in ["nationality", "الجنسية"]):
-                    column_config[f"🚩_{col}"] = st.column_config.ImageColumn(t("country_label", lang), width="small")
+                    column_config[f"🚩_{col}"] = st.column_config.ImageColumn(t("country_label", lang), width="small", pinned=True)
 
 
 
@@ -4411,27 +4422,16 @@ def render_order_processing_content():
                         for col in city_df.columns:
                             if any(kw in str(col).lower() for kw in ["nationality", "الجنسية"]):
                                 nat_col_city = col
-                                col_cfg_city[f"🚩_{col}"] = st.column_config.ImageColumn(t("country_label", lang), width="small")
+                                col_cfg_city[f"🚩_{col}"] = st.column_config.ImageColumn(t("country_label", lang), width="small", pinned=True)
 
-                        # Apply style and reorder columns to put flag before nationality
+                        # Apply style (which handles flag injection and reordering)
                         city_styled = style_df(city_df.drop(columns=["__uid"]))
                         
-                        # Reorder columns: put flag before nationality
-                        if nat_col_city and f"🚩_{nat_col_city}" in city_styled.data.columns:
-                            cols = list(city_styled.data.columns)
-                            flag_col = f"🚩_{nat_col_city}"
-                            if flag_col in cols:
-                                cols.remove(flag_col)
-                            if nat_col_city in cols:
-                                nat_idx_after = cols.index(nat_col_city)
-                                cols.insert(nat_idx_after, flag_col)
-                                city_styled = city_styled.data[cols].style
-
                         df_city_height = min((len(city_df) + 1) * 35 + 40, 500)
                         event_city = st.dataframe(
                             city_styled,
                             use_container_width=True, hide_index=True, on_select="rerun",
-                            selection_mode="single-row", column_config=__apply_pinned_columns(city_df, col_cfg_city),
+                            selection_mode="single-row", column_config=__apply_pinned_columns(city_styled, col_cfg_city),
                             key=f"op_city_table_{idx}", height=df_city_height
                         )
                         
@@ -4474,27 +4474,16 @@ def render_order_processing_content():
                         for col in reg_df.columns:
                             if any(kw in str(col).lower() for kw in ["nationality", "الجنسية"]):
                                 nat_col_reg = col
-                                col_cfg_reg[f"🚩_{col}"] = st.column_config.ImageColumn(t("country_label", lang), width="small")
+                                col_cfg_reg[f"🚩_{col}"] = st.column_config.ImageColumn(t("country_label", lang), width="small", pinned=True)
 
-                        # Apply style and reorder columns to put flag before nationality
+                        # Apply style (which handles flag injection and reordering)
                         reg_styled = style_df(reg_df.drop(columns=["__uid"]))
                         
-                        # Reorder columns: put flag before nationality
-                        if nat_col_reg and f"🚩_{nat_col_reg}" in reg_styled.data.columns:
-                            cols = list(reg_styled.data.columns)
-                            flag_col = f"🚩_{nat_col_reg}"
-                            if flag_col in cols:
-                                cols.remove(flag_col)
-                            if nat_col_reg in cols:
-                                nat_idx_after = cols.index(nat_col_reg)
-                                cols.insert(nat_idx_after, flag_col)
-                                reg_styled = reg_styled.data[cols].style
-
                         df_reg_h = min((len(reg_df) + 1) * 35 + 40, 400)
                         ev_reg = st.dataframe(
                             reg_styled,
                             use_container_width=True, hide_index=True, on_select="rerun",
-                            selection_mode="single-row", column_config=__apply_pinned_columns(reg_df, col_cfg_reg),
+                            selection_mode="single-row", column_config=__apply_pinned_columns(reg_styled, col_cfg_reg),
                             key=f"op_reg_table_{idx}", height=df_reg_h
                         )
                         if ev_reg.selection and ev_reg.selection.get("rows"):
@@ -4527,27 +4516,16 @@ def render_order_processing_content():
                         for col in other_df.columns:
                             if any(kw in str(col).lower() for kw in ["nationality", "الجنسية"]):
                                 nat_col_oth = col
-                                col_cfg_oth[f"🚩_{col}"] = st.column_config.ImageColumn(t("country_label", lang), width="small")
+                                col_cfg_oth[f"🚩_{col}"] = st.column_config.ImageColumn(t("country_label", lang), width="small", pinned=True)
 
-                        # Apply style and reorder columns to put flag before nationality
+                        # Apply style (which handles flag injection and reordering)
                         other_styled = style_df(other_df.drop(columns=["__uid"]))
                         
-                        # Reorder columns: put flag before nationality
-                        if nat_col_oth and f"🚩_{nat_col_oth}" in other_styled.data.columns:
-                            cols = list(other_styled.data.columns)
-                            flag_col = f"🚩_{nat_col_oth}"
-                            if flag_col in cols:
-                                cols.remove(flag_col)
-                            if nat_col_oth in cols:
-                                nat_idx_after = cols.index(nat_col_oth)
-                                cols.insert(nat_idx_after, flag_col)
-                                other_styled = other_styled.data[cols].style
-
                         df_other_h = min((len(other_df) + 1) * 35 + 40, 500)
                         event_other = st.dataframe(
                             other_styled,
                             use_container_width=True, hide_index=True, on_select="rerun",
-                            selection_mode="single-row", column_config=__apply_pinned_columns(other_df, col_cfg_oth),
+                            selection_mode="single-row", column_config=__apply_pinned_columns(other_styled, col_cfg_oth),
                             key=f"op_other_table_{idx}", height=df_other_h
                         )
                         
@@ -4875,7 +4853,7 @@ def render_customer_requests_content():
                         col_cfg_match = {}
                         for col in display_df.columns:
                             if any(kw in str(col).lower() for kw in ["nationality", "الجنسية"]):
-                                col_cfg_match[f"🚩_{col}"] = st.column_config.ImageColumn(t("country_label", lang), width="small")
+                                col_cfg_match[f"🚩_{col}"] = st.column_config.ImageColumn(t("country_label", lang), width="small", pinned=True)
 
                         # Smart Translator Button
                         display_df = render_table_translator(display_df, key_prefix="match_res")
@@ -5234,7 +5212,7 @@ def render_bengali_supply_content():
                     col_cfg_b = {}
                 for col in df_bengali_search.columns:
                     if any(kw in str(col).lower() for kw in ["nationality", "الجنسية"]):
-                        col_cfg_b[f"🚩_{col}"] = st.column_config.ImageColumn(t("country_label", lang), width="small")
+                        col_cfg_b[f"🚩_{col}"] = st.column_config.ImageColumn(t("country_label", lang), width="small", pinned=True)
 
                     
                     st.dataframe(style_df(df_bengali_search), use_container_width=True, hide_index=True, column_config=__apply_pinned_columns(df_bengali_search, col_cfg_b))
