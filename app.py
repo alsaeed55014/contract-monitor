@@ -2678,7 +2678,7 @@ def __apply_pinned_columns(df_or_style, cfg=None):
         "وقت", "طابع", "timestamp", "registration",
         "الاسم", "name", 
         "جنسية", "nationality", "🚩", "دولة", "country",
-        "جنس", "gender", "النوع"
+        "جنس", "gender", "النوع", "Gender"
     ]
     
     # Handle both DataFrame and Styler
