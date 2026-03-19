@@ -2124,6 +2124,10 @@ def check_notifications():
         except Exception as e:
             print(f"[DEBUG] Failed to save notification state: {e}")
 
+        # Store counts in session for comparison on next check
+        st.session_state.last_seen_worker_count = current_worker_count
+        st.session_state.last_seen_cust_count = current_cust_count
+
     except Exception as e:
         print(f"[ERROR] Notification check failed: {e}")
 
