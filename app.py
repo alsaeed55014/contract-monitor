@@ -2678,7 +2678,7 @@ def __apply_pinned_columns(df_or_style, cfg=None):
         "وقت", "طابع", "timestamp", "registration",
         "الاسم", "name", 
         "جنسية", "nationality", "🚩", "دولة", "country",
-        "جنس", "gender", "النوع", "Gender"
+        "جنس", "gender", "النوع"
     ]
     
     # Handle both DataFrame and Styler
@@ -2691,7 +2691,7 @@ def __apply_pinned_columns(df_or_style, cfg=None):
         
     for col in cols:
         col_str = str(col).lower()
-        should_pin = any(kw in col_str for kw in pin_keywords)
+        should_pin = any(kw.lower() in col_str for kw in pin_keywords)
         if should_pin:
             if col not in cfg:
                 cfg[col] = st.column_config.Column(pinned=True)
