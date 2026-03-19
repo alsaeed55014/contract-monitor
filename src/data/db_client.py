@@ -25,14 +25,18 @@ class DBClient:
         self.client = None
         
         # 1. Try connecting via Streamlit Secrets (Recommended for Cloud)
-        try:
-            if hasattr(st, "secrets") and "gcp_service_account" in st.secrets:
-                key_dict = dict(st.secrets["gcp_service_account"])
-                self.client = gspread.service_account_from_dict(key_dict)
-                print("[DEBUG] Connected via Streamlit Secrets")
-                return
-        except Exception as e:
-            print(f"[DEBUG] st.secrets check skipped or failed: {e}")
+        # Try multiple possible key names
+        secret_keys = ["gcp_service_account", "google_credentials", "google"]
+        for key in secret_keys:
+            try:
+                if hasattr(st, "secrets") and key in st.secrets:
+                    key_dict = dict(st.secrets[key])
+                    self.client = gspread.service_account_from_dict(key_dict)
+                    print(f"[DEBUG] Connected via Streamlit Secrets (key: {key})")
+                    return
+            except Exception as e:
+                print(f"[DEBUG] Failed with key '{key}': {e}")
+                continue
         
         # 2. Fallback to local file (Recommended for Local Dev)
         try:
