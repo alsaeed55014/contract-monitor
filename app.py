@@ -1939,11 +1939,21 @@ def check_notifications():
     # Initialize session state
     if 'notifications' not in st.session_state: st.session_state.notifications = []
     if 'notif_triggered' not in st.session_state: st.session_state.notif_triggered = False
-    # Store last seen counts in session - initialize if not exists
-    if 'notif_last_worker_count' not in st.session_state:
-        st.session_state.notif_last_worker_count = None
-    if 'notif_last_cust_count' not in st.session_state:
-        st.session_state.notif_last_cust_count = None
+
+    # Persistent storage file for counts
+    NOTIF_STATE_FILE = os.path.join(BASE_DIR, "notification_state.json")
+
+    # Load saved counts from file (for persistence across sessions)
+    saved_worker_count = None
+    saved_cust_count = None
+    try:
+        if os.path.exists(NOTIF_STATE_FILE):
+            with open(NOTIF_STATE_FILE, 'r') as f:
+                saved_state = json.load(f)
+                saved_worker_count = saved_state.get('worker_count')
+                saved_cust_count = saved_state.get('cust_count')
+    except:
+        pass
 
     def get_flag(nat_name):
         """Converts nationality name to emoji flag."""
@@ -1972,14 +1982,9 @@ def check_notifications():
         current_worker_count = len(df_workers) if not df_workers.empty else 0
         current_cust_count = len(df_customers) if not df_customers.empty else 0
 
-        last_worker = st.session_state.notif_last_worker_count
-        last_cust = st.session_state.notif_last_cust_count
-
-        # First time check - just store counts without notifying
-        if last_worker is None or last_cust is None:
-            st.session_state.notif_last_worker_count = current_worker_count
-            st.session_state.notif_last_cust_count = current_cust_count
-            return
+        # Use saved counts if available, otherwise use current (first run)
+        last_worker = saved_worker_count if saved_worker_count is not None else current_worker_count
+        last_cust = saved_cust_count if saved_cust_count is not None else current_cust_count
 
         # Check for new workers
         if current_worker_count > last_worker:
@@ -2052,9 +2057,16 @@ def check_notifications():
                     })
                     st.session_state.notif_triggered = True
 
-        # Update stored counts
-        st.session_state.notif_last_worker_count = current_worker_count
-        st.session_state.notif_last_cust_count = current_cust_count
+        # Save current counts to file for persistence
+        try:
+            with open(NOTIF_STATE_FILE, 'w') as f:
+                json.dump({
+                    'worker_count': current_worker_count,
+                    'cust_count': current_cust_count,
+                    'last_check': datetime.now().isoformat()
+                }, f)
+        except Exception as e:
+            print(f"[DEBUG] Failed to save notification state: {e}")
 
     except Exception as e:
         print(f"[ERROR] Notification check failed: {e}")
