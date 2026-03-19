@@ -1231,15 +1231,17 @@ def style_df(df):
                 if styled_df[col].dtype == 'object':
                     styled_df[col] = styled_df[col].apply(lambda x: auto_translate(x, target_lang='en'))
 
-    # 1. Flag Image Injection (Optimized)
+    # 1. Flag Image Injection (Optimized) - Insert BEFORE nationality column
     nat_cols = [c for c in styled_df.columns if any(kw in str(c).lower() for kw in ["nationality", "الجنسية"])]
     for col in nat_cols:
         flag_col = f"🚩_{col}"
         if flag_col not in styled_df.columns:
+            # Get current index of nationality column
             idx = list(styled_df.columns).index(col)
+            # Insert flag column at the same position (shifts nationality to right)
             styled_df.insert(idx, flag_col, styled_df[col].apply(_get_flag_url_cached))
         
-        # Fast cleanup
+        # Fast cleanup - remove emoji flags from text
         styled_df[col] = styled_df[col].astype(str).str.replace(r'[\U0001F1E6-\U0001F1FF]{2}\s*', '', regex=True)
 
     # 2. Gender Icon Injection (Fast Vectorized replacement)
