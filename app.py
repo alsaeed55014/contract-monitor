@@ -2128,7 +2128,14 @@ def render_top_banner():
         with c3: st.write("") # Spacer
             
         with c4: # Date/Log at absolute right
-            st.markdown(f'<div style="text-align:right; margin-top:5px;"><p style="color:rgba(255,255,255,0.6); font-size:0.75rem; margin:0;">{datetime.now().strftime("%Y-%m-%d")}</p><p style="color:#D4AF37; font-size:0.85rem; font-weight:bold; margin:0;">{t("contract_dashboard", lang)}</p></div>', unsafe_allow_html=True)
+            now = datetime.now()
+            date_str = now.strftime("%Y-%m-%d")
+            day_name = now.strftime("%A") if lang == 'en' else {
+                'Saturday': 'السبت', 'Sunday': 'الأحد', 'Monday': 'الاثنين',
+                'Tuesday': 'الثلاثاء', 'Wednesday': 'الأربعاء', 'Thursday': 'الخميس', 'Friday': 'الجمعة'
+            }.get(now.strftime("%A"), now.strftime("%A"))
+            time_str = now.strftime("%I:%M %p") if lang == 'en' else now.strftime("%I:%M %p").replace('AM', 'ص').replace('PM', 'م')
+            st.markdown(f'<div style="text-align:right; margin-top:5px;"><p style="color:#D4AF37; font-size:0.85rem; font-weight:bold; margin:0;">{t("contract_dashboard", lang)}</p><p style="color:rgba(255,255,255,0.6); font-size:0.75rem; margin:0;">{day_name} | {date_str} | {time_str}</p></div>', unsafe_allow_html=True)
 
     # 4. Floating List Overlay
     if st.session_state.get('notif_panel_open') and notifs:
