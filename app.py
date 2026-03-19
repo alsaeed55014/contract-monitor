@@ -2864,7 +2864,7 @@ def render_dashboard_content():
         # Flag Image Configuration
         for col in d_final.columns:
             if any(kw in str(col).lower() for kw in ["nationality", "الجنسية"]):
-                final_cfg[f"🚩_{col}"] = st.column_config.ImageColumn(" ", width="small")
+                final_cfg[f"🚩_{col}"] = st.column_config.ImageColumn(t("country_label", lang), width="small")
         
         
         # Smart Translator Button
@@ -3227,7 +3227,7 @@ def render_search_content():
             # Flag Image Configuration
             for col in res_display.columns:
                 if any(kw in str(col).lower() for kw in ["nationality", "الجنسية"]):
-                    column_config[f"🚩_{col}"] = st.column_config.ImageColumn(" ", width="small")
+                    column_config[f"🚩_{col}"] = st.column_config.ImageColumn(t("country_label", lang), width="small")
 
 
 
@@ -4411,7 +4411,7 @@ def render_order_processing_content():
                         for col in city_df.columns:
                             if any(kw in str(col).lower() for kw in ["nationality", "الجنسية"]):
                                 nat_col_city = col
-                                col_cfg_city[f"🚩_{col}"] = st.column_config.ImageColumn(" ", width="small")
+                                col_cfg_city[f"🚩_{col}"] = st.column_config.ImageColumn(t("country_label", lang), width="small")
 
                         # Apply style and reorder columns to put flag before nationality
                         city_styled = style_df(city_df.drop(columns=["__uid"]))
@@ -4419,12 +4419,13 @@ def render_order_processing_content():
                         # Reorder columns: put flag before nationality
                         if nat_col_city and f"🚩_{nat_col_city}" in city_styled.data.columns:
                             cols = list(city_styled.data.columns)
-                            nat_idx = cols.index(nat_col_city)
                             flag_col = f"🚩_{nat_col_city}"
-                            # Remove flag from current position and insert before nationality
-                            cols.remove(flag_col)
-                            cols.insert(nat_idx, flag_col)
-                            city_styled = city_styled.data[cols].style
+                            if flag_col in cols:
+                                cols.remove(flag_col)
+                            if nat_col_city in cols:
+                                nat_idx_after = cols.index(nat_col_city)
+                                cols.insert(nat_idx_after, flag_col)
+                                city_styled = city_styled.data[cols].style
 
                         df_city_height = min((len(city_df) + 1) * 35 + 40, 500)
                         event_city = st.dataframe(
@@ -4473,7 +4474,7 @@ def render_order_processing_content():
                         for col in reg_df.columns:
                             if any(kw in str(col).lower() for kw in ["nationality", "الجنسية"]):
                                 nat_col_reg = col
-                                col_cfg_reg[f"🚩_{col}"] = st.column_config.ImageColumn(" ", width="small")
+                                col_cfg_reg[f"🚩_{col}"] = st.column_config.ImageColumn(t("country_label", lang), width="small")
 
                         # Apply style and reorder columns to put flag before nationality
                         reg_styled = style_df(reg_df.drop(columns=["__uid"]))
@@ -4481,12 +4482,13 @@ def render_order_processing_content():
                         # Reorder columns: put flag before nationality
                         if nat_col_reg and f"🚩_{nat_col_reg}" in reg_styled.data.columns:
                             cols = list(reg_styled.data.columns)
-                            nat_idx = cols.index(nat_col_reg)
                             flag_col = f"🚩_{nat_col_reg}"
-                            # Remove flag from current position and insert before nationality
-                            cols.remove(flag_col)
-                            cols.insert(nat_idx, flag_col)
-                            reg_styled = reg_styled.data[cols].style
+                            if flag_col in cols:
+                                cols.remove(flag_col)
+                            if nat_col_reg in cols:
+                                nat_idx_after = cols.index(nat_col_reg)
+                                cols.insert(nat_idx_after, flag_col)
+                                reg_styled = reg_styled.data[cols].style
 
                         df_reg_h = min((len(reg_df) + 1) * 35 + 40, 400)
                         ev_reg = st.dataframe(
@@ -4525,7 +4527,7 @@ def render_order_processing_content():
                         for col in other_df.columns:
                             if any(kw in str(col).lower() for kw in ["nationality", "الجنسية"]):
                                 nat_col_oth = col
-                                col_cfg_oth[f"🚩_{col}"] = st.column_config.ImageColumn(" ", width="small")
+                                col_cfg_oth[f"🚩_{col}"] = st.column_config.ImageColumn(t("country_label", lang), width="small")
 
                         # Apply style and reorder columns to put flag before nationality
                         other_styled = style_df(other_df.drop(columns=["__uid"]))
@@ -4533,12 +4535,13 @@ def render_order_processing_content():
                         # Reorder columns: put flag before nationality
                         if nat_col_oth and f"🚩_{nat_col_oth}" in other_styled.data.columns:
                             cols = list(other_styled.data.columns)
-                            nat_idx = cols.index(nat_col_oth)
                             flag_col = f"🚩_{nat_col_oth}"
-                            # Remove flag from current position and insert before nationality
-                            cols.remove(flag_col)
-                            cols.insert(nat_idx, flag_col)
-                            other_styled = other_styled.data[cols].style
+                            if flag_col in cols:
+                                cols.remove(flag_col)
+                            if nat_col_oth in cols:
+                                nat_idx_after = cols.index(nat_col_oth)
+                                cols.insert(nat_idx_after, flag_col)
+                                other_styled = other_styled.data[cols].style
 
                         df_other_h = min((len(other_df) + 1) * 35 + 40, 500)
                         event_other = st.dataframe(
@@ -4872,7 +4875,7 @@ def render_customer_requests_content():
                         col_cfg_match = {}
                         for col in display_df.columns:
                             if any(kw in str(col).lower() for kw in ["nationality", "الجنسية"]):
-                                col_cfg_match[f"🚩_{col}"] = st.column_config.ImageColumn(" ", width="small")
+                                col_cfg_match[f"🚩_{col}"] = st.column_config.ImageColumn(t("country_label", lang), width="small")
 
                         # Smart Translator Button
                         display_df = render_table_translator(display_df, key_prefix="match_res")
@@ -5231,7 +5234,7 @@ def render_bengali_supply_content():
                     col_cfg_b = {}
                 for col in df_bengali_search.columns:
                     if any(kw in str(col).lower() for kw in ["nationality", "الجنسية"]):
-                        col_cfg_b[f"🚩_{col}"] = st.column_config.ImageColumn(" ", width="small")
+                        col_cfg_b[f"🚩_{col}"] = st.column_config.ImageColumn(t("country_label", lang), width="small")
 
                     
                     st.dataframe(style_df(df_bengali_search), use_container_width=True, hide_index=True, column_config=__apply_pinned_columns(df_bengali_search, col_cfg_b))

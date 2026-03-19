@@ -166,6 +166,7 @@ TRANSLATIONS = {
     "registration_date": {"ar": "تاريخ التسجيل", "en": "registration date"},
     "no_huroob": {"ar": "بدون بلاغ هروب (No)", "en": "No Huroob"},
     "work_outside_city": {"ar": "يقبل العمل خارج مدينته (Yes)", "en": "Can work outside city"},
+    "country_label": {"ar": "دولة", "en": "country"},
     
     # Bengali Supply Module
     # Bengali Supply Module
