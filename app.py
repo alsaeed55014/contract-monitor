@@ -1834,6 +1834,18 @@ def render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search", 
     else: st.info("لا يتوفر رابط معاينة لهذا العامل.")
 
 def login_screen():
+    # Request browser notification permission early
+    st.components.v1.html("""
+<script>
+// Request notification permission on page load
+if ('Notification' in window && Notification.permission === 'default') {
+    Notification.requestPermission().then(function(permission) {
+        console.log('Notification permission:', permission);
+    });
+}
+</script>
+""", height=0)
+
     lang = st.session_state.lang
     
     # 2026 Luxury Flag Icons
@@ -1924,40 +1936,16 @@ def silent_notification_monitor():
                 check_notifications()
 
 def check_notifications():
-    """Checks for new worker entries or customer requests and synchronizes UI data."""
+    """Checks for new worker entries or customer requests directly from Google Sheets."""
     if 'db' not in st.session_state or not st.session_state.user:
         return
 
-    # initialize session state
+    # Initialize session state
     if 'notifications' not in st.session_state: st.session_state.notifications = []
     if 'notif_last_worker_count' not in st.session_state: st.session_state.notif_last_worker_count = None
     if 'notif_last_cust_count' not in st.session_state: st.session_state.notif_last_cust_count = None
     if 'notif_triggered' not in st.session_state: st.session_state.notif_triggered = False
-
-    def find_col(df, keywords):
-        """Smart column finder - handles Arabic normalization (ة vs ه)."""
-        cols = list(df.columns)
-        import re
-        for kw in keywords:
-            # Normalize keyword: replace ة with ه pattern for matching
-            kw_norm = kw.replace('ة', '[ةه]').replace('ه', '[ةه]')
-            pattern = re.compile(kw_norm, re.IGNORECASE)
-            for c in cols:
-                if pattern.search(str(c)): return c
-        return None
-
-    def safe_val(row, col_name):
-        if col_name is None: return '---'
-        val = str(row.get(col_name, '---')).strip()
-        if val in ['nan', 'None', '', 'NaN']: return '---'
-        return val
-
-    def mask_phone(phone_str):
-        """Masks entire phone number for viewers with stars (**********)."""
-        p = str(phone_str).strip()
-        if p == '---' or not p: return '---'
-        # Replace all digits and characters with stars
-        return "*" * len(p)
+    if 'notif_checked_once' not in st.session_state: st.session_state.notif_checked_once = False
 
     def get_flag(nat_name):
         """Converts nationality name to emoji flag."""
@@ -1979,48 +1967,92 @@ def check_notifications():
         return '🏁'
 
     try:
-        # 0. Sync with background service cache (Per-User Logic)
-        user_id = st.session_state.user.get('username', 'guest')
-        CACHE_FILE = os.path.join(BASE_DIR, "notification_cache.json")
-        USER_SEEN_FILE = os.path.join(BASE_DIR, f"notif_seen_{user_id}.json")
-        
-        # Load what this user has already seen/deleted from the global cache
-        user_seen_ids = []
-        if os.path.exists(USER_SEEN_FILE):
-            try:
-                with open(USER_SEEN_FILE, "r") as f:
-                    user_seen_ids = json.load(f)
-            except: pass
+        # Get current data counts directly from Google Sheets
+        df_workers = st.session_state.db.fetch_data()
+        df_customers = st.session_state.db.fetch_customer_requests()
 
-        if os.path.exists(CACHE_FILE):
-            try:
-                with open(CACHE_FILE, "r") as f:
-                    global_cache = json.load(f)
-                
-                if global_cache:
-                    # Filter: Only add if NOT in user's seen list AND not already in session
-                    existing_msgs = [n['msg'] for n in st.session_state.notifications]
-                    new_for_user = False
-                    
-                    for cn in global_cache:
-                        # Create a unique ID for this notification (msg + time)
-                        notif_id = f"{cn['msg']}_{cn.get('time','')}"
-                        if notif_id not in user_seen_ids and cn['msg'] not in existing_msgs:
-                            st.session_state.notifications.append({
-                                'id': notif_id,
-                                'title': cn.get('title', '🔔 إشعار'),
-                                'msg': cn['msg'],
-                                'time': cn.get('time', datetime.now().strftime("%H:%M"))
-                            })
-                            st.session_state.notif_triggered = True
-                            new_for_user = True
-            except Exception as e:
-                print(f"[DEBUG] Cache sync error: {e}")
+        current_worker_count = len(df_workers) if not df_workers.empty else 0
+        current_cust_count = len(df_customers) if not df_customers.empty else 0
 
-        # Note: The background service handles row counting and caching notifications globally.
-        # This app only reads that cache to ensure per-user persistence.
-        # Redundant row-count checks are removed here to prevent cross-user interference.
-        return
+        last_worker = st.session_state.notif_last_worker_count
+        last_cust = st.session_state.notif_last_cust_count
+
+        # First run - just store counts, don't notify
+        if not st.session_state.notif_checked_once:
+            st.session_state.notif_last_worker_count = current_worker_count
+            st.session_state.notif_last_cust_count = current_cust_count
+            st.session_state.notif_checked_once = True
+            return
+
+        # Check for new workers
+        if last_worker is not None and current_worker_count > last_worker:
+            new_count = current_worker_count - last_worker
+            # Get the newest entries
+            new_rows = df_workers.tail(new_count)
+
+            for _, row in new_rows.iterrows():
+                name = str(row.get('Full Name:', row.get('الاسم الكامل', '---')))
+                nat = str(row.get('Nationality', row.get('الجنسية', '---')))
+                job = str(row.get('Job Type', row.get('نوع العمل', '---')))
+                loc = str(row.get('City', row.get('المدينة', '---')))
+
+                flag = get_flag(nat)
+                preview = f"🆕 تسجيل عامل جديد\nالاسم : {name} 👤\nالجنسية : {nat} {flag}\nالوظيفة : {job} 💼\nالمدينة : {loc} 📍"
+
+                notif_id = f"worker_{name}_{datetime.now().strftime('%H%M')}"
+                st.session_state.notifications.append({
+                    'id': notif_id,
+                    'title': '🆕 تسجيل عامل جديد',
+                    'msg': preview,
+                    'time': datetime.now().strftime('%H:%M'),
+                    'type': 'worker'
+                })
+                st.session_state.notif_triggered = True
+
+        # Check for new customer requests
+        if last_cust is not None and current_cust_count > last_cust:
+            new_count = current_cust_count - last_cust
+            new_rows = df_customers.tail(new_count)
+
+            for _, row in new_rows.iterrows():
+                # Find company name column
+                company = '---'
+                for col in row.index:
+                    if 'شركه' in str(col) or 'company' in str(col).lower() or 'مؤسسة' in str(col):
+                        company = str(row.get(col, '---'))
+                        break
+
+                # Find gender/nationality columns
+                gender = '---'
+                nat = '---'
+                for col in row.index:
+                    col_str = str(col).lower()
+                    if 'فئة' in col_str or 'gender' in col_str or 'جنس' in col_str:
+                        gender = str(row.get(col, '---'))
+                    if 'جنسية' in col_str or 'nationality' in col_str:
+                        nat = str(row.get(col, '---'))
+
+                flag = get_flag(nat)
+                g_icon = '🚻'
+                if any(x in str(gender).lower() for x in ['رجال', 'ذكر', 'male']): g_icon = '🚹'
+                elif any(x in str(gender).lower() for x in ['نساء', 'أنثى', 'female']): g_icon = '🚺'
+
+                preview = f"🔔 طلب عميل جديد\nالشركة : {company} 🏢\nالجنس : {gender} {g_icon}\nالجنسية : {nat} {flag}"
+
+                notif_id = f"cust_{company}_{datetime.now().strftime('%H%M')}"
+                st.session_state.notifications.append({
+                    'id': notif_id,
+                    'title': '🔔 طلب عميل جديد',
+                    'msg': preview,
+                    'time': datetime.now().strftime('%H:%M'),
+                    'type': 'customer'
+                })
+                st.session_state.notif_triggered = True
+
+        # Update stored counts
+        st.session_state.notif_last_worker_count = current_worker_count
+        st.session_state.notif_last_cust_count = current_cust_count
+
     except Exception as e:
         print(f"[ERROR] Notification check failed: {e}")
 
@@ -2031,35 +2063,44 @@ def render_top_banner():
     notifs = st.session_state.get('notifications', [])
     notif_count = len(notifs)
 
-    # 1. Global Audio Alert - High Reliability Implementation
+    # 1. Global Audio Alert + Browser Push Notification
     if st.session_state.get('notif_triggered'):
-        st.components.v1.html("""
+        notif_count = len([n for n in st.session_state.get('notifications', [])])
+        st.components.v1.html(f"""
 <script>
-(async function(){
-    try {
+(async function(){{
+    // 1. Audio Alert
+    try {{
         var AudioContext = window.AudioContext || window.webkitAudioContext;
         var ctx = new AudioContext();
         if (ctx.state === 'suspended') await ctx.resume();
         
-        function playTone(freq, type, startTime, dur, vol) {
+        function playTone(freq, type, startTime, dur, vol) {{
             var osc = ctx.createOscillator(); var gain = ctx.createGain();
             osc.connect(gain); gain.connect(ctx.destination);
             osc.type = type; osc.frequency.setValueAtTime(freq, ctx.currentTime + startTime);
             gain.gain.setValueAtTime(vol, ctx.currentTime + startTime);
             gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + startTime + dur);
             osc.start(ctx.currentTime + startTime); osc.stop(ctx.currentTime + startTime + dur);
-        }
-        // Strong "Luxury Alert" Sequence
-        // 1. Foundation tone
+        }}
         playTone(523.25, 'sine', 0.0, 0.8, 0.6); 
-        // 2. Bright chime
         playTone(1046.50, 'triangle', 0.1, 0.5, 0.4); 
-        // 3. Success triple-beep
         playTone(1318.51, 'sine', 0.4, 0.3, 0.3);
         playTone(1567.98, 'sine', 0.5, 0.3, 0.3);
         playTone(2093.00, 'sine', 0.6, 0.4, 0.2);
-    } catch(e) { console.error('Audio fail:', e); }
-})();
+    }} catch(e) {{ console.error('Audio fail:', e); }}
+    
+    // 2. Browser Push Notification (works even when tab is in background)
+    if ('Notification' in window && Notification.permission === 'granted') {{
+        new Notification('نظام السعيد - إشعار جديد', {{
+            body: 'لديك {notif_count} إشعارات جديدة',
+            icon: '🔔',
+            badge: '🔔',
+            tag: 'alsaeed-notif',
+            requireInteraction: true
+        }});
+    }}
+}})();
 </script>
 """, height=0, width=0)
         st.session_state.notif_triggered = False
