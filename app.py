@@ -2549,7 +2549,7 @@ def dashboard():
                 st.rerun()
 
     # --- Background Notifications (Handled by Fragment) ---
-    # check_notifications() - Removed direct blocking call for faster UI render
+    silent_notification_monitor()
 
     # --- Render Global Top Banner (Persistent) ---
     render_top_banner()
