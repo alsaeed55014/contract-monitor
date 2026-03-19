@@ -1925,15 +1925,11 @@ if ('Notification' in window && Notification.permission === 'default') {
 def silent_notification_monitor():
     """
     MODERN BACKGROUND MONITOR:
-    Runs every 20 seconds in a fragment context. 
-    Skips the very first run to ensure main dashboard loads instantly.
+    Runs every 20 seconds in a fragment context.
+    Immediately checks for notifications on Streamlit Cloud.
     """
     if st.session_state.get('user'):
-        # Only run if we've been logged in for at least a few seconds
-        # to prevent blocking the initial dashboard load
-        if 'last_login_time' in st.session_state:
-            if time.time() - st.session_state.last_login_time > 5:
-                check_notifications()
+        check_notifications()
 
 def check_notifications():
     """Checks for new worker entries or customer requests directly from Google Sheets."""
@@ -1942,10 +1938,12 @@ def check_notifications():
 
     # Initialize session state
     if 'notifications' not in st.session_state: st.session_state.notifications = []
-    if 'notif_last_worker_count' not in st.session_state: st.session_state.notif_last_worker_count = None
-    if 'notif_last_cust_count' not in st.session_state: st.session_state.notif_last_cust_count = None
     if 'notif_triggered' not in st.session_state: st.session_state.notif_triggered = False
-    if 'notif_checked_once' not in st.session_state: st.session_state.notif_checked_once = False
+    # Store last seen counts in session - initialize if not exists
+    if 'notif_last_worker_count' not in st.session_state:
+        st.session_state.notif_last_worker_count = None
+    if 'notif_last_cust_count' not in st.session_state:
+        st.session_state.notif_last_cust_count = None
 
     def get_flag(nat_name):
         """Converts nationality name to emoji flag."""
@@ -1977,17 +1975,16 @@ def check_notifications():
         last_worker = st.session_state.notif_last_worker_count
         last_cust = st.session_state.notif_last_cust_count
 
-        # First run - just store counts, don't notify
-        if not st.session_state.notif_checked_once:
+        # First time check - just store counts without notifying
+        if last_worker is None or last_cust is None:
             st.session_state.notif_last_worker_count = current_worker_count
             st.session_state.notif_last_cust_count = current_cust_count
-            st.session_state.notif_checked_once = True
             return
 
         # Check for new workers
-        if last_worker is not None and current_worker_count > last_worker:
+        if current_worker_count > last_worker:
             new_count = current_worker_count - last_worker
-            # Get the newest entries
+            # Get the newest entries (last rows)
             new_rows = df_workers.tail(new_count)
 
             for _, row in new_rows.iterrows():
@@ -1999,18 +1996,21 @@ def check_notifications():
                 flag = get_flag(nat)
                 preview = f"🆕 تسجيل عامل جديد\nالاسم : {name} 👤\nالجنسية : {nat} {flag}\nالوظيفة : {job} 💼\nالمدينة : {loc} 📍"
 
-                notif_id = f"worker_{name}_{datetime.now().strftime('%H%M')}"
-                st.session_state.notifications.append({
-                    'id': notif_id,
-                    'title': '🆕 تسجيل عامل جديد',
-                    'msg': preview,
-                    'time': datetime.now().strftime('%H:%M'),
-                    'type': 'worker'
-                })
-                st.session_state.notif_triggered = True
+                notif_id = f"worker_{name}_{datetime.now().strftime('%H%M%S')}"
+                # Avoid duplicate notifications
+                existing_ids = [n.get('id', '') for n in st.session_state.notifications]
+                if notif_id not in existing_ids:
+                    st.session_state.notifications.append({
+                        'id': notif_id,
+                        'title': '🆕 تسجيل عامل جديد',
+                        'msg': preview,
+                        'time': datetime.now().strftime('%H:%M'),
+                        'type': 'worker'
+                    })
+                    st.session_state.notif_triggered = True
 
         # Check for new customer requests
-        if last_cust is not None and current_cust_count > last_cust:
+        if current_cust_count > last_cust:
             new_count = current_cust_count - last_cust
             new_rows = df_customers.tail(new_count)
 
@@ -2039,15 +2039,18 @@ def check_notifications():
 
                 preview = f"🔔 طلب عميل جديد\nالشركة : {company} 🏢\nالجنس : {gender} {g_icon}\nالجنسية : {nat} {flag}"
 
-                notif_id = f"cust_{company}_{datetime.now().strftime('%H%M')}"
-                st.session_state.notifications.append({
-                    'id': notif_id,
-                    'title': '🔔 طلب عميل جديد',
-                    'msg': preview,
-                    'time': datetime.now().strftime('%H:%M'),
-                    'type': 'customer'
-                })
-                st.session_state.notif_triggered = True
+                notif_id = f"cust_{company}_{datetime.now().strftime('%H%M%S')}"
+                # Avoid duplicate notifications
+                existing_ids = [n.get('id', '') for n in st.session_state.notifications]
+                if notif_id not in existing_ids:
+                    st.session_state.notifications.append({
+                        'id': notif_id,
+                        'title': '🔔 طلب عميل جديد',
+                        'msg': preview,
+                        'time': datetime.now().strftime('%H:%M'),
+                        'type': 'customer'
+                    })
+                    st.session_state.notif_triggered = True
 
         # Update stored counts
         st.session_state.notif_last_worker_count = current_worker_count
