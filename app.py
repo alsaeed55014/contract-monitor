@@ -6,8 +6,16 @@ import json
 import hashlib
 import time
 from datetime import datetime, timedelta
+import pytz
 import base64
 import re
+
+# Saudi Arabia timezone for consistent time display
+SAUDI_TZ = pytz.timezone('Asia/Riyadh')
+
+def get_saudi_time():
+    """Get current time in Saudi Arabia timezone."""
+    return datetime.now(SAUDI_TZ)
 
 # 1. Ensure project root is in path (Robust Injection)
 # Get the absolute path of the directory containing app.py
@@ -1993,15 +2001,38 @@ def check_notifications():
             new_rows = df_workers.tail(new_count)
 
             for _, row in new_rows.iterrows():
-                name = str(row.get('Full Name:', row.get('الاسم الكامل', '---')))
-                nat = str(row.get('Nationality', row.get('الجنسية', '---')))
-                job = str(row.get('Job Type', row.get('نوع العمل', '---')))
-                loc = str(row.get('City', row.get('المدينة', '---')))
+                # Helper to find value by partial header match
+                def get_val(keywords, default="---"):
+                    for k, v in row.items():
+                        k_clean = str(k).lower().strip()
+                        if any(kw.lower() in k_clean for kw in keywords):
+                            return v
+                    return default
+
+                name = str(get_val(["الاسم", "Name", "Full Name", "الاسم الكامل"], '---'))
+                nat = str(get_val(["الجنسية", "Nationality"], '---'))
+                job = str(get_val(["نوع العمل", "الوظيفة", "Job", "Job Type"], '---'))
+                loc = str(get_val(["المدينة", "Location", "City"], '---'))
+                phone = str(get_val(["رقم الجوال", "Phone", "Mobile", "الهاتف"], '---'))
+                age = str(get_val(["العمر", "Age"], '---'))
+                religion = str(get_val(["الديانة", "Religion"], '---'))
 
                 flag = get_flag(nat)
-                preview = f"🆕 تسجيل عامل جديد\nالاسم : {name} 👤\nالجنسية : {nat} {flag}\nالوظيفة : {job} 💼\nالمدينة : {loc} 📍"
+                
+                # Build detailed notification message
+                preview = "🆕 تسجيل عامل جديد\n"
+                preview += f"الاسم : {name} 👤\n"
+                preview += f"الجنسية : {nat} {flag}\n"
+                preview += f"الوظيفة : {job} 💼\n"
+                preview += f"المدينة : {loc} 📍\n"
+                if age and age != '---':
+                    preview += f"العمر : {age} 🎂\n"
+                if religion and religion != '---':
+                    preview += f"الديانة : {religion} 🕌\n"
+                if phone and phone != '---':
+                    preview += f"الجوال : {phone} 📱"
 
-                notif_id = f"worker_{name}_{datetime.now().strftime('%H%M%S')}"
+                notif_id = f"worker_{name}_{get_saudi_time().strftime('%H%M%S')}"
                 # Avoid duplicate notifications
                 existing_ids = [n.get('id', '') for n in st.session_state.notifications]
                 if notif_id not in existing_ids:
@@ -2009,7 +2040,7 @@ def check_notifications():
                         'id': notif_id,
                         'title': '🆕 تسجيل عامل جديد',
                         'msg': preview,
-                        'time': datetime.now().strftime('%H:%M'),
+                        'time': get_saudi_time().strftime('%H:%M'),
                         'type': 'worker'
                     })
                     st.session_state.notif_triggered = True
@@ -2020,31 +2051,56 @@ def check_notifications():
             new_rows = df_customers.tail(new_count)
 
             for _, row in new_rows.iterrows():
-                # Find company name column
-                company = '---'
-                for col in row.index:
-                    if 'شركه' in str(col) or 'company' in str(col).lower() or 'مؤسسة' in str(col):
-                        company = str(row.get(col, '---'))
-                        break
+                # Helper to find value by partial header match
+                def get_val(keywords, default="---"):
+                    for k, v in row.items():
+                        k_clean = str(k).lower().strip()
+                        if any(kw.lower() in k_clean for kw in keywords):
+                            return v
+                    return default
 
-                # Find gender/nationality columns
-                gender = '---'
-                nat = '---'
-                for col in row.index:
-                    col_str = str(col).lower()
-                    if 'فئة' in col_str or 'gender' in col_str or 'جنس' in col_str:
-                        gender = str(row.get(col, '---'))
-                    if 'جنسية' in col_str or 'nationality' in col_str:
-                        nat = str(row.get(col, '---'))
+                # Find company name
+                company = str(get_val(["اسم الشركه", "المؤسسة", "Company", "الشركة", "شركه"], '---'))
+                # Find contact person
+                pic = str(get_val(["المسئول", "Contact Person", "Person in charge", "المسؤول"], ''))
+                # Find gender
+                gender_val = str(get_val(["الفئة المطلوبة", "الجنس", "Gender", "الفئة"], '---'))
+                # Find nationality
+                nat = str(get_val(["الجنسية المطلوبة", "الجنسية", "Nationality"], '---'))
+                # Find location
+                loc = str(get_val(["موقع العمل", "الموقع", "Location", "المدينة"], '---'))
+                # Find salary
+                salary = str(get_val(["الراتب", "Salary", "Expected salary"], '---'))
+                # Find experience
+                exp = str(get_val(["الخبرة", "Experience"], '---'))
+                # Find contract type
+                contract = str(get_val(["نوع العقد", "Contract Type"], '---'))
 
                 flag = get_flag(nat)
-                g_icon = '🚻'
-                if any(x in str(gender).lower() for x in ['رجال', 'ذكر', 'male']): g_icon = '🚹'
-                elif any(x in str(gender).lower() for x in ['نساء', 'أنثى', 'female']): g_icon = '🚺'
+                
+                # Gender Icons
+                g_clean = str(gender_val).lower()
+                g_icon = "🚻"
+                if any(x in g_clean for x in ["رجال", "ذكر", "male"]): g_icon = "🚹"
+                elif any(x in g_clean for x in ["نساء", "أنثى", "female", "بنت"]): g_icon = "🚺"
+                
+                # Build detailed notification message
+                preview = "🔔 طلب عميل جديد\n"
+                preview += f"الشركة : {company} 🏢\n"
+                if pic and pic != '---':
+                    preview += f"المسؤول : {pic} 👤\n"
+                preview += f"الفئة : {gender_val} {g_icon}\n"
+                preview += f"الجنسية : {nat} {flag}\n"
+                if loc and loc != '---':
+                    preview += f"الموقع : {loc} 📍\n"
+                if salary and salary != '---':
+                    preview += f"الراتب المتوقع : {salary} 💰\n"
+                if exp and exp != '---':
+                    preview += f"الخبرة : {exp} 📊\n"
+                if contract and contract != '---':
+                    preview += f"نوع العقد : {contract} 📝"
 
-                preview = f"🔔 طلب عميل جديد\nالشركة : {company} 🏢\nالجنس : {gender} {g_icon}\nالجنسية : {nat} {flag}"
-
-                notif_id = f"cust_{company}_{datetime.now().strftime('%H%M%S')}"
+                notif_id = f"cust_{company}_{get_saudi_time().strftime('%H%M%S')}"
                 # Avoid duplicate notifications
                 existing_ids = [n.get('id', '') for n in st.session_state.notifications]
                 if notif_id not in existing_ids:
@@ -2052,7 +2108,7 @@ def check_notifications():
                         'id': notif_id,
                         'title': '🔔 طلب عميل جديد',
                         'msg': preview,
-                        'time': datetime.now().strftime('%H:%M'),
+                        'time': get_saudi_time().strftime('%H:%M'),
                         'type': 'customer'
                     })
                     st.session_state.notif_triggered = True
@@ -2063,7 +2119,7 @@ def check_notifications():
                 json.dump({
                     'worker_count': current_worker_count,
                     'cust_count': current_cust_count,
-                    'last_check': datetime.now().isoformat()
+                    'last_check': get_saudi_time().isoformat()
                 }, f)
         except Exception as e:
             print(f"[DEBUG] Failed to save notification state: {e}")
@@ -2184,7 +2240,7 @@ def render_top_banner():
         with c3: st.write("") # Spacer
             
         with c4: # Date/Log at absolute right
-            now = datetime.now()
+            now = get_saudi_time()
             date_str = now.strftime("%Y-%m-%d")
             day_name = now.strftime("%A") if lang == 'en' else {
                 'Saturday': 'السبت', 'Sunday': 'الأحد', 'Monday': 'الاثنين',
