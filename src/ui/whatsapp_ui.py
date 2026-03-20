@@ -10,43 +10,63 @@ from src.core.i18n import t
 from src.config import WA_HISTORY_FILE
 import random
 
-# --- Smart Message Templates ---
+# --- Smart Message Templates (Updated 2026-03-20) ---
 SMART_TEMPLATES = {
     "intro": [
-        "Hope you're having a great day.",
-        "I hope this message finds you well.",
-        "Wishing you a wonderful day.",
-        "Hope everything is going great with you.",
-        "I hope you are doing well today."
+        "I hope you are doing well.",
+        "I hope this message finds you in good health.",
+        "Wishing you a productive day ahead.",
+        "Hope you're having a great start to your day.",
+        "Trust you are doing well today."
     ],
-    "body": [
-        "We’re reaching out regarding your earlier interest in job opportunities. We would be glad to continue with you, so please let us know if you are still interested and ready to move forward.",
-        "We are following up on your previous inquiry about job openings. We'd love to proceed, so please tell us if you're still available and interested in moving ahead.",
-        "Regarding your past interest in our job roles, we are checking in to see if you are still looking for work. We would like to move forward if you are still available.",
-        "This is a follow-up about the job opportunities you were interested in. If you're still ready to start, please let us know so we can continue the process.",
-        "We are contacting you to see if you are still interested in the job positions we discussed earlier. We would be happy to proceed if you are still available."
+    "body_start": [
+        "We are currently proceeding with candidates for available job opportunities",
+        "We are moving forward with selecting candidates for open job opportunities",
+        "We are in the process of reviewing candidates for various job opportunities",
+        "Our team is currently evaluating candidates for several job opportunities",
+        "We are actively matching candidates with the latest job opportunities"
+    ],
+    "body_end": [
+        ", and since you previously showed interest, we would like to confirm your availability.",
+        ". Based on your previous interest, we want to check if you are still available.",
+        ", and we're checking in to see if you're still interested and ready to work.",
+        ". Since you expressed interest before, please let us know your current status.",
+        ", and we'd love to know if you are still looking for a position."
     ],
     "closing": [
-        "A quick reply would be highly appreciated.",
-        "Looking forward to hearing back from you soon.",
-        "Please let us know your status at your earliest convenience.",
-        "We would value a prompt response from you.",
-        "Hope to hear from you at your earliest convenience."
+        "Please reply with one of the following:\nYES – I am interested and available\nNO – I am not available at the moment",
+        "Kindly respond with:\nYES – Still interested and available\nNO – Not available right now",
+        "Let us know your choice:\nYES – I want to proceed\nNO – Not interested at this time",
+        "Please confirm by replying:\nYES – I am ready\nNO – I have another job",
+        "A quick reply would be great:\nYES – Proceed with me\nNO – Don't proceed"
+    ],
+    "final_call": [
+        "We will be moving forward shortly, so your quick response is highly appreciated.",
+        "We are finalizing our list soon, so please get back to us as soon as possible.",
+        "The selection process is moving fast, and we value your prompt reply.",
+        "To ensure you don't miss out, please let us know your status shortly.",
+        "We look forward to hearing from you at your earliest convenience."
     ]
 }
 
-def generate_smart_message(name, cv_link):
+def generate_smart_message(name, cv_link, custom_job=""):
     intro = random.choice(SMART_TEMPLATES["intro"])
-    body = random.choice(SMART_TEMPLATES["body"])
+    b_start = random.choice(SMART_TEMPLATES["body_start"])
+    b_end = random.choice(SMART_TEMPLATES["body_end"])
+    closing = random.choice(SMART_TEMPLATES["closing"])
+    final_call = random.choice(SMART_TEMPLATES["final_call"])
     
-    msg = f"Hello {name},\n\n{intro}\n\n{body}\n\n"
+    # Handle custom job title injection
+    job_part = f" in {custom_job}" if custom_job.strip() else ""
+    full_body = f"{b_start}{job_part}{b_end}"
     
-    # Logic: If CV exists, add closing and CV link. If not, omit both.
+    msg = f"Hello {name},\n\n{intro}\n\n{full_body}\n\n{closing}\n\n{final_call}\n\n"
+    
+    # Logic: If CV exists, add CV link. If not, omit it.
     if cv_link and str(cv_link).lower() != 'nan' and str(cv_link).strip() != '':
-        closing = random.choice(SMART_TEMPLATES["closing"])
-        msg += f"{closing}\n\nLink to your profile: {cv_link}\n\n"
+        msg += f"Link to your profile: {cv_link}\n\n"
     
-    msg += "Warm regards,\nAbu Fahd"
+    msg += "Best regards,\nAbu Fahd"
     return msg
 
 def load_wa_history():
@@ -149,6 +169,8 @@ def render_whatsapp_page():
         'remove_msg': "🗑️" if is_ar else "🗑️",
         'smart_msg': "🤖 تفعيل الرسائل الذكية (AI)" if is_ar else "🤖 Enable Smart Messages (AI)",
         'smart_msg_help': "سيتم إنشاء رسائل تلقائية بأسلوب مختلف لكل عميل لتجنب الحظر." if is_ar else "Generates unique variations for each message to avoid ban.",
+        'job_title_label': "اسم الوظيفة (اختياري)" if is_ar else "Job Title (Optional)",
+        'job_title_placeholder': "مثال: Driver, Nurse..." if is_ar else "e.g. Driver, Nurse...",
     }
 
     # 1. Connection Status
@@ -424,12 +446,18 @@ Link to your profile: {CV}
 Sincerely,
 Abu Fahd"""
         
-        # Initialize first message if empty
-        if not st.session_state.wa_messages[0]:
-            st.session_state.wa_messages[0] = default_msg
-
         # Smart Message Toggle
         is_smart = st.checkbox(lbl['smart_msg'], value=st.session_state.get('wa_smart_mode', False), help=lbl['smart_msg_help'], key="wa_smart_mode")
+        
+        # Custom Job Title Input for Smart Mode
+        custom_job = ""
+        if is_smart:
+            custom_job = st.text_input(lbl['job_title_label'], placeholder=lbl['job_title_placeholder'], key="wa_custom_job")
+            st.session_state.wa_custom_job_val = custom_job # Store for sending logic
+        
+        # Initialize first message if empty
+        if not st.session_state.wa_messages[0]:
+            st.session_state.wa_messages[0] = generate_smart_message("{Name}", "{CV}", custom_job=custom_job)
         
         # Render dynamic message fields
         if not is_smart:
@@ -447,13 +475,18 @@ Abu Fahd"""
 
             # Add Message Button
             if st.button(lbl['add_msg'], key="add_msg_btn"):
-                st.session_state.wa_messages.append("")
+                # Generate a new smart variation for the added field
+                new_smart_msg = generate_smart_message("{Name}", "{CV}")
+                st.session_state.wa_messages.append(new_smart_msg)
                 st.rerun()
         else:
             # Preview of Smart Message
             st.info("💡 " + ("سيتم توليد رسالة فريدة لكل رقم تلقائياً عند بدء الإرسال." if is_ar else "A unique message will be generated for each number upon sending."))
-            preview_msg = generate_smart_message("{Name}", "{CV}")
+            preview_msg = generate_smart_message("{Name}", "{CV}", custom_job=st.session_state.get('wa_custom_job_val', ''))
             st.text_area("معاينة الرسالة الذكية (Smart Message Preview)", value=preview_msg, height=250, disabled=True)
+            
+            # Ensure ready logic works in smart mode
+            has_valid_msg = True 
         
         # Attachment
         attachment = st.file_uploader(lbl['attach'], 
@@ -564,7 +597,8 @@ Abu Fahd"""
                     # --- Message Generation Logic ---
                     if st.session_state.get('wa_smart_mode'):
                         # Smart AI Mode: Generate unique message for each person
-                        final_msg = generate_smart_message(n, v)
+                        custom_job_val = st.session_state.get('wa_custom_job_val', '')
+                        final_msg = generate_smart_message(n, v, custom_job=custom_job_val)
                     else:
                         # Standard Rotation Mode
                         current_msg_body = st.session_state.wa_messages[st.session_state.wa_msg_index]
