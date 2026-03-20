@@ -48,6 +48,7 @@ def render_whatsapp_page():
     if 'wa_data' not in st.session_state: st.session_state.wa_data = None
     if 'wa_history' not in st.session_state: st.session_state.wa_history = load_wa_history()
     if 'wa_review_targets' not in st.session_state: st.session_state.wa_review_targets = []
+    if 'wa_messages' not in st.session_state: st.session_state.wa_messages = [""]
 
     st.markdown('<div class="programmer-signature-neon">By: Alsaeed Alwazzan</div>', unsafe_allow_html=True)
 
@@ -103,6 +104,9 @@ def render_whatsapp_page():
         'total_ready': "الإجمالي الجاهز: {}" if is_ar else "Total Ready: {}",
         'uncheck_all': "🔄 إرجاع الكل لقائمة الإرسال" if is_ar else "🔄 Return all to Sending List",
         'dups_removed': "⚠️ تم حذف {} رقم مكرر من القائمة" if is_ar else "⚠️ Removed {} duplicate numbers",
+        'add_msg': "+ إضافة رسالة" if is_ar else "+ Add Message",
+        'msg_num': "رسالة {}" if is_ar else "Message {}",
+        'remove_msg': "🗑️" if is_ar else "🗑️",
     }
 
     # 1. Connection Status
@@ -377,7 +381,28 @@ Link to your profile: {CV}
 
 Sincerely,
 Abu Fahd"""
-        msg_body = st.text_area(lbl['msg_label'], height=250, value=default_msg)
+        
+        # Initialize first message if empty
+        if not st.session_state.wa_messages[0]:
+            st.session_state.wa_messages[0] = default_msg
+
+        # Render dynamic message fields
+        for i in range(len(st.session_state.wa_messages)):
+            msg_col1, msg_col2 = st.columns([11, 1])
+            with msg_col1:
+                label = lbl['msg_label'] if i == 0 else lbl['msg_num'].format(i + 1)
+                st.session_state.wa_messages[i] = st.text_area(label, height=250, value=st.session_state.wa_messages[i], key=f"wa_msg_{i}")
+            with msg_col2:
+                if i > 0:
+                    st.markdown("<br><br><br><br>", unsafe_allow_html=True)
+                    if st.button(lbl['remove_msg'], key=f"del_msg_{i}"):
+                        st.session_state.wa_messages.pop(i)
+                        st.rerun()
+
+        # Add Message Button
+        if st.button(lbl['add_msg'], key="add_msg_btn"):
+            st.session_state.wa_messages.append("")
+            st.rerun()
         
         # Attachment
         attachment = st.file_uploader(lbl['attach'], 
@@ -390,7 +415,7 @@ Abu Fahd"""
             st.success(lbl['attached'].format(attachment.name, round(attachment.size/1024, 1)))
         
         st.markdown(lbl['settings_title'])
-        col_s1, col_s2, col_s3 = st.columns(3)
+        col_s1, col_s2, col_s3, col_s4 = st.columns(4)
         with col_s1:
             delay = st.number_input(lbl['delay'], min_value=5, max_value=600, value=15, disabled=st.session_state.wa_running)
         with col_s2:
@@ -398,6 +423,8 @@ Abu Fahd"""
         with col_s3:
             batch_delay_mins = st.number_input(lbl['batch_delay'], min_value=1, max_value=60, value=1, disabled=st.session_state.wa_running)
             batch_delay = int(batch_delay_mins * 60)
+        with col_s4:
+            msg_switch_threshold = st.number_input("تبديل الرسالة بعد" if is_ar else "Switch msg after", min_value=1, max_value=1000, value=20, disabled=st.session_state.wa_running)
 
         # Smart detect target changes
         current_fp = ",".join([t['phone'] for t in final_targets]) if final_targets else ""
@@ -411,7 +438,9 @@ Abu Fahd"""
                 if st.button(lbl['stop'], type="primary", use_container_width=True):
                     st.session_state.wa_running = False; st.rerun()
             else:
-                ready = len(final_targets) > 0 and msg_body.strip() != ""
+                # Check if at least one message is not empty
+                has_valid_msg = any(msg.strip() != "" for msg in st.session_state.wa_messages)
+                ready = len(final_targets) > 0 and has_valid_msg
                 if st.session_state.get('wa_done', False) and current_fp == st.session_state.get('wa_sent_fingerprint', ''):
                     st.button(lbl['sent_done'], disabled=True, use_container_width=True)
                 else:
@@ -422,6 +451,11 @@ Abu Fahd"""
                         st.session_state.wa_sent_fingerprint = current_fp
                         # CRITICAL: Store a STABLE copy of targets to avoid "shrinking list" bug
                         st.session_state.wa_active_targets = list(final_targets)
+                        
+                        # Initialize message rotation state
+                        st.session_state.wa_msg_index = 0
+                        st.session_state.wa_msg_sent_count = 0
+                        
                         st.rerun()
 
         if st.session_state.wa_running and st.session_state.get('wa_active_targets'):
@@ -442,6 +476,10 @@ Abu Fahd"""
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
                     <span style="color: #00FF41; font-weight: 700; font-size: 1.1rem;">✅ {lbl['sent_count']}: {st.session_state.wa_idx}</span>
                     <span style="color: #D4AF37; font-weight: 700; font-size: 1.1rem;">⌛ {lbl['remaining_count']}: {len(active_targets) - st.session_state.wa_idx}</span>
+                </div>
+                <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.9rem; color: #888;">
+                    <span>يتم الآن الإرسال من الرسالة رقم {st.session_state.wa_msg_index + 1}</span>
+                    <span>تم إرسال {st.session_state.wa_msg_sent_count} رسالة → الانتقال للرسالة التالية بعد {msg_switch_threshold - st.session_state.wa_msg_sent_count}</span>
                 </div>
             </div>
             """, unsafe_allow_html=True)
@@ -472,8 +510,12 @@ Abu Fahd"""
                     trg = active_targets[st.session_state.wa_idx]
                     p, n, v = trg['phone'], trg['name'], trg['cv']
                     
+                    # --- Message Rotation Logic ---
+                    # Get current message based on index
+                    current_msg_body = st.session_state.wa_messages[st.session_state.wa_msg_index]
+                    
                     # Intelligent dynamic replacement for ALL columns
-                    final_msg = msg_body
+                    final_msg = current_msg_body
                     
                     # Check for CV placeholder variations
                     cv_placeholders = ["{CV}", "{cv}", "{السيرة}"]
@@ -519,6 +561,14 @@ Abu Fahd"""
                         save_wa_history(st.session_state.wa_history)
                         for t in st.session_state.wa_review_targets:
                             if t['phone'] == p: t['is_sent'] = True
+                            
+                        # Update message rotation counters ONLY on successful send
+                        st.session_state.wa_msg_sent_count += 1
+                        if st.session_state.wa_msg_sent_count >= msg_switch_threshold:
+                            st.session_state.wa_msg_sent_count = 0
+                            # Move to next message if available, otherwise stay on the last one
+                            if st.session_state.wa_msg_index < len(st.session_state.wa_messages) - 1:
+                                st.session_state.wa_msg_index += 1
 
                     st.session_state.wa_idx += 1
                     
