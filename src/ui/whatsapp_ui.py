@@ -8,6 +8,46 @@ from src.services.whatsapp_service import WhatsAppService
 from src.utils.phone_utils import validate_numbers, format_phone_number, save_to_local_desktop, render_pasha_export_button
 from src.core.i18n import t
 from src.config import WA_HISTORY_FILE
+import random
+
+# --- Smart Message Templates ---
+SMART_TEMPLATES = {
+    "intro": [
+        "Hope you're having a great day.",
+        "I hope this message finds you well.",
+        "Wishing you a wonderful day.",
+        "Hope everything is going great with you.",
+        "I hope you are doing well today."
+    ],
+    "body": [
+        "We’re reaching out regarding your earlier interest in job opportunities. We would be glad to continue with you, so please let us know if you are still interested and ready to move forward.",
+        "We are following up on your previous inquiry about job openings. We'd love to proceed, so please tell us if you're still available and interested in moving ahead.",
+        "Regarding your past interest in our job roles, we are checking in to see if you are still looking for work. We would like to move forward if you are still available.",
+        "This is a follow-up about the job opportunities you were interested in. If you're still ready to start, please let us know so we can continue the process.",
+        "We are contacting you to see if you are still interested in the job positions we discussed earlier. We would be happy to proceed if you are still available."
+    ],
+    "closing": [
+        "A quick reply would be highly appreciated.",
+        "Looking forward to hearing back from you soon.",
+        "Please let us know your status at your earliest convenience.",
+        "We would value a prompt response from you.",
+        "Hope to hear from you at your earliest convenience."
+    ]
+}
+
+def generate_smart_message(name, cv_link):
+    intro = random.choice(SMART_TEMPLATES["intro"])
+    body = random.choice(SMART_TEMPLATES["body"])
+    
+    msg = f"Hello {name},\n\n{intro}\n\n{body}\n\n"
+    
+    # Logic: If CV exists, add closing and CV link. If not, omit both.
+    if cv_link and str(cv_link).lower() != 'nan' and str(cv_link).strip() != '':
+        closing = random.choice(SMART_TEMPLATES["closing"])
+        msg += f"{closing}\n\nLink to your profile: {cv_link}\n\n"
+    
+    msg += "Warm regards,\nAbu Fahd"
+    return msg
 
 def load_wa_history():
     if os.path.exists(WA_HISTORY_FILE):
@@ -107,6 +147,8 @@ def render_whatsapp_page():
         'add_msg': "+ إضافة رسالة" if is_ar else "+ Add Message",
         'msg_num': "رسالة {}" if is_ar else "Message {}",
         'remove_msg': "🗑️" if is_ar else "🗑️",
+        'smart_msg': "🤖 تفعيل الرسائل الذكية (AI)" if is_ar else "🤖 Enable Smart Messages (AI)",
+        'smart_msg_help': "سيتم إنشاء رسائل تلقائية بأسلوب مختلف لكل عميل لتجنب الحظر." if is_ar else "Generates unique variations for each message to avoid ban.",
     }
 
     # 1. Connection Status
@@ -386,23 +428,32 @@ Abu Fahd"""
         if not st.session_state.wa_messages[0]:
             st.session_state.wa_messages[0] = default_msg
 
+        # Smart Message Toggle
+        is_smart = st.checkbox(lbl['smart_msg'], value=st.session_state.get('wa_smart_mode', False), help=lbl['smart_msg_help'], key="wa_smart_mode")
+        
         # Render dynamic message fields
-        for i in range(len(st.session_state.wa_messages)):
-            msg_col1, msg_col2 = st.columns([11, 1])
-            with msg_col1:
-                label = lbl['msg_label'] if i == 0 else lbl['msg_num'].format(i + 1)
-                st.session_state.wa_messages[i] = st.text_area(label, height=250, value=st.session_state.wa_messages[i], key=f"wa_msg_{i}")
-            with msg_col2:
-                if i > 0:
-                    st.markdown("<br><br><br><br>", unsafe_allow_html=True)
-                    if st.button(lbl['remove_msg'], key=f"del_msg_{i}"):
-                        st.session_state.wa_messages.pop(i)
-                        st.rerun()
+        if not is_smart:
+            for i in range(len(st.session_state.wa_messages)):
+                msg_col1, msg_col2 = st.columns([11, 1])
+                with msg_col1:
+                    label = lbl['msg_label'] if i == 0 else lbl['msg_num'].format(i + 1)
+                    st.session_state.wa_messages[i] = st.text_area(label, height=250, value=st.session_state.wa_messages[i], key=f"wa_msg_{i}")
+                with msg_col2:
+                    if i > 0:
+                        st.markdown("<br><br><br><br>", unsafe_allow_html=True)
+                        if st.button(lbl['remove_msg'], key=f"del_msg_{i}"):
+                            st.session_state.wa_messages.pop(i)
+                            st.rerun()
 
-        # Add Message Button
-        if st.button(lbl['add_msg'], key="add_msg_btn"):
-            st.session_state.wa_messages.append("")
-            st.rerun()
+            # Add Message Button
+            if st.button(lbl['add_msg'], key="add_msg_btn"):
+                st.session_state.wa_messages.append("")
+                st.rerun()
+        else:
+            # Preview of Smart Message
+            st.info("💡 " + ("سيتم توليد رسالة فريدة لكل رقم تلقائياً عند بدء الإرسال." if is_ar else "A unique message will be generated for each number upon sending."))
+            preview_msg = generate_smart_message("{Name}", "{CV}")
+            st.text_area("معاينة الرسالة الذكية (Smart Message Preview)", value=preview_msg, height=250, disabled=True)
         
         # Attachment
         attachment = st.file_uploader(lbl['attach'], 
@@ -510,36 +561,37 @@ Abu Fahd"""
                     trg = active_targets[st.session_state.wa_idx]
                     p, n, v = trg['phone'], trg['name'], trg['cv']
                     
-                    # --- Message Rotation Logic ---
-                    # Get current message based on index
-                    current_msg_body = st.session_state.wa_messages[st.session_state.wa_msg_index]
-                    
-                    # Intelligent dynamic replacement for ALL columns
-                    final_msg = current_msg_body
-                    
-                    # Check for CV placeholder variations
-                    cv_placeholders = ["{CV}", "{cv}", "{السيرة}"]
-                    # Attempt to find what the CV column was named in the current session
-                    if 'wa_review_targets' in st.session_state and st.session_state.wa_review_targets:
-                        first_trg = st.session_state.wa_review_targets[0]
-                        for k in first_trg.keys():
-                            if any(x in k.lower() for x in ["سيرة", "cv", "resume", "link"]):
-                                cv_placeholders.append("{" + k + "}")
-                    
-                    # If CV is empty, remove lines containing CV placeholders
-                    if not v or v.lower() == 'nan':
-                        lines = final_msg.split('\n')
-                        final_lines = []
-                        for line in lines:
-                            if not any(ph in line for ph in cv_placeholders):
-                                final_lines.append(line)
-                        final_msg = '\n'.join(final_lines)
-                    
-                    for key, val in trg.items():
-                        final_msg = final_msg.replace("{" + str(key) + "}", str(val))
-                        final_msg = final_msg.replace("{" + str(key).lower() + "}", str(val))
-                    
-                    final_msg = final_msg.replace("{Name}", n).replace("{name}", n).replace("{الاسم}", n).replace("{CV}", v).replace("{cv}", v).replace("{السيرة}", v)
+                    # --- Message Generation Logic ---
+                    if st.session_state.get('wa_smart_mode'):
+                        # Smart AI Mode: Generate unique message for each person
+                        final_msg = generate_smart_message(n, v)
+                    else:
+                        # Standard Rotation Mode
+                        current_msg_body = st.session_state.wa_messages[st.session_state.wa_msg_index]
+                        final_msg = current_msg_body
+                        
+                        # Check for CV placeholder variations
+                        cv_placeholders = ["{CV}", "{cv}", "{السيرة}"]
+                        if 'wa_review_targets' in st.session_state and st.session_state.wa_review_targets:
+                            first_trg = st.session_state.wa_review_targets[0]
+                            for k in first_trg.keys():
+                                if any(x in k.lower() for x in ["سيرة", "cv", "resume", "link"]):
+                                    cv_placeholders.append("{" + k + "}")
+                        
+                        # If CV is empty, remove lines containing CV placeholders
+                        if not v or v.lower() == 'nan':
+                            lines = final_msg.split('\n')
+                            final_lines = []
+                            for line in lines:
+                                if not any(ph in line for ph in cv_placeholders):
+                                    final_lines.append(line)
+                            final_msg = '\n'.join(final_lines)
+                        
+                        for key, val in trg.items():
+                            final_msg = final_msg.replace("{" + str(key) + "}", str(val))
+                            final_msg = final_msg.replace("{" + str(key).lower() + "}", str(val))
+                        
+                        final_msg = final_msg.replace("{Name}", n).replace("{name}", n).replace("{الاسم}", n).replace("{CV}", v).replace("{cv}", v).replace("{السيرة}", v)
                     
                     import re
                     final_msg = re.sub(r'\n{3,}', '\n\n', final_msg).strip()
