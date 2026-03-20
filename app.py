@@ -2812,6 +2812,66 @@ def render_dashboard_content():
             """, unsafe_allow_html=True)
     st.markdown("---")
     
+    # --- ADD SMART SEARCH UI TO DASHBOARD ---
+    lbl_age = t("age", lang)
+    lbl_contract = t("contract_end", lang)
+    lbl_reg = t("registration_date", lang)
+    lbl_enable = "تفعيل" if lang == "ar" else "Activate"
+
+    with st.expander(t("advanced_filters", lang) if t("advanced_filters", lang) != "advanced_filters" else "تصفية متقدمة", expanded=False):
+        st.markdown(f'<div class="premium-filter-label">📅 {t("filter_dates_group", lang)}</div>', unsafe_allow_html=True)
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            use_age = st.checkbox(f" {lbl_enable} {lbl_age}", key="dash_use_age_filter")
+            if use_age:
+                ac1, ac2 = st.columns(2)
+                with ac1: a_min = st.number_input("من سن" if lang == 'ar' else "From", 1, 100, 16, key="dash_age_min")
+                with ac2: a_max = st.number_input("إلى سن" if lang == 'ar' else "To", 1, 100, 35, key="dash_age_max")
+                age_range = (a_min, a_max)
+            else: age_range = (16, 35)
+        with c2:
+            use_contract = st.checkbox(f" {lbl_enable} {lbl_contract}", key="dash_use_contract_filter")
+            if use_contract:
+                contract_range = st.date_input("Contract Range", (datetime.now().date(), datetime.now().date() + timedelta(days=30)), label_visibility="collapsed", key="dash_contract_range")
+            else: contract_range = []
+        with c3:
+            use_reg = st.checkbox(f" {lbl_enable} {lbl_reg}", key="dash_use_reg_filter")
+            if use_reg:
+                reg_range = st.date_input("Registration Range", (datetime.now().date().replace(day=1), datetime.now().date()), label_visibility="collapsed", key="dash_reg_range")
+            else: reg_range = []
+
+        st.markdown("<br>", unsafe_allow_html=True)
+        st.markdown(f'<div class="premium-filter-label">⚙️ {t("filter_advanced_group", lang)}</div>', unsafe_allow_html=True)
+        c2_1, c2_2, c2_3 = st.columns(3)
+        with c2_1:
+            use_not_working = st.checkbox("No (هل يعمل حالياً؟)" if lang == "ar" else "Not Working (No)", key="dash_use_not_working")
+        with c2_2:
+            transfer_options = {"": f"— {t('transfer_all', lang)} —", "First time": t("transfer_1", lang), "Second time": t("transfer_2", lang), "The third time": t("transfer_3", lang), "More than three": t("transfer_more", lang)}
+            selected_transfer_label = st.selectbox(t("transfer_count_label", lang), options=list(transfer_options.values()), key="dash_transfer_dropdown")
+            selected_transfer_key = [k for k, v in transfer_options.items() if v == selected_transfer_label][0]
+        with c2_3:
+            use_no_huroob = st.checkbox(t("no_huroob", lang), key="dash_use_no_huroob")
+        
+        st.markdown("<br>", unsafe_allow_html=True)
+        c3_1, c3_2 = st.columns(2)
+        with c3_1:
+            use_work_outside = st.checkbox(t("work_outside_city", lang), key="dash_use_work_outside")
+
+    dash_query = st.text_input(t("smart_search", lang), placeholder=t("search_placeholder", lang), key="dash_search_query")
+    dash_search_clicked = st.button(t("search_btn", lang), key="dash_search_btn", use_container_width=True, type="primary")
+
+    dash_filters = {}
+    if use_age: dash_filters['age_enabled'] = True; dash_filters['age_min'] = age_range[0]; dash_filters['age_max'] = age_range[1]
+    if use_contract and len(contract_range) == 2: dash_filters['contract_enabled'] = True; dash_filters['contract_end_start'] = contract_range[0]; dash_filters['contract_end_end'] = contract_range[1]
+    if use_reg and len(reg_range) == 2: dash_filters['date_enabled'] = True; dash_filters['date_start'] = reg_range[0]; dash_filters['date_end'] = reg_range[1]
+    if use_not_working: dash_filters['not_working_only'] = True
+    if use_no_huroob: dash_filters['no_huroob'] = True
+    if use_work_outside: dash_filters['work_outside_city'] = True
+    if selected_transfer_key: dash_filters['transfer_count'] = selected_transfer_key
+
+    st.markdown("---")
+    # --- END SMART SEARCH UI ---
+
     cv_col = next((c for c in cols if any(kw in clean_col(c) for kw in ["cv", "سيرة", "download"])), None)
     
     # Configuration for LinkColumn needs the TRANSLATED column name if we rename it!
@@ -2822,7 +2882,15 @@ def render_dashboard_content():
     def show(data, tab_id):
         if not data: st.info(t("no_data", lang)); return
         d = pd.DataFrame(data)
-        
+
+        # Apply Smart Search if active
+        if dash_query or dash_filters:
+            eng = SmartSearchEngine(d)
+            d = eng.search(dash_query, filters=dash_filters)
+            if d.empty:
+                st.info(t("no_results", lang) if t("no_results", lang) != "no_results" else "لا توجد نتائج تطابق بحثك في هذا التبويب")
+                return
+
         # Sort Logic:
         # For Expired: sort by absolute days (smallest number of days ago first)
         # For others: sort by raw days (soonest to expire first)
