@@ -161,6 +161,14 @@ AR_TO_EN = {
     "ممرض": ["Nurse"], "ممرضة": ["Nurse"],
     "طبيب": ["Doctor"],
     "نظافة": ["Cleaner"], "عامل نظافة": ["Cleaner"], "عاملة نظافة": ["Cleaner"],
+    "بائع": ["Salesman", "Salesperson"],
+    "بائع زهور": ["Florist"],
+    "بائع ورد": ["Florist"],
+    "منسق": ["Coordinator"],
+    "منسق زهور": ["Florist", "Floral Coordinator"],
+    "منسق ورد": ["Florist", "Floral Coordinator"],
+    "زهور": ["Florist", "Flowers"],
+    "ورد": ["Florist", "Flowers"],
     "بدكير": ["Pedicure", "Technician"], "منكير": ["Manicure", "Technician"],
     "حلاق": ["Barber"],
     "كوافير": ["Hairdresser", "Hair Stylist"],
@@ -253,8 +261,10 @@ def _translate_ar_to_en(text):
         ar_norm = _normalize(ar_key)
         if ar_norm == text_norm:
             results.extend(en_vals)
-        elif len(text_norm) > 3 and (text_norm in ar_norm or ar_norm in text_norm):
+        elif len(text_norm) > 3 and text_norm in ar_norm:
+            # Substring match: e.g. "باريستا" in "باريستا فلبيني"
             results.extend(en_vals)
+        # REMOVED: ar_norm in text_norm (This was too broad, e.g. "منسق" in "منسق زهور")
 
     return list(set(results))
 
@@ -318,20 +328,31 @@ def _fuzzy_match(value, target):
     v_norm = _normalize(v_str)
     t_norm = _normalize(t_str)
 
-    # 1. Direct Arabic/normalized match
+    # 1. Direct Arabic/normalized match (More strict)
     if t_norm and v_norm:
-        if t_norm in v_norm or v_norm in t_norm:
+        if t_norm == v_norm:
+            return True
+        # Check if target is a distinct part of the value (e.g. "باريستا" in "باريستا فلبيني")
+        pattern = r'(?:^|[\s,:;.\-/])' + re.escape(t_norm) + r'(?:[\s,:;.\-/]|$)'
+        if re.search(pattern, v_norm):
             return True
 
     # 2. Direct English match (both already in English)
-    if t_lower in v_lower or v_lower in t_lower:
-        return True
+    if t_lower and v_lower:
+        if t_lower == v_lower:
+            return True
+        pattern_en = r'(?:^|[\s,:;.\-/])' + re.escape(t_lower) + r'(?:[\s,:;.\-/]|$)'
+        if re.search(pattern_en, v_lower):
+            return True
 
     # 3. Translate target (Arabic) → English, match against value
     en_translations = _translate_ar_to_en(t_str)
     for en in en_translations:
         en_lower = en.lower()
-        if en_lower in v_lower or v_lower in en_lower:
+        if en_lower == v_lower:
+            return True
+        pattern_trans = r'(?:^|[\s,:;.\-/])' + re.escape(en_lower) + r'(?:[\s,:;.\-/]|$)'
+        if re.search(pattern_trans, v_lower):
             return True
 
     # 4. Translate value (Arabic) → English, match against target

@@ -34,6 +34,14 @@ class TranslationManager:
             "ممرضة": "Nurse",
             "طبيب": "Doctor",
             "نظافة": "Cleaner",
+            "بائع": "Sales",
+            "بائع زهور": "Florist",
+            "بائع ورد": "Florist",
+            "منسق": "Coordinator",
+            "منسق زهور": "Florist",
+            "منسق ورد": "Florist",
+            "زهور": ["Florist", "Flowers"],
+            "ورد": ["Florist", "Flowers"],
             "عامل نظافة": "Cleaner",
             "عاملة نظافة": "Cleaner",
 
@@ -338,33 +346,34 @@ class TranslationManager:
         return self.normalize_text(word)
 
     def analyze_query(self, query):
-
         clean_query = query.lower().strip()
         ignore_words = ["جميع", "كل", "دول", "دولة", "قارة", "قاره"]
-
-        # --- Step 0: Check full query as compound phrase FIRST ---
-        compound_trans = self.translate_word(clean_query)
-        compound_found = False
-        if isinstance(compound_trans, list):
-            compound_found = True
-        elif compound_trans and compound_trans.lower() != clean_query.lower():
-            compound_found = True
-        
-        if compound_found:
-            # The full query matched a compound entry (e.g. "مصفف شعر" -> "Hairdresser")
-            synonyms = {clean_query}
-            if isinstance(compound_trans, list):
-                for t in compound_trans: synonyms.add(t)
-            else:
-                synonyms.add(compound_trans)
-            return [list(synonyms)]
-
-        # --- Step 1: Split and translate word by word ---
-        words = re.split(r'[\s,،/\\|]+', clean_query)
         bundle_list = []
 
+        # --- Step 0: Extract Compound Phrases FIRST ---
+        # Sort keys by length (longest first) to catch "مصفف شعر" before "مصفف"
+        compound_keys = sorted([k for k in self.dictionary.keys() if len(k.split()) > 1], key=len, reverse=True)
+        
+        remaining_query = clean_query
+        for ck in compound_keys:
+            if ck in remaining_query:
+                # Found a compound phrase!
+                trans = self.dictionary[ck]
+                synonyms = {ck}
+                if isinstance(trans, list):
+                    for t in trans: synonyms.add(t)
+                else:
+                    synonyms.add(trans)
+                
+                bundle_list.append(list(synonyms))
+                # Remove from remaining query to avoid double matching
+                remaining_query = remaining_query.replace(ck, "").strip()
+
+        # --- Step 1: Split and translate remaining words ---
+        words = re.split(r'[\s,،/\\|]+', remaining_query)
+
         for word in words:
-            if word in ignore_words or len(word) < 2:
+            if not word or word in ignore_words or len(word) < 2:
                 continue
             
             # Use a Set to avoid duplicates
@@ -381,29 +390,19 @@ class TranslationManager:
                 synonyms.add(trans)
                 found_local = True
                 
-            # 2. Check for compound word matches in dictionary keys
-            norm_word = self.normalize_text(word)
-            for k, v in self.dictionary.items():
-                if norm_word in self.normalize_text(k) and len(k.split()) > 1:
-                     if isinstance(v, list):
-                         for t in v: synonyms.add(t)
-                         found_local = True
-                     else:
-                         synonyms.add(v)
-                         found_local = True
-
-            # 3. Google Translate fallback for Arabic words NOT found locally
+            # 2. Google Translate fallback for Arabic words NOT found locally
             if not found_local and self._is_arabic(word):
                 google_result = self._google_translate_fallback(word)
                 if google_result:
                     synonyms.add(google_result)
-                    # Also try the full query as a phrase via Google
-                    if len(words) > 1:
-                        full_google = self._google_translate_fallback(clean_query)
-                        if full_google:
-                            synonyms.add(full_google)
 
             bundle_list.append(list(synonyms))
+
+        # 3. Final Fallback: If nothing matched and query is Arabic, try full Google translate
+        if not bundle_list and self._is_arabic(clean_query):
+            full_google = self._google_translate_fallback(clean_query)
+            if full_google:
+                bundle_list.append([clean_query, full_google])
 
         return bundle_list
 
@@ -468,6 +467,19 @@ AR_TO_EN = {
     "باريستا": ["Barista"],
     "افريقي": ["Nigeria", "Kenya", "Ghana", "Ethiopia", "Sudan", "Morocco", "Tunisia", "Senegal"],
     "افريقية": ["Nigeria", "Kenya", "Ghana", "Ethiopia", "Sudan", "Morocco", "Tunisia", "Senegal"],
+    
+    # Experience Levels
+    "لا توجد خبرة": "No experience",
+    "لايوجد خبرة": "No experience",
+    "اقل من سنة": "Less than 1 year",
+    "سنة": "1 year",
+    "سنتين": "2 years",
+    "3 سنوات": "3 years",
+    "4 سنوات": "4 years",
+    "5 سنوات": "5 years",
+    "اكثر من 5 سنوات": "More than 5 years",
+    "أكثر من 5 سنوات": "More than 5 years",
+    "خبرة": "Experience",
 }
 
 

@@ -1328,7 +1328,9 @@ def render_table_translator(df, key_prefix="table"):
         "الوظيفة المطلوبة", "Requested Job", "Job Requested", "Which job are you looking for",
         "مهارات أخرى", "Other Skills", "What other jobs can you do",
         "المهنة في الإقامة", "Iqama Profession", "What is the occupation listed on your Iqama",
-        "Iqama Job", "occupation listed on your Iqama"
+        "Iqama Job", "occupation listed on your Iqama",
+        "الخبرة في هذا المجال", "Experience in this field",
+        "الخبرة (أخرى)", "Experience (Other)"
     ]
     cols_to_translate = [c for c in df.columns if any(kw.lower() in str(c).lower() for kw in target_keywords)]
 
@@ -4492,6 +4494,10 @@ def render_order_processing_content():
                                 nat_col_city = col
                                 col_cfg_city[f"🚩_{col}"] = st.column_config.ImageColumn(t("country_label", lang), width="small", pinned=True)
 
+                        # Smart Translator Buttons (Added here for OP tables)
+                        st.markdown("<br>", unsafe_allow_html=True)
+                        city_df = render_table_translator(city_df, key_prefix=f"op_city_{idx}")
+                        
                         # Apply style (which handles flag injection and reordering)
                         city_styled = style_df(city_df.drop(columns=["__uid"]))
                         
@@ -4535,6 +4541,7 @@ def render_order_processing_content():
                         explainer = f"{'هؤلاء العمال في مدن تتبع لنفس المنطقة ولاكن في مدن اخرى' if lang == 'ar' else 'These workers are in other cities within the same region'}"
                         render_segment_header(label, len(reg_df), color="#D4AF37", explainer=explainer)
 
+                        st.markdown("<br>", unsafe_allow_html=True)
                         reg_df = render_table_translator(reg_df, key_prefix=f"op_reg_{idx}")
                         
                         col_cfg_reg = {}
@@ -4577,6 +4584,7 @@ def render_order_processing_content():
                         label_other = "🌍 عمال في مدن أخرى (مرتبين حسب القرب)" if lang == 'ar' else f"🌍 Workers in other cities (sorted by proximity)"
                         render_segment_header(label_other, len(other_df), color="#FFFFFF")
                         
+                        st.markdown("<br>", unsafe_allow_html=True)
                         other_df = render_table_translator(other_df, key_prefix=f"op_other_{idx}")
                         
                         col_cfg_oth = {}
