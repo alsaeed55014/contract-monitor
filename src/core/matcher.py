@@ -359,7 +359,10 @@ def _fuzzy_match(value, target):
     en_val_translations = _translate_ar_to_en(v_str)
     for en in en_val_translations:
         en_lower = en.lower()
-        if t_lower in en_lower or en_lower in t_lower:
+        if t_lower == en_lower or t_lower in en_lower:
+            return True
+        pattern_trans = r'(?:^|[\s,:;.\-/])' + re.escape(en_lower) + r'(?:[\s,:;.\-/]|$)'
+        if re.search(pattern_trans, t_lower):
             return True
 
     return False
@@ -520,6 +523,7 @@ class CandidateMatcher:
             "job": "",
         }
 
+        job_vals = []
         # Smart column detection from request
         for key, val in request_row.items():
             key_norm = _normalize(str(key))
@@ -546,8 +550,9 @@ class CandidateMatcher:
 
             # Job / Profession
             elif any(_normalize(kw) in key_norm or kw.lower() in key_lower for kw in JOB_KEYWORDS):
-                if not criteria["job"]:
-                    criteria["job"] = val_str
+                job_vals.append(val_str)
+                
+        criteria["job"] = " / ".join(job_vals) if job_vals else ""
 
         self.debug_info["criteria"] = criteria
         return criteria
@@ -621,14 +626,10 @@ class CandidateMatcher:
 
         return df[df[city_col].apply(city_match)]
 
-    # ─────────────────────────────────────────
-    # Step 3 (cont): Filter by Job / Skills
-    # ─────────────────────────────────────────
     def _filter_by_job(self, df, job_text):
         """
-        Phase A: Search in Job column.
-        Phase B: Search in Skills column.
-        Returns (result_df, source) where source is 'job', 'skills', or 'none'.
+        Phase A: Create a combined text of 'job' and 'skills' (as requested by user).
+                 Search exactly across this combined 'Nature of the worker's work'.
         """
         if df.empty or not job_text:
             return df, "none"
@@ -639,19 +640,40 @@ class CandidateMatcher:
         self.debug_info["job_col"] = job_col
         self.debug_info["skills_col"] = skills_col
 
-        # Phase A: Job column
-        if job_col:
-            mask = df[job_col].apply(lambda v: _fuzzy_match(v, job_text))
-            job_results = df[mask]
-            if not job_results.empty:
-                return job_results, "job"
+        # Pre-filter using Strict + Smart Matching
+        c_words = set(job_text.split())
+        critical_kws = ["زهور", "ورد", "flower", "flowers", "قهوة", "مقهى", "coffee", "طبخ", "طباخ", "cook", "chef", "باريستا", "barista"]
+        required_kws = [kw for kw in critical_kws if kw in job_text]
 
-        # Phase B: Skills column
-        if skills_col:
-            mask = df[skills_col].apply(lambda v: _fuzzy_match(v, job_text))
-            skills_results = df[mask]
-            if not skills_results.empty:
-                return skills_results, "skills"
+        def exact_combine_and_match(row):
+            j = str(row[job_col]) if job_col and pd.notna(row[job_col]) and str(row[job_col]).strip() != "nan" else ""
+            s = str(row[skills_col]) if skills_col and pd.notna(row[skills_col]) and str(row[skills_col]).strip() != "nan" else ""
+            
+            if j and s:
+                nature = f"{j} / {s}"
+            elif j:
+                nature = j
+            elif s:
+                nature = s
+            else:
+                nature = ""
+                
+            if not nature:
+                return False
+                
+            # If the request contains critical keywords (like flowers/coffee), enforce strict check
+            if required_kws:
+                has_critical = any(req.lower() in nature.lower() for req in required_kws)
+                if not has_critical:
+                    return False
+
+            return _fuzzy_match(nature, job_text)
+
+        mask = df.apply(exact_combine_and_match, axis=1)
+        job_results = df[mask]
+        
+        if not job_results.empty:
+            return job_results, "job"
 
         return pd.DataFrame(), "none"
 

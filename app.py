@@ -4028,6 +4028,7 @@ def render_order_processing_content():
     w_nationality_col = next((c for c in workers_df.columns if c.strip().lower() == "nationality"), None)
     w_gender_col = next((c for c in workers_df.columns if c.strip().lower() == "gender"), None)
     w_job_col = next((c for c in workers_df.columns if "job" in c.lower() and "looking" in c.lower()), None)
+    w_other_job_col = next((c for c in workers_df.columns if "other jobs" in c.lower()), None)
     w_city_col = next((c for c in workers_df.columns if "city" in c.lower() and "saudi" in c.lower()), None)
     w_phone_col = next((c for c in workers_df.columns if "phone" in c.lower()), None)
     w_age_col = next((c for c in workers_df.columns if "age" in c.lower()), None)
@@ -4097,26 +4098,78 @@ def render_order_processing_content():
     
     def match_job(customer_job, worker_job):
         c_job = str(customer_job).strip()
-        w_job = normalize(worker_job)
-        if not c_job or not w_job: return True
+        w_job_raw = str(worker_job).strip()
+        if not c_job or not w_job_raw: return True
         
-        tm = st.session_state.get('tm')
-        search_terms = {normalize(c_job)}
-        if tm:
-            bundles = tm.analyze_query(c_job)
-            for b in bundles:
-                for s in b:
-                    search_terms.add(normalize(s))
-                    
-        for term in search_terms:
-            if not term: continue
-            if term in w_job or w_job in term:
+        c_norm = normalize(c_job)
+        w_norm = normalize(w_job_raw)
+        if not c_norm or not w_norm: return True
+        
+        # 1. Direct full phrase match (normalized)
+        if c_norm in w_norm or w_norm in c_norm:
+            return True
+        
+        # 2. Bilingual full phrase match (uses Arabic↔English translation)
+        if _fuzzy_match(w_job_raw, c_job):
+            return True
+        
+        # 3. Word-level bilingual matching (skip generic title words)
+        generic_words = {"coordinator", "supervisor", "worker", "employee", "manager",
+                         "منسق", "عامل", "موظف", "بائع", "صانع", "مقدم", "مشرف",
+                         "sales", "driver", "and", "the", "a", "an", "or", "in", "of"}
+        
+        c_words = re.split(r'[\s,،/\-–]+', c_job)
+        for cw in c_words:
+            cw = cw.strip()
+            if not cw or len(cw) < 3 or cw.lower() in generic_words:
+                continue
+            # Bilingual match for this meaningful keyword
+            if _fuzzy_match(w_job_raw, cw):
                 return True
-            parts = re.split(r'[\s|,،\-–]+', term)
-            for p in parts:
-                p = p.strip()
-                if len(p) > 1 and (p in w_job or w_job in p):
-                    return True
+        
+        # 4. Domain synonym groups (cross-language matching for common professions)
+        synonym_groups = [
+            {"flower", "flowers", "florist", "floral", "زهور", "ورد", "floriculture"},
+            {"coffee", "barista", "باريستا", "قهوة", "مقهى", "كوفي", "cafe"},
+            {"cook", "cooking", "chef", "طباخ", "طبخ", "شيف", "cuisine"},
+            {"clean", "cleaner", "cleaning", "نظافة", "تنظيف", "نظافه"},
+            {"hair", "hairdresser", "stylist", "حلاق", "كوافير", "مصفف", "شعر", "coiffeur"},
+            {"nail", "manicure", "pedicure", "بدكير", "منكير", "اظافر"},
+            {"massage", "مساج", "spa"},
+            {"pastry", "dessert", "sweets", "حلا", "حلويات", "معجنات"},
+            {"nurse", "nursing", "ممرض", "ممرضة", "تمريض"},
+            {"driver", "driving", "سائق", "قيادة"},
+            {"butcher", "جزار", "لحام", "لحوم", "meat", "مجزر"},
+            {"waiter", "waitress", "نادل", "نادلة", "garson"},
+            {"secretary", "سكرتيرة", "سكرتير", "admin", "اداري", "ادارية"},
+            {"guard", "security", "حارس", "أمن", "امن", "حراسة"},
+            {"carpenter", "نجار", "نجارة", "woodwork"},
+            {"plumber", "سباك", "سباكة", "plumbing"},
+            {"electrician", "كهربائي", "كهرباء", "electrical"},
+            {"painter", "دهان", "طلاء", "painting"},
+            {"tailor", "خياط", "خياطة", "sewing"},
+            {"mechanic", "ميكانيكي", "صيانة", "maintenance"},
+            {"welder", "لحام", "welding"},
+            {"farmer", "مزارع", "فلاح", "farm", "زراعة", "agriculture"},
+            {"baker", "خباز", "مخبز", "bakery"},
+            {"cashier", "كاشير", "محاسب", "صراف"},
+            {"salesman", "مندوب", "مبيعات", "sales representative"},
+            {"teacher", "مدرس", "معلم", "تعليم", "teaching"},
+            {"accountant", "محاسب", "حسابات", "accounting"},
+            {"warehouse", "مستودع", "مخزن", "storekeeper"},
+            {"delivery", "توصيل", "مندوب توصيل"},
+            {"housemaid", "خادمة", "شغالة", "عاملة منزلية", "domestic"},
+        ]
+        
+        c_lower = c_job.lower()
+        w_lower = w_job_raw.lower()
+        
+        for group in synonym_groups:
+            c_has = any(syn in c_lower for syn in group)
+            w_has = any(syn in w_lower for syn in group)
+            if c_has and w_has:
+                return True
+
         return False
     
     def find_matching_workers(customer_row):
@@ -4148,12 +4201,26 @@ def render_order_processing_content():
                     total_criteria += 1
                     score += 1
             
-            if c_work_nature and w_job_col:
+            if c_work_nature and (w_job_col or w_other_job_col):
                 cv = str(customer_row.get(c_work_nature, ""))
-                wv = str(worker.get(w_job_col, ""))
+                
+                job_val = str(worker.get(w_job_col, "")) if w_job_col else ""
+                other_val = str(worker.get(w_other_job_col, "")) if w_other_job_col else ""
+                
+                if job_val and other_val:
+                    wv = f"{job_val} / {other_val}"
+                elif job_val:
+                    wv = job_val
+                elif other_val:
+                    wv = other_val
+                else:
+                    wv = ""
+
                 if cv.strip():
+                    if not wv or not match_job(cv, wv):
+                        continue # Hard Filter: Skip if job mismatch completely
                     total_criteria += 1
-                    if match_job(cv, wv): score += 1
+                    score += 1
             
             if c_location and w_city_col:
                 cv = str(customer_row.get(c_location, ""))
