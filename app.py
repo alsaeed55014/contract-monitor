@@ -1688,6 +1688,218 @@ def render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search", 
     
     col_a, col_b = st.columns([1, 1])
     
+    # === Professional Summary Modal & Button === #
+    @st.dialog("الملخص الاحترافي للعامل" if lang == "ar" else "Professional Worker Summary")
+    def show_worker_summary_modal():
+        import re as _re
+        # -- 1. Data Extraction --
+        def g(ar_col, en_col):
+            val = worker_row.get(en_col, worker_row.get(ar_col, ""))
+            return str(val).strip() if pd.notnull(val) else ""
+
+        name = g("الاسم الكامل", "Full Name:")
+        nat = g("الجنسية", "Nationality")
+        gen = g("الجنس", "Gender")
+        age = g("العمر", "your Age:")
+        ar_lang_val = g("هل تتحدث العربية؟", "Do you speak Arabic")
+        job = g("الوظيفة المطلوبة", "Which job are you looking for")
+        exp = g("الخبرة في هذا المجال", "Experience in this field")
+        skills = g("مهارات أخرى", "What other jobs can you do")
+        exp_other = g("الخبرة (أخرى)", "Other experience")
+        card = g("هل لديك كرت بلدية؟", "Do you have Card Baladiya")
+        card_val = g("مدة صلاحية الكرت (أشهر)", "how many months Card Baladiya valid")
+        iqama_prof = g("المهنة في الإقامة", "What is the occupation listed on your Iqama")
+        iqama_rem = g("المدة المتبقية في الإقامة", "If the Iqama is valid, how many months are left?")
+        transfers = g("عدد مرات نقل الكفالة", "How many times did you transfer your sponsorship")
+
+        # -- 2. EN→AR Dictionary for strict Arabic localization --
+        is_ar = (lang == "ar")
+        _en_ar = {
+            "male": "ذكر", "female": "أنثى",
+            "indian": "هندي", "bangladeshi": "بنغلاديشي", "pakistani": "باكستاني",
+            "filipino": "فلبيني", "filipina": "فلبينية", "indonesian": "إندونيسي",
+            "nepali": "نيبالي", "nepalese": "نيبالي", "sri lankan": "سريلانكي",
+            "ethiopian": "إثيوبي", "eritrean": "إريتري", "sudanese": "سوداني",
+            "egyptian": "مصري", "yemeni": "يمني", "syrian": "سوري",
+            "jordanian": "أردني", "lebanese": "لبناني", "moroccan": "مغربي",
+            "tunisian": "تونسي", "algerian": "جزائري", "iraqi": "عراقي",
+            "afghan": "أفغاني", "turkish": "تركي", "kenyan": "كيني",
+            "nigerian": "نيجيري", "ghanaian": "غاني", "ugandan": "أوغندي",
+            "somali": "صومالي", "burmese": "بورمي", "thai": "تايلندي",
+            "vietnamese": "فيتنامي", "chinese": "صيني", "malaysian": "ماليزي",
+            "barista": "باريستا", "coffee maker": "صانع قهوة", "driver": "سائق",
+            "chef": "شيف (طباخ)", "cook": "طباخ", "cleaner": "عامل نظافة",
+            "waiter": "نادل", "cashier": "كاشير", "security guard": "حارس أمن",
+            "plumber": "سبّاك", "electrician": "كهربائي", "carpenter": "نجار",
+            "painter": "دهّان", "welder": "لحّام", "mechanic": "ميكانيكي",
+            "ac technician": "فني تكييف", "technician": "فني", "supervisor": "مشرف",
+            "manager": "مدير", "management": "إدارة", "managerial": "إداري",
+            "accountant": "محاسب", "salesman": "بائع", "sales": "مبيعات",
+            "worker": "عامل", "laborer": "عامل", "farmer": "مزارع",
+            "gardener": "بستاني", "tailor": "خياط", "barber": "حلّاق",
+            "baker": "خبّاز", "butcher": "جزّار", "nurse": "ممرض",
+            "hairdresser": "مصفف شعر", "hair dresser": "مصفف شعر", "dresser": "مصفف شعر",
+            "makeup artist": "خبير تجميل", "beautician": "أخصائى تجميل",
+            "massage": "مساج", "massage therapist": "أخصائي مساج",
+            "manicure": "بدكير", "pedicure": "منكير",
+            "moroccan bath": "حمام مغربي", "bath": "حمام",
+            "spa": "سبا", "salon": "صالون",
+            "secretary": "سكرتير", "secretarial": "سكرتاريا",
+            "office boy": "عامل مكتب (أوفيس بوي)", "tea boy": "عامل تقديم شاي (تي بوي)",
+            "receptionist": "موظف استقبال", "waitress": "نادلة",
+            "housekeeper": "عامل منزلي", "housemaid": "عاملة منزلية",
+            "babysitter": "مربية أطفال", "nanny": "مربية أطفال",
+            "delivery driver": "سائق توصيل", "delivery": "توصيل",
+            "purchasing/warehouse manager": "مدير مشتريات/مستودعات",
+            "warehouse manager": "مدير مستودعات", "purchasing": "مشتريات",
+            "store keeper": "أمين مستودع", "storekeeper": "أمين مستودع",
+            "data entry": "إدخال بيانات", "helper": "مساعد",
+            "general helper": "مساعد عام", "flower coordinator": "منسق زهور",
+            "coordinator": "منسق", "sales": "مبيعات",
+            "first time": "المرة الأولى", "second time": "المرة الثانية",
+            "third time": "المرة الثالثة", "fourth time": "المرة الرابعة",
+            "once": "مرة واحدة", "twice": "مرتان", "never": "لم يتم النقل",
+            "1 time": "مرة واحدة", "2 times": "مرتان", "3 times": "3 مرات",
+            "i speak arabic fluently": "يتحدث العربية بطلاقة",
+            "i speak arabic in the middle": "يتحدث العربية بشكل متوسط",
+            "i speak arabic a little": "يتحدث العربية قليلاً",
+            "i don't speak arabic": "لا يتحدث العربية",
+            "i do not speak arabic": "لا يتحدث العربية",
+            "fluently": "بطلاقة", "fluent": "بطلاقة",
+            "a little": "قليلاً", "good": "جيد", "very good": "جيد جداً",
+            "excellent": "ممتاز", "basic": "أساسي", "intermediate": "متوسط",
+            "advanced": "متقدم", "no": "لا", "yes": "نعم",
+            "experience": "خبرة", "experiance": "خبرة",
+            "years": "سنوات", "year": "سنة", "months": "أشهر", "month": "شهر",
+            "riyadh": "الرياض", "jeddah": "جدة", "makkah": "مكة المكرمة",
+            "madinah": "المدينة المنورة", "medina": "المدينة المنورة",
+            "dammam": "الدمام", "khobar": "الخبر", "abha": "أبها",
+            "taif": "الطائف", "tabuk": "تبوك", "hail": "حائل",
+            "jazan": "جازان", "najran": "نجران", "yanbu": "ينبع",
+            "jubail": "الجبيل", "khamis mushait": "خميس مشيط",
+            "buraydah": "بريدة", "al kharj": "الخرج",
+            "and": "و", "or": "أو", "available": "متاح",
+            # Restaurant & food industry
+            "restaurant": "مطعم", "captain": "كابتن", "all": "جميع",
+            "in": "في", "the": "الـ", "of": "من", "for": "لـ",
+            "hotel": "فندق", "kitchen": "مطبخ", "cafe": "مقهى",
+            "typing": "طباعة", "filing": "أرشفة",
+        }
+
+        def to_arabic(val):
+            """Smart EN to AR: translates ALL English text to Arabic using Google Translate."""
+            if not val or not is_ar:
+                return val
+            text = str(val).strip()
+            if not _re.search(r'[a-zA-Z]', text):
+                return text
+            low = text.lower()
+            # 1. Arabic proficiency phrases
+            prof_match = _re.search(r'speak\s*arabic|arabic.*speak', low)
+            if prof_match or ('arabic' in low and 'speak' in low):
+                if _re.search(r'fluent|very\s*well', low):
+                    return "يتحدث العربية بطلاقة"
+                elif _re.search(r'middle|moderate|so\s*so|average|intermed', low):
+                    return "يتحدث العربية بشكل متوسط"
+                elif _re.search(r'little|basic|simple|small', low):
+                    return "يتحدث العربية قليلاً"
+                elif _re.search(r"don't|do\s*not", low):
+                    return "لا يتحدث العربية"
+                elif _re.search(r'good', low):
+                    return "يتحدث العربية بشكل جيد"
+                else:
+                    return "يتحدث العربية"
+            # 2. Numeric experience pattern
+            cleaned = text.strip().replace("'s", "").replace("'", "")
+            m = _re.match(r'^(\d+)\s*x?\s*(years?|months?)?(\s*experience|\s*experiance)?$', cleaned, _re.IGNORECASE)
+            if m:
+                n = m.group(1)
+                unit = m.group(2)
+                if not unit and int(n) < 50:
+                    return f"{n} سنوات"
+                if not unit:
+                    return n
+                u = "سنوات" if "year" in unit.lower() else "أشهر"
+                if n == "1":
+                    u = "سنة" if "year" in unit.lower() else "شهر"
+                return f"{n} {u}"
+            # 3. Google Translate for everything else
+            try:
+                translated = get_cached_translation(text, 'ar')
+                if translated and not translated.startswith("Translation Error") and not translated.startswith("Error:"):
+                    return translated.strip()
+            except Exception:
+                pass
+            return text
+
+        # -- UI Strings --
+        msg_warning = "⚠️ لا توجد بيانات كافية لإنشاء ملخص." if is_ar else "⚠️ Not enough professional data found for summary."
+        msg_success = "📝 **الملخص جاهز!** يمكنك نسخه الآن." if is_ar else "📝 **Summary Ready!** You can copy it now."
+        title = "🚀 **ملف كفاءة مهنية مرشحة للعمل** 🚀" if is_ar else "🚀 **Professional Candidate Profile** 🚀"
+        sep = "━━━━━━━━━━━━━━━━━━━━━━━━"
+        sec_overview = "✨ **نظرة عامة على الملف الشخصي:**" if is_ar else "✨ **Profile Overview:**"
+        lbl_name = "👤 **الاسم الكامل:**" if is_ar else "👤 **Full Name:**"
+        lbl_nat = "🌍 **الجنسية:**" if is_ar else "🌍 **Nationality:**"
+        lbl_age = "🎂 **العمر:**" if is_ar else "🎂 **Age:**"
+        lbl_gen = "🚻 **الجنس:**" if is_ar else "🚻 **Gender:**"
+        sec_quals = "💼 **المؤهلات المهنية والخبرات:**" if is_ar else "💼 **Professional Qualifications:**"
+        lbl_job = "🎯 **المسمى الوظيفي المستهدف:**" if is_ar else "🎯 **Targeted Job Title:**"
+        lbl_exp = "⚖️ **الخبرة النوعية:**" if is_ar else "⚖️ **Field Experience:**"
+        lbl_skills = "🛠️ **المهارات المتعددة:**" if is_ar else "🛠️ **Diverse Skills:**"
+        lbl_exp_other = "📚 **الخبرة (أخرى):**" if is_ar else "📚 **Other Experience:**"
+        lbl_iqama_p = "🆔 **المهنة الرسمية (الإقامة):**" if is_ar else "🆔 **Official Profession (Iqama):**"
+        sec_ready = "⚡ **التواجد والقانونية (جاهزية النقل):**" if is_ar else "⚡ **Legal & Readiness (Transfer):**"
+        lbl_trans = "🔄 **سجل نقل الكفالة:**" if is_ar else "🔄 **Transfer History:**"
+        lbl_lang = "🗣️ **إتقان اللغة العربية:**" if is_ar else "🗣️ **Arabic Proficiency:**"
+        lbl_rem = "⏳ **صلاحية الإقامة:**" if is_ar else "⏳ **Iqama Validity:**"
+        lbl_card = "🪪 **كرت البلدية:**" if is_ar else "🪪 **Baladiya Card:**"
+        val_months = "شهراً" if is_ar else "Months"
+        val_years = "عاماً" if is_ar else "Years old"
+        val_card_status = "متوفر وساري" if is_ar else "Available and Valid"
+        footer = "💡 *تم مراجعة هذا الملف بدقة لضمان الجودة.*" if is_ar else "💡 *This profile has been verified for quality assurance.*"
+
+        # -- Check for basic data --
+        if not any([job, exp, nat]):
+            d = 'rtl' if is_ar else 'ltr'
+            a = 'right' if is_ar else 'left'
+            st.markdown(f"<div style='direction:{d};text-align:{a};'>", unsafe_allow_html=True)
+            st.warning(msg_warning)
+            st.markdown("</div>", unsafe_allow_html=True)
+            return
+
+        # -- Build Summary --
+        summary = f"{title}\n{sep}\n\n"
+        summary += f"{sec_overview}\n"
+        if name: summary += f"{lbl_name} {name}\n"
+        if nat: summary += f"{lbl_nat} {to_arabic(nat)}\n"
+        if age: summary += f"{lbl_age} {age} {val_years}\n"
+        if gen: summary += f"{lbl_gen} {to_arabic(gen)}\n\n"
+        summary += f"{sec_quals}\n"
+        if job: summary += f"{lbl_job} {to_arabic(job)}\n"
+        if exp: summary += f"{lbl_exp} {to_arabic(exp)}\n"
+        if skills: summary += f"{lbl_skills} {to_arabic(skills)}\n"
+        if exp_other: summary += f"{lbl_exp_other} {to_arabic(exp_other)}\n"
+        if iqama_prof: summary += f"{lbl_iqama_p} {to_arabic(iqama_prof)}\n\n"
+        summary += f"{sec_ready}\n"
+        if transfers: summary += f"{lbl_trans} {to_arabic(transfers)}\n"
+        if ar_lang_val: summary += f"{lbl_lang} {to_arabic(ar_lang_val)}\n"
+        if iqama_rem: summary += f"{lbl_rem} {iqama_rem} {val_months}\n"
+        if "yes" in card.lower() or "نعم" in card.lower() or "ساري" in card.lower():
+            v_info = f" ({card_val} {val_months})" if card_val else ""
+            summary += f"{lbl_card} {val_card_status}{v_info}\n"
+        summary += f"\n{sep}\n{footer}"
+
+        # -- UI Display --
+        d = 'rtl' if is_ar else 'ltr'
+        a = 'right' if is_ar else 'left'
+        st.markdown(f"<div style='direction:{d};text-align:{a};'>", unsafe_allow_html=True)
+        st.success(msg_success)
+        st.code(summary, language="markdown")
+        st.markdown("</div>", unsafe_allow_html=True)
+        
+    if st.button("✨ " + ("إنشاء ملخص العامل" if lang == 'ar' else "Create Worker Summary"), use_container_width=True, key=f"btn_summary_mk_{key_prefix}_{worker_id}"):
+        show_worker_summary_modal()
+
     translate_configs = [
         {"lang_code": "ar", "label": t('translate_cv_btn', lang), "key_suffix": "ar", "target": "ar"},
         {"lang_code": "tl", "label": "✨ Isalin ang CV (Filipino)", "key_suffix": "tl", "target": "tl"}
