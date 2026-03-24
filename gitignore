@@ -1,0 +1,37 @@
+# Local files
+gui_monitor.py
+monitor.py
+users.json
+app_icon.ico
+profile.jpg
+image/
+
+# Credentials and secrets
+credentials.json
+service_account.json
+*.json
+
+# Exclude test scripts and logs
+test_*.py
+check_*.py
+find_*.py
+debug_*.py
+verify_*.py
+fix_*.py
+cleanup_*.py
+temp_*.py
+remove_*.py
+move_*.py
+apply_*.py
+restart_*.py
+*.log
+*.txt
+!requirements.txt
+!packages.txt
+
+# Notification local state
+notif_seen_admin.json
+notification_cache.json
+notification_state.json
+whatsapp_history.json
+bengali_data.json
