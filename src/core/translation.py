@@ -46,8 +46,8 @@ class TranslationManager:
             "عاملة نظافة": "Cleaner",
 
             # Beauty / Salon
-            "بدكير": ["Pedicure", "Technician"],
-            "منكير": ["Manicure", "Technician"],
+            "بدكير": ["Pedicure", "Nail"],
+            "منكير": ["Manicure", "Nail"],
             "حلاق": "Barber",
             "حلاقة": "Barber",
             "كوافير": ["Hairdresser", "Hair Stylist"],

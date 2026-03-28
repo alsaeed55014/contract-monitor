@@ -169,7 +169,7 @@ AR_TO_EN = {
     "منسق ورد": ["Florist", "Floral Coordinator"],
     "زهور": ["Florist", "Flowers"],
     "ورد": ["Florist", "Flowers"],
-    "بدكير": ["Pedicure", "Technician"], "منكير": ["Manicure", "Technician"],
+    "بدكير": ["Pedicure", "Nail"], "منكير": ["Manicure", "Nail"],
     "حلاق": ["Barber"],
     "كوافير": ["Hairdresser", "Hair Stylist"],
     "مصففة": ["Hairdresser", "Hair Stylist"],
@@ -642,7 +642,7 @@ class CandidateMatcher:
 
         # Pre-filter using Strict + Smart Matching
         c_words = set(job_text.split())
-        critical_kws = ["زهور", "ورد", "flower", "flowers", "قهوة", "مقهى", "coffee", "طبخ", "طباخ", "cook", "chef", "باريستا", "barista"]
+        critical_kws = ["زهور", "ورد", "flower", "flowers", "قهوة", "مقهى", "coffee", "طبخ", "طباخ", "cook", "chef", "باريستا", "barista", "بدكير", "منكير", "pedicure", "manicure", "nail"]
         required_kws = [kw for kw in critical_kws if kw in job_text]
 
         def exact_combine_and_match(row):

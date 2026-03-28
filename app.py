@@ -2511,24 +2511,7 @@ def render_top_banner():
         if st.button(btn_clear, use_container_width=True, key="clear_all_notifs"):
             # Mark all current notifications as seen for THIS user
             user_id = st.session_state.user.get('username', 'guest')
-            USER_SEEN_FILE = os.path.join(BASE_DIR, f"notif_seen_{user_id}.json")
-            
-            seen_ids = []
-            if os.path.exists(USER_SEEN_FILE):
-                try:
-                    with open(USER_SEEN_FILE, "r") as f:
-                        seen_ids = json.load(f)
-                except: pass
-            
-            # Add current notification IDs to seen list
-            for n in st.session_state.notifications:
-                n_id = n.get('id')
-                if n_id and n_id not in seen_ids:
-                    seen_ids.append(n_id)
-            
-            # Save back to user-specific file
-            with open(USER_SEEN_FILE, "w") as f:
-                json.dump(seen_ids, f)
+            mark_notifications_as_seen(user_id, st.session_state.notifications)
 
             st.session_state.notifications = []
             st.session_state.notif_panel_open = False
@@ -2565,22 +2548,7 @@ def render_top_banner():
             if st.button(btn_clear_side, use_container_width=True):
                 # Mark all current notifications as seen for THIS user
                 user_id = st.session_state.user.get('username', 'guest')
-                USER_SEEN_FILE = os.path.join(BASE_DIR, f"notif_seen_{user_id}.json")
-                
-                seen_ids = []
-                if os.path.exists(USER_SEEN_FILE):
-                    try:
-                        with open(USER_SEEN_FILE, "r") as f:
-                            seen_ids = json.load(f)
-                    except: pass
-                
-                for n in st.session_state.notifications:
-                    n_id = n.get('id')
-                    if n_id and n_id not in seen_ids:
-                        seen_ids.append(n_id)
-                
-                with open(USER_SEEN_FILE, "w") as f:
-                    json.dump(seen_ids, f)
+                mark_notifications_as_seen(user_id, st.session_state.notifications)
 
                 st.session_state.notifications = []
                 st.rerun()
@@ -2882,6 +2850,130 @@ def dashboard():
     elif page == "whatsapp_marketing": render_whatsapp_page()
     elif page == "duplicate_remover": render_duplicate_remover_content()
 
+def render_advanced_filters(key_prefix, lang, include_expired=True, default_expanded=False):
+    lbl_age = t("age", lang)
+    lbl_contract = t("contract_end", lang)
+    lbl_reg = t("registration_date", lang)
+    lbl_enable = "تفعيل" if lang == "ar" else "Activate"
+    
+    filters = {}
+    
+    with st.expander(t("advanced_filters", lang) if t("advanced_filters", lang) != "advanced_filters" else "تصفية متقدمة", expanded=default_expanded):
+        st.markdown(f'<div class="premium-filter-label">📅 {t("filter_dates_group", lang)}</div>', unsafe_allow_html=True)
+        c1, c2, c3 = st.columns(3)
+        
+        with c1:
+            use_age = st.checkbox(f" {lbl_enable} {lbl_age}", key=f"{key_prefix}_use_age")
+            if use_age:
+                ac1, ac2 = st.columns(2)
+                with ac1:
+                    a_min = st.number_input("من سن" if lang == 'ar' else "From", 1, 100, 16, key=f"{key_prefix}_age_min")
+                with ac2:
+                    a_max = st.number_input("إلى سن" if lang == 'ar' else "To", 1, 100, 35, key=f"{key_prefix}_age_max")
+                age_range = (a_min, a_max)
+            else: 
+                age_range = (16, 35)
+
+        with c2:
+            use_contract = st.checkbox(f" {lbl_enable} {lbl_contract}", key=f"{key_prefix}_use_contract")
+            if use_contract:
+                contract_range = st.date_input("Contract Range", (datetime.now().date(), datetime.now().date() + timedelta(days=30)), label_visibility="collapsed", key=f"{key_prefix}_contract_range")
+            else: contract_range = []
+
+        with c3:
+            use_reg = st.checkbox(f" {lbl_enable} {lbl_reg}", key=f"{key_prefix}_use_reg")
+            if use_reg:
+                reg_range = st.date_input("Registration Range", (datetime.now().date().replace(day=1), datetime.now().date()), label_visibility="collapsed", key=f"{key_prefix}_reg_range")
+            else: reg_range = []
+
+        st.markdown("<br>", unsafe_allow_html=True)
+        st.markdown(f'<div class="premium-filter-label">⚙️ {t("filter_advanced_group", lang)}</div>', unsafe_allow_html=True)
+        
+        c2_1, c2_2, c2_3 = st.columns(3)
+        
+        with c2_1:
+            use_expired = False
+            if include_expired:
+                use_expired = st.checkbox(t("expired", lang), key=f"{key_prefix}_use_expired")
+                if use_expired:
+                    st.caption("⚠️ " + ("ترتيب من الأقدم" if lang == "ar" else "Sorting Oldest first"))
+            else:
+                st.write("") # Spacer
+
+        with c2_2:
+            use_not_working = st.checkbox("No (هل يعمل حالياً؟)" if lang == "ar" else "Not Working (No)", key=f"{key_prefix}_use_not_working")
+            
+        with c2_3:
+            transfer_options = {
+                "": f"— {t('transfer_all', lang)} —",
+                "First time": t("transfer_1", lang),
+                "Second time": t("transfer_2", lang),
+                "The third time": t("transfer_3", lang),
+                "More than three": t("transfer_more", lang)
+            }
+            selected_transfer_label = st.selectbox(
+                t("transfer_count_label", lang),
+                options=list(transfer_options.values()),
+                key=f"{key_prefix}_transfer_count"
+            )
+            selected_transfer_key = [k for k, v in transfer_options.items() if v == selected_transfer_label][0]
+        
+        st.markdown("<br>", unsafe_allow_html=True)
+        c3_1, c3_2 = st.columns(2)
+        with c3_1:
+            use_no_huroob = st.checkbox(t("no_huroob", lang), key=f"{key_prefix}_use_no_huroob")
+        with c3_2:
+            use_work_outside = st.checkbox(t("work_outside_city", lang), key=f"{key_prefix}_use_work_outside")
+
+    # Gather Filters
+    if use_age:
+        filters['age_enabled'] = True
+        filters['age_min'] = age_range[0]
+        filters['age_max'] = age_range[1]
+    
+    if use_contract and len(contract_range) == 2:
+        filters['contract_enabled'] = True
+        filters['contract_end_start'] = contract_range[0]
+        filters['contract_end_end'] = contract_range[1]
+        
+    if use_reg and len(reg_range) == 2:
+        filters['date_enabled'] = True
+        filters['date_start'] = reg_range[0]
+        filters['date_end'] = reg_range[1]
+
+    if include_expired and use_expired:
+        filters['expired_only'] = True
+
+    if use_not_working:
+        filters['not_working_only'] = True
+
+    if use_no_huroob:
+        filters['no_huroob'] = True
+
+    if use_work_outside:
+        filters['work_outside_city'] = True
+        
+    if selected_transfer_key:
+        filters['transfer_count'] = selected_transfer_key
+        
+    return filters
+
+def mark_notifications_as_seen(user_id, notifications):
+    USER_SEEN_FILE = os.path.join(BASE_DIR, f"notif_seen_{user_id}.json")
+    seen_ids = []
+    if os.path.exists(USER_SEEN_FILE):
+        try:
+            with open(USER_SEEN_FILE, "r") as f:
+                seen_ids = json.load(f)
+        except: pass
+    
+    for n in notifications:
+        n_id = n.get('id')
+        if n_id and n_id not in seen_ids:
+            seen_ids.append(n_id)
+    
+    with open(USER_SEEN_FILE, "w") as f:
+        json.dump(seen_ids, f)
 
 
 def __apply_pinned_columns(df_or_style, cfg=None):
@@ -3027,61 +3119,10 @@ def render_dashboard_content():
     st.markdown("---")
     
     # --- ADD SMART SEARCH UI TO DASHBOARD ---
-    lbl_age = t("age", lang)
-    lbl_contract = t("contract_end", lang)
-    lbl_reg = t("registration_date", lang)
-    lbl_enable = "تفعيل" if lang == "ar" else "Activate"
-
-    with st.expander(t("advanced_filters", lang) if t("advanced_filters", lang) != "advanced_filters" else "تصفية متقدمة", expanded=False):
-        st.markdown(f'<div class="premium-filter-label">📅 {t("filter_dates_group", lang)}</div>', unsafe_allow_html=True)
-        c1, c2, c3 = st.columns(3)
-        with c1:
-            use_age = st.checkbox(f" {lbl_enable} {lbl_age}", key="dash_use_age_filter")
-            if use_age:
-                ac1, ac2 = st.columns(2)
-                with ac1: a_min = st.number_input("من سن" if lang == 'ar' else "From", 1, 100, 16, key="dash_age_min")
-                with ac2: a_max = st.number_input("إلى سن" if lang == 'ar' else "To", 1, 100, 35, key="dash_age_max")
-                age_range = (a_min, a_max)
-            else: age_range = (16, 35)
-        with c2:
-            use_contract = st.checkbox(f" {lbl_enable} {lbl_contract}", key="dash_use_contract_filter")
-            if use_contract:
-                contract_range = st.date_input("Contract Range", (datetime.now().date(), datetime.now().date() + timedelta(days=30)), label_visibility="collapsed", key="dash_contract_range")
-            else: contract_range = []
-        with c3:
-            use_reg = st.checkbox(f" {lbl_enable} {lbl_reg}", key="dash_use_reg_filter")
-            if use_reg:
-                reg_range = st.date_input("Registration Range", (datetime.now().date().replace(day=1), datetime.now().date()), label_visibility="collapsed", key="dash_reg_range")
-            else: reg_range = []
-
-        st.markdown("<br>", unsafe_allow_html=True)
-        st.markdown(f'<div class="premium-filter-label">⚙️ {t("filter_advanced_group", lang)}</div>', unsafe_allow_html=True)
-        c2_1, c2_2, c2_3 = st.columns(3)
-        with c2_1:
-            use_not_working = st.checkbox("No (هل يعمل حالياً؟)" if lang == "ar" else "Not Working (No)", key="dash_use_not_working")
-        with c2_2:
-            transfer_options = {"": f"— {t('transfer_all', lang)} —", "First time": t("transfer_1", lang), "Second time": t("transfer_2", lang), "The third time": t("transfer_3", lang), "More than three": t("transfer_more", lang)}
-            selected_transfer_label = st.selectbox(t("transfer_count_label", lang), options=list(transfer_options.values()), key="dash_transfer_dropdown")
-            selected_transfer_key = [k for k, v in transfer_options.items() if v == selected_transfer_label][0]
-        with c2_3:
-            use_no_huroob = st.checkbox(t("no_huroob", lang), key="dash_use_no_huroob")
-        
-        st.markdown("<br>", unsafe_allow_html=True)
-        c3_1, c3_2 = st.columns(2)
-        with c3_1:
-            use_work_outside = st.checkbox(t("work_outside_city", lang), key="dash_use_work_outside")
+    dash_filters = render_advanced_filters("dash", lang, include_expired=False)
 
     dash_query = st.text_input(t("smart_search", lang), placeholder=t("search_placeholder", lang), key="dash_search_query")
     dash_search_clicked = st.button(t("search_btn", lang), key="dash_search_btn", use_container_width=True, type="primary")
-
-    dash_filters = {}
-    if use_age: dash_filters['age_enabled'] = True; dash_filters['age_min'] = age_range[0]; dash_filters['age_max'] = age_range[1]
-    if use_contract and len(contract_range) == 2: dash_filters['contract_enabled'] = True; dash_filters['contract_end_start'] = contract_range[0]; dash_filters['contract_end_end'] = contract_range[1]
-    if use_reg and len(reg_range) == 2: dash_filters['date_enabled'] = True; dash_filters['date_start'] = reg_range[0]; dash_filters['date_end'] = reg_range[1]
-    if use_not_working: dash_filters['not_working_only'] = True
-    if use_no_huroob: dash_filters['no_huroob'] = True
-    if use_work_outside: dash_filters['work_outside_city'] = True
-    if selected_transfer_key: dash_filters['transfer_count'] = selected_transfer_key
 
     st.markdown("---")
     # --- END SMART SEARCH UI ---
@@ -3224,78 +3265,8 @@ def render_search_content():
     lbl_age = t("age", lang)
     lbl_contract = t("contract_end", lang)
     lbl_reg = t("registration_date", lang)
-    lbl_enable = "تفعيل" if lang == "ar" else "Activate"
-    
     # Advanced Filters UI
-    # Advanced Filters UI
-    filter_expander_key = f"filter_expander_{st.session_state.get('search_entry_count', 0)}"
-    with st.expander(t("advanced_filters", lang) if t("advanced_filters", lang) != "advanced_filters" else "تصفية متقدمة", expanded=False):
-        
-        # Row 1: Date & Range Filters
-        st.markdown(f'<div class="premium-filter-label">📅 {t("filter_dates_group", lang)}</div>', unsafe_allow_html=True)
-        c1, c2, c3 = st.columns(3)
-        
-        with c1:
-            use_age = st.checkbox(f" {lbl_enable} {lbl_age}", key="use_age_filter")
-            if use_age:
-                ac1, ac2 = st.columns(2)
-                with ac1:
-                    a_min = st.number_input("من سن" if lang == 'ar' else "From", 1, 100, 16, key="age_min_search")
-                with ac2:
-                    a_max = st.number_input("إلى سن" if lang == 'ar' else "To", 1, 100, 35, key="age_max_search")
-                age_range = (a_min, a_max)
-            else: 
-                age_range = (16, 35)
-
-        with c2:
-            use_contract = st.checkbox(f" {lbl_enable} {lbl_contract}", key="use_contract_filter")
-            if use_contract:
-                contract_range = st.date_input("Contract Range", (datetime.now().date(), datetime.now().date() + timedelta(days=30)), label_visibility="collapsed", key="contract_range")
-            else: contract_range = []
-
-        with c3:
-            use_reg = st.checkbox(f" {lbl_enable} {lbl_reg}", key="use_reg_filter")
-            if use_reg:
-                reg_range = st.date_input("Registration Range", (datetime.now().date().replace(day=1), datetime.now().date()), label_visibility="collapsed", key="reg_range")
-            else: reg_range = []
-
-        st.markdown("<br>", unsafe_allow_html=True)
-        st.markdown(f'<div class="premium-filter-label">⚙️ {t("filter_advanced_group", lang)}</div>', unsafe_allow_html=True)
-        
-        # Row 2: Status & Dropdown Filters
-        c2_1, c2_2, c2_3 = st.columns(3)
-        
-        with c2_1:
-            use_expired = st.checkbox(t("expired", lang), key="use_expired_filter")
-            if use_expired:
-                st.caption("⚠️ " + ("ترتيب من الأقدم" if lang == "ar" else "Sorting Oldest first"))
-        
-        with c2_2:
-            use_not_working = st.checkbox("No (هل يعمل حالياً؟)" if lang == "ar" else "Not Working (No)", key="use_not_working_filter")
-            
-        with c2_3:
-            transfer_options = {
-                "": f"— {t('transfer_all', lang)} —",
-                "First time": t("transfer_1", lang),
-                "Second time": t("transfer_2", lang),
-                "The third time": t("transfer_3", lang),
-                "More than three": t("transfer_more", lang)
-            }
-            selected_transfer_label = st.selectbox(
-                t("transfer_count_label", lang),
-                options=list(transfer_options.values()),
-                key="transfer_count_dropdown"
-            )
-            # Find the key (English value) from the selected label
-            selected_transfer_key = [k for k, v in transfer_options.items() if v == selected_transfer_label][0]
-        
-        # Row 3: Huroob & Outside City Filters
-        st.markdown("<br>", unsafe_allow_html=True)
-        c3_1, c3_2 = st.columns(2)
-        with c3_1:
-            use_no_huroob = st.checkbox(t("no_huroob", lang), key="use_no_huroob_filter")
-        with c3_2:
-            use_work_outside = st.checkbox(t("work_outside_city", lang), key="use_work_outside_filter")
+    filters = render_advanced_filters("search", lang, include_expired=True)
 
     # 2. Search Input & Button
     st.markdown('<div class="search-container">', unsafe_allow_html=True)
@@ -3305,7 +3276,7 @@ def render_search_content():
     search_clicked = st.button(t("search_btn", lang), key="main_search_btn", use_container_width=True, type="primary")
     
     # NEW: Detect search trigger (Button OR Enter) and increment session ID to reset table selection
-    current_search_hash = f"{query}_{str(st.session_state.get('use_age_filter'))}_{str(st.session_state.get('use_contract_filter'))}"
+    current_search_hash = f"{query}_{str(st.session_state.get('search_use_age'))}_{str(st.session_state.get('search_use_contract'))}"
     if search_clicked or (query and st.session_state.get('last_search_hash') != current_search_hash):
         st.session_state.search_entry_count = st.session_state.get('search_entry_count', 0) + 1
         st.session_state.last_search_hash = current_search_hash
@@ -3313,39 +3284,6 @@ def render_search_content():
     # Notification placeholder right below the button
     search_notif = st.empty()
     st.markdown('</div>', unsafe_allow_html=True)
-    
-    # Gather Filters
-    filters = {}
-    
-    if use_age:
-        filters['age_enabled'] = True
-        filters['age_min'] = age_range[0]
-        filters['age_max'] = age_range[1]
-    
-    if use_contract and len(contract_range) == 2:
-        filters['contract_enabled'] = True
-        filters['contract_end_start'] = contract_range[0]
-        filters['contract_end_end'] = contract_range[1]
-        
-    if use_reg and len(reg_range) == 2:
-        filters['date_enabled'] = True
-        filters['date_start'] = reg_range[0]
-        filters['date_end'] = reg_range[1]
-
-    if use_expired:
-        filters['expired_only'] = True
-
-    if use_not_working:
-        filters['not_working_only'] = True
-
-    if use_no_huroob:
-        filters['no_huroob'] = True
-
-    if use_work_outside:
-        filters['work_outside_city'] = True
-        
-    if selected_transfer_key:
-        filters['transfer_count'] = selected_transfer_key
     
     # Check if any filter is actually active
     has_active_filter = bool(filters)
@@ -4963,97 +4901,7 @@ def render_customer_requests_content():
     loading_placeholder.empty()
 
     # ────── Advanced Filters for Matching ──────
-    lbl_age = t("age", lang)
-    lbl_contract = t("contract_end", lang)
-    lbl_reg = t("registration_date", lang)
-    lbl_enable = "تفعيل" if lang == "ar" else "Activate"
-    
-    with st.expander(t("advanced_filters", lang) if t("advanced_filters", lang) != "advanced_filters" else "تصفية متقدمة", expanded=False):
-        
-        # Row 1: Date & Range Filters
-        st.markdown(f'<div class="premium-filter-label">📅 {t("filter_dates_group", lang)}</div>', unsafe_allow_html=True)
-        c1, c2, c3 = st.columns(3)
-        
-        with c1:
-            use_age = st.checkbox(f" {lbl_enable} {lbl_age}", key="cr_use_age_filter")
-            if use_age:
-                ac1, ac2 = st.columns(2)
-                with ac1:
-                    a_min = st.number_input("من سن" if lang == 'ar' else "From", 1, 100, 16, key="cr_age_min")
-                with ac2:
-                    a_max = st.number_input("إلى سن" if lang == 'ar' else "To", 1, 100, 35, key="cr_age_max")
-                age_range = (a_min, a_max)
-            else: 
-                age_range = (16, 35)
-
-        with c2:
-            use_contract = st.checkbox(f" {lbl_enable} {lbl_contract}", key="cr_use_contract_filter")
-            if use_contract:
-                contract_range = st.date_input("Contract Range", (datetime.now().date(), datetime.now().date() + timedelta(days=30)), label_visibility="collapsed", key="cr_contract_range")
-            else: contract_range = []
-
-        with c3:
-            use_reg = st.checkbox(f" {lbl_enable} {lbl_reg}", key="cr_use_reg_filter")
-            if use_reg:
-                reg_range = st.date_input("Registration Range", (datetime.now().date().replace(day=1), datetime.now().date()), label_visibility="collapsed", key="cr_reg_range")
-            else: reg_range = []
-
-        st.markdown("<br>", unsafe_allow_html=True)
-        st.markdown(f'<div class="premium-filter-label">⚙️ {t("filter_advanced_group", lang)}</div>', unsafe_allow_html=True)
-        
-        # Row 2: Status & Dropdown Filters
-        c2_1, c2_2, c2_3 = st.columns(3)
-        
-        with c2_1:
-            use_expired = st.checkbox(t("expired", lang), key="cr_use_expired_filter")
-            if use_expired:
-                st.caption("⚠️ " + ("ترتيب من الأقدم" if lang == "ar" else "Sorting Oldest first"))
-        
-        with c2_2:
-            use_not_working = st.checkbox("No (هل يعمل حالياً؟)" if lang == "ar" else "Not Working (No)", key="cr_use_not_working_filter")
-            
-        with c2_3:
-            transfer_options = {
-                "": f"— {t('transfer_all', lang)} —",
-                "First time": t("transfer_1", lang),
-                "Second time": t("transfer_2", lang),
-                "The third time": t("transfer_3", lang),
-                "More than three": t("transfer_more", lang)
-            }
-            selected_transfer_label = st.selectbox(
-                t("transfer_count_label", lang),
-                options=list(transfer_options.values()),
-                key="cr_transfer_count_dropdown"
-            )
-            selected_transfer_key = [k for k, v in transfer_options.items() if v == selected_transfer_label][0]
-        
-        # Row 3: Huroob & Outside City Filters
-        st.markdown("<br>", unsafe_allow_html=True)
-        c3_1, c3_2 = st.columns(2)
-        with c3_1:
-            use_no_huroob = st.checkbox(t("no_huroob", lang), key="cr_use_no_huroob_filter")
-        with c3_2:
-            use_work_outside = st.checkbox(t("work_outside_city", lang), key="cr_use_work_outside_filter")
-
-    # Gather Filters
-    filters = {}
-    if use_age:
-        filters['age_enabled'] = True
-        filters['age_min'] = age_range[0]
-        filters['age_max'] = age_range[1]
-    if use_contract and len(contract_range) == 2:
-        filters['contract_enabled'] = True
-        filters['contract_end_start'] = contract_range[0]
-        filters['contract_end_end'] = contract_range[1]
-    if use_reg and len(reg_range) == 2:
-        filters['date_enabled'] = True
-        filters['date_start'] = reg_range[0]
-        filters['date_end'] = reg_range[1]
-    if use_expired: filters['expired_only'] = True
-    if use_not_working: filters['not_working_only'] = True
-    if use_no_huroob: filters['no_huroob'] = True
-    if use_work_outside: filters['work_outside_city'] = True
-    if selected_transfer_key: filters['transfer_count'] = selected_transfer_key
+    filters = render_advanced_filters("cr", lang)
 
     if df.empty:
         st.warning(t("no_data", lang))
@@ -5729,5 +5577,4 @@ if not st.session_state.user:
 else:
     placeholder.empty() # Explicitly clear just in case
     dashboard()
-    # Call the silent monitor AFTER dashboard to ensure fast initial load
-    silent_notification_monitor()
+    # Double dashboard notification monitor removed to avoid redundant API request
