@@ -5320,7 +5320,7 @@ def render_bengali_supply_content():
             g_notes = st.text_area(t("general_notes", lang), label_visibility="collapsed", key="w_g_notes")
             
             if st.form_submit_button(t("add_worker_btn", lang), use_container_width=True):
-                if w_name and (sel_s if s_options else True) and (sel_e if e_options else True):
+                if w_name and (selected_s if s_options else True) and (selected_e if e_options else True):
                     # Save files physically
                     saved_files = []
                     if uploaded_files:
@@ -5347,8 +5347,8 @@ def render_bengali_supply_content():
                         "name": w_name,
                         "mobile": w_mobile,
                         "id": w_id,
-                        "supplier": sel_s if s_options else "",
-                        "employer": sel_e if e_options else "",
+                        "supplier": selected_s if s_options else "",
+                        "employer": selected_e if e_options else "",
                         "file_notes": f_notes,
                         "general_notes": g_notes,
                         "files": saved_files,
