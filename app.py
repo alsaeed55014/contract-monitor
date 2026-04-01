@@ -4519,8 +4519,11 @@ def render_order_processing_content():
     def info_cell(icon, label_text, value, color="#F4F4F4", min_width="200px"):
         if not value or str(value).strip().lower() in ["nan", "none", ""]:
             return ""
-        # Auto translate Arabic values to English if in English interface
-        disp_val = auto_translate(str(value), target_lang='en')
+        # Only auto-translate values when in English interface
+        if lang == 'en':
+            disp_val = auto_translate(str(value), target_lang='en')
+        else:
+            disp_val = str(value)
         return f'<div style="background: rgba(255,255,255,0.04); padding: 12px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.06); margin: 5px; flex: 1 1 {min_width}; min-height: 80px; display: flex; flex-direction: column; justify-content: center;"><span style="color: #888; font-size: 0.8rem;">{label_text}</span><span style="color: {color}; font-size: 1.1rem; font-weight: 600; margin-top: 4px;">{icon} {disp_val}</span></div>'
 
     # --- Timestamp column lookup ---
@@ -4555,6 +4558,8 @@ def render_order_processing_content():
             display_title = f"🏢 {company_val}" if user_role != "viewer" else "🏢 " + ("طلب عميل" if lang == 'ar' else f"Customer Request")
             
             # Start Neon Frame and Header
+            card_dir = 'rtl' if lang == 'ar' else 'ltr'
+            header_border_side = 'border-right' if lang == 'ar' else 'border-left'
             st.markdown(f"""
 <style>
 @keyframes neonWhitePulseCard {{
@@ -4568,12 +4573,12 @@ def render_order_processing_content():
     margin: 15px 0;
     background: rgba(10, 14, 26, 0.6);
     animation: neonWhitePulseCard 3s ease-in-out infinite alternate;
-    direction: rtl;
+    direction: {card_dir};
 }}
 </style>
 <div class="neon-wrapper-card">
     <div style="background: linear-gradient(90deg, rgba(255,255,255,0.1), transparent); 
-                padding: 12px 20px; border-radius: 12px; border-right: 5px solid #FFFFFF; margin: 0 0 15px 0;
+                padding: 12px 20px; border-radius: 12px; {header_border_side}: 5px solid #FFFFFF; margin: 0 0 15px 0;
                 box-shadow: 0 0 15px rgba(255,255,255,0.2);">
         <h3 style="color: #FFFFFF; margin: 0; font-family: 'Tajawal', sans-serif; text-shadow: 0 0 10px rgba(255,255,255,0.5);">
             {display_title} <span style="font-size: 0.8rem; color: #888;">#{idx+1}</span>
