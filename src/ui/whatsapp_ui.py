@@ -173,56 +173,71 @@ def render_whatsapp_page():
         'job_title_placeholder': "مثال: Driver, Nurse..." if is_ar else "e.g. Driver, Nurse...",
     }
 
-    # 1. Connection Status
+    # 1. Connection Status (Simplified One-Step Login)
     status = st.session_state.wa_service.get_status()
-    c1, c2, c3 = st.columns([2, 1, 1])
-    with c1:
-        if status == "Connected": st.success(lbl['connected'])
-        elif status == "Awaiting Login": st.warning(lbl['awaiting'])
-        elif status == "Loading...": st.info(lbl['loading'])
-        else:
-            st.error(lbl['stopped'])
-            if getattr(st.session_state.wa_service, 'last_error', ''):
-                st.code(st.session_state.wa_service.last_error, language=None)
-    with c2:
-        if st.button(lbl['start_engine'], type="primary", use_container_width=True):
-            with st.spinner(lbl['starting']):
-                st.session_state.wa_service.close()
-                ok, msg = st.session_state.wa_service.start_driver(headless=is_cloud, force_clean=False)
-                if ok: st.toast(f"✅ {msg}")
-                else: st.error(f"❌ {msg}")
-                st.rerun()
-    with c3:
-        if st.button(lbl['full_reset'], use_container_width=True):
-            with st.spinner(lbl['resetting']):
-                st.session_state.wa_service.close()
-                ok, msg = st.session_state.wa_service.start_driver(headless=is_cloud, force_clean=True)
-                if ok: st.toast(f"✅ {msg}")
-                else: st.error(f"❌ {msg}")
-                st.rerun()
+    
+    if status != "Connected":
+        c1, c2 = st.columns([3, 1])
+        with c1:
+            if st.button("🚀 تشغيل واتساب (خطوة واحدة)" if is_ar else "🚀 Start WhatsApp (One Step)", type="primary", use_container_width=True):
+                with st.status("جاري تشغيل واتساب وتأمين الاتصال..." if is_ar else "Starting WhatsApp and securing connection...", expanded=True) as status_box:
+                    st.write("بدء تشغيل المتصفح الخفي..." if is_ar else "Starting browser...")
+                    st.session_state.wa_service.close()
+                    ok, msg = st.session_state.wa_service.start_driver(headless=is_cloud, force_clean=False)
+                    
+                    if not ok:
+                        status_box.update(label="فشل التشغيل" if is_ar else "Failed to start", state="error")
+                        st.error(msg)
+                        st.stop()
+                    
+                    st.write("جاري التحقق من حالة الدخول..." if is_ar else "Checking login status...")
+                    
+                    status_ph = st.empty()
+                    qr_ph = st.empty()
+                    
+                    # Loop up to 45 times (90 seconds)
+                    for _ in range(45):
+                        current_status = st.session_state.wa_service.get_status()
+                        
+                        if current_status == "Connected":
+                            status_box.update(label="تم الاتصال بنجاح!" if is_ar else "Connected Successfully!", state="complete")
+                            qr_ph.empty()
+                            time.sleep(1)
+                            st.rerun()
+                            break
+                        elif current_status == "Awaiting Login":
+                            status_box.update(label="بانتظار مسح الباركود..." if is_ar else "Awaiting QR scan...", state="running")
+                            status_ph.warning("⚠️ الباركود جاهز، قم بمسحه من تطبيق واتساب للاتصال..." if is_ar else "⚠️ QR Ready, scan to connect...")
+                            qr_b64 = st.session_state.wa_service.get_qr_hd()
+                            if qr_b64:
+                                src = qr_b64 if qr_b64.startswith("data:") else f"data:image/png;base64,{qr_b64}"
+                                qr_ph.markdown(f'<div style="background: #FFFFFF; padding: 25px; border-radius: 20px; max-width: 420px; margin: 15px auto; text-align: center; box-shadow: 0 0 40px rgba(255,255,255,0.4);"><img src="{src}" style="width: 350px; height: 350px; image-rendering: pixelated; image-rendering: crisp-edges;" /></div>', unsafe_allow_html=True)
+                        else:
+                            status_ph.info(lbl['loading'])
+                        
+                        time.sleep(2)
+                    else:
+                        status_box.update(label="انتهى وقت الانتظار" if is_ar else "Timeout", state="error")
+                        st.warning("انتهى وقت الانتظار. لم يتم مسح الباركود." if is_ar else "Timeout. QR code was not scanned.")
 
-    # 2. QR CODE SECTION
-    if status == "Awaiting Login":
-        qr_b64 = st.session_state.wa_service.get_qr_hd()
-        if qr_b64:
-            src = qr_b64 if qr_b64.startswith("data:") else f"data:image/png;base64,{qr_b64}"
-            st.markdown(f'<div style="background: #FFFFFF; padding: 25px; border-radius: 20px; max-width: 420px; margin: 15px auto; text-align: center; box-shadow: 0 0 40px rgba(255,255,255,0.4);"><img src="{src}" style="width: 350px; height: 350px; image-rendering: pixelated; image-rendering: crisp-edges;" /></div>', unsafe_allow_html=True)
-        else:
-            st.info(lbl['qr_loading'])
-        
-        b1, b2 = st.columns(2)
-        with b1:
-            if st.button(lbl['refresh_qr'], use_container_width=True):
-                st.rerun()
-        with b2:
-            if st.button(lbl['verify'], use_container_width=True, type="primary"):
-                with st.spinner(lbl['verifying']):
-                    connected = st.session_state.wa_service.wait_for_connection(timeout=30)
-                if connected:
-                    st.toast(lbl['connected_ok'])
-                    st.balloons()
-                else:
-                    st.error(lbl['not_connected'])
+        with c2:
+            if st.button("🗑️ " + lbl['full_reset'], use_container_width=True):
+                with st.spinner(lbl['resetting']):
+                    st.session_state.wa_service.close()
+                    ok, msg = st.session_state.wa_service.start_driver(headless=is_cloud, force_clean=True)
+                    if ok: st.toast(f"✅ {msg}")
+                    else: st.error(f"❌ {msg}")
+                    st.rerun()
+    else:
+        # Show connected status and logout easily
+        c1, c2 = st.columns([3, 1])
+        with c1:
+            st.success(lbl['connected'] + " 🎉")
+        with c2:
+            if st.button("🗑️ تسجيل الخروج" if is_ar else "🗑️ Logout", use_container_width=True):
+                st.session_state.wa_service.close()
+                st.session_state.wa_service.start_driver(headless=is_cloud, force_clean=True)
+                st.session_state.wa_service.close() # close it again
                 st.rerun()
 
     # 3. INPUT + BROADCAST
@@ -501,14 +516,14 @@ Abu Fahd"""
         st.markdown(lbl['settings_title'])
         col_s1, col_s2, col_s3, col_s4 = st.columns(4)
         with col_s1:
-            delay = st.number_input(lbl['delay'], min_value=5, max_value=600, value=15, disabled=st.session_state.wa_running)
+            delay = st.number_input(lbl['delay'], min_value=5, max_value=600, value=60, disabled=st.session_state.wa_running)
         with col_s2:
-            batch_size = st.number_input(lbl['batch_size'], min_value=0, max_value=1000, value=0, help=lbl['batch_help'], disabled=st.session_state.wa_running)
+            batch_size = st.number_input(lbl['batch_size'], min_value=0, max_value=1000, value=10, help=lbl['batch_help'], disabled=st.session_state.wa_running)
         with col_s3:
-            batch_delay_mins = st.number_input(lbl['batch_delay'], min_value=1, max_value=60, value=1, disabled=st.session_state.wa_running)
+            batch_delay_mins = st.number_input(lbl['batch_delay'], min_value=1, max_value=60, value=10, disabled=st.session_state.wa_running)
             batch_delay = int(batch_delay_mins * 60)
         with col_s4:
-            msg_switch_threshold = st.number_input("تبديل الرسالة بعد" if is_ar else "Switch msg after", min_value=1, max_value=1000, value=20, disabled=st.session_state.wa_running)
+            msg_switch_threshold = st.number_input("تبديل الرسالة بعد" if is_ar else "Switch msg after", min_value=1, max_value=1000, value=1, disabled=st.session_state.wa_running)
 
         # Smart detect target changes
         current_fp = ",".join([t['phone'] for t in final_targets]) if final_targets else ""
@@ -582,6 +597,12 @@ Abu Fahd"""
                     wait_ph = st.empty()
                     is_batch_pause = batch_size > 0 and st.session_state.wa_idx % batch_size == 0
                     current_delay = batch_delay if is_batch_pause else delay
+                    
+                    # --- ANTI-BAN MECHANISM: RANDOM JITTER ---
+                    # Adding a random delay so WhatsApp AI doesn't detect a fixed uniform interval bot
+                    jitter = random.randint(2, 6) if not is_batch_pause else random.randint(10, 30)
+                    current_delay = int(current_delay) + jitter
+                    
                     delay_lbl = lbl['pausing'] if is_batch_pause else lbl['next_msg_in']
                     
                     for i in range(current_delay, 0, -1):

@@ -13,9 +13,13 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.keys import Keys
 
+from src.config import BASE_DIR
+
 class WhatsAppService:
     def __init__(self, session_id="wa_pasha_stable"):
-        self.session_path = os.path.join(tempfile.gettempdir(), session_id)
+        # Store session permanently in BASE_DIR to prevent logging out
+        # Prefix with dot (.) to prevent Streamlit from autoreloading when cache files are modified
+        self.session_path = os.path.join(BASE_DIR, ".whatsapp_session", session_id)
         self.driver = None
         self.last_error = ""
 
@@ -53,8 +57,20 @@ class WhatsAppService:
         opts.add_argument("--disable-notifications")
         opts.add_argument("--window-size=1920,1080")
         opts.add_argument(f"user-data-dir={self.session_path}")
-        opts.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36")
+        
+        # Hide Selenium footprint to prevent WhatsApp from logging out or blocking
+        opts.add_experimental_option("excludeSwitches", ["enable-automation"])
+        opts.add_experimental_option("useAutomationExtension", False)
+        opts.add_argument("--disable-blink-features=AutomationControlled")
+        
+        # Only set explicit User-Agent in headless to avoid mobile view, otherwise let Chrome use default
+        if headless:
+            opts.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36")
+        
         opts.add_argument("--disable-extensions")
+        
+        # Keep browser open if script stops
+        opts.add_experimental_option("detach", True)
         opts.page_load_strategy = "eager"
         
         # Find Chrome binary (Windows & Linux)
