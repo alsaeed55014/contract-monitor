@@ -48,6 +48,38 @@ class WhatsAppService:
         self.driver = None
         self.last_error = ""
 
+    def _get_chrome_major_version(self):
+        """Detects the major version of Google Chrome installed on this machine."""
+        import subprocess
+        try:
+            if os.name == 'nt':  # Windows
+                paths = [
+                    os.environ.get("PROGRAMFILES", "C:\\Program Files") + "\\Google\\Chrome\\Application\\chrome.exe",
+                    os.environ.get("PROGRAMFILES(X86)", "C:\\Program Files (x86)") + "\\Google\\Chrome\\Application\\chrome.exe",
+                    os.environ.get("LOCALAPPDATA", "") + "\\Google\\Chrome\\Application\\chrome.exe",
+                ]
+                for path in paths:
+                    if os.path.exists(path):
+                        result = subprocess.run(
+                            [path, "--version"],
+                            capture_output=True, text=True, timeout=5
+                        )
+                        m = re.search(r'(\d+)\.', result.stdout)
+                        if m:
+                            return int(m.group(1))
+            else:  # Linux/Mac
+                for cmd in ["google-chrome --version", "chromium --version", "chromium-browser --version"]:
+                    try:
+                        result = subprocess.run(cmd.split(), capture_output=True, text=True, timeout=5)
+                        m = re.search(r'(\d+)\.', result.stdout)
+                        if m:
+                            return int(m.group(1))
+                    except Exception:
+                        continue
+        except Exception:
+            pass
+        return None
+
     def _apply_stealth(self):
         """Inject stealth JavaScript to hide automation fingerprints."""
         try:
@@ -95,6 +127,9 @@ class WhatsAppService:
         try:
             import undetected_chromedriver as uc
 
+            # Auto-detect Chrome version installed on this machine
+            chrome_ver = self._get_chrome_major_version()
+
             options = uc.ChromeOptions()
             options.add_argument(f"--user-data-dir={self.session_path}")
             options.add_argument("--no-sandbox")
@@ -105,28 +140,30 @@ class WhatsAppService:
             options.add_argument("--lang=en-US")
 
             if headless:
-                # headless=2 is the new Chrome headless mode, less detectable
                 options.add_argument("--headless=new")
 
-            self.driver = uc.Chrome(
+            uc_kwargs = dict(
                 options=options,
                 user_data_dir=self.session_path,
                 headless=headless,
-                use_subprocess=True,   # Keeps browser alive if Python restarts
-                version_main=None,     # Auto-detect Chrome version
+                use_subprocess=True,
             )
+            # Only pass version_main if we detected it (avoids mismatch errors)
+            if chrome_ver:
+                uc_kwargs["version_main"] = chrome_ver
 
+            self.driver = uc.Chrome(**uc_kwargs)
             self._apply_stealth()
             self.driver.get("https://web.whatsapp.com")
             return True, "Ready (Stealth Engine)"
 
         except ImportError:
-            pass  # Fall through to selenium
+            pass  # undetected-chromedriver not installed, fall through
         except Exception as e:
             self.last_error = f"UC: {str(e)[:80]}"
             self.close()
 
-        # ── Attempt 2: Regular selenium + manual stealth patches (FALLBACK) ──
+        # ── Attempt 2: Regular selenium + stealth patches + correct driver ──
         try:
             from selenium import webdriver
             from selenium.webdriver.chrome.options import Options
@@ -144,24 +181,16 @@ class WhatsAppService:
             opts.add_argument("--lang=en-US")
             opts.add_argument(f"--user-data-dir={self.session_path}")
 
-            # Critical stealth flags
             opts.add_experimental_option("excludeSwitches", ["enable-automation", "enable-logging"])
             opts.add_experimental_option("useAutomationExtension", False)
             opts.add_argument("--disable-blink-features=AutomationControlled")
-
-            if headless:
-                opts.add_argument("--headless=new")
-                opts.add_argument(
-                    "user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                    "AppleWebKit/537.36 (KHTML, like Gecko) "
-                    "Chrome/122.0.0.0 Safari/537.36"
-                )
-
-            # Keep browser open if Streamlit restarts
             opts.add_experimental_option("detach", True)
             opts.page_load_strategy = "eager"
 
-            # Find Chrome binary
+            if headless:
+                opts.add_argument("--headless=new")
+
+            # Find Chrome binary on Windows
             if os.name == 'nt':
                 for b in [
                     os.environ.get("PROGRAMFILES", "C:\\Program Files") + "\\Google\\Chrome\\Application\\chrome.exe",
@@ -173,18 +202,23 @@ class WhatsAppService:
                         break
             else:
                 for b in ["/usr/bin/chromium", "/usr/bin/chromium-browser",
-                          "/usr/bin/google-chrome", "/usr/bin/google-chrome-stable",
-                          "/snap/bin/chromium"]:
+                          "/usr/bin/google-chrome", "/usr/bin/google-chrome-stable"]:
                     if os.path.exists(b):
                         opts.binary_location = b
                         break
 
-            # Try webdriver-manager
+            # webdriver-manager with correct Chrome version
+            service = None
             try:
                 from webdriver_manager.chrome import ChromeDriverManager
-                service = Service(ChromeDriverManager().install())
+                from webdriver_manager.core.os_manager import ChromeType
+                chrome_ver = self._get_chrome_major_version()
+                if chrome_ver:
+                    service = Service(ChromeDriverManager(driver_version=f"{chrome_ver}").install())
+                else:
+                    service = Service(ChromeDriverManager().install())
             except Exception:
-                service = None
+                pass
 
             if service:
                 self.driver = webdriver.Chrome(service=service, options=opts)
