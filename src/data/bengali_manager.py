@@ -196,5 +196,29 @@ class BengaliDataManager:
     def get_suppliers(self):
         return self.data.get("suppliers", [])
 
+
     def get_employers(self):
         return self.data.get("employers", [])
+
+    def return_worker(self, worker_uuid, amount=1):
+        """Decrements headcount for batch entries or deletes individual entries."""
+        for i, w in enumerate(self.data.get("workers", [])):
+            if isinstance(w, dict) and w.get("worker_uuid") == worker_uuid:
+                if "headcount" in w:
+                    try:
+                        current = int(w["headcount"])
+                        new_val = current - amount
+                        if new_val <= 0:
+                            self.data["workers"].pop(i)
+                        else:
+                            w["headcount"] = new_val
+                    except:
+                        self.data["workers"].pop(i)
+                else:
+                    # Individual worker return
+                    self.data["workers"].pop(i)
+                
+                self.save_data()
+                return True
+        return False
+

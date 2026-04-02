@@ -259,8 +259,11 @@ TRANSLATIONS = {
     "suppliers_tab": {"ar": "إدارة الموردين", "en": "Manage Suppliers"},
     "employers_tab": {"ar": "إدارة أصحاب العمل", "en": "Manage Employers"},
     "details_label": {"ar": "عرض التفاصيل", "en": "View Details"},
+
     "edit_btn": {"ar": "تعديل", "en": "Edit"},
+    "return_btn": {"ar": "مرتجع", "en": "Return"},
     "delete_btn_sm": {"ar": "حذف", "en": "Delete"},
+
     "save_btn": {"ar": "حفظ", "en": "Save"},
 
     "columns": {
