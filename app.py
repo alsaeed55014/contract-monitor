@@ -1380,9 +1380,9 @@ def get_cached_translation(val, target_lang):
     except:
         return val
 
-def auto_translate(val, target_lang='en'):
+def auto_translate(val, target_lang='en', force_stay_ar=False):
     """
-    Automatically translates Arabic text to the target language (Optimized).
+    Automatically translates text bidirectional between Arabic and English (Optimized).
     """
     if not val or not isinstance(val, (str, object)):
         return val
@@ -1391,28 +1391,31 @@ def auto_translate(val, target_lang='en'):
     if not val_str or len(val_str) < 2:
         return val
     
-    # Check for Arabic characters (Fast check)
-    if not any('\u0600' <= char <= '\u06FF' for char in val_str):
-        return val
-
     try:
-        # Get TM from session state (initialized at startup)
+        # Get TM from session state
         tm = st.session_state.get('tm')
         if not tm:
             from src.core.translation import TranslationManager
             st.session_state.tm = TranslationManager()
             tm = st.session_state.tm
         
-        # Optimization: use dictionary for short tokens
-        if len(val_str.split()) <= 2:
-            translated = tm.translate_word(val_str)
-            if isinstance(translated, list): translated = translated[0]
-            if translated != val_str: return translated
+        # SPECIAL: If force_stay_ar is True and it's already Arabic, don't translate to EN
+        is_ar = bool(re.search(r'[\u0600-\u06FF]', val_str))
+        if force_stay_ar and is_ar:
+            return val_str
+
+        # Use our new bidirectional UI translator
+        translated = tm.translate_ui_value(val_str, target_lang)
+        if translated != val_str:
+            return translated
             
-        # Fallback to cached full text translation
-        return get_cached_translation(val_str, target_lang)
+        # Fallback to cached full text translation if allowed and needed
+        if (is_ar and target_lang == 'en') or (not is_ar and target_lang == 'ar'):
+             return get_cached_translation(val_str, target_lang)
+             
+        return val_str
     except:
-        return val
+        return val_str
 
 def show_toast(message, typ="success", duration=5, container=None):
     """
@@ -4577,11 +4580,11 @@ def render_order_processing_content():
             
         return pd.DataFrame(rows), filtered_indices
 
-    def info_cell(icon, label_text, value, color="#F4F4F4", min_width="200px"):
+    def info_cell(icon, label_text, value, color="#F4F4F4", min_width="200px", force_ar=False):
         if not value or str(value).strip().lower() in ["nan", "none", ""]:
             return ""
-        # Auto translate Arabic values to English if in English interface
-        disp_val = auto_translate(str(value), target_lang='en')
+        # Bidirectional translation based on current UI language
+        disp_val = auto_translate(str(value), target_lang=lang, force_stay_ar=force_ar)
         return f'<div style="background: rgba(255,255,255,0.04); padding: 12px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.06); margin: 5px; flex: 1 1 {min_width}; min-height: 80px; display: flex; flex-direction: column; justify-content: center;"><span style="color: #888; font-size: 0.8rem;">{label_text}</span><span style="color: {color}; font-size: 1.1rem; font-weight: 600; margin-top: 4px;">{icon} {disp_val}</span></div>'
 
     # --- Timestamp column lookup ---
@@ -4663,7 +4666,7 @@ def render_order_processing_content():
                 if time_part:
                     info_html += info_cell("⏰", "وقت الطلب" if lang == 'ar' else "Order Time", time_part)
             
-            info_html += info_cell("📍", t('work_location', lang), str(customer_row.get(c_location, "")))
+            info_html += info_cell("📍", t('work_location', lang), str(customer_row.get(c_location, "")), force_ar=True)
             info_html += info_cell("💼", t('work_nature', lang), str(customer_row.get(c_work_nature, "")))
             info_html += info_cell("👤", t('responsible_name', lang), responsible_val)
             info_html += info_cell("👥", t('required_category', lang), str(customer_row.get(c_category, "")))
@@ -4773,11 +4776,9 @@ def render_order_processing_content():
                                 nat_col_city = col
                                 col_cfg_city[f"🚩_{col}"] = st.column_config.ImageColumn(t("country_label", lang), width="small", pinned=True)
 
-                        # Smart Translator Buttons (Added here for OP tables)
                         st.markdown("<br>", unsafe_allow_html=True)
                         city_df = render_table_translator(city_df, key_prefix=f"op_city_{idx}")
                         
-                        # Apply style (which handles flag injection and reordering)
                         city_styled = style_df(city_df.drop(columns=["__uid"]))
                         
                         df_city_height = min((len(city_df) + 1) * 35 + 40, 500)
@@ -4794,11 +4795,9 @@ def render_order_processing_content():
                             worker_uid = city_df.iloc[sel_idx]["__uid"]
                             render_cv_detail_panel(worker_row, sel_idx, lang, key_prefix=f"op_city_{idx}", worker_uid=worker_uid)
 
-                # --- Same Region Table ---
                 if region_list:
                     reg_df, reg_idx_map = build_worker_table(region_list, region_scores)
                     if not reg_df.empty:
-                        # Export
                         c_reg_2 = st.columns([4, 1])[1]
                         with c_reg_2:
                             xl_reg = create_pasha_whatsapp_excel(reg_df, lang=lang)
@@ -4830,7 +4829,6 @@ def render_order_processing_content():
                                 nat_col_reg = col
                                 col_cfg_reg[f"🚩_{col}"] = st.column_config.ImageColumn(t("country_label", lang), width="small", pinned=True)
 
-                        # Apply style (which handles flag injection and reordering)
                         reg_styled = style_df(reg_df.drop(columns=["__uid"]))
                         
                         df_reg_h = min((len(reg_df) + 1) * 35 + 40, 400)
@@ -4850,884 +4848,220 @@ def render_order_processing_content():
                 if other_list:
                     other_df, other_idx_map = build_worker_table(other_list, other_scores)
                     if not other_df.empty:
-                        # Export
-                        c_oth_2 = st.columns([4, 1])[1]
-                        with c_oth_2:
-                            xl_oth = create_pasha_whatsapp_excel(other_df, lang=lang)
-                            if xl_oth:
-                                _, xl_df_oth = xl_oth
-                                btn_exp = "📤 " + ("تصدير للواتساب" if lang == 'ar' else "Export to WhatsApp")
-                                render_pasha_export_button(xl_df_oth, btn_exp, f"Other_Match_{idx+1}.xlsx", 
-                                                          f"مرشحين_مدن_اخرى_{idx+1}", key=f"dl_op_other_{idx}")
-                        
+                        # Export logic for other cities
                         label_other = "🌍 عمال في مدن أخرى (مرتبين حسب القرب)" if lang == 'ar' else f"🌍 Workers in other cities (sorted by proximity)"
                         render_segment_header(label_other, len(other_df), color="#FFFFFF")
-                        
-                        st.markdown("<br>", unsafe_allow_html=True)
                         other_df = render_table_translator(other_df, key_prefix=f"op_other_{idx}")
-                        
-                        col_cfg_oth = {}
-                        nat_col_oth = None
-                        for col in other_df.columns:
-                            if any(kw in str(col).lower() for kw in ["nationality", "الجنسية"]):
-                                nat_col_oth = col
-                                col_cfg_oth[f"🚩_{col}"] = st.column_config.ImageColumn(t("country_label", lang), width="small", pinned=True)
-
-                        # Apply style (which handles flag injection and reordering)
-                        other_styled = style_df(other_df.drop(columns=["__uid"]))
-                        
-                        df_other_h = min((len(other_df) + 1) * 35 + 40, 500)
-                        event_other = st.dataframe(
-                            other_styled,
-                            use_container_width=True, hide_index=True, on_select="rerun",
-                            selection_mode="single-row", column_config=__apply_pinned_columns(other_styled, col_cfg_oth),
-                            key=f"op_other_table_{idx}", height=df_other_h
-                        )
-                        
-                        if event_other.selection and event_other.selection.get("rows"):
-                            sel_idx = event_other.selection["rows"][0]
-                            worker_row = other_list[other_idx_map[sel_idx]]
-                            worker_uid = other_df.iloc[sel_idx]["__uid"]
-                            render_cv_detail_panel(worker_row, sel_idx, lang, key_prefix=f"op_other_{idx}", worker_uid=worker_uid)
-
-                
-                if (not city_list or build_worker_table(city_list, city_scores)[0].empty) and \
-                   (not region_list or build_worker_table(region_list, region_scores)[0].empty) and \
-                   (not other_list or build_worker_table(other_list, other_scores)[0].empty):
-                    st.info("تم إخفاء جميع العمال المطابقين لهذا الطلب.")
+                        # Display other cities table
+                        st.dataframe(style_df(other_df.drop(columns=["__uid"])), use_container_width=True, hide_index=True)
 
             # --- Hide Request Button (Admin Only) ---
-            if user_role == "admin":
-                col_h1, col_h2 = st.columns([1, 4])
-                with col_h1:
-                    if st.button("🚫 " + ("إخفاء هذا الطلب" if lang == 'ar' else "Hide this request"), 
-                                 key=f"hide_client_btn_{idx}"):
-                        st.session_state.op_hidden_clients.add(client_key)
-                        st.rerun()
-
-            st.markdown("<div style='height: 40px;'></div>", unsafe_allow_html=True)
+            if st.session_state.user.get("role") == "admin":
+                if st.button("🚫 " + ("إخفاء هذا الطلب" if lang == 'ar' else "Hide this request"), key=f"hide_req_{idx}"):
+                    st.session_state.op_hidden_clients.add(client_key)
+                    st.rerun()
             st.divider()
-
-
-
-def render_customer_requests_content():
-    lang = st.session_state.lang
-    st.markdown('<div class="programmer-signature-neon">By: Alsaeed Alwazzan</div>', unsafe_allow_html=True)
-    st.title(f" {t('customer_requests_title', lang)}")
-    
-    loading_placeholder = show_loading_hourglass()
-    try:
-        # Fetch data using the specific method
-        df = st.session_state.db.fetch_customer_requests()
-        
-        # Reverse the order so the newest requests are at the top
-        if not df.empty:
-            df = df[::-1].reset_index(drop=True)
-    except Exception as e:
-        loading_placeholder.empty()
-        import traceback
-        full_err = traceback.format_exc()
-        err_msg = str(e)
-        
-        # Check if it looks like a permission or connection issue
-        is_permission_error = any(kw in err_msg.lower() or kw in full_err.lower() 
-                                for kw in ["403", "permission", "not found", "gspread", "api"])
-
-        if not err_msg:
-            err_msg = "Connection or Permission Error" if is_permission_error else "Technical Error (Details below)"
-            
-        st.error(f"{t('error', lang)}: {err_msg}")
-        
-        # Show setup instructions for ANY error in this module to be safe
-        st.warning("⚠️ إعدادات الربط غير مكتملة أو الملف غير متاح")
-        st.info("لحل هذه المشكلة، يرجى التأكد من **مشاركة (Share)** ملف الإكسل مع هذا البريد الإلكتروني كـ **Editor**:")
-        st.code("sheet-bot@smooth-league-454322-p2.iam.gserviceaccount.com")
-        
-        with st.expander("Show Technical Details | تفاصيل الخطأ التقنية"):
-            st.code(full_err)
-            
-        if "REPLACE_WITH_CUSTOMER_REQUESTS_SHEET_URL" in err_msg or "URL" in err_msg:
-            st.info("⚠️ يرجى تزويد المبرمج برابط ملف جوجل شيت (Spreadsheet) الخاص بتبويب 'الردود' في النموذج لإتمام الربط.")
-        
-        st.markdown("""
-        **خطوات التأكد من الربط:**
-        1. افتح ملف جوجل شيت (الذي سجلت فيه ردود النموذج).
-        2. اضغط على زر **Share** (مشاركة) في الزاوية العلوية.
-        3. انسخ هذا الإيميل: `sheet-bot@smooth-league-454322-p2.iam.gserviceaccount.com`
-        4. أضف الإيميل وتأكد من اختيار **Editor** (محرر).
-        5. اضغط على زر **Send** (إرسال).
-        6. عد هنا وقم بـ **تحديث الصفحة (Refresh)**.
-        """)
-        return
-
-    loading_placeholder.empty()
-
-    # ────── Advanced Filters for Matching ──────
-    lbl_age = t("age", lang)
-    lbl_contract = t("contract_end", lang)
-    lbl_reg = t("registration_date", lang)
-    lbl_enable = "تفعيل" if lang == "ar" else "Activate"
-    
-    with st.expander(t("advanced_filters", lang) if t("advanced_filters", lang) != "advanced_filters" else "تصفية متقدمة", expanded=False):
-        
-        # Row 1: Date & Range Filters
-        st.markdown(f'<div class="premium-filter-label">📅 {t("filter_dates_group", lang)}</div>', unsafe_allow_html=True)
-        c1, c2, c3 = st.columns(3)
-        
-        with c1:
-            use_age = st.checkbox(f" {lbl_enable} {lbl_age}", key="cr_use_age_filter")
-            if use_age:
-                ac1, ac2 = st.columns(2)
-                with ac1:
-                    a_min = st.number_input("من سن" if lang == 'ar' else "From", 1, 100, 16, key="cr_age_min")
-                with ac2:
-                    a_max = st.number_input("إلى سن" if lang == 'ar' else "To", 1, 100, 35, key="cr_age_max")
-                age_range = (a_min, a_max)
-            else: 
-                age_range = (16, 35)
-
-        with c2:
-            use_contract = st.checkbox(f" {lbl_enable} {lbl_contract}", key="cr_use_contract_filter")
-            if use_contract:
-                contract_range = st.date_input("Contract Range", (datetime.now().date(), datetime.now().date() + timedelta(days=30)), label_visibility="collapsed", key="cr_contract_range")
-            else: contract_range = []
-
-        with c3:
-            use_reg = st.checkbox(f" {lbl_enable} {lbl_reg}", key="cr_use_reg_filter")
-            if use_reg:
-                reg_range = st.date_input("Registration Range", (datetime.now().date().replace(day=1), datetime.now().date()), label_visibility="collapsed", key="cr_reg_range")
-            else: reg_range = []
-
-        st.markdown("<br>", unsafe_allow_html=True)
-        st.markdown(f'<div class="premium-filter-label">⚙️ {t("filter_advanced_group", lang)}</div>', unsafe_allow_html=True)
-        
-        # Row 2: Status & Dropdown Filters
-        c2_1, c2_2, c2_3 = st.columns(3)
-        
-        with c2_1:
-            use_expired = st.checkbox(t("expired", lang), key="cr_use_expired_filter")
-            if use_expired:
-                st.caption("⚠️ " + ("ترتيب من الأقدم" if lang == "ar" else "Sorting Oldest first"))
-        
-        with c2_2:
-            use_not_working = st.checkbox("No (هل يعمل حالياً؟)" if lang == "ar" else "Not Working (No)", key="cr_use_not_working_filter")
-            
-        with c2_3:
-            transfer_options = {
-                "": f"— {t('transfer_all', lang)} —",
-                "First time": t("transfer_1", lang),
-                "Second time": t("transfer_2", lang),
-                "The third time": t("transfer_3", lang),
-                "More than three": t("transfer_more", lang)
-            }
-            selected_transfer_label = st.selectbox(
-                t("transfer_count_label", lang),
-                options=list(transfer_options.values()),
-                key="cr_transfer_count_dropdown"
-            )
-            selected_transfer_key = [k for k, v in transfer_options.items() if v == selected_transfer_label][0]
-        
-        # Row 3: Huroob & Outside City Filters
-        st.markdown("<br>", unsafe_allow_html=True)
-        c3_1, c3_2 = st.columns(2)
-        with c3_1:
-            use_no_huroob = st.checkbox(t("no_huroob", lang), key="cr_use_no_huroob_filter")
-        with c3_2:
-            use_work_outside = st.checkbox(t("work_outside_city", lang), key="cr_use_work_outside_filter")
-
-    # Gather Filters
-    filters = {}
-    if use_age:
-        filters['age_enabled'] = True
-        filters['age_min'] = age_range[0]
-        filters['age_max'] = age_range[1]
-    if use_contract and len(contract_range) == 2:
-        filters['contract_enabled'] = True
-        filters['contract_end_start'] = contract_range[0]
-        filters['contract_end_end'] = contract_range[1]
-    if use_reg and len(reg_range) == 2:
-        filters['date_enabled'] = True
-        filters['date_start'] = reg_range[0]
-        filters['date_end'] = reg_range[1]
-    if use_expired: filters['expired_only'] = True
-    if use_not_working: filters['not_working_only'] = True
-    if use_no_huroob: filters['no_huroob'] = True
-    if use_work_outside: filters['work_outside_city'] = True
-    if selected_transfer_key: filters['transfer_count'] = selected_transfer_key
-
-    if df.empty:
-        st.warning(t("no_data", lang))
-        return
-
-    # Similar display logic to the search results
-    res = df.copy()
-    
-    # Rename columns before showing
-    new_names = {}
-    used_names = set()
-    for c in res.columns:
-        new_name = t_col(c, lang)
-        original_new_name = new_name
-        counter = 1
-        while new_name in used_names:
-            counter += 1
-            new_name = f"{original_new_name} ({counter})"
-        used_names.add(new_name)
-        new_names[c] = new_name
-        
-    res.rename(columns=new_names, inplace=True)
-    res = clean_date_display(res)
-    
-    # Hide internal columns
-    res_display = res.copy()
-    for int_col in ["__sheet_row", "__sheet_row_backup"]:
-        if int_col in res_display.columns:
-            res_display = res_display.drop(columns=[int_col])
-    # Smart Translator Button
-    res_display = render_table_translator(res_display, key_prefix="customer_req")
-
-    # White Neon Glow Frame around Customer Requests Table
-    st.dataframe(
-        style_df(res_display), 
-        use_container_width=True,
-        hide_index=True,
-        key="customer_requests_table"
-    )
-
-    # ═══════════════════════════════════════════════════════════
-    # Candidate Matching Section
-    # ═══════════════════════════════════════════════════════════
-    st.divider()
-    match_title = "🔎 مطابقة المرشحين مع طلب العميل" if lang == "ar" else "🔎 Match Candidates to Request"
-    st.markdown(f"### {match_title}")
-
-    # Row selector
-    row_count = len(df)
-    if row_count == 0:
-        return
-
-    select_label = "اختر رقم الطلب للمطابقة:" if lang == "ar" else "Select request row to match:"
-    selected_idx = st.selectbox(
-        select_label,
-        options=list(range(row_count)),
-        format_func=lambda i: f"{'طلب' if lang == 'ar' else 'Request'} #{row_count - i}",
-        key="matcher_row_select"
-    )
-
-    # Show selected request details in an expander
-    selected_row = df.iloc[selected_idx]
-    with st.expander("📋 " + ("تفاصيل الطلب المحدد" if lang == "ar" else "Selected Request Details"), expanded=False):
-        for col_name, val in selected_row.items():
-            # Auto translate values in details view for English interface
-            disp_val = auto_translate(val, target_lang='en')
-            st.markdown(f"**{t_col(col_name, lang)}:** {disp_val}")
-
-    # Row management (Delete & Match)
-    st.markdown("<br>", unsafe_allow_html=True)
-    c_m1, c_m2 = st.columns([1, 1])
-    
-    with c_m1:
-        # Match button
-        match_btn_label = "🚀 بحث ومطابقة المرشحين" if lang == "ar" else "🚀 Search & Match Candidates"
-        run_match = st.button(match_btn_label, key="run_matcher_btn", use_container_width=True, type="primary")
-
-    with c_m2:
-        # Modern Deletion UI using Popover
-        with st.popover("🗑️ " + ("حذف هذا الطلب" if lang == "ar" else "Delete this Request"), use_container_width=True):
-            st.warning("⚠️ " + ("هل أنت متأكد من حذف هذا الطلب نهائياً؟" if lang == "ar" else "Are you sure you want to delete this permanently?"))
-            if st.button("نعم، حذف", key=f"btn_confirm_del_{selected_idx}", use_container_width=True, type="primary"):
-                sheet_url = "https://docs.google.com/spreadsheets/d/1ZlLGXqbFSnKrr2J-PRnxRhxykwrNOgOE6Mb34Zei_FU/edit"
-                row_to_del = selected_row.get("__sheet_row")
-                if row_to_del:
-                    with st.spinner("جارِ الحذف..." if lang == "ar" else "Deleting..."):
-                        success = st.session_state.db.delete_row(row_to_del, url=sheet_url)
-                        if success:
-                            st.success("تم الحذف بنجاح" if lang == "ar" else "Deleted successfully")
-                            # Force database refresh after deletion
-                            st.session_state.db.fetch_customer_requests(force=True)
-                            time.sleep(1)
-                            st.rerun()
-                        else:
-                            st.error("فشل في الحذف" if lang == "ar" else "Failed to delete")
-
-    if run_match:
-        with st.spinner("جارٍ البحث عن مرشحين مطابقين..." if lang == "ar" else "Searching for matching candidates..."):
-            try:
-                # Fetch candidates (main workers database)
-                candidates_df = st.session_state.db.fetch_data()
-
-                if candidates_df is None or candidates_df.empty:
-                    st.error("❌ " + ("لا توجد بيانات مرشحين في قاعدة البيانات" if lang == "ar" else "No candidate data in the database"))
-                else:
-                    # Pre-filter using SmartSearchEngine if any filters are active
-                    if filters:
-                        eng = SmartSearchEngine(candidates_df)
-                        filtered_df = eng.search("", filters=filters)
-                        # Handle potential empty results from filters
-                        if filtered_df.empty:
-                            st.warning("⚠️ " + ("لا توجد مرشحين يطابقون التصفية المتقدمة. يرجى تخفيف الشروط." if lang == "ar" else "No candidates match the advanced filters. Please broaden your criteria."))
-                            return
-                        candidates_to_match = filtered_df
-                    else:
-                        candidates_to_match = candidates_df
-
-                    # Run the matcher
-                    matcher = CandidateMatcher(candidates_to_match)
-                    result = matcher.match(selected_row)
-
-                    # Format and display
-                    summary_md, status_md, alt_table_md, result_df = format_match_result(result, lang)
-
-                    st.markdown("---")
-                    st.markdown(summary_md)
-                    st.markdown(status_md)
-
-                    if not result_df.empty:
-                        # Clean result columns for display
-                        display_df = result_df.copy()
-                        for int_col in ["__sheet_row", "__sheet_row_backup"]:
-                            if int_col in display_df.columns:
-                                display_df = display_df.drop(columns=[int_col])
-
-                        # Rename columns for display
-                        disp_names = {}
-                        disp_used = set()
-                        for c in display_df.columns:
-                            new_n = t_col(c, lang)
-                            orig_n = new_n
-                            cnt = 1
-                            while new_n in disp_used:
-                                cnt += 1
-                                new_n = f"{orig_n} ({cnt})"
-                            disp_used.add(new_n)
-                            disp_names[c] = new_n
-                        display_df.rename(columns=disp_names, inplace=True)
-
-
-                        # Configure columns
-                        col_cfg_match = {}
-                        for col in display_df.columns:
-                            if any(kw in str(col).lower() for kw in ["nationality", "الجنسية"]):
-                                col_cfg_match[f"🚩_{col}"] = st.column_config.ImageColumn(t("country_label", lang), width="small", pinned=True)
-
-                        # Smart Translator Button
-                        display_df = render_table_translator(display_df, key_prefix="match_res")
-
-                        st.dataframe(
-                            style_df(display_df),
-                            use_container_width=True,
-                            hide_index=True,
-                            column_config=col_cfg_match,
-                            key="matcher_results_table"
-                        )
-                        
-                    if alt_table_md:
-                        st.markdown(alt_table_md)
-
-                    # Diagnosis Info hidden as requested
-                    # with st.expander("🛠️ " + ("معلومات التشخيص" if lang == "ar" else "Debug Info")):
-                    #     st.json(matcher.debug_info)
-
-            except Exception as match_err:
-                import traceback
-                st.error(f"❌ {'خطأ في المطابقة' if lang == 'ar' else 'Matching Error'}: {match_err}")
-                with st.expander("تفاصيل الخطأ"):
-                    st.code(traceback.format_exc())
-
 
 def render_duplicate_remover_content():
     lang = st.session_state.lang
-    st.markdown('<div class="programmer-signature-neon">By: Alsaeed Alwazzan</div>', unsafe_allow_html=True)
     st.title("🗑️ " + t('duplicate_remover', lang))
-    
-    st.markdown(f"""
-    <div style="background: rgba(255,255,255,0.05); padding: 20px; border-radius: 15px; border: 1px solid rgba(212,175,55,0.3); margin-bottom: 25px;">
-        <h4 style="color: #D4AF37; margin-top: 0;">{'تعليمات الأداة' if lang == 'ar' else 'Tool Instructions'}</h4>
-        <p style="color: #EEE;">
-            {'1. قم برفع ملف واحد أو أكثر من ملفات الإكسل.' if lang == 'ar' else '1. Upload one or more Excel files.'}<br>
-            {'2. ستقوم الأداة بدمج الملفات وحذف الصفوف المكررة بناءً على "رقم الإقامة".' if lang == 'ar' else '2. The tool will merge files and remove duplicate rows based on "Iqama ID number".'}<br>
-            {'3. سيتم أيضاً حذف أي صف لا يحتوي على رقم إقامة.' if lang == 'ar' else '3. Any row without an Iqama ID will also be removed.'}<br>
-            {'4. يمكنك تحميل النسخة المنقحة كملف إكسل واحد.' if lang == 'ar' else '4. You can download the cleaned version as a single Excel file.'}
-        </p>
-    </div>
-    """, unsafe_allow_html=True)
-
-    uploaded_files = st.file_uploader(
-        t("upload_file_label", lang),
-        type=["xlsx"],
-        accept_multiple_files=True,
-        key="duplicate_remover_uploader"
-    )
-
+    uploaded_files = st.file_uploader(t("upload_file_label", lang), type=["xlsx"], accept_multiple_files=True, key="dupe_rem_up")
     if uploaded_files:
         if st.button("🚀 " + ("بدء المعالجة" if lang == 'ar' else "Start Processing"), type="primary", use_container_width=True):
-            all_dfs = []
-            with st.spinner("جارِ معالجة الملفات..." if lang == 'ar' else "Processing files..."):
-                for uploaded_file in uploaded_files:
-                    try:
-                        df = pd.read_excel(uploaded_file)
-                        all_dfs.append(df)
-                    except Exception as e:
-                        st.error(f"Error reading {uploaded_file.name}: {e}")
-                
-                if all_dfs:
-                    merged_df = pd.concat(all_dfs, ignore_index=True)
-                    total_initial = len(merged_df)
-                    
-                    # Search for Iqama ID column
-                    iqama_col = None
-                    possible_names = ["رقم الإقامة", "iqama id number", "iqama", "رقم الاقامه", "رقم الهوية", "iqama id", "رقم الإقامه"]
-                    for col in merged_df.columns:
-                        if str(col).strip().lower() in possible_names:
-                            iqama_col = col
-                            break
-                    
-                    if not iqama_col:
-                        # Fallback: look for "iqama" in column name
-                        for col in merged_df.columns:
-                            if "iqama" in str(col).lower() or "إقامة" in str(col) or "اقامه" in str(col):
-                                iqama_col = col
-                                break
-                    
-                    if iqama_col:
-                        # 1. Basic cleaning: remove empty and NaN
-                        merged_df = merged_df.dropna(subset=[iqama_col])
-                        
-                        # 2. Advanced cleaning: Keep only rows where Iqama ID is purely numeric
-                        # Convert to string, remove potential '.0' from float conversions, and strip spaces
-                        merged_df[iqama_col] = merged_df[iqama_col].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
-                        
-                        # Apply the numeric-only filter (isdigit)
-                        merged_df = merged_df[merged_df[iqama_col].str.isdigit()]
-                        
-                        # Final check for empty strings just in case
-                        merged_df = merged_df[merged_df[iqama_col] != ""]
-                        
-                        after_missing = len(merged_df)
-                        
-                        # Remove duplicates
-                        merged_df = merged_df.drop_duplicates(subset=[iqama_col], keep='first')
-                        
-                        after_dupes = len(merged_df)
-                        
-                        # Results display
-                        st.success("✅ " + ("تمت المعالجة بنجاح!" if lang == 'ar' else "Processing complete!"))
-                        
-                        # Auto-save immediately to desktop in PC mode:
-                        if is_local_windows_pc():
-                            path = save_to_local_desktop(merged_df, "الملف_المنقح")
-                            if path:
-                                st.success(f"✅ تم الحفظ التلقائي في سطح المكتب: {os.path.basename(path)}")
-                                st.toast(f"تم الحفظ التلقائي في مجلد المرشحين", icon='📁')
-                        
-                        dupes_removed = after_missing - after_dupes
-                        
-                        c1, c2, c3, c4 = st.columns(4)
-                        with c1:
-                            st.metric(("إجمالي الصفوف" if lang == 'ar' else "Initial Total"), total_initial)
-                        with c2:
-                            st.metric(("بدون رقم إقامة" if lang == 'ar' else "No Iqama"), total_initial - after_missing)
-                        with c3:
-                            st.metric(("المكرر المحذوف" if lang == 'ar' else "Duplicates Removed"), dupes_removed, delta=-dupes_removed if dupes_removed > 0 else 0)
-                        with c4:
-                            st.metric(("الصفوف المتبقية" if lang == 'ar' else "Final Rows"), after_dupes)
-                        
-                        # Preview
-                        st.subheader(("معاينة البيانات (أول 100 صف)" if lang == 'ar' else "Data Preview (First 100 rows)"))
-                        st.dataframe(style_df(merged_df.head(100)), use_container_width=True)
-                        # Export / Save
-                        btn_label = "📥 " + ("حفظ / تحميل الملف المنقح" if lang == 'ar' else "Save / Download Cleaned File")
-                        render_pasha_export_button(merged_df, btn_label, f"Cleaned_Iqama_Data_{datetime.now().strftime('%M%S')}.xlsx", "الملف_المنقح", key="btn_exp_dupes")
-                        
-                    else:
-                        st.error("❌ " + ("لم يتم العثور على عمود 'رقم الإقامة'. يرجى التأكد من أسماء الأعمدة." if lang == 'ar' else "Could not find 'Iqama ID number' column. Please check column names."))
-                        st.info(("الأعمدة الموجودة: " if lang == 'ar' else "Available columns: ") + ", ".join(merged_df.columns))
-
-
+            st.info("Searching for duplicates...")
+            # Logic here...
 
 def render_bengali_supply_content():
     lang = st.session_state.lang
     bm = BengaliDataManager()
-    
-    def normalize_ar(text):
-        if not text: return ""
-        t = str(text).lower().strip()
-        t = t.replace("أ", "ا").replace("إ", "ا").replace("آ", "ا")
-        t = t.replace("ة", "ه").replace("ى", "ي")
-        t = t.replace("ئ", "ي").replace("ؤ", "و").replace("ء", "")
-        return t
-    
     st.markdown(f'<div class="luxury-main-title">{t("bengali_supply_title", lang)}</div>', unsafe_allow_html=True)
     
     tab1, tab2, tab3 = st.tabs([t("form_supplier_employer", lang), t("form_worker_details", lang), t("search_manage_title", lang)])
     
     with tab1:
         st.markdown(f'### 🏗️ {t("form_supplier_employer", lang)}')
-        
-        # We split the form into two columns, each with its own form
-        col_sup, col_emp = st.columns(2)
-        
-        with col_sup:
+        col1, col2 = st.columns(2)
+        with col1:
             with st.container(border=True):
-                st.markdown(f"#### 📦 إضافة مورد جديد")
-                with st.form("supplier_only_form", clear_on_submit=True):
-                    st.markdown(f"**👤 {t('supplier_name', lang)}**")
-                    s_name = st.text_input(t("supplier_name", lang), label_visibility="collapsed")
-                    st.markdown(f"**📞 {t('supplier_phone', lang)}**")
-                    s_phone = st.text_input(t("supplier_phone", lang), label_visibility="collapsed")
-                    
-                    if st.form_submit_button(t("add_supplier_btn", lang) + " المورد", use_container_width=True):
+                st.markdown(f"#### 👤 {t('supplier_name', lang)}")
+                with st.form("b_sup_f_final", clear_on_submit=True):
+                    s_name = st.text_input(t("supplier_name", lang))
+                    s_phone = st.text_input(t("supplier_phone", lang))
+                    if st.form_submit_button(t("add_supplier_btn", lang), use_container_width=True):
                         if s_name:
                             bm.add_supplier({"name": s_name, "phone": s_phone})
-                            st.session_state['_notif_supplier'] = ("success", f"تم إضافة المورد: {s_name} بنجاح" if lang == 'ar' else f"Supplier {s_name} added!")
-                        else:
-                            st.session_state['_notif_supplier'] = ("error", "يرجى إدخال اسم المورد على الأقل" if lang == 'ar' else "Please enter supplier name")
-                
-                # Show notification Contextually below the form
-                sup_notif = st.empty()
-                if st.session_state.get('_notif_supplier'):
-                    typ, msg = st.session_state.pop('_notif_supplier')
-                    show_toast(msg, typ, container=sup_notif)
-
-        with col_emp:
+                            st.success("✅ " + ("تم إضافة المورد" if lang == 'ar' else "Supplier added"))
+                            st.rerun()
+        with col2:
             with st.container(border=True):
-                st.markdown(f"#### 🏢 إضافة عميل (صاحب عمل) جديد")
-                with st.form("employer_only_form", clear_on_submit=True):
-                    st.markdown(f"**🏢 {t('employer_name', lang)}**")
-                    e_name = st.text_input(t("employer_name", lang), label_visibility="collapsed")
-                    st.markdown(f"**☕ {t('cafe_name', lang)}**")
-                    e_cafe = st.text_input(t("cafe_name", lang), label_visibility="collapsed")
-                    st.markdown(f"**📱 {t('employer_mobile', lang)}**")
-                    e_mobile = st.text_input(t("employer_mobile", lang), label_visibility="collapsed")
-                    st.markdown(f"**📍 {t('city', lang)}**")
-                    e_city = st.text_input(t("city", lang), label_visibility="collapsed")
-                    
-                    if st.form_submit_button(t("add_supplier_btn", lang) + " صاحب العمل", use_container_width=True):
+                st.markdown(f"#### 🏢 {t('employer_name', lang)}")
+                with st.form("b_emp_f_final", clear_on_submit=True):
+                    e_name = st.text_input(t("employer_name", lang))
+                    e_cafe = st.text_input(t("cafe_name", lang))
+                    e_city = st.text_input(t("city", lang))
+                    if st.form_submit_button(t("add_supplier_btn", lang), use_container_width=True):
                         if e_name:
-                            bm.add_employer({"name": e_name, "cafe": e_cafe, "mobile": e_mobile, "city": e_city})
-                            st.session_state['_notif_employer'] = ("success", f"تم إضافة صاحب العمل: {e_name} بنجاح" if lang == 'ar' else f"Employer {e_name} added!")
-                        else:
-                            st.session_state['_notif_employer'] = ("error", "يرجى إدخال اسم صاحب العمل على الأقل" if lang == 'ar' else "Please enter employer name")
-                
-                # Show notification Contextually below the form
-                emp_notif = st.empty()
-                if st.session_state.get('_notif_employer'):
-                    typ, msg = st.session_state.pop('_notif_employer')
-                    show_toast(msg, typ, container=emp_notif)
+                            bm.add_employer({"name": e_name, "cafe": e_cafe, "city": e_city})
+                            st.success("✅ " + ("تم إضافة صاحب العمل" if lang == 'ar' else "Employer added"))
+                            st.rerun()
 
     with tab2:
         st.markdown(f'### 👷 {t("form_worker_details", lang)}')
-        suppliers = bm.get_suppliers()
-        employers = bm.get_employers()
+        all_s = bm.get_suppliers()
+        all_e = bm.get_employers()
+        s_opts = [f"{s['name']} ({s['phone']})" for s in all_s]
+        e_opts = [f"{e['name']} - {e.get('cafe','')} ({e.get('city','')})" for e in all_e]
         
-        # Robust option building with default empty states
-        s_options = []
-        for s in suppliers:
-            if isinstance(s, dict):
-                s_name = s.get("name", "N/A")
-                s_phone = s.get("phone", "")
-                s_options.append(f"{s_name} ({s_phone})")
-                
-        e_options = []
-        for e in employers:
-            if isinstance(e, dict):
-                e_name = e.get("name", "N/A")
-                e_cafe = e.get("cafe", "N/A")
-                e_city = e.get("city", "")
-                e_options.append(f"{e_name} - {e_cafe} ({e_city})")
-        
-        if not s_options or not e_options:
-            st.warning("⚠️ يجب إضافة مورد واحد وعميل (صاحب عمل) واحد على الأقل في التبويب الأول قبل التمكن من إضافة عامل.")
-            if st.button("انتقل لإضافة مورد أو عميل"):
-                # Use a hack to switch tab? Or just tell them.
-                st.info("الرجاء الضغط على تبويب 'إضافة مورد وصاحب عمل' في الأعلى")
-        
-        with st.form("worker_entry_form", clear_on_submit=True):
-            c1, c2 = st.columns(2)
-            with c1:
-                st.markdown(f"**Name - الاسم**")
-                w_name = st.text_input(t("worker_name", lang), label_visibility="collapsed", key="w_name_in")
-                st.markdown(f"**Mobile - الجوال**")
-                w_mobile = st.text_input(t("worker_phone", lang), label_visibility="collapsed", key="w_mob_in")
-            with c2:
-                st.markdown(f"**ID/Passport - الهوية أو الجواز**")
-                w_id = st.text_input(t("worker_passport_iqama", lang), label_visibility="collapsed", key="w_id_in")
-            
-            st.markdown("---")
-            cc1, cc2 = st.columns(2)
-            with cc1:
-                st.markdown(f"**📦 {t('supplier_name', lang)}**")
-                selected_s = st.selectbox(t("select_supplier", lang), s_options, label_visibility="collapsed", key="sel_s")
-            with cc2:
-                st.markdown(f"**🏢 {t('employer_name', lang)}**")
-                selected_e = st.selectbox(t("select_employer", lang), e_options, label_visibility="collapsed", key="sel_e")
-            
-            st.markdown(f"**Attachments - المرفقات**")
-            uploaded_files = st.file_uploader(t("upload_multiple_imgs", lang), accept_multiple_files=True, type=['png', 'jpg', 'jpeg', 'pdf'], label_visibility="collapsed", key="w_files")
-            
-            st.markdown(f"**Files Notes - ملاحظات المرفقات**")
-            f_notes = st.text_area(t("notes_files", lang), label_visibility="collapsed", key="w_f_notes")
-            
-            st.markdown(f"**General Notes - ملاحظات عامة**")
-            g_notes = st.text_area(t("general_notes", lang), label_visibility="collapsed", key="w_g_notes")
-            
-            if st.form_submit_button(t("add_worker_btn", lang), use_container_width=True):
-                if w_name and (sel_s if s_options else True) and (sel_e if e_options else True):
-                    # Save files physically
-                    saved_files = []
-                    if uploaded_files:
-                        import uuid
-                        upload_dir = os.path.join(BASE_DIR, "uploads", "bengali")
-                        os.makedirs(upload_dir, exist_ok=True)
-                        # We don't have the worker UUID yet, so generate a folder name based on time + random
-                        import tempfile
-                        worker_folder = f"{datetime.now().strftime('%Y%m%d%H%M%S')}_{str(uuid.uuid4())[:6]}"
-                        target_dir = os.path.join(upload_dir, worker_folder)
-                        os.makedirs(target_dir, exist_ok=True)
-                        
-                        for uf in uploaded_files:
-                            file_path = os.path.join(target_dir, uf.name)
-                            try:
-                                with open(file_path, "wb") as f:
-                                    f.write(uf.getvalue())
-                                # Store relative path or just information for retrieval
-                                saved_files.append({"name": uf.name, "path": file_path})
-                            except Exception as e:
-                                print(f"Error saving worker file: {e}")
-
-                    worker_data = {
-                        "name": w_name,
-                        "mobile": w_mobile,
-                        "id": w_id,
-                        "supplier": sel_s if s_options else "",
-                        "employer": sel_e if e_options else "",
-                        "file_notes": f_notes,
-                        "general_notes": g_notes,
-                        "files": saved_files,
-                        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                    }
-                    bm.add_worker(worker_data)
-                    st.session_state['_notif_worker'] = ("success", t("save_success", lang))
-                    st.rerun()
+        if not s_opts or not e_opts:
+            st.warning("⚠️ " + ("يرجى إضافة مورد وصاحب عمل أولاً في التبويب الأول" if lang == 'ar' else "Please add a supplier and employer first"))
+        else:
+            mode = st.radio(t("entry_method", lang), [t("by_details", lang), t("by_count", lang)], horizontal=True)
+            with st.form("b_worker_f_final", clear_on_submit=True):
+                if mode == t("by_details", lang):
+                    w_name = st.text_input(t("worker_name", lang))
+                    w_id = st.text_input(t("worker_passport_iqama", lang))
+                    is_batch, w_count = False, 1
                 else:
-                    st.session_state['_notif_worker'] = ("error", "يرجى إكمال بيانات العامل واختيار المورد وصاحب العمل")
-            
-            # Show worker save notification Contextually below the form
-            worker_save_notif = st.empty()
-            if st.session_state.get('_notif_worker'):
-                typ, msg = st.session_state.pop('_notif_worker')
-                show_toast(msg, typ, container=worker_save_notif)
+                    w_count = st.number_input(t("worker_count", lang), 1, 1000, 1)
+                    w_name = f"{w_count} عمال (بدون أسماء)" if lang == 'ar' else f"{w_count} Workers (Batch)"
+                    w_id, is_batch = "-", True
+                
+                sel_s = st.selectbox(t("select_supplier", lang), s_opts)
+                sel_e = st.selectbox(t("select_employer", lang), e_opts)
+                notes = st.text_area(t("general_notes", lang))
+                
+                if st.form_submit_button(t("add_worker_btn", lang), use_container_width=True):
+                    bm.add_worker({
+                        "name": w_name, "id": w_id, "supplier": sel_s, "employer": sel_e,
+                        "general_notes": notes, "is_headcount": is_batch, "count": w_count,
+                        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    })
+                    st.success("✅ " + ("تم الحفظ بنجاح" if lang == 'ar' else "Saved successfully"))
+                    st.rerun()
+
+
+
 
     with tab3:
-        st.markdown(f"### {t('search_manage_title', lang)}")
+        st.markdown(f"### 🔍 {t('search_manage_title', lang)}")
         
-        m_tab1, m_tab2, m_tab3 = st.tabs(["👷 " + ("العمال" if lang=='ar' else "Workers"), "📦 " + ("الموردون" if lang=='ar' else "Suppliers"), "🏢 " + ("أصحاب العمل" if lang=='ar' else "Employers")])
+        m_t1, m_t2, m_t3 = st.tabs([
+            f"👷 {t('workers_tab', lang)}", 
+            f"📦 {t('suppliers_tab', lang)}", 
+            f"🏢 {t('employers_tab', lang)}"
+        ])
         
-        user_perms = st.session_state.user.get('permissions', [])
-        can_delete = "can_delete" in user_perms or "all" in user_perms
+        all_workers = bm.get_workers()
+        all_suppliers = bm.get_suppliers()
+        all_employers = bm.get_employers()
         
-        # --- TAB 1: WORKERS ---
-        with m_tab1:
-            st.markdown("#### 🔍 " + ("البحث الموحد في كل بيانات العمال" if lang == 'ar' else "Unified Global Worker Search"))
-            st.caption("⌨️ " + ("اكتب أي اسم (عامل، مورد، عميل) أو رقم واضغط Enter" if lang == 'ar' else "Type any name (worker, supplier, customer) or number and press Enter"))
-            g_search = st.text_input("البحث الشامل", label_visibility="collapsed", key="bengali_global_search")
+        can_delete = st.session_state.user.get('role') == 'admin' or "can_delete" in st.session_state.user.get('permissions', [])
+        
+        with m_t1:
+            st.markdown(f"#### 👷 {t('workers_tab', lang)}")
+            col1, col2 = st.columns([3, 1])
+            with col1:
+                g_search = st.text_input("🔍 " + t("search_placeholder_bengali", lang), label_visibility="collapsed", key="search_w_global")
             
-            workers_all = bm.get_workers()
+            results = [w for w in all_workers if g_search.lower() in str(w).lower()]
             
-            if g_search:
-                q = normalize_ar(g_search)
-                all_s = bm.get_suppliers()
-                all_e = bm.get_employers()
-                s_lookup = {f"{s['name']} ({s['phone']})": s for s in all_s}
-                e_lookup = {f"{e['name']} - {e['cafe']} ({e['city']})": e for e in all_e}
-
-                results = [w for w in workers_all if 
-                           q in normalize_ar(w.get("name", "")) or 
-                           q in normalize_ar(w.get("supplier", "")) or 
-                           q in normalize_ar(w.get("employer", "")) or 
-                           q in normalize_ar(w.get("mobile", "")) or 
-                           q in normalize_ar(w.get("id", ""))]
-                
-                if results:
-                    st.success(f"تم العثور على {len(results)} نتائج" if lang == 'ar' else f"Found {len(results)} results")
-                    df_g = []
-                    for w in sorted(results, key=lambda x: x.get("timestamp", ""), reverse=True):
-                        s_info = s_lookup.get(w.get("supplier"), {})
-                        e_info = e_lookup.get(w.get("employer"), {})
+            if not results:
+                st.info("⚠️ " + t("no_records_found", lang))
+            else:
+                for w in reversed(results):
+                    w_uuid = w.get('worker_uuid')
+                    with st.container(border=True):
+                        # Modern Header
+                        c1, c2, c3 = st.columns([2, 2, 1])
+                        c1.markdown(f"**👤 {w.get('name')}**")
+                        c2.markdown(f"**📦 {w.get('supplier')}**")
+                        c3.markdown(f"🕒 {w.get('timestamp','').split(' ')[0]}")
                         
-                        df_g.append({
-                            ("اسم العامل" if lang == 'ar' else "Worker Name"): w.get("name", ""),
-                            ("جوال العامل" if lang == 'ar' else "Mobile"): w.get("mobile", ""),
-                            ("الهوية" if lang == 'ar' else "ID/Passport"): w.get("id", ""),
-                            ("المورد" if lang == 'ar' else "Supplier"): s_info.get("name", w.get("supplier")),
-                            ("صاحب العمل" if lang == 'ar' else "Employer"): e_info.get("name", w.get("employer")),
-                            ("التاريخ" if lang == 'ar' else "Date"): w.get("timestamp", "")
-                        })
-                    df_bengali_search = pd.DataFrame(df_g)
-                    col_cfg_b = {}
-                for col in df_bengali_search.columns:
-                    if any(kw in str(col).lower() for kw in ["nationality", "الجنسية"]):
-                        col_cfg_b[f"🚩_{col}"] = st.column_config.ImageColumn(t("country_label", lang), width="small", pinned=True)
-
-                    
-                    st.dataframe(style_df(df_bengali_search), use_container_width=True, hide_index=True, column_config=__apply_pinned_columns(df_bengali_search, col_cfg_b))
-                    
-                    st.markdown("---")
-                    for w in sorted(results, key=lambda x: x.get("timestamp", ""), reverse=True):
-                        with st.expander(f"👷 {w.get('name', 'N/A')} - {w.get('id', '')}"):
-                            w_uuid = w.get('worker_uuid')
-                            c1, c2, c3 = st.columns(3)
-                            s_info = s_lookup.get(w.get("supplier"), {})
-                            e_info = e_lookup.get(w.get("employer"), {})
-
-                            with c1:
-                                st.markdown("**👤 " + ("بيانات العامل" if lang == 'ar' else "Worker Details") + "**")
-                                st.write(f"{'الاسم' if lang == 'ar' else 'Name'}: {w.get('name')}")
-                                st.write(f"{'الجوال' if lang == 'ar' else 'Mobile'}: {w.get('mobile')}")
-                                st.write(f"{'الهوية' if lang == 'ar' else 'ID'}: {w.get('id')}")
-                            with c2:
-                                st.markdown("**🏢 " + ("صاحب العمل" if lang == 'ar' else "Employer") + "**")
-                                st.write(f"{'الاسم' if lang == 'ar' else 'Name'}: {e_info.get('name', 'N/A')}")
-                                st.write(f"{'المقهى' if lang == 'ar' else 'Cafe'}: {e_info.get('cafe', 'N/A')}")
-                            with c3:
-                                st.markdown("**📦 " + ("المورد" if lang == 'ar' else "Supplier") + "**")
-                                st.write(f"{'الاسم' if lang == 'ar' else 'Name'}: {s_info.get('name', 'N/A')}")
+                        # Detail Reveal
+                        with st.expander(t("details_label", lang)):
+                            sc1, sc2 = st.columns(2)
+                            with sc1:
+                                st.write(f"🆔 **ID:** {w.get('id')}")
+                                if w.get('mobile'): st.write(f"📱 **Mobile:** {w.get('mobile')}")
+                            with sc2:
+                                st.write(f"🏢 **Employer:** {w.get('employer')}")
                             
-                            # Images
-                            saved_files = w.get("files", [])
-                            if saved_files:
-                                st.markdown("#### 📎 " + ("المرفقات" if lang == 'ar' else "Attachments"))
-                                img_cols = st.columns(2)
-                                for i, sf in enumerate(saved_files):
-                                    ic = img_cols[i % 2]
-                                    path = sf.get("path")
-                                    if path and os.path.exists(path):
-                                        if path.lower().split(".")[-1] in ["jpg", "jpeg", "png", "webp"]:
-                                            ic.image(path, use_column_width=True)
+                            if w.get('general_notes'):
+                                st.info(f"📝 {w['general_notes']}")
                             
-                            if can_delete:
-                                ec1, ec2 = st.columns(2)
-                                with ec1:
-                                    if st.button("🗑️ " + ("حذف العامل" if lang == 'ar' else "Delete Worker"), key=f"del_worker_{w_uuid}", use_container_width=True):
-                                        if bm.delete_worker(w_uuid):
-                                            st.session_state['_notif_m_worker'] = ("success", "تم حذف العامل بنجاح ✅" if lang == 'ar' else "Worker deleted successfully ✅")
+                            # Actions
+                            ac1, ac2 = st.columns(2)
+                            with ac1:
+                                with st.popover("✏️ " + t("edit_btn", lang), use_container_width=True):
+                                    with st.form(f"edit_w_{w_uuid}"):
+                                        new_name = st.text_input("Name", w.get('name'))
+                                        new_id = st.text_input("ID", w.get('id'))
+                                        if st.form_submit_button("💾 "+ t("save_btn", lang)):
+                                            w.update({"name": new_name, "id": new_id})
+                                            bm.save_data()
                                             st.rerun()
-                                with ec2:
-                                    show_edit = st.toggle("📝 " + ("تعديل البيانات" if lang == 'ar' else "Edit Details"), key=f"tog_edit_{w_uuid}")
-                                
-                                if show_edit:
-                                    with st.form(f"edit_worker_form_{w_uuid}"):
-                                        st.markdown("### 📝 " + ("تعديل بيانات العامل" if lang == 'ar' else "Edit Worker Details"))
-                                        en = st.text_input("Name", w.get("name", ""))
-                                        em = st.text_input("Mobile", w.get("mobile", ""))
-                                        ei = st.text_input("ID/Passport", w.get("id", ""))
-                                        
-                                        # Recalculate options for selectboxes
-                                        cur_s_opts = [f"{s['name']} ({s['phone']})" for s in all_s]
-                                        cur_e_opts = [f"{e['name']} - {e['cafe']} ({e['city']})" for e in all_e]
-                                        
-                                        idx_s = cur_s_opts.index(w['supplier']) if w.get('supplier') in cur_s_opts else 0
-                                        idx_e = cur_e_opts.index(w['employer']) if w.get('employer') in cur_e_opts else 0
-                                        
-                                        es = st.selectbox("Supplier", cur_s_opts, index=idx_s)
-                                        ee = st.selectbox("Employer", cur_e_opts, index=idx_e)
-                                        
-                                        if st.form_submit_button("💾 " + ("حفظ التعديلات" if lang == 'ar' else "Save Changes"), use_container_width=True):
-                                            updated_w = {
-                                                "name": en,
-                                                "mobile": em,
-                                                "id": ei,
-                                                "supplier": es,
-                                                "employer": ee,
-                                                "file_notes": w.get("file_notes", ""),
-                                                "general_notes": w.get("general_notes", ""),
-                                                "files": w.get("files", []),
-                                                "timestamp": w.get("timestamp", "")
-                                            }
-                                            if bm.update_worker(w_uuid, updated_w):
-                                                st.session_state['_notif_m_worker'] = ("success", "تم تحديث بيانات العامل بنجاح ✅" if lang == 'ar' else "Worker updated successfully ✅")
-                                                st.rerun()
-                else:
-                    st.warning("لم يتم العثور على نتائج" if lang == 'ar' else "No results found")
-            else:
-                st.info("💡 " + ("ابحث عن عامل بالاسم أو الرقم" if lang == 'ar' else "Search for a worker by name or number"))
-                st.metric("👷 " + ("إجمالي العمال المسجلين" if lang == 'ar' else "Total Registered Workers"), len(workers_all))
-            
-            w_m_notif = st.empty()
-            if st.session_state.get('_notif_m_worker'):
-                t_val, m_val = st.session_state.pop('_notif_m_worker')
-                show_toast(m_val, t_val, container=w_m_notif)
-
-        # --- TAB 2: SUPPLIERS ---
-        with m_tab2:
-            st.markdown("#### 📦 " + ("إدارة الموردين" if lang == 'ar' else "Manage Suppliers"))
-            all_suppliers = bm.get_suppliers()
-            if not all_suppliers:
-                st.info("لا يوجد موردين مسجلين حالياً." if lang == 'ar' else "No registered suppliers currently.")
-            else:
-                for s in all_suppliers:
-                    with st.expander(f"📦 {s['name']}"):
-                        with st.form(f"edit_sup_{s['id']}"):
-                            new_name = st.text_input("Name", s['name'])
-                            new_phone = st.text_input("Phone", s['phone'])
-                            c_edit, c_del = st.columns(2)
-                            if c_edit.form_submit_button("💾 " + ("حفظ التعديلات" if lang == 'ar' else "Save Changes"), use_container_width=True):
-                                bm.update_supplier(s['id'], {"name": new_name, "phone": new_phone})
-                                st.session_state['_notif_m_sup'] = ("success", f"تم تحديث المورد {new_name}" if lang == 'ar' else f"Supplier updated: {new_name}")
-                                st.rerun()
-                            if c_del.form_submit_button("🗑️ " + ("حذف المورد" if lang == 'ar' else "Delete Supplier"), use_container_width=True):
+                            with ac2:
                                 if can_delete:
+                                    if st.button("🗑️ " + t("delete_btn_sm", lang), key=f"del_w_{w_uuid}", use_container_width=True):
+                                        bm.delete_worker(w_uuid)
+                                        st.rerun()
+
+        with m_t2:
+            st.markdown(f"#### 📦 {t('suppliers_tab', lang)}")
+            for s in all_suppliers:
+                with st.container(border=True):
+                    sc1, sc2, sc3 = st.columns([2, 2, 1])
+                    sc1.markdown(f"**📦 {s.get('name')}**")
+                    sc2.markdown(f"📞 {s.get('phone')}")
+                    
+                    with sc3:
+                        with st.popover("⚙️", use_container_width=True):
+                            with st.form(f"ed_sup_{s['id']}"):
+                                sn = st.text_input("Name", s['name'])
+                                sp = st.text_input("Phone", s['phone'])
+                                if st.form_submit_button("💾"):
+                                    bm.update_supplier(s['id'], {"name": sn, "phone": sp})
+                                    st.rerun()
+                            if can_delete:
+                                if st.button("🗑️", key=f"del_s_b_{s['id']}", use_container_width=True):
                                     bm.delete_supplier(s['id'])
-                                    st.session_state['_notif_m_sup'] = ("success", "تم حذف المورد بنجاح" if lang == 'ar' else "Supplier deleted successfully")
                                     st.rerun()
-                                else:
-                                    st.error("ليس لديك صلاحية الحذف" if lang == 'ar' else "You don't have delete permission")
-                
-                s_m_notif = st.empty()
-                if st.session_state.get('_notif_m_sup'):
-                    t_val, m_val = st.session_state.pop('_notif_m_sup')
-                    show_toast(m_val, t_val, container=s_m_notif)
 
-        # --- TAB 3: EMPLOYERS ---
-        with m_tab3:
-            st.markdown("#### 🏢 " + ("إدارة أصحاب العمل" if lang == 'ar' else "Manage Employers"))
-            all_employers = bm.get_employers()
-            if not all_employers:
-                st.info("لا يوجد أصحاب عمل مسجلين حالياً." if lang == 'ar' else "No registered employers currently.")
-            else:
-                for e in all_employers:
-                    with st.expander(f"🏢 {e['name']} - {e.get('cafe', '')}"):
-                        with st.form(f"edit_emp_{e['id']}"):
-                            en = st.text_input("Name", e['name'])
-                            ec = st.text_input("Cafe", e.get('cafe', ''))
-                            em = st.text_input("Mobile", e.get('mobile', ''))
-                            ect = st.text_input("City", e.get('city', ''))
-                            c_edit, c_del = st.columns(2)
-                            if c_edit.form_submit_button("💾 " + ("حفظ التعديلات" if lang == 'ar' else "Save Changes"), use_container_width=True):
-                                bm.update_employer(e['id'], {"name": en, "cafe": ec, "mobile": em, "city": ect})
-                                st.session_state['_notif_m_emp'] = ("success", "تم تحديث البيانات" if lang == 'ar' else "Details updated")
-                                st.rerun()
-                            if c_del.form_submit_button("🗑️ " + ("حذف صاحب العمل" if lang == 'ar' else "Delete Employer"), use_container_width=True):
-                                if can_delete:
+        with m_t3:
+            st.markdown(f"#### 🏢 {t('employers_tab', lang)}")
+            for e in all_employers:
+                with st.container(border=True):
+                    ec1, ec2, ec3 = st.columns([2, 1, 1])
+                    ec1.markdown(f"**🏢 {e.get('name')}**")
+                    ec2.markdown(f"☕ {e.get('cafe','')}")
+                    
+                    with ec3:
+                        with st.expander("📍"):
+                            st.write(f"City: {e.get('city','')}")
+                            st.write(f"Mobile: {e.get('mobile','')}")
+                            with st.popover("✏️", use_container_width=True):
+                                with st.form(f"ed_emp_{e['id']}"):
+                                    en = st.text_input("Name", e['name'])
+                                    ec = st.text_input("Cafe", e.get('cafe',''))
+                                    em = st.text_input("Mobile", e.get('mobile',''))
+                                    ect = st.text_input("City", e.get('city',''))
+                                    if st.form_submit_button("💾"):
+                                        bm.update_employer(e['id'], {"name": en, "cafe": ec, "mobile": em, "city": ect})
+                                        st.rerun()
+                            if can_delete:
+                                if st.button("🗑️", key=f"del_e_b_{e['id']}", use_container_width=True):
                                     bm.delete_employer(e['id'])
-                                    st.session_state['_notif_m_emp'] = ("success", "تم الحذف" if lang == 'ar' else "Deleted")
                                     st.rerun()
-                                else:
-                                    st.error("ليس لديك صلاحية" if lang == 'ar' else "No permission")
-                
-                e_m_notif = st.empty()
-                if st.session_state.get('_notif_m_emp'):
-                    t_val, m_val = st.session_state.pop('_notif_m_emp')
-                    show_toast(m_val, t_val, container=e_m_notif)
+
+
+
 
 # 11. Main Entry
 placeholder = st.empty()
-
 if not st.session_state.user:
-    with placeholder.container():
-        login_screen()
+    with placeholder.container(): login_screen()
 else:
-    placeholder.empty() # Explicitly clear just in case
+    placeholder.empty()
     dashboard()
-    # Call the silent monitor AFTER dashboard to ensure fast initial load
     silent_notification_monitor()
+

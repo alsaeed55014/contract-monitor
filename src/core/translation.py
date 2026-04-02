@@ -453,6 +453,66 @@ class TranslationManager:
 
         except Exception as e:
             return f"Translation Error: {str(e)}"
+
+    def translate_ui_value(self, val, target_lang='ar'):
+        """Bidirectional UI value translation using dictionaries and heuristics."""
+        if not val: return val
+        s = str(val).strip().lower()
+        
+        # Dictionary for English -> Arabic
+        en_to_ar = {
+            "pastry chef": "شيف حلويات",
+            "male": "ذكر",
+            "female": "أنثى",
+            "yes": "نعم",
+            "no": "لا",
+            "waiter": "نادل",
+            "waitress": "نادلة",
+            "barista": "باريستا",
+            "cleaner": "عامل نظافة",
+            "cook": "طباخ",
+            "chef": "شيف",
+            "nurse": "ممرضة",
+            "doctor": "طبيب",
+            "driver": "سائق",
+            "yes | yes": "نعم | نعم",
+            "no | no": "لا | لا",
+            "tabuk": "تبوك",
+            "riyadh": "الرياض",
+            "jeddah": "جدة",
+            "dammam": "الدمام",
+            "madinah": "المدينة المنورة",
+            "rizal": "الجنس",
+            "rizal | male": "الجنس | ذكر",
+            "filipino": "فلبيني",
+            "indian": "هندي",
+            "bangladeshi": "بنجلاديشي",
+            "nepali": "نيبالي",
+            "pakistani": "باكستاني"
+        }
+
+        if target_lang == 'ar':
+            # 1. Exact or partial dictionary check
+            if s in en_to_ar: return en_to_ar[s]
+            
+            # 2. Check if it's already Arabic - if so, preserve it!
+            if self._is_arabic(val): return val
+            
+            # 3. Heuristic for "City | City" or "Category | Gender"
+            if '|' in val:
+                parts = [self.translate_ui_value(p.strip(), 'ar') for p in val.split('|')]
+                return " | ".join(parts)
+            
+            return val
+        else:
+            # Arabic to English
+            # SPECIAL: If we want EN but it was originally AR, only translate if it's not a location or if needed.
+            # But here we don't know the field. the caller (app.py) will handle the location exception.
+            for k, v in self.dictionary.items():
+                if k.strip().lower() == s:
+                    return v[0] if isinstance(v, list) else v
+            return val
+
 AR_TO_EN = {
     "بدكير": ["Manicure", "Nail Technician"],
     "منكير": ["Pedicure", "Nail Technician"],
@@ -467,21 +527,9 @@ AR_TO_EN = {
     "باريستا": ["Barista"],
     "افريقي": ["Nigeria", "Kenya", "Ghana", "Ethiopia", "Sudan", "Morocco", "Tunisia", "Senegal"],
     "افريقية": ["Nigeria", "Kenya", "Ghana", "Ethiopia", "Sudan", "Morocco", "Tunisia", "Senegal"],
-    
-    # Experience Levels
     "لا توجد خبرة": "No experience",
-    "لايوجد خبرة": "No experience",
-    "اقل من سنة": "Less than 1 year",
-    "سنة": "1 year",
-    "سنتين": "2 years",
-    "3 سنوات": "3 years",
-    "4 سنوات": "4 years",
-    "5 سنوات": "5 years",
-    "اكثر من 5 سنوات": "More than 5 years",
-    "أكثر من 5 سنوات": "More than 5 years",
     "خبرة": "Experience",
 }
-
 
 def translate_to_english(keyword: str):
     keyword = keyword.strip().lower()

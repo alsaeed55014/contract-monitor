@@ -501,14 +501,14 @@ Abu Fahd"""
         st.markdown(lbl['settings_title'])
         col_s1, col_s2, col_s3, col_s4 = st.columns(4)
         with col_s1:
-            delay = st.number_input(lbl['delay'], min_value=5, max_value=600, value=15, disabled=st.session_state.wa_running)
+            delay = st.number_input(lbl['delay'], min_value=5, max_value=600, value=60, disabled=st.session_state.wa_running)
         with col_s2:
-            batch_size = st.number_input(lbl['batch_size'], min_value=0, max_value=1000, value=0, help=lbl['batch_help'], disabled=st.session_state.wa_running)
+            batch_size = st.number_input(lbl['batch_size'], min_value=0, max_value=1000, value=10, help=lbl['batch_help'], disabled=st.session_state.wa_running)
         with col_s3:
-            batch_delay_mins = st.number_input(lbl['batch_delay'], min_value=1, max_value=60, value=1, disabled=st.session_state.wa_running)
+            batch_delay_mins = st.number_input(lbl['batch_delay'], min_value=1, max_value=60, value=10, disabled=st.session_state.wa_running)
             batch_delay = int(batch_delay_mins * 60)
         with col_s4:
-            msg_switch_threshold = st.number_input("تبديل الرسالة بعد" if is_ar else "Switch msg after", min_value=1, max_value=1000, value=20, disabled=st.session_state.wa_running)
+            msg_switch_threshold = st.number_input("تبديل الرسالة بعد" if is_ar else "Switch msg after", min_value=1, max_value=1000, value=1, disabled=st.session_state.wa_running)
 
         # Smart detect target changes
         current_fp = ",".join([t['phone'] for t in final_targets]) if final_targets else ""
