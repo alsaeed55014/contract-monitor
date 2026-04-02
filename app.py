@@ -2810,9 +2810,50 @@ def dashboard():
         # Determine Bengali Supply Visibility
         user_perms = user.get("permissions", [])
         if "all" in user_perms or "bengali_supply" in user_perms:
-            if st.button("🇧🇩 " + t("bengali_supply_title", lang), key="btn_bengali_supply_main", use_container_width=True):
+            # PURE CSS BANGLADESH FLAG (Zero Dependency/100% Reliable)
+            st.sidebar.markdown("""
+                <style>
+                #bengali-btn-wrapper button p {
+                    display: flex !important;
+                    flex-direction: row-reverse !important;
+                    align-items: center !important;
+                    justify-content: center !important;
+                    gap: 12px !important;
+                }
+                /* Pure CSS Bangladesh Flag */
+                #bengali-btn-wrapper button p::before {
+                    content: "" !important;
+                    display: block !important;
+                    width: 24px !important;
+                    height: 16px !important;
+                    background-color: #006a4e !important;
+                    border-radius: 2px !important;
+                    position: relative !important;
+                    order: -1 !important;
+                }
+                #bengali-btn-wrapper button p::after {
+                    content: "" !important;
+                    position: absolute !important;
+                    width: 9px !important;
+                    height: 9px !important;
+                    background-color: #f42a41 !important;
+                    border-radius: 50% !important;
+                    /* Move to the right side of the button text space where ::before is */
+                    right: 21px; /* Precision position over the green box */
+                    top: 50%;
+                    transform: translateY(-50%);
+                    z-index: 101 !important;
+                }
+                </style>
+                <div id="bengali-btn-wrapper">
+            """, unsafe_allow_html=True)
+            
+            if st.button(t("bengali_supply_title", lang), key="btn_bengali_supply_main", use_container_width=True):
                 st.session_state.page = "bengali_supply"
                 st.rerun()
+            
+            st.sidebar.markdown("</div>", unsafe_allow_html=True)
+
         if user.get("role") == "admin":
             if st.button(t("permissions", lang), use_container_width=True):
                 st.session_state.page = "permissions"
@@ -4935,7 +4976,10 @@ def render_duplicate_remover_content():
 def render_bengali_supply_content():
     lang = st.session_state.lang
     bm = BengaliDataManager()
-    st.markdown(f'<div class="luxury-main-title">🇧🇩 {t("bengali_supply_title", lang)}</div>', unsafe_allow_html=True)
+    # High-quality flag image for the title
+    flag_url = "https://flagsapi.com/BD/flat/64.png"
+    flag_html = f'<img src="{flag_url}" style="height:40px; vertical-align:middle; margin-bottom:10px; margin-left:10px;">'
+    st.markdown(f'<div class="luxury-main-title">{flag_html} {t("bengali_supply_title", lang)}</div>', unsafe_allow_html=True)
     
     tab1, tab2, tab3 = st.tabs([t("form_supplier_employer", lang), t("form_worker_details", lang), t("search_manage_title", lang)])
     
