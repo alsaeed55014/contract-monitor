@@ -4989,8 +4989,9 @@ def render_bengali_supply_content():
                             if w.get('general_notes'):
                                 st.info(f"📝 {w['general_notes']}")
                             
+
                             # Actions
-                            ac1, ac2 = st.columns(2)
+                            ac1, ac2, ac3 = st.columns(3)
                             with ac1:
                                 with st.popover("✏️ " + t("edit_btn", lang), use_container_width=True):
                                     with st.form(f"edit_w_{w_uuid}"):
@@ -5001,10 +5002,28 @@ def render_bengali_supply_content():
                                             bm.save_data()
                                             st.rerun()
                             with ac2:
+                                # Return Logic (Decrements headcount or deletes)
+
+                                if "headcount" in w:
+                                    with st.popover("🔄 " + t("return_btn", lang), use_container_width=True):
+                                        st.write(f"Current Count: {w['headcount']}")
+                                        ret_amt = st.number_input("Return Amount", min_value=1, max_value=int(w['headcount']), value=1, key=f"ret_amt_{w_uuid}")
+                                        if st.button("Confirm Return", key=f"conf_ret_{w_uuid}", use_container_width=True, type="primary"):
+                                            bm.return_worker(w_uuid, ret_amt)
+                                            st.success("✅ Success")
+                                            st.rerun()
+                                else:
+                                    if st.button("🔄 " + t("return_btn", lang), key=f"ret_indiv_{w_uuid}", use_container_width=True):
+                                        bm.return_worker(w_uuid)
+                                        st.rerun()
+
+
+                            with ac3:
                                 if can_delete:
                                     if st.button("🗑️ " + t("delete_btn_sm", lang), key=f"del_w_{w_uuid}", use_container_width=True):
                                         bm.delete_worker(w_uuid)
                                         st.rerun()
+
 
         with m_t2:
             st.markdown(f"#### 📦 {t('suppliers_tab', lang)}")
