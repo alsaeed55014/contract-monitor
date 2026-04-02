@@ -4594,19 +4594,44 @@ def render_order_processing_content():
         # Flag Injection: Look for country codes (BD, NP, PH, etc.) in nationality fields
         if any(kw in label_text.lower() for kw in ["nationality", "جنسية"]):
             import re
-            # Find 2-letter uppercase codes and inject flags
+            # Find 2-letter uppercase codes and inject flags (always before the code)
             codes = re.findall(r'\b[A-Z]{2}\b', disp_val)
             for code in set(codes):
                 flag_ui = f'<img src="https://flagsapi.com/{code}/flat/24.png" style="height:16px; vertical-align:middle; margin:0 4px 2px 4px;">'
                 disp_val = disp_val.replace(code, f"{flag_ui} {code}")
             
             # Map common names to flags if codes are missing
-            name_to_code = {"bangladeshi": "BD", "بنجلاديشي": "BD", "nepali": "NP", "نيبالي": "NP", "philippines": "PH", "فلبيني": "PH"}
+            name_to_code = {
+                "bangladeshi": "BD", "bengali": "BD", 
+                "nepal": "NP", "nepali": "NP", 
+                "philippines": "PH", "filipino": "PH",
+                "indian": "IN", "india": "IN",
+                "egypt": "EG", "egyptian": "EG",
+                "pakistan": "PK", "pakistani": "PK",
+                "sudan": "SD", "sudanese": "SD",
+                "kenya": "KE", "kenyan": "KE",
+                "uganda": "UG", "ugandan": "UG",
+                "ethiopia": "ET", "ethiopian": "ET",
+                "yemen": "YE", "yemeni": "YE",
+                "indonesia": "ID", "indonesian": "ID"
+            }
+            
+            # Use regex to replace each English name with flag + name
             for name, code in name_to_code.items():
-                if name in disp_val.lower() and code not in disp_val:
-                     flag_ui = f'<img src="https://flagsapi.com/{code}/flat/24.png" style="height:16px; vertical-align:middle; margin:0 4px 2px 4px;">'
-                     disp_val = f"{flag_ui} {disp_val}"
-                     break
+                if name.lower() in disp_val.lower():
+                    flag_ui = f'<img src="https://flagsapi.com/{code}/flat/24.png" style="height:16px; vertical-align:middle; margin:0 4px 2px 4px;">'
+                    try:
+                        pattern = rf"(?i)\b({re.escape(name)})\b"
+                        # Only inject if this word isn't already preceded by a flag
+                        # Replace word with [FLAG] word
+                        new_disp, count = re.subn(pattern, f"{flag_ui} \\1", disp_val)
+                        if count > 0:
+                            disp_val = new_disp
+                        else:
+                            if name in disp_val:
+                                disp_val = disp_val.replace(name, f"{flag_ui} {name}", 1)
+                    except:
+                        pass
 
         return f'<div style="background: rgba(255,255,255,0.04); padding: 12px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.06); margin: 5px; flex: 1 1 {min_width}; min-height: 80px; display: flex; flex-direction: column; justify-content: center;"><span style="color: #888; font-size: 0.8rem;">{label_text}</span><span style="color: {color}; font-size: 1.1rem; font-weight: 600; margin-top: 4px;">{icon} {disp_val}</span></div>'
 
@@ -4910,7 +4935,7 @@ def render_duplicate_remover_content():
 def render_bengali_supply_content():
     lang = st.session_state.lang
     bm = BengaliDataManager()
-    st.markdown(f'<div class="luxury-main-title">{t("bengali_supply_title", lang)}</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="luxury-main-title">🇧🇩 {t("bengali_supply_title", lang)}</div>', unsafe_allow_html=True)
     
     tab1, tab2, tab3 = st.tabs([t("form_supplier_employer", lang), t("form_worker_details", lang), t("search_manage_title", lang)])
     
