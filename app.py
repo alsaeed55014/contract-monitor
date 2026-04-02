@@ -1252,8 +1252,11 @@ def style_df(df):
                 cols.insert(new_nat_idx, flag_col)
                 styled_df = styled_df[cols]
         
-        # Fast cleanup - remove emoji flags from text
-        styled_df[col] = styled_df[col].astype(str).str.replace(r'[\U0001F1E6-\U0001F1FF]{2}\s*', '', regex=True)
+
+        # Fast cleanup - remove emoji flags from text (Safe conversion for Arrow)
+        import re
+        styled_df[col] = styled_df[col].astype(str).apply(lambda x: re.sub(r'[\U0001F1E6-\U0001F1FF]{2}\s*', '', x))
+
 
     # 2. Gender Icon Injection (Fast Vectorized replacement)
     gen_cols = [c for c in styled_df.columns if any(kw in str(c).lower() for kw in ["gender", "الجنس"]) and str(c).lower() != "الجنسية"]
