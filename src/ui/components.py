@@ -45,15 +45,16 @@ def get_flag(nat_name):
         'باكستان': '🇵🇰', 'باكستاني': '🇵🇰', 'pakistan': '🇵🇰',
         'الهند': '🇮🇳', 'هندي': '🇮🇳', 'india': '🇮🇳',
         'اليمن': '🇾🇪', 'يمني': '🇾🇪', 'yemen': '🇾🇪',
-        'بنجلاديش': '🇧🇩', 'بنجالي': '🇧🇩', 'bangladesh': '🇧🇩',
+        'بنجلاديش': '🇧🇩', 'بنجالي': '🇧🇩', 'bangladesh': '🇧🇩', 'bangladeshi': '🇧🇩',
         'الفلبين': '🇵🇭', 'فلبيني': '🇵🇭', 'philippines': '🇵🇭',
         'كينيا': '🇰🇪', 'كيني': '🇰🇪', 'kenya': '🇰🇪',
         'أوغندا': '🇺🇬', 'أوغندي': '🇺🇬', 'uganda': '🇺🇬',
         'إثيوبيا': '🇪🇹', 'إثيوبي': '🇪🇹', 'ethiopia': '🇪🇹',
+        'نيبال': '🇳🇵', 'نيبالي': '🇳🇵', 'nepal': '🇳🇵', 'nepali': '🇳🇵',
     }
     for k, v in flags.items():
         if k in nat_name: return v
-    return '🏁'
+    return '🏳️' # Use a more neutral flag for unknown
 
 def safe_val(row, col_name):
     if col_name is None: return '---'
