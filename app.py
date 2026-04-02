@@ -1253,8 +1253,7 @@ def style_df(df):
                 styled_df = styled_df[cols]
         
         # Fast cleanup - remove emoji flags from text
-        import re
-        styled_df[col] = styled_df[col].apply(lambda x: re.sub(r'[\U0001F1E6-\U0001F1FF]{2}\s*', '', str(x)))
+        styled_df[col] = styled_df[col].astype(str).str.replace(r'[\U0001F1E6-\U0001F1FF]{2}\s*', '', regex=True)
 
     # 2. Gender Icon Injection (Fast Vectorized replacement)
     gen_cols = [c for c in styled_df.columns if any(kw in str(c).lower() for kw in ["gender", "الجنس"]) and str(c).lower() != "الجنسية"]
@@ -2512,7 +2511,24 @@ def render_top_banner():
         if st.button(btn_clear, use_container_width=True, key="clear_all_notifs"):
             # Mark all current notifications as seen for THIS user
             user_id = st.session_state.user.get('username', 'guest')
-            mark_notifications_as_seen(user_id, st.session_state.notifications)
+            USER_SEEN_FILE = os.path.join(BASE_DIR, f"notif_seen_{user_id}.json")
+            
+            seen_ids = []
+            if os.path.exists(USER_SEEN_FILE):
+                try:
+                    with open(USER_SEEN_FILE, "r") as f:
+                        seen_ids = json.load(f)
+                except: pass
+            
+            # Add current notification IDs to seen list
+            for n in st.session_state.notifications:
+                n_id = n.get('id')
+                if n_id and n_id not in seen_ids:
+                    seen_ids.append(n_id)
+            
+            # Save back to user-specific file
+            with open(USER_SEEN_FILE, "w") as f:
+                json.dump(seen_ids, f)
 
             st.session_state.notifications = []
             st.session_state.notif_panel_open = False
@@ -2549,7 +2565,22 @@ def render_top_banner():
             if st.button(btn_clear_side, use_container_width=True):
                 # Mark all current notifications as seen for THIS user
                 user_id = st.session_state.user.get('username', 'guest')
-                mark_notifications_as_seen(user_id, st.session_state.notifications)
+                USER_SEEN_FILE = os.path.join(BASE_DIR, f"notif_seen_{user_id}.json")
+                
+                seen_ids = []
+                if os.path.exists(USER_SEEN_FILE):
+                    try:
+                        with open(USER_SEEN_FILE, "r") as f:
+                            seen_ids = json.load(f)
+                    except: pass
+                
+                for n in st.session_state.notifications:
+                    n_id = n.get('id')
+                    if n_id and n_id not in seen_ids:
+                        seen_ids.append(n_id)
+                
+                with open(USER_SEEN_FILE, "w") as f:
+                    json.dump(seen_ids, f)
 
                 st.session_state.notifications = []
                 st.rerun()
@@ -2851,130 +2882,6 @@ def dashboard():
     elif page == "whatsapp_marketing": render_whatsapp_page()
     elif page == "duplicate_remover": render_duplicate_remover_content()
 
-def render_advanced_filters(key_prefix, lang, include_expired=True, default_expanded=False):
-    lbl_age = t("age", lang)
-    lbl_contract = t("contract_end", lang)
-    lbl_reg = t("registration_date", lang)
-    lbl_enable = "تفعيل" if lang == "ar" else "Activate"
-    
-    filters = {}
-    
-    with st.expander(t("advanced_filters", lang) if t("advanced_filters", lang) != "advanced_filters" else "تصفية متقدمة", expanded=default_expanded):
-        st.markdown(f'<div class="premium-filter-label">📅 {t("filter_dates_group", lang)}</div>', unsafe_allow_html=True)
-        c1, c2, c3 = st.columns(3)
-        
-        with c1:
-            use_age = st.checkbox(f" {lbl_enable} {lbl_age}", key=f"{key_prefix}_use_age")
-            if use_age:
-                ac1, ac2 = st.columns(2)
-                with ac1:
-                    a_min = st.number_input("من سن" if lang == 'ar' else "From", 1, 100, 16, key=f"{key_prefix}_age_min")
-                with ac2:
-                    a_max = st.number_input("إلى سن" if lang == 'ar' else "To", 1, 100, 35, key=f"{key_prefix}_age_max")
-                age_range = (a_min, a_max)
-            else: 
-                age_range = (16, 35)
-
-        with c2:
-            use_contract = st.checkbox(f" {lbl_enable} {lbl_contract}", key=f"{key_prefix}_use_contract")
-            if use_contract:
-                contract_range = st.date_input("Contract Range", (datetime.now().date(), datetime.now().date() + timedelta(days=30)), label_visibility="collapsed", key=f"{key_prefix}_contract_range")
-            else: contract_range = []
-
-        with c3:
-            use_reg = st.checkbox(f" {lbl_enable} {lbl_reg}", key=f"{key_prefix}_use_reg")
-            if use_reg:
-                reg_range = st.date_input("Registration Range", (datetime.now().date().replace(day=1), datetime.now().date()), label_visibility="collapsed", key=f"{key_prefix}_reg_range")
-            else: reg_range = []
-
-        st.markdown("<br>", unsafe_allow_html=True)
-        st.markdown(f'<div class="premium-filter-label">⚙️ {t("filter_advanced_group", lang)}</div>', unsafe_allow_html=True)
-        
-        c2_1, c2_2, c2_3 = st.columns(3)
-        
-        with c2_1:
-            use_expired = False
-            if include_expired:
-                use_expired = st.checkbox(t("expired", lang), key=f"{key_prefix}_use_expired")
-                if use_expired:
-                    st.caption("⚠️ " + ("ترتيب من الأقدم" if lang == "ar" else "Sorting Oldest first"))
-            else:
-                st.write("") # Spacer
-
-        with c2_2:
-            use_not_working = st.checkbox("No (هل يعمل حالياً؟)" if lang == "ar" else "Not Working (No)", key=f"{key_prefix}_use_not_working")
-            
-        with c2_3:
-            transfer_options = {
-                "": f"— {t('transfer_all', lang)} —",
-                "First time": t("transfer_1", lang),
-                "Second time": t("transfer_2", lang),
-                "The third time": t("transfer_3", lang),
-                "More than three": t("transfer_more", lang)
-            }
-            selected_transfer_label = st.selectbox(
-                t("transfer_count_label", lang),
-                options=list(transfer_options.values()),
-                key=f"{key_prefix}_transfer_count"
-            )
-            selected_transfer_key = [k for k, v in transfer_options.items() if v == selected_transfer_label][0]
-        
-        st.markdown("<br>", unsafe_allow_html=True)
-        c3_1, c3_2 = st.columns(2)
-        with c3_1:
-            use_no_huroob = st.checkbox(t("no_huroob", lang), key=f"{key_prefix}_use_no_huroob")
-        with c3_2:
-            use_work_outside = st.checkbox(t("work_outside_city", lang), key=f"{key_prefix}_use_work_outside")
-
-    # Gather Filters
-    if use_age:
-        filters['age_enabled'] = True
-        filters['age_min'] = age_range[0]
-        filters['age_max'] = age_range[1]
-    
-    if use_contract and len(contract_range) == 2:
-        filters['contract_enabled'] = True
-        filters['contract_end_start'] = contract_range[0]
-        filters['contract_end_end'] = contract_range[1]
-        
-    if use_reg and len(reg_range) == 2:
-        filters['date_enabled'] = True
-        filters['date_start'] = reg_range[0]
-        filters['date_end'] = reg_range[1]
-
-    if include_expired and use_expired:
-        filters['expired_only'] = True
-
-    if use_not_working:
-        filters['not_working_only'] = True
-
-    if use_no_huroob:
-        filters['no_huroob'] = True
-
-    if use_work_outside:
-        filters['work_outside_city'] = True
-        
-    if selected_transfer_key:
-        filters['transfer_count'] = selected_transfer_key
-        
-    return filters
-
-def mark_notifications_as_seen(user_id, notifications):
-    USER_SEEN_FILE = os.path.join(BASE_DIR, f"notif_seen_{user_id}.json")
-    seen_ids = []
-    if os.path.exists(USER_SEEN_FILE):
-        try:
-            with open(USER_SEEN_FILE, "r") as f:
-                seen_ids = json.load(f)
-        except: pass
-    
-    for n in notifications:
-        n_id = n.get('id')
-        if n_id and n_id not in seen_ids:
-            seen_ids.append(n_id)
-    
-    with open(USER_SEEN_FILE, "w") as f:
-        json.dump(seen_ids, f)
 
 
 def __apply_pinned_columns(df_or_style, cfg=None):
@@ -3120,10 +3027,61 @@ def render_dashboard_content():
     st.markdown("---")
     
     # --- ADD SMART SEARCH UI TO DASHBOARD ---
-    dash_filters = render_advanced_filters("dash", lang, include_expired=False)
+    lbl_age = t("age", lang)
+    lbl_contract = t("contract_end", lang)
+    lbl_reg = t("registration_date", lang)
+    lbl_enable = "تفعيل" if lang == "ar" else "Activate"
+
+    with st.expander(t("advanced_filters", lang) if t("advanced_filters", lang) != "advanced_filters" else "تصفية متقدمة", expanded=False):
+        st.markdown(f'<div class="premium-filter-label">📅 {t("filter_dates_group", lang)}</div>', unsafe_allow_html=True)
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            use_age = st.checkbox(f" {lbl_enable} {lbl_age}", key="dash_use_age_filter")
+            if use_age:
+                ac1, ac2 = st.columns(2)
+                with ac1: a_min = st.number_input("من سن" if lang == 'ar' else "From", 1, 100, 16, key="dash_age_min")
+                with ac2: a_max = st.number_input("إلى سن" if lang == 'ar' else "To", 1, 100, 35, key="dash_age_max")
+                age_range = (a_min, a_max)
+            else: age_range = (16, 35)
+        with c2:
+            use_contract = st.checkbox(f" {lbl_enable} {lbl_contract}", key="dash_use_contract_filter")
+            if use_contract:
+                contract_range = st.date_input("Contract Range", (datetime.now().date(), datetime.now().date() + timedelta(days=30)), label_visibility="collapsed", key="dash_contract_range")
+            else: contract_range = []
+        with c3:
+            use_reg = st.checkbox(f" {lbl_enable} {lbl_reg}", key="dash_use_reg_filter")
+            if use_reg:
+                reg_range = st.date_input("Registration Range", (datetime.now().date().replace(day=1), datetime.now().date()), label_visibility="collapsed", key="dash_reg_range")
+            else: reg_range = []
+
+        st.markdown("<br>", unsafe_allow_html=True)
+        st.markdown(f'<div class="premium-filter-label">⚙️ {t("filter_advanced_group", lang)}</div>', unsafe_allow_html=True)
+        c2_1, c2_2, c2_3 = st.columns(3)
+        with c2_1:
+            use_not_working = st.checkbox("No (هل يعمل حالياً؟)" if lang == "ar" else "Not Working (No)", key="dash_use_not_working")
+        with c2_2:
+            transfer_options = {"": f"— {t('transfer_all', lang)} —", "First time": t("transfer_1", lang), "Second time": t("transfer_2", lang), "The third time": t("transfer_3", lang), "More than three": t("transfer_more", lang)}
+            selected_transfer_label = st.selectbox(t("transfer_count_label", lang), options=list(transfer_options.values()), key="dash_transfer_dropdown")
+            selected_transfer_key = [k for k, v in transfer_options.items() if v == selected_transfer_label][0]
+        with c2_3:
+            use_no_huroob = st.checkbox(t("no_huroob", lang), key="dash_use_no_huroob")
+        
+        st.markdown("<br>", unsafe_allow_html=True)
+        c3_1, c3_2 = st.columns(2)
+        with c3_1:
+            use_work_outside = st.checkbox(t("work_outside_city", lang), key="dash_use_work_outside")
 
     dash_query = st.text_input(t("smart_search", lang), placeholder=t("search_placeholder", lang), key="dash_search_query")
     dash_search_clicked = st.button(t("search_btn", lang), key="dash_search_btn", use_container_width=True, type="primary")
+
+    dash_filters = {}
+    if use_age: dash_filters['age_enabled'] = True; dash_filters['age_min'] = age_range[0]; dash_filters['age_max'] = age_range[1]
+    if use_contract and len(contract_range) == 2: dash_filters['contract_enabled'] = True; dash_filters['contract_end_start'] = contract_range[0]; dash_filters['contract_end_end'] = contract_range[1]
+    if use_reg and len(reg_range) == 2: dash_filters['date_enabled'] = True; dash_filters['date_start'] = reg_range[0]; dash_filters['date_end'] = reg_range[1]
+    if use_not_working: dash_filters['not_working_only'] = True
+    if use_no_huroob: dash_filters['no_huroob'] = True
+    if use_work_outside: dash_filters['work_outside_city'] = True
+    if selected_transfer_key: dash_filters['transfer_count'] = selected_transfer_key
 
     st.markdown("---")
     # --- END SMART SEARCH UI ---
@@ -3266,8 +3224,78 @@ def render_search_content():
     lbl_age = t("age", lang)
     lbl_contract = t("contract_end", lang)
     lbl_reg = t("registration_date", lang)
+    lbl_enable = "تفعيل" if lang == "ar" else "Activate"
+    
     # Advanced Filters UI
-    filters = render_advanced_filters("search", lang, include_expired=True)
+    # Advanced Filters UI
+    filter_expander_key = f"filter_expander_{st.session_state.get('search_entry_count', 0)}"
+    with st.expander(t("advanced_filters", lang) if t("advanced_filters", lang) != "advanced_filters" else "تصفية متقدمة", expanded=False):
+        
+        # Row 1: Date & Range Filters
+        st.markdown(f'<div class="premium-filter-label">📅 {t("filter_dates_group", lang)}</div>', unsafe_allow_html=True)
+        c1, c2, c3 = st.columns(3)
+        
+        with c1:
+            use_age = st.checkbox(f" {lbl_enable} {lbl_age}", key="use_age_filter")
+            if use_age:
+                ac1, ac2 = st.columns(2)
+                with ac1:
+                    a_min = st.number_input("من سن" if lang == 'ar' else "From", 1, 100, 16, key="age_min_search")
+                with ac2:
+                    a_max = st.number_input("إلى سن" if lang == 'ar' else "To", 1, 100, 35, key="age_max_search")
+                age_range = (a_min, a_max)
+            else: 
+                age_range = (16, 35)
+
+        with c2:
+            use_contract = st.checkbox(f" {lbl_enable} {lbl_contract}", key="use_contract_filter")
+            if use_contract:
+                contract_range = st.date_input("Contract Range", (datetime.now().date(), datetime.now().date() + timedelta(days=30)), label_visibility="collapsed", key="contract_range")
+            else: contract_range = []
+
+        with c3:
+            use_reg = st.checkbox(f" {lbl_enable} {lbl_reg}", key="use_reg_filter")
+            if use_reg:
+                reg_range = st.date_input("Registration Range", (datetime.now().date().replace(day=1), datetime.now().date()), label_visibility="collapsed", key="reg_range")
+            else: reg_range = []
+
+        st.markdown("<br>", unsafe_allow_html=True)
+        st.markdown(f'<div class="premium-filter-label">⚙️ {t("filter_advanced_group", lang)}</div>', unsafe_allow_html=True)
+        
+        # Row 2: Status & Dropdown Filters
+        c2_1, c2_2, c2_3 = st.columns(3)
+        
+        with c2_1:
+            use_expired = st.checkbox(t("expired", lang), key="use_expired_filter")
+            if use_expired:
+                st.caption("⚠️ " + ("ترتيب من الأقدم" if lang == "ar" else "Sorting Oldest first"))
+        
+        with c2_2:
+            use_not_working = st.checkbox("No (هل يعمل حالياً؟)" if lang == "ar" else "Not Working (No)", key="use_not_working_filter")
+            
+        with c2_3:
+            transfer_options = {
+                "": f"— {t('transfer_all', lang)} —",
+                "First time": t("transfer_1", lang),
+                "Second time": t("transfer_2", lang),
+                "The third time": t("transfer_3", lang),
+                "More than three": t("transfer_more", lang)
+            }
+            selected_transfer_label = st.selectbox(
+                t("transfer_count_label", lang),
+                options=list(transfer_options.values()),
+                key="transfer_count_dropdown"
+            )
+            # Find the key (English value) from the selected label
+            selected_transfer_key = [k for k, v in transfer_options.items() if v == selected_transfer_label][0]
+        
+        # Row 3: Huroob & Outside City Filters
+        st.markdown("<br>", unsafe_allow_html=True)
+        c3_1, c3_2 = st.columns(2)
+        with c3_1:
+            use_no_huroob = st.checkbox(t("no_huroob", lang), key="use_no_huroob_filter")
+        with c3_2:
+            use_work_outside = st.checkbox(t("work_outside_city", lang), key="use_work_outside_filter")
 
     # 2. Search Input & Button
     st.markdown('<div class="search-container">', unsafe_allow_html=True)
@@ -3277,7 +3305,7 @@ def render_search_content():
     search_clicked = st.button(t("search_btn", lang), key="main_search_btn", use_container_width=True, type="primary")
     
     # NEW: Detect search trigger (Button OR Enter) and increment session ID to reset table selection
-    current_search_hash = f"{query}_{str(st.session_state.get('search_use_age'))}_{str(st.session_state.get('search_use_contract'))}"
+    current_search_hash = f"{query}_{str(st.session_state.get('use_age_filter'))}_{str(st.session_state.get('use_contract_filter'))}"
     if search_clicked or (query and st.session_state.get('last_search_hash') != current_search_hash):
         st.session_state.search_entry_count = st.session_state.get('search_entry_count', 0) + 1
         st.session_state.last_search_hash = current_search_hash
@@ -3285,6 +3313,39 @@ def render_search_content():
     # Notification placeholder right below the button
     search_notif = st.empty()
     st.markdown('</div>', unsafe_allow_html=True)
+    
+    # Gather Filters
+    filters = {}
+    
+    if use_age:
+        filters['age_enabled'] = True
+        filters['age_min'] = age_range[0]
+        filters['age_max'] = age_range[1]
+    
+    if use_contract and len(contract_range) == 2:
+        filters['contract_enabled'] = True
+        filters['contract_end_start'] = contract_range[0]
+        filters['contract_end_end'] = contract_range[1]
+        
+    if use_reg and len(reg_range) == 2:
+        filters['date_enabled'] = True
+        filters['date_start'] = reg_range[0]
+        filters['date_end'] = reg_range[1]
+
+    if use_expired:
+        filters['expired_only'] = True
+
+    if use_not_working:
+        filters['not_working_only'] = True
+
+    if use_no_huroob:
+        filters['no_huroob'] = True
+
+    if use_work_outside:
+        filters['work_outside_city'] = True
+        
+    if selected_transfer_key:
+        filters['transfer_count'] = selected_transfer_key
     
     # Check if any filter is actually active
     has_active_filter = bool(filters)
@@ -3381,10 +3442,10 @@ def render_search_content():
             if count_found > 0:
                 show_toast(f"{'تم العثور على' if lang == 'ar' else 'Found'} {count_found} {'نتائج من أصل' if lang == 'ar' else 'results out of'} {total_rows}", "success", container=search_notif)
             
-            # Debug Panel (hidden to avoid confusing users)
-            # with st.expander("🔧 تشخيص البحث | Search Debug", expanded=False):
-            #     debug = eng.last_debug
-            #     st.json(debug)
+            # Debug Panel (for diagnosing search issues)
+            with st.expander("🔧 تشخيص البحث | Search Debug", expanded=False):
+                debug = eng.last_debug
+                st.json(debug)
             
             # Handle both DataFrame and list returns
             is_empty = (isinstance(res, list) and len(res) == 0) or (hasattr(res, 'empty') and res.empty)
@@ -3392,7 +3453,7 @@ def render_search_content():
             if is_empty:
                 show_toast(t("no_results", lang), "warning", container=search_notif)
             elif query and count_found == total_rows:
-                show_toast("تنبيه: البحث أرجع جميع النتائج." if lang == 'ar' else "Warning: Search returned all results.", "warning", container=search_notif)
+                show_toast("تنبيه: البحث أرجع جميع النتائج. تحقق من تشخيص البحث أعلاه." if lang == 'ar' else "Warning: Search returned all results. Check debug panel above.", "warning", container=search_notif)
             
             # Preserve internal diagnostic columns for logic (dropping them here was causing the ID Missing error)
             # internal_cols = [c for c in res.columns if str(c).startswith('__')]
@@ -4519,11 +4580,8 @@ def render_order_processing_content():
     def info_cell(icon, label_text, value, color="#F4F4F4", min_width="200px"):
         if not value or str(value).strip().lower() in ["nan", "none", ""]:
             return ""
-        # Only auto-translate values when in English interface
-        if lang == 'en':
-            disp_val = auto_translate(str(value), target_lang='en')
-        else:
-            disp_val = str(value)
+        # Auto translate Arabic values to English if in English interface
+        disp_val = auto_translate(str(value), target_lang='en')
         return f'<div style="background: rgba(255,255,255,0.04); padding: 12px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.06); margin: 5px; flex: 1 1 {min_width}; min-height: 80px; display: flex; flex-direction: column; justify-content: center;"><span style="color: #888; font-size: 0.8rem;">{label_text}</span><span style="color: {color}; font-size: 1.1rem; font-weight: 600; margin-top: 4px;">{icon} {disp_val}</span></div>'
 
     # --- Timestamp column lookup ---
@@ -4558,8 +4616,6 @@ def render_order_processing_content():
             display_title = f"🏢 {company_val}" if user_role != "viewer" else "🏢 " + ("طلب عميل" if lang == 'ar' else f"Customer Request")
             
             # Start Neon Frame and Header
-            card_dir = 'rtl' if lang == 'ar' else 'ltr'
-            header_border_side = 'border-right' if lang == 'ar' else 'border-left'
             st.markdown(f"""
 <style>
 @keyframes neonWhitePulseCard {{
@@ -4573,12 +4629,12 @@ def render_order_processing_content():
     margin: 15px 0;
     background: rgba(10, 14, 26, 0.6);
     animation: neonWhitePulseCard 3s ease-in-out infinite alternate;
-    direction: {card_dir};
+    direction: rtl;
 }}
 </style>
 <div class="neon-wrapper-card">
     <div style="background: linear-gradient(90deg, rgba(255,255,255,0.1), transparent); 
-                padding: 12px 20px; border-radius: 12px; {header_border_side}: 5px solid #FFFFFF; margin: 0 0 15px 0;
+                padding: 12px 20px; border-radius: 12px; border-right: 5px solid #FFFFFF; margin: 0 0 15px 0;
                 box-shadow: 0 0 15px rgba(255,255,255,0.2);">
         <h3 style="color: #FFFFFF; margin: 0; font-family: 'Tajawal', sans-serif; text-shadow: 0 0 10px rgba(255,255,255,0.5);">
             {display_title} <span style="font-size: 0.8rem; color: #888;">#{idx+1}</span>
@@ -4907,7 +4963,97 @@ def render_customer_requests_content():
     loading_placeholder.empty()
 
     # ────── Advanced Filters for Matching ──────
-    filters = render_advanced_filters("cr", lang)
+    lbl_age = t("age", lang)
+    lbl_contract = t("contract_end", lang)
+    lbl_reg = t("registration_date", lang)
+    lbl_enable = "تفعيل" if lang == "ar" else "Activate"
+    
+    with st.expander(t("advanced_filters", lang) if t("advanced_filters", lang) != "advanced_filters" else "تصفية متقدمة", expanded=False):
+        
+        # Row 1: Date & Range Filters
+        st.markdown(f'<div class="premium-filter-label">📅 {t("filter_dates_group", lang)}</div>', unsafe_allow_html=True)
+        c1, c2, c3 = st.columns(3)
+        
+        with c1:
+            use_age = st.checkbox(f" {lbl_enable} {lbl_age}", key="cr_use_age_filter")
+            if use_age:
+                ac1, ac2 = st.columns(2)
+                with ac1:
+                    a_min = st.number_input("من سن" if lang == 'ar' else "From", 1, 100, 16, key="cr_age_min")
+                with ac2:
+                    a_max = st.number_input("إلى سن" if lang == 'ar' else "To", 1, 100, 35, key="cr_age_max")
+                age_range = (a_min, a_max)
+            else: 
+                age_range = (16, 35)
+
+        with c2:
+            use_contract = st.checkbox(f" {lbl_enable} {lbl_contract}", key="cr_use_contract_filter")
+            if use_contract:
+                contract_range = st.date_input("Contract Range", (datetime.now().date(), datetime.now().date() + timedelta(days=30)), label_visibility="collapsed", key="cr_contract_range")
+            else: contract_range = []
+
+        with c3:
+            use_reg = st.checkbox(f" {lbl_enable} {lbl_reg}", key="cr_use_reg_filter")
+            if use_reg:
+                reg_range = st.date_input("Registration Range", (datetime.now().date().replace(day=1), datetime.now().date()), label_visibility="collapsed", key="cr_reg_range")
+            else: reg_range = []
+
+        st.markdown("<br>", unsafe_allow_html=True)
+        st.markdown(f'<div class="premium-filter-label">⚙️ {t("filter_advanced_group", lang)}</div>', unsafe_allow_html=True)
+        
+        # Row 2: Status & Dropdown Filters
+        c2_1, c2_2, c2_3 = st.columns(3)
+        
+        with c2_1:
+            use_expired = st.checkbox(t("expired", lang), key="cr_use_expired_filter")
+            if use_expired:
+                st.caption("⚠️ " + ("ترتيب من الأقدم" if lang == "ar" else "Sorting Oldest first"))
+        
+        with c2_2:
+            use_not_working = st.checkbox("No (هل يعمل حالياً؟)" if lang == "ar" else "Not Working (No)", key="cr_use_not_working_filter")
+            
+        with c2_3:
+            transfer_options = {
+                "": f"— {t('transfer_all', lang)} —",
+                "First time": t("transfer_1", lang),
+                "Second time": t("transfer_2", lang),
+                "The third time": t("transfer_3", lang),
+                "More than three": t("transfer_more", lang)
+            }
+            selected_transfer_label = st.selectbox(
+                t("transfer_count_label", lang),
+                options=list(transfer_options.values()),
+                key="cr_transfer_count_dropdown"
+            )
+            selected_transfer_key = [k for k, v in transfer_options.items() if v == selected_transfer_label][0]
+        
+        # Row 3: Huroob & Outside City Filters
+        st.markdown("<br>", unsafe_allow_html=True)
+        c3_1, c3_2 = st.columns(2)
+        with c3_1:
+            use_no_huroob = st.checkbox(t("no_huroob", lang), key="cr_use_no_huroob_filter")
+        with c3_2:
+            use_work_outside = st.checkbox(t("work_outside_city", lang), key="cr_use_work_outside_filter")
+
+    # Gather Filters
+    filters = {}
+    if use_age:
+        filters['age_enabled'] = True
+        filters['age_min'] = age_range[0]
+        filters['age_max'] = age_range[1]
+    if use_contract and len(contract_range) == 2:
+        filters['contract_enabled'] = True
+        filters['contract_end_start'] = contract_range[0]
+        filters['contract_end_end'] = contract_range[1]
+    if use_reg and len(reg_range) == 2:
+        filters['date_enabled'] = True
+        filters['date_start'] = reg_range[0]
+        filters['date_end'] = reg_range[1]
+    if use_expired: filters['expired_only'] = True
+    if use_not_working: filters['not_working_only'] = True
+    if use_no_huroob: filters['no_huroob'] = True
+    if use_work_outside: filters['work_outside_city'] = True
+    if selected_transfer_key: filters['transfer_count'] = selected_transfer_key
 
     if df.empty:
         st.warning(t("no_data", lang))
@@ -5213,13 +5359,7 @@ def render_bengali_supply_content():
     
     st.markdown(f'<div class="luxury-main-title">{t("bengali_supply_title", lang)}</div>', unsafe_allow_html=True)
     
-    ret_tab_title = "🔄 مرتجع عمال" if lang == 'ar' else "🔄 Worker Returns"
-    tab1, tab2, tab3, tab4 = st.tabs([
-        t("form_supplier_employer", lang), 
-        t("form_worker_details", lang), 
-        t("search_manage_title", lang),
-        ret_tab_title
-    ])
+    tab1, tab2, tab3 = st.tabs([t("form_supplier_employer", lang), t("form_worker_details", lang), t("search_manage_title", lang)])
     
     with tab1:
         st.markdown(f'### 🏗️ {t("form_supplier_employer", lang)}')
@@ -5302,31 +5442,16 @@ def render_bengali_supply_content():
                 # Use a hack to switch tab? Or just tell them.
                 st.info("الرجاء الضغط على تبويب 'إضافة مورد وصاحب عمل' في الأعلى")
         
-        entry_mode_val = st.radio("طريقة الإدخال / Entry Method", 
-                                  ["تفاصيل عامل واحد (Single Worker)", "إدخال عدد فقط (Headcount Only)"], 
-                                  horizontal=True)
-        
         with st.form("worker_entry_form", clear_on_submit=True):
-            if "عدد" in entry_mode_val or "Headcount" in entry_mode_val:
-                st.markdown(f"**Number of Workers - عدد العمال**")
-                w_count = st.number_input("Count", min_value=1, value=5, step=1, label_visibility="collapsed")
-                st.info("سيتم تسجيل العمال كعدد جماعي تحت المورد وصاحب العمل المحددين. (مثال: 5 عمال)" if lang == 'ar' else "Workers will be registered as a headcount under the selected supplier and employer.")
-                w_name = f"{w_count} عمال (بدون أسماء)" if lang == 'ar' else f"{w_count} Workers (Anonymous)"
-                w_mobile = "-"
-                w_id = "-"
-                w_count_mode = True
-            else:
-                c1, c2 = st.columns(2)
-                with c1:
-                    st.markdown(f"**Name - الاسم**")
-                    w_name = st.text_input(t("worker_name", lang), label_visibility="collapsed", key="w_name_in")
-                    st.markdown(f"**Mobile - الجوال**")
-                    w_mobile = st.text_input(t("worker_phone", lang), label_visibility="collapsed", key="w_mob_in")
-                with c2:
-                    st.markdown(f"**ID/Passport - الهوية أو الجواز**")
-                    w_id = st.text_input(t("worker_passport_iqama", lang), label_visibility="collapsed", key="w_id_in")
-                w_count = 1
-                w_count_mode = False
+            c1, c2 = st.columns(2)
+            with c1:
+                st.markdown(f"**Name - الاسم**")
+                w_name = st.text_input(t("worker_name", lang), label_visibility="collapsed", key="w_name_in")
+                st.markdown(f"**Mobile - الجوال**")
+                w_mobile = st.text_input(t("worker_phone", lang), label_visibility="collapsed", key="w_mob_in")
+            with c2:
+                st.markdown(f"**ID/Passport - الهوية أو الجواز**")
+                w_id = st.text_input(t("worker_passport_iqama", lang), label_visibility="collapsed", key="w_id_in")
             
             st.markdown("---")
             cc1, cc2 = st.columns(2)
@@ -5347,7 +5472,7 @@ def render_bengali_supply_content():
             g_notes = st.text_area(t("general_notes", lang), label_visibility="collapsed", key="w_g_notes")
             
             if st.form_submit_button(t("add_worker_btn", lang), use_container_width=True):
-                if w_name and (selected_s if s_options else True) and (selected_e if e_options else True):
+                if w_name and (sel_s if s_options else True) and (sel_e if e_options else True):
                     # Save files physically
                     saved_files = []
                     if uploaded_files:
@@ -5374,13 +5499,11 @@ def render_bengali_supply_content():
                         "name": w_name,
                         "mobile": w_mobile,
                         "id": w_id,
-                        "supplier": selected_s if s_options else "",
-                        "employer": selected_e if e_options else "",
+                        "supplier": sel_s if s_options else "",
+                        "employer": sel_e if e_options else "",
                         "file_notes": f_notes,
                         "general_notes": g_notes,
                         "files": saved_files,
-                        "is_headcount": w_count_mode,
-                        "count": w_count,
                         "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                     }
                     bm.add_worker(worker_data)
@@ -5394,19 +5517,11 @@ def render_bengali_supply_content():
             if st.session_state.get('_notif_worker'):
                 typ, msg = st.session_state.pop('_notif_worker')
                 show_toast(msg, typ, container=worker_save_notif)
-                
 
     with tab3:
         st.markdown(f"### {t('search_manage_title', lang)}")
-        ret_search_lbl = "بحث عن العامل/السجل المراد إرجاعه" if lang == 'ar' else "Search for worker/record to return"
-        ret_count_lbl = "عدد المرجعين" if lang == 'ar' else "Number to return"
-        ret_btn_lbl = "إتمام المرتجع" if lang == 'ar' else "Confirm Return"
-
-        m_tab1, m_tab2, m_tab3 = st.tabs([
-            "👷 " + ("العمال" if lang=='ar' else "Workers"), 
-            "📦 " + ("الموردون" if lang=='ar' else "Suppliers"), 
-            "🏢 " + ("أصحاب العمل" if lang=='ar' else "Employers")
-        ])
+        
+        m_tab1, m_tab2, m_tab3 = st.tabs(["👷 " + ("العمال" if lang=='ar' else "Workers"), "📦 " + ("الموردون" if lang=='ar' else "Suppliers"), "🏢 " + ("أصحاب العمل" if lang=='ar' else "Employers")])
         
         user_perms = st.session_state.user.get('permissions', [])
         can_delete = "can_delete" in user_perms or "all" in user_perms
@@ -5442,7 +5557,6 @@ def render_bengali_supply_content():
                         
                         df_g.append({
                             ("اسم العامل" if lang == 'ar' else "Worker Name"): w.get("name", ""),
-                            ("العدد" if lang == 'ar' else "Count"): w.get("count", 1),
                             ("جوال العامل" if lang == 'ar' else "Mobile"): w.get("mobile", ""),
                             ("الهوية" if lang == 'ar' else "ID/Passport"): w.get("id", ""),
                             ("المورد" if lang == 'ar' else "Supplier"): s_info.get("name", w.get("supplier")),
@@ -5451,16 +5565,16 @@ def render_bengali_supply_content():
                         })
                     df_bengali_search = pd.DataFrame(df_g)
                     col_cfg_b = {}
-                    for col in df_bengali_search.columns:
-                        if any(kw in str(col).lower() for kw in ["nationality", "الجنسية"]):
-                            col_cfg_b[f"🚩_{col}"] = st.column_config.ImageColumn(t("country_label", lang), width="small", pinned=True)
+                for col in df_bengali_search.columns:
+                    if any(kw in str(col).lower() for kw in ["nationality", "الجنسية"]):
+                        col_cfg_b[f"🚩_{col}"] = st.column_config.ImageColumn(t("country_label", lang), width="small", pinned=True)
 
+                    
                     st.dataframe(style_df(df_bengali_search), use_container_width=True, hide_index=True, column_config=__apply_pinned_columns(df_bengali_search, col_cfg_b))
                     
                     st.markdown("---")
                     for w in sorted(results, key=lambda x: x.get("timestamp", ""), reverse=True):
-                        count_disp = f" ({w.get('count', 1)} عمال)" if w.get('is_headcount') else ""
-                        with st.expander(f"👷 {w.get('name', 'N/A')}{count_disp} - {w.get('id', '')}"):
+                        with st.expander(f"👷 {w.get('name', 'N/A')} - {w.get('id', '')}"):
                             w_uuid = w.get('worker_uuid')
                             c1, c2, c3 = st.columns(3)
                             s_info = s_lookup.get(w.get("supplier"), {})
@@ -5469,7 +5583,6 @@ def render_bengali_supply_content():
                             with c1:
                                 st.markdown("**👤 " + ("بيانات العامل" if lang == 'ar' else "Worker Details") + "**")
                                 st.write(f"{'الاسم' if lang == 'ar' else 'Name'}: {w.get('name')}")
-                                st.write(f"{'العدد' if lang == 'ar' else 'Count'}: {w.get('count', 1)}")
                                 st.write(f"{'الجوال' if lang == 'ar' else 'Mobile'}: {w.get('mobile')}")
                                 st.write(f"{'الهوية' if lang == 'ar' else 'ID'}: {w.get('id')}")
                             with c2:
@@ -5490,14 +5603,14 @@ def render_bengali_supply_content():
                                     path = sf.get("path")
                                     if path and os.path.exists(path):
                                         if path.lower().split(".")[-1] in ["jpg", "jpeg", "png", "webp"]:
-                                            ic.image(path, use_container_width=True)
+                                            ic.image(path, use_column_width=True)
                             
                             if can_delete:
                                 ec1, ec2 = st.columns(2)
                                 with ec1:
-                                    if st.button("🗑️ " + ("حذف السجل" if lang == 'ar' else "Delete Record"), key=f"del_worker_{w_uuid}", use_container_width=True):
+                                    if st.button("🗑️ " + ("حذف العامل" if lang == 'ar' else "Delete Worker"), key=f"del_worker_{w_uuid}", use_container_width=True):
                                         if bm.delete_worker(w_uuid):
-                                            st.session_state['_notif_m_worker'] = ("success", "تم حذف السجل بنجاح ✅" if lang == 'ar' else "Record deleted successfully ✅")
+                                            st.session_state['_notif_m_worker'] = ("success", "تم حذف العامل بنجاح ✅" if lang == 'ar' else "Worker deleted successfully ✅")
                                             st.rerun()
                                 with ec2:
                                     show_edit = st.toggle("📝 " + ("تعديل البيانات" if lang == 'ar' else "Edit Details"), key=f"tog_edit_{w_uuid}")
@@ -5506,7 +5619,6 @@ def render_bengali_supply_content():
                                     with st.form(f"edit_worker_form_{w_uuid}"):
                                         st.markdown("### 📝 " + ("تعديل بيانات العامل" if lang == 'ar' else "Edit Worker Details"))
                                         en = st.text_input("Name", w.get("name", ""))
-                                        ecn = st.number_input("Count", min_value=1, value=int(w.get("count", 1)))
                                         em = st.text_input("Mobile", w.get("mobile", ""))
                                         ei = st.text_input("ID/Passport", w.get("id", ""))
                                         
@@ -5522,100 +5634,39 @@ def render_bengali_supply_content():
                                         
                                         if st.form_submit_button("💾 " + ("حفظ التعديلات" if lang == 'ar' else "Save Changes"), use_container_width=True):
                                             updated_w = {
-                                                "name": en, "count": ecn, "is_headcount": w.get("is_headcount", False),
-                                                "mobile": em, "id": ei, "supplier": es, "employer": ee,
-                                                "file_notes": w.get("file_notes", ""), "general_notes": w.get("general_notes", ""),
-                                                "files": w.get("files", []), "timestamp": w.get("timestamp", "")
+                                                "name": en,
+                                                "mobile": em,
+                                                "id": ei,
+                                                "supplier": es,
+                                                "employer": ee,
+                                                "file_notes": w.get("file_notes", ""),
+                                                "general_notes": w.get("general_notes", ""),
+                                                "files": w.get("files", []),
+                                                "timestamp": w.get("timestamp", "")
                                             }
                                             if bm.update_worker(w_uuid, updated_w):
-                                                st.session_state['_notif_m_worker'] = ("success", "تم تحديث البيانات بنجاح ✅" if lang == 'ar' else "Updated successfully ✅")
+                                                st.session_state['_notif_m_worker'] = ("success", "تم تحديث بيانات العامل بنجاح ✅" if lang == 'ar' else "Worker updated successfully ✅")
                                                 st.rerun()
                 else:
                     st.warning("لم يتم العثور على نتائج" if lang == 'ar' else "No results found")
             else:
-                st.info("💡 " + ("ابحث عن عامل أو سجل بالاسم أو الرقم" if lang == 'ar' else "Search for a worker or record by name or number"))
-                total_w_sum = sum([int(w.get("count", 1)) for w in workers_all])
-                st.metric("👷 " + ("إجمالي العمال (فعلي)" if lang == 'ar' else "Total Workers (Actual)"), total_w_sum)
+                st.info("💡 " + ("ابحث عن عامل بالاسم أو الرقم" if lang == 'ar' else "Search for a worker by name or number"))
+                st.metric("👷 " + ("إجمالي العمال المسجلين" if lang == 'ar' else "Total Registered Workers"), len(workers_all))
             
             w_m_notif = st.empty()
             if st.session_state.get('_notif_m_worker'):
                 t_val, m_val = st.session_state.pop('_notif_m_worker')
                 show_toast(m_val, t_val, container=w_m_notif)
 
-    with tab4:
-        st.markdown(f"#### 🔄 {ret_tab_title}")
-        ret_q = st.text_input(ret_search_lbl, key="ret_search_in_global")
-        workers_all = bm.get_workers()
-        if ret_q:
-            rq = normalize_ar(ret_q)
-            ret_results = [w for w in workers_all if 
-                          rq in normalize_ar(w.get("name", "")) or 
-                          rq in normalize_ar(w.get("mobile", "")) or 
-                          rq in normalize_ar(w.get("id", "")) or
-                          rq in normalize_ar(w.get("supplier", "")) or
-                          rq in normalize_ar(w.get("employer", ""))]
-            
-            if ret_results:
-                for rw in ret_results:
-                    wc = int(rw.get("count", 1))
-                    with st.container(border=True):
-                        st.write(f"👷 **{rw.get('name')}** (📦 {'العدد' if lang=='ar' else 'Count'}: {wc})")
-                        st.write(f"🏷️ {rw.get('supplier')} ➡️ {rw.get('employer')}")
-                        
-                        with st.form(f"ret_form_g_{rw.get('worker_uuid')}"):
-                            amount = st.number_input(ret_count_lbl, min_value=1, max_value=wc, value=1)
-                            if st.form_submit_button(ret_btn_lbl, use_container_width=True):
-                                if amount >= wc:
-                                    # Delete record if all returned
-                                    bm.delete_worker(rw.get("worker_uuid"))
-                                    st.session_state['_notif_ret'] = ("success", "تم إرجاع السجل بالكامل بنجاح ✅" if lang=='ar' else "Whole record returned successfully ✅")
-                                else:
-                                    # Reduce count
-                                    rw["count"] = wc - amount
-                                    # Update the display name if it was a headcount text
-                                    if rw.get("is_headcount"):
-                                        rw["name"] = f"{rw['count']} عمال (بدون أسماء)" if lang == 'ar' else f"{rw['count']} Workers (Anonymous)"
-                                    bm.update_worker(rw.get("worker_uuid"), rw)
-                                    st.session_state['_notif_ret'] = ("success", f"تم إرجاع {amount} عمال بنجاح ✅" if lang=='ar' else f"Returned {amount} workers successfully ✅")
-                                st.rerun()
-            else:
-                st.warning("لا توجد نتائج مطابقة")
-        else:
-            st.info("ابحث عن اسم العامل أو المورد أو صاحب العمل للبدء بعملية المرتجع")
-        
-        ret_notif_box = st.empty()
-        if st.session_state.get('_notif_ret'):
-            rt, rm = st.session_state.pop('_notif_ret')
-            show_toast(rm, rt, container=ret_notif_box)
-
         # --- TAB 2: SUPPLIERS ---
         with m_tab2:
             st.markdown("#### 📦 " + ("إدارة الموردين" if lang == 'ar' else "Manage Suppliers"))
-            sup_search = st.text_input("🔍 " + ("بحث الموردين (الاسم أو الرقم)" if lang == 'ar' else "Search Suppliers (Name or Phone)"), key="search_sup_bengali")
             all_suppliers = bm.get_suppliers()
-            workers_all = bm.get_workers()
-            
-            # Map workers to suppliers/employers for total counts
-            sup_counts = {}
-            emp_counts = {}
-            for w in workers_all:
-                s_key = w.get("supplier")
-                e_key = w.get("employer")
-                w_c = int(w.get("count", 1))
-                if s_key: sup_counts[s_key] = sup_counts.get(s_key, 0) + w_c
-                if e_key: emp_counts[e_key] = emp_counts.get(e_key, 0) + w_c
-            
-            if sup_search:
-                q_s = normalize_ar(sup_search)
-                all_suppliers = [s for s in all_suppliers if q_s in normalize_ar(s.get('name', '')) or q_s in normalize_ar(s.get('phone', ''))]
-                
             if not all_suppliers:
                 st.info("لا يوجد موردين مسجلين حالياً." if lang == 'ar' else "No registered suppliers currently.")
             else:
                 for s in all_suppliers:
-                    s_key = f"{s['name']} ({s['phone']})"
-                    total_sw = sup_counts.get(s_key, 0)
-                    with st.expander(f"📦 {s['name']} (👷 {'عدد العمال' if lang=='ar' else 'Workers'}: {total_sw})"):
+                    with st.expander(f"📦 {s['name']}"):
                         with st.form(f"edit_sup_{s['id']}"):
                             new_name = st.text_input("Name", s['name'])
                             new_phone = st.text_input("Phone", s['phone'])
@@ -5640,20 +5691,12 @@ def render_bengali_supply_content():
         # --- TAB 3: EMPLOYERS ---
         with m_tab3:
             st.markdown("#### 🏢 " + ("إدارة أصحاب العمل" if lang == 'ar' else "Manage Employers"))
-            emp_search = st.text_input("🔍 " + ("بحث أصحاب العمل (الاسم، الجوال، المقهى، المدينة)" if lang == 'ar' else "Search Employers (Name, Mobile, Cafe, City)"), key="search_emp_bengali")
             all_employers = bm.get_employers()
-            
-            if emp_search:
-                q_e = normalize_ar(emp_search)
-                all_employers = [e for e in all_employers if q_e in normalize_ar(e.get('name', '')) or q_e in normalize_ar(e.get('mobile', '')) or q_e in normalize_ar(e.get('cafe', '')) or q_e in normalize_ar(e.get('city', ''))]
-                
             if not all_employers:
                 st.info("لا يوجد أصحاب عمل مسجلين حالياً." if lang == 'ar' else "No registered employers currently.")
             else:
                 for e in all_employers:
-                    e_key = f"{e['name']} - {e['cafe']} ({e['city']})"
-                    total_ew = emp_counts.get(e_key, 0)
-                    with st.expander(f"🏢 {e['name']} - {e.get('cafe', '')} (👷 {'عدد العمال' if lang=='ar' else 'Workers'}: {total_ew})"):
+                    with st.expander(f"🏢 {e['name']} - {e.get('cafe', '')}"):
                         with st.form(f"edit_emp_{e['id']}"):
                             en = st.text_input("Name", e['name'])
                             ec = st.text_input("Cafe", e.get('cafe', ''))
@@ -5686,4 +5729,5 @@ if not st.session_state.user:
 else:
     placeholder.empty() # Explicitly clear just in case
     dashboard()
-    # Double dashboard notification monitor removed to avoid redundant API request
+    # Call the silent monitor AFTER dashboard to ensure fast initial load
+    silent_notification_monitor()
