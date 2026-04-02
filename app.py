@@ -4583,12 +4583,33 @@ def render_order_processing_content():
             
         return pd.DataFrame(rows), filtered_indices
 
+
     def info_cell(icon, label_text, value, color="#F4F4F4", min_width="200px", force_ar=False):
         if not value or str(value).strip().lower() in ["nan", "none", ""]:
             return ""
+        
         # Bidirectional translation based on current UI language
         disp_val = auto_translate(str(value), target_lang=lang, force_stay_ar=force_ar)
+        
+        # Flag Injection: Look for country codes (BD, NP, PH, etc.) in nationality fields
+        if any(kw in label_text.lower() for kw in ["nationality", "جنسية"]):
+            import re
+            # Find 2-letter uppercase codes and inject flags
+            codes = re.findall(r'\b[A-Z]{2}\b', disp_val)
+            for code in set(codes):
+                flag_ui = f'<img src="https://flagsapi.com/{code}/flat/24.png" style="height:16px; vertical-align:middle; margin:0 4px 2px 4px;">'
+                disp_val = disp_val.replace(code, f"{flag_ui} {code}")
+            
+            # Map common names to flags if codes are missing
+            name_to_code = {"bangladeshi": "BD", "بنجلاديشي": "BD", "nepali": "NP", "نيبالي": "NP", "philippines": "PH", "فلبيني": "PH"}
+            for name, code in name_to_code.items():
+                if name in disp_val.lower() and code not in disp_val:
+                     flag_ui = f'<img src="https://flagsapi.com/{code}/flat/24.png" style="height:16px; vertical-align:middle; margin:0 4px 2px 4px;">'
+                     disp_val = f"{flag_ui} {disp_val}"
+                     break
+
         return f'<div style="background: rgba(255,255,255,0.04); padding: 12px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.06); margin: 5px; flex: 1 1 {min_width}; min-height: 80px; display: flex; flex-direction: column; justify-content: center;"><span style="color: #888; font-size: 0.8rem;">{label_text}</span><span style="color: {color}; font-size: 1.1rem; font-weight: 600; margin-top: 4px;">{icon} {disp_val}</span></div>'
+
 
     # --- Timestamp column lookup ---
     c_timestamp = find_cust_col(["timestamp"]) or find_cust_col(["الطابع"]) or find_cust_col(["تاريخ"])
@@ -4847,16 +4868,28 @@ def render_order_processing_content():
                              w_uid = reg_df.iloc[sel_idx]["__uid"]
                              render_cv_detail_panel(w_row, sel_idx, lang, key_prefix=f"op_reg_{idx}", worker_uid=w_uid)
 
+
                 # Other Cities Table
                 if other_list:
                     other_df, other_idx_map = build_worker_table(other_list, other_scores)
                     if not other_df.empty:
-                        # Export logic for other cities
                         label_other = "🌍 عمال في مدن أخرى (مرتبين حسب القرب)" if lang == 'ar' else f"🌍 Workers in other cities (sorted by proximity)"
                         render_segment_header(label_other, len(other_df), color="#FFFFFF")
+                        
+                        col_cfg_other = {}
+                        for col in other_df.columns:
+                            if any(kw in str(col).lower() for kw in ["nationality", "الجنسية"]):
+                                col_cfg_other[f"🚩_{col}"] = st.column_config.ImageColumn(t("country_label", lang), width="small", pinned=True)
+
                         other_df = render_table_translator(other_df, key_prefix=f"op_other_{idx}")
-                        # Display other cities table
-                        st.dataframe(style_df(other_df.drop(columns=["__uid"])), use_container_width=True, hide_index=True)
+                        other_styled = style_df(other_df.drop(columns=["__uid"]))
+                        st.dataframe(
+                            other_styled, 
+                            use_container_width=True, hide_index=True,
+                            column_config=__apply_pinned_columns(other_styled, col_cfg_other),
+                            key=f"op_other_table_{idx}"
+                        )
+
 
             # --- Hide Request Button (Admin Only) ---
             if st.session_state.user.get("role") == "admin":
