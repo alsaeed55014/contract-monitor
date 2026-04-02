@@ -1,0 +1,139 @@
+{
+    "suppliers": [
+        {
+            "name": "عطا الرحمن ",
+            "phone": "⁦+966 50 828 7726⁩",
+            "id": "1c4778bf"
+        },
+        {
+            "id": "823c57e5",
+            "name": "عزيز",
+            "phone": "⁦+966 57 639 8221⁩"
+        },
+        {
+            "id": "b7431aec-1a1",
+            "name": "محمد مسعود",
+            "phone": "⁦+966 51 095 6235⁩"
+        },
+        {
+            "id": "60959c98-d9f",
+            "name": "جونال",
+            "phone": "236542145"
+        },
+        {
+            "id": "dd5e83ed-c6a",
+            "name": "محمد مسعود ",
+            "phone": "⁦+966 51 095 6235⁩"
+        },
+        {
+            "id": "c5afaa7c-64b",
+            "name": "رنا",
+            "phone": ""
+        },
+        {
+            "id": "1e666164-628",
+            "name": "كازي",
+            "phone": ""
+        }
+    ],
+    "employers": [
+        {
+            "name": "ابو صقر",
+            "cafe": "حفر الباطن",
+            "mobile": "0566964681",
+            "city": "حفر الباطن",
+            "id": "edd9b9d9"
+        },
+        {
+            "id": "ffb80799",
+            "name": "الجوف",
+            "cafe": "خبراء الكيك",
+            "mobile": "⁦+966 57 952 8528⁩",
+            "city": "الجوف - طبرجل"
+        },
+        {
+            "id": "1ec3313d-f45",
+            "name": "حسان",
+            "cafe": "مصنع حلويات",
+            "mobile": "⁦+966 56 112 0318⁩",
+            "city": ""
+        }
+    ],
+    "workers": [
+        {
+            "name": "بنقالي",
+            "mobile": "",
+            "id": "",
+            "supplier": "عطا الرحمن  (⁦+966 50 828 7726⁩)",
+            "employer": "ابو صقر - حفر الباطن (حفر الباطن)",
+            "file_notes": "",
+            "general_notes": "",
+            "timestamp": "2026-03-03 23:13:01",
+            "worker_uuid": "993caa93"
+        },
+        {
+            "name": "بنقال",
+            "mobile": "",
+            "id": "",
+            "supplier": "عزيز (⁦+966 57 639 8221⁩)",
+            "employer": "الجوف - خبراء الكيك (الجوف - طبرجل)",
+            "file_notes": "",
+            "general_notes": "",
+            "files": [],
+            "timestamp": "2026-03-04 01:01:24",
+            "worker_uuid": "43fe2842"
+        },
+        {
+            "name": "4 عمال (بدون أسماء)",
+            "mobile": "-",
+            "id": "-",
+            "supplier": "عطا الرحمن  (⁦+966 50 828 7726⁩)",
+            "employer": "الجوف - خبراء الكيك (الجوف - طبرجل)",
+            "file_notes": "",
+            "general_notes": "",
+            "files": [],
+            "timestamp": "2026-04-01 19:12:24",
+            "worker_uuid": "2259a9ea-af9"
+        },
+        {
+            "name": "1 عمال (بدون أسماء)",
+            "mobile": "-",
+            "id": "-",
+            "supplier": "كازي ()",
+            "employer": "حسان - مصنع حلويات ()",
+            "file_notes": "",
+            "general_notes": "",
+            "files": [],
+            "timestamp": "2026-04-01 19:15:09",
+            "worker_uuid": "b7f7335b-f14"
+        },
+        {
+            "name": "5 عمال (بدون أسماء)",
+            "mobile": "-",
+            "id": "-",
+            "supplier": "عطا الرحمن  (⁦+966 50 828 7726⁩)",
+            "employer": "ابو صقر - حفر الباطن (حفر الباطن)",
+            "file_notes": "",
+            "general_notes": "",
+            "files": [],
+            "is_headcount": true,
+            "count": 5,
+            "timestamp": "2026-04-01 20:38:37",
+            "worker_uuid": "a6e5b56c-163"
+        },
+        {
+            "name": "5 عمال (بدون أسماء)",
+            "mobile": "-",
+            "id": "-",
+            "supplier": "رنا ()",
+            "employer": "حسان - مصنع حلويات ()",
+            "file_notes": "",
+            "general_notes": "",
+            "files": [],
+            "is_headcount": true,
+            "count": 5,
+            "timestamp": "2026-04-01 20:39:13",
+            "worker_uuid": "52a217f9-be1"
+        }
+    ]
+}

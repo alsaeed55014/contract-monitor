@@ -40,7 +40,7 @@ except ImportError:
     from core.contracts import ContractManager
     from data.bengali_manager import BengaliDataManager
     from utils.phone_utils import create_pasha_whatsapp_excel, format_phone_number, save_to_local_desktop, render_pasha_export_button, is_local_windows_pc
-    from core.matcher import CandidateMatcher, format_match_result
+    from core.matcher import CandidateMatcher, format_match_result, _find_city_region, _fuzzy_match, REGION_PROXIMITY, REGION_MAP
 
 # 2. Local Auth Class to prevent Import/Sync Errors
 class AuthManager:
