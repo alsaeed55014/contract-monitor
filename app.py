@@ -2922,7 +2922,7 @@ def dashboard():
             st.error("🔒 لا تملك صلاحية الوصول لهذه الصفحة" if lang == 'ar' else "🔒 Access Denied")
             st.session_state.page = "dashboard"
             st.rerun()
-        render_customer_requests_content()
+        render_order_processing_content()
     elif page == "order_processing": render_order_processing_content()
     elif page == "permissions": render_permissions_content()
     elif page == "bengali_supply": render_bengali_supply_content()
@@ -4996,7 +4996,8 @@ def render_bengali_supply_content():
                     if st.form_submit_button(t("add_supplier_btn", lang), use_container_width=True):
                         if s_name:
                             bm.add_supplier({"name": s_name, "phone": s_phone, "notes": s_notes})
-                            st.success("✅ " + ("تم إضافة المورد" if lang == 'ar' else "Supplier added"))
+                            st.success("✅ " + ("تم إضافة المورد بنجاح" if lang == 'ar' else "Supplier added"))
+                            time.sleep(1)
                             st.rerun()
         with col2:
             with st.container(border=True):
@@ -5010,7 +5011,8 @@ def render_bengali_supply_content():
                     if st.form_submit_button(t("add_supplier_btn", lang), use_container_width=True):
                         if e_name:
                             bm.add_employer({"name": e_name, "cafe": e_cafe, "mobile": e_mobile, "city": e_city, "notes": e_notes})
-                            st.success("✅ " + ("تم إضافة صاحب العمل" if lang == 'ar' else "Employer added"))
+                            st.success("✅ " + ("تم إضافة صاحب العمل بنجاح" if lang == 'ar' else "Employer added"))
+                            time.sleep(1)
                             st.rerun()
 
     with tab2:
@@ -5036,15 +5038,31 @@ def render_bengali_supply_content():
                 
                 sel_s = st.selectbox(t("select_supplier", lang), s_opts)
                 sel_e = st.selectbox(t("select_employer", lang), e_opts)
+
+                # Automatic Day and Date (Insertion Date)
+                now = datetime.now(SAUDI_TZ)
+                col_d1, col_d2 = st.columns(2)
+                with col_d1:
+                    day_name = now.strftime("%A")
+                    days_ar = {"Monday": "الاثنين", "Tuesday": "الثلاثاء", "Wednesday": "الأربعاء", "Thursday": "الخميس", "Friday": "الجمعة", "Saturday": "السبت", "Sunday": "الأحد"}
+                    display_day = days_ar.get(day_name, day_name) if lang == 'ar' else day_name
+                    st.text_input(t("day_label", lang), value=display_day, disabled=True)
+                with col_d2:
+                    current_date_val = now.date()
+                    # To allow override if needed, but the user asked for automatic.
+                    # I'll keep it as a value that's saved.
+                    st.text_input(t("insertion_date", lang), value=current_date_val.strftime("%Y-%m-%d"), disabled=True)
+
                 notes = st.text_area(t("general_notes", lang))
                 
                 if st.form_submit_button(t("add_worker_btn", lang), use_container_width=True):
                     bm.add_worker({
                         "name": w_name, "id": w_id, "supplier": sel_s, "employer": sel_e,
-                        "general_notes": notes, "is_headcount": is_batch, "count": w_count,
-                        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                        "general_notes": notes, "is_headcount": is_batch, "headcount": w_count,
+                        "timestamp": get_saudi_time().strftime("%Y-%m-%d %H:%M:%S")
                     })
-                    st.success("✅ " + ("تم الحفظ بنجاح" if lang == 'ar' else "Saved successfully"))
+                    st.success("✅ " + ("تم إضافة بيانات العامل/العدد بنجاح!" if lang == 'ar' else "Saved successfully!"))
+                    time.sleep(1)
                     st.rerun()
 
 
@@ -5053,46 +5071,142 @@ def render_bengali_supply_content():
     with tab3:
         st.markdown(f"### 🔍 {t('search_manage_title', lang)}")
         
-        m_t1, m_t2, m_t3 = st.tabs([
-            f"👷 {t('workers_tab', lang)}", 
-            f"📦 {t('suppliers_tab', lang)}", 
-            f"🏢 {t('employers_tab', lang)}"
-        ])
-        
         all_workers = bm.get_workers()
         all_suppliers = bm.get_suppliers()
         all_employers = bm.get_employers()
         
-        can_delete = st.session_state.user.get('role') == 'admin' or "can_delete" in st.session_state.user.get('permissions', [])
+        # 1. Global Search Box at the Top
+        col_s1, col_s2 = st.columns([4, 1])
+        with col_s1:
+            g_search = st.text_input("🔍 " + t("search_placeholder_bengali", lang), key="master_search_bengali")
+        with col_s2:
+            st.write(""); st.write("")
+            def clear_master_search():
+                st.session_state.master_search_bengali = ""
+            
+            st.button("🔄", use_container_width=True, help="تفريغ البحث", on_click=clear_master_search)
+
+        # 2. Filter All Data first for Counts
+        if g_search:
+            g_s = g_search.lower()
+            matched_w = [w for w in all_workers if g_s in str(w).lower()]
+            matched_s = [s for s in all_suppliers if g_s in str(s).lower()]
+            matched_e = [e for e in all_employers if g_s in str(e).lower()]
+            
+            s_names = {s['name'].strip() for s in matched_s}
+            e_names = {e['name'].strip() for e in matched_e}
+            
+            for w in matched_w:
+                w_s = w.get('supplier', '')
+                if '(' in w_s: s_names.add(w_s.split('(')[0].strip())
+                else: s_names.add(w_s.strip())
+                
+                w_e = w.get('employer', '')
+                if '-' in w_e: e_names.add(w_e.split('-')[0].strip())
+                else: e_names.add(w_e.strip())
+
+            filtered_w = []
+            for w in all_workers:
+                w_s = w.get('supplier', '')
+                w_s_clean = w_s.split('(')[0].strip() if '(' in w_s else w_s.strip()
+                w_e = w.get('employer', '')
+                w_e_clean = w_e.split('-')[0].strip() if '-' in w_e else w_e.strip()
+                if w in matched_w or w_s_clean in s_names or w_e_clean in e_names:
+                    if w not in filtered_w: filtered_w.append(w)
+                    
+            filtered_s = []
+            for s in all_suppliers:
+                if s in matched_s or s['name'].strip() in s_names:
+                    filtered_s.append(s)
+            
+            filtered_e = []
+            for e in all_employers:
+                if e in matched_e or e['name'].strip() in e_names:
+                    filtered_e.append(e)
+                    
+            ar_msg = f"📊 نتائج البحث المترابطة: {len(filtered_w)} عمال، {len(filtered_s)} موارد، {len(filtered_e)} أصحاب عمل."
+            en_msg = f"📊 Cross-Referenced Results: {len(filtered_w)} Workers, {len(filtered_s)} Suppliers, {len(filtered_e)} Employers."
+            st.info(ar_msg if lang == 'ar' else en_msg)
+        else:
+            filtered_w, filtered_s, filtered_e = all_workers, all_suppliers, all_employers
+
+        # 3. Tabs for Categories with Counts
+        m_t1, m_t2, m_t3 = st.tabs([
+            f"👷 {t('workers_tab', lang)} ({len(filtered_w)})", 
+            f"📦 {t('suppliers_tab', lang)} ({len(filtered_s)})", 
+            f"🏢 {t('employers_tab', lang)} ({len(filtered_e)})"
+        ])
+        
+        can_edit_delete = True 
         
         with m_t1:
             st.markdown(f"#### 👷 {t('workers_tab', lang)}")
-            col1, col2 = st.columns([3, 1])
-            with col1:
-                g_search = st.text_input("🔍 " + t("search_placeholder_bengali", lang), label_visibility="collapsed", key="search_w_global")
             
-            results = [w for w in all_workers if g_search.lower() in str(w).lower()]
-            
-            if not results:
-                st.info("⚠️ " + t("no_records_found", lang))
+            if not filtered_w:
+                st.info("⚠️ " + t("no_results", lang))
             else:
-                for w in reversed(results):
+                for w in reversed(filtered_w):
                     w_uuid = w.get('worker_uuid')
                     with st.container(border=True):
                         # Modern Header
                         c1, c2, c3 = st.columns([2, 2, 1])
                         c1.markdown(f"**👤 {w.get('name')}**")
                         c2.markdown(f"**📦 {w.get('supplier')}**")
-                        c3.markdown(f"🕒 {w.get('timestamp','').split(' ')[0]}")
                         
+                        # Calculation for Days Passed
+                        try:
+                            t_str = w.get('timestamp','')
+                            if t_str and " " in t_str:
+                                # Parse without timezone then attach SAUDI_TZ if original was naive (or just compare naively)
+                                entry_dt = datetime.strptime(t_str, "%Y-%m-%d %H:%M:%S")
+                                # Compare dates only
+                                now_dt = get_saudi_time().replace(tzinfo=None)
+                                days_diff = (now_dt.date() - entry_dt.date()).days
+                                
+                                if days_diff <= 0:
+                                    days_text = f"🟢 {t('today_label', lang)}"
+                                else:
+                                    days_text = f"⏳ {days_diff} {t('days_passed_label', lang)}"
+                            else:
+                                days_text = "-"
+                        except:
+                            days_text = "-"
+                            
+                        c3.markdown(f"**{days_text}**")
                         # Detail Reveal
                         with st.expander(t("details_label", lang)):
                             sc1, sc2 = st.columns(2)
                             with sc1:
                                 st.write(f"🆔 **ID:** {w.get('id')}")
                                 if w.get('mobile'): st.write(f"📱 **Mobile:** {w.get('mobile')}")
-                            with sc2:
-                                st.write(f"🏢 **Employer:** {w.get('employer')}")
+                                
+                                lbl = "الوقت المنقضي" if lang == 'ar' else "Time Passed"
+                                st.write(f"⏱️ **{lbl}:** {days_text}")
+                            
+                            st.markdown("---")
+                            det1, det2 = st.columns(2)
+                            
+                            s_match = next((s for s in all_suppliers if w.get('supplier', '').startswith(s.get('name', ''))), None)
+                            e_match = next((e for e in all_employers if w.get('employer', '').startswith(e.get('name', ''))), None)
+                            
+                            with det1:
+                                st.markdown("**(📦) " + ("بيانات المورد الكاملة" if lang == 'ar' else "Full Supplier Details") + "**")
+                                if s_match:
+                                    st.write(f"👤 {s_match.get('name', '-')}")
+                                    st.write(f"📞 {s_match.get('phone', '')}")
+                                    if s_match.get('notes'): st.markdown(f"> 📝 {s_match['notes']}")
+                                else:
+                                    st.write(w.get('supplier', '-'))
+                                    
+                            with det2:
+                                st.markdown("**(🏢) " + ("بيانات صاحب العمل الكاملة" if lang == 'ar' else "Full Employer Details") + "**")
+                                if e_match:
+                                    st.write(f"👤 {e_match.get('name', '-')}")
+                                    st.write(f"☕ {e_match.get('cafe', '')}")
+                                    st.write(f"📍 {e_match.get('city', '')} | 📱 {e_match.get('mobile', '')}")
+                                    if e_match.get('notes'): st.markdown(f"> 📝 {e_match['notes']}")
+                                else:
+                                    st.write(w.get('employer', '-'))
                             
                             if w.get('general_notes'):
                                 st.info(f"📝 {w['general_notes']}")
@@ -5127,21 +5241,32 @@ def render_bengali_supply_content():
 
 
                             with ac3:
-                                if can_delete:
-                                    if st.button("🗑️ " + t("delete_btn_sm", lang), key=f"del_w_{w_uuid}", use_container_width=True):
-                                        bm.delete_worker(w_uuid)
-                                        st.rerun()
+                                if can_edit_delete:
+                                    with st.popover("🗑️ " + t("delete_btn_sm", lang), use_container_width=True):
+                                        st.write("هل أنت متأكد من الحذف؟" if lang == 'ar' else "Are you sure?")
+                                        if st.button("تأكيد الحذف 🗑️" if lang == 'ar' else "Confirm Delete 🗑️", key=f"del_w_{w_uuid}", use_container_width=True, type="primary"):
+                                            bm.delete_worker(w_uuid)
+                                            st.rerun()
 
 
         with m_t2:
             st.markdown(f"#### 📦 {t('suppliers_tab', lang)}")
-            for s in all_suppliers:
+            
+            if not filtered_s:
+                st.info("⚠️ " + t("no_results", lang))
+            
+            for s in filtered_s:
                 with st.container(border=True):
                     sc1, sc2, sc3 = st.columns([2, 2, 1])
                     sc1.markdown(f"**📦 {s.get('name')}**")
                     sc2.markdown(f"📞 {s.get('phone')}")
+                    
+                    s_w_count = sum(int(w.get('headcount', 1)) if 'headcount' in w else 1 for w in all_workers if w.get('supplier', '').startswith(s.get('name', '')))
+                    lbl = "إجمالي العمال المرتبطين" if lang == 'ar' else "Total Workers Associated"
+                    st.info(f"👥 **{lbl}: {s_w_count}**")
+                    
                     if s.get('notes'):
-                        st.info(f"📝 {s['notes']}")
+                        st.write(f"📝 {s['notes']}")
                     
                     with sc3:
                         with st.popover("⚙️", use_container_width=True):
@@ -5152,18 +5277,28 @@ def render_bengali_supply_content():
                                 if st.form_submit_button("💾"):
                                     bm.update_supplier(s['id'], {"name": sn, "phone": sp, "notes": snt})
                                     st.rerun()
-                            if can_delete:
-                                if st.button("🗑️", key=f"del_s_b_{s['id']}", use_container_width=True):
-                                    bm.delete_supplier(s['id'])
-                                    st.rerun()
+                            if can_edit_delete:
+                                with st.popover("🗑️ " + ("حذف" if lang=='ar' else "Delete"), use_container_width=True):
+                                    st.write("هل أنت متأكد؟" if lang=='ar' else "Are you sure?")
+                                    if st.button("تأكيد 🗑️" if lang=='ar' else "Confirm 🗑️", key=f"del_s_b_{s['id']}", use_container_width=True, type="primary"):
+                                        bm.delete_supplier(s['id'])
+                                        st.rerun()
 
         with m_t3:
             st.markdown(f"#### 🏢 {t('employers_tab', lang)}")
-            for e in all_employers:
+            
+            if not filtered_e:
+                st.info("⚠️ " + t("no_results", lang))
+
+            for e in filtered_e:
                 with st.container(border=True):
                     ec1, ec2, ec3 = st.columns([2, 1, 1])
                     ec1.markdown(f"**🏢 {e.get('name')}**")
                     ec2.markdown(f"☕ {e.get('cafe','')}")
+                    
+                    e_w_count = sum(int(w.get('headcount', 1)) if 'headcount' in w else 1 for w in all_workers if w.get('employer', '').startswith(e.get('name', '')))
+                    lbl = "إجمالي العمال المرتبطين" if lang == 'ar' else "Total Workers Associated"
+                    st.info(f"👥 **{lbl}: {e_w_count}**")
                     
                     with ec3:
                         with st.expander("📍"):
@@ -5181,10 +5316,12 @@ def render_bengali_supply_content():
                                     if st.form_submit_button("💾"):
                                         bm.update_employer(e['id'], {"name": en, "cafe": ec, "mobile": em, "city": ect, "notes": ent})
                                         st.rerun()
-                            if can_delete:
-                                if st.button("🗑️", key=f"del_e_b_{e['id']}", use_container_width=True):
-                                    bm.delete_employer(e['id'])
-                                    st.rerun()
+                            if can_edit_delete:
+                                with st.popover("🗑️ " + ("حذف" if lang=='ar' else "Delete"), use_container_width=True):
+                                    st.write("هل أنت متأكد؟" if lang=='ar' else "Are you sure?")
+                                    if st.button("تأكيد 🗑️" if lang=='ar' else "Confirm 🗑️", key=f"del_e_b_{e['id']}", use_container_width=True, type="primary"):
+                                        bm.delete_employer(e['id'])
+                                        st.rerun()
 
 
 

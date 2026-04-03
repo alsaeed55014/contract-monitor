@@ -265,6 +265,10 @@ TRANSLATIONS = {
     "delete_btn_sm": {"ar": "حذف", "en": "Delete"},
 
     "save_btn": {"ar": "حفظ", "en": "Save"},
+    "insertion_date": {"ar": "تاريخ الإدخال", "en": "Insertion Date"},
+    "day_label": {"ar": "اليوم", "en": "Day"},
+    "days_passed_label": {"ar": "منذ (أيام)", "en": "Days Passed"},
+    "today_label": {"ar": "اليوم", "en": "Today"},
 
     "columns": {
         "__sheet_row": {"ar": "معرف الصف", "en": "Row ID"},
