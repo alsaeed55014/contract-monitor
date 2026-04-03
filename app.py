@@ -4992,9 +4992,10 @@ def render_bengali_supply_content():
                 with st.form("b_sup_f_final", clear_on_submit=True):
                     s_name = st.text_input(t("supplier_name", lang))
                     s_phone = st.text_input(t("supplier_phone", lang))
+                    s_notes = st.text_area(t("general_notes", lang), key="s_notes_input")
                     if st.form_submit_button(t("add_supplier_btn", lang), use_container_width=True):
                         if s_name:
-                            bm.add_supplier({"name": s_name, "phone": s_phone})
+                            bm.add_supplier({"name": s_name, "phone": s_phone, "notes": s_notes})
                             st.success("✅ " + ("تم إضافة المورد" if lang == 'ar' else "Supplier added"))
                             st.rerun()
         with col2:
@@ -5002,11 +5003,13 @@ def render_bengali_supply_content():
                 st.markdown(f"#### 🏢 {t('employer_name', lang)}")
                 with st.form("b_emp_f_final", clear_on_submit=True):
                     e_name = st.text_input(t("employer_name", lang))
+                    e_mobile = st.text_input(t("employer_mobile", lang))
                     e_cafe = st.text_input(t("cafe_name", lang))
                     e_city = st.text_input(t("city", lang))
+                    e_notes = st.text_area(t("general_notes", lang), key="e_notes_input")
                     if st.form_submit_button(t("add_supplier_btn", lang), use_container_width=True):
                         if e_name:
-                            bm.add_employer({"name": e_name, "cafe": e_cafe, "city": e_city})
+                            bm.add_employer({"name": e_name, "cafe": e_cafe, "mobile": e_mobile, "city": e_city, "notes": e_notes})
                             st.success("✅ " + ("تم إضافة صاحب العمل" if lang == 'ar' else "Employer added"))
                             st.rerun()
 
@@ -5137,14 +5140,17 @@ def render_bengali_supply_content():
                     sc1, sc2, sc3 = st.columns([2, 2, 1])
                     sc1.markdown(f"**📦 {s.get('name')}**")
                     sc2.markdown(f"📞 {s.get('phone')}")
+                    if s.get('notes'):
+                        st.info(f"📝 {s['notes']}")
                     
                     with sc3:
                         with st.popover("⚙️", use_container_width=True):
                             with st.form(f"ed_sup_{s['id']}"):
                                 sn = st.text_input("Name", s['name'])
                                 sp = st.text_input("Phone", s['phone'])
+                                snt = st.text_area("Notes", s.get('notes', ''))
                                 if st.form_submit_button("💾"):
-                                    bm.update_supplier(s['id'], {"name": sn, "phone": sp})
+                                    bm.update_supplier(s['id'], {"name": sn, "phone": sp, "notes": snt})
                                     st.rerun()
                             if can_delete:
                                 if st.button("🗑️", key=f"del_s_b_{s['id']}", use_container_width=True):
@@ -5163,14 +5169,17 @@ def render_bengali_supply_content():
                         with st.expander("📍"):
                             st.write(f"City: {e.get('city','')}")
                             st.write(f"Mobile: {e.get('mobile','')}")
+                            if e.get('notes'):
+                                st.info(f"📝 {e['notes']}")
                             with st.popover("✏️", use_container_width=True):
                                 with st.form(f"ed_emp_{e['id']}"):
                                     en = st.text_input("Name", e['name'])
                                     ec = st.text_input("Cafe", e.get('cafe',''))
                                     em = st.text_input("Mobile", e.get('mobile',''))
                                     ect = st.text_input("City", e.get('city',''))
+                                    ent = st.text_area("Notes", e.get('notes', ''))
                                     if st.form_submit_button("💾"):
-                                        bm.update_employer(e['id'], {"name": en, "cafe": ec, "mobile": em, "city": ect})
+                                        bm.update_employer(e['id'], {"name": en, "cafe": ec, "mobile": em, "city": ect, "notes": ent})
                                         st.rerun()
                             if can_delete:
                                 if st.button("🗑️", key=f"del_e_b_{e['id']}", use_container_width=True):

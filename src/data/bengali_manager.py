@@ -86,7 +86,8 @@ class BengaliDataManager:
         s_entry = {
             "id": s_id, 
             "name": supplier.get("name", ""), 
-            "phone": supplier.get("phone", "")
+            "phone": supplier.get("phone", ""),
+            "notes": supplier.get("notes", "")
         }
         
         # Ensure suppliers list exists
@@ -110,7 +111,8 @@ class BengaliDataManager:
             "name": employer.get("name", ""), 
             "cafe": employer.get("cafe", ""), 
             "mobile": employer.get("mobile", ""), 
-            "city": employer.get("city", "")
+            "city": employer.get("city", ""),
+            "notes": employer.get("notes", "")
         }
         
         if "employers" not in self.data:
