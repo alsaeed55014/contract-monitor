@@ -5,6 +5,7 @@ import tempfile
 import base64
 import io
 import glob
+import random
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
@@ -179,7 +180,6 @@ class WhatsAppService:
     def send_message(self, phone, message, attachment_path=None):
         if not self.driver: return False, "Engine Offline"
         try:
-            import random
             from selenium.webdriver.common.action_chains import ActionChains
             
             clean_phone = "".join(filter(str.isdigit, str(phone)))
