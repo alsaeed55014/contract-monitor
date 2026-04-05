@@ -64,10 +64,7 @@ class WhatsAppService:
         ua = random.choice(USER_AGENTS)
         opts.add_argument(f"user-agent={ua}")
         
-        # Bypassing Detection & Stealth flags
-        opts.add_argument("--disable-blink-features=AutomationControlled")
-        opts.add_argument("--disable-infobars")
-        opts.add_experimental_option("excludeSwitches", ["enable-automation"])
+        # Bypassing Detection: Let uc handle it natively
         opts.add_argument("--use-fake-ui-for-media-stream")
         opts.add_argument("--disable-notifications")
         
@@ -97,10 +94,10 @@ class WhatsAppService:
         try:
             # Use Undetected Chromedriver (UC)
             # UC manages its own driver, so we don't need Service() usually
+            # Attempt to match modern version, but let uc auto-detect if possible
             self.driver = uc.Chrome(
                 options=opts, 
-                browser_executable_path=binary,
-                version_main=123 # Attempt to match modern version
+                browser_executable_path=binary
             )
             self.driver.get("https://web.whatsapp.com")
             return True, "Ready (Powered by UC Stealth)"
