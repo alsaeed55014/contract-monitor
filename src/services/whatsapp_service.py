@@ -6,8 +6,6 @@ import base64
 import io
 import glob
 import random
-import subprocess
-import re
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
@@ -31,100 +29,51 @@ class WhatsAppService:
             except: 
                 self.close()
 
-        # Simple cleanup
         if force_clean and os.path.exists(self.session_path):
-            import shutil
             shutil.rmtree(self.session_path, ignore_errors=True)
         
         os.makedirs(self.session_path, exist_ok=True)
         
+        # Clean lock files
+        for lf in ["SingletonLock", "SingletonSocket", "SingletonCookie", "lockfile"]:
+            p = os.path.join(self.session_path, lf)
+            try:
+                if os.path.exists(p): os.remove(p)
+            except: pass
+        
         import undetected_chromedriver as uc
         
-        # Use UC's own options to avoid "no setter" and capability issues
         opts = uc.ChromeOptions()
-        
         if headless:
             opts.add_argument("--headless")
         
-        opts.add_argument(f"--user-data-dir={self.session_path}")
         opts.add_argument("--no-sandbox")
         opts.add_argument("--disable-dev-shm-usage")
+        opts.add_argument("--disable-gpu")
+        opts.add_argument("--window-size=1920,1080")
+        opts.add_argument(f"--user-data-dir={self.session_path}")
         
-        # 2026 High Compatibility User Agent
-        ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+        # 2026 Advanced Stealth User Agents
+        USER_AGENTS = [
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
+            "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36 Edg/122.0.0.0",
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:124.0) Gecko/20100101 Firefox/124.0"
+        ]
+        ua = random.choice(USER_AGENTS)
         opts.add_argument(f"user-agent={ua}")
         
-        # Stability & Anti-Bot flags
+        # Bypassing Detection & Stealth flags
         opts.add_argument("--disable-blink-features=AutomationControlled")
         opts.add_argument("--disable-infobars")
-        opts.add_argument("--no-first-run")
-        opts.add_argument("--no-service-autorun")
-        opts.add_argument("--password-store=basic")
+        opts.add_argument("--excludeSwitches", ["enable-automation"])
+        opts.add_argument("--use-fake-ui-for-media-stream")
+        opts.add_argument("--disable-notifications")
         
-        # Find Chrome binary
-        binary = self._find_chrome_binary()
-        
-        # In Cloud environment, we should be careful with version_main
-        # If detection fails or we are in cloud, it's safer to let UC handle it
-        v_main = None
-        if os.name == 'nt':
-            v_main = self._get_chrome_version(binary)
-        
-        try:
-            # UC initialization
-            self.driver = uc.Chrome(
-                options=opts, 
-                browser_executable_path=binary,
-                use_subprocess=True,
-                version_main=v_main
-            )
-            
-            self.driver.get("https://web.whatsapp.com")
-            return True, "Driver Started Successfully"
-        except Exception as e:
-            self.last_error = f"UC Error: {str(e)}"
-            # Fallback Recovery: Try without a custom user-data-dir if it's a session error
-            if "session not created" in str(e).lower() or "not reachable" in str(e).lower():
-                try:
-                    opts_fallback = uc.ChromeOptions()
-                    if headless: opts_fallback.add_argument("--headless")
-                    self.driver = uc.Chrome(
-                        options=opts_fallback, 
-                        use_subprocess=True,
-                        version_main=v_main
-                    )
-                    self.driver.get("https://web.whatsapp.com")
-                    return True, "Driver Started (Recovery Mode - No Session)"
-                except Exception as e2:
-                    self.last_error += f" | Recovery Failed: {str(e2)}"
-            
-            print(f"[{time.ctime()}] Start Driver Error: {self.last_error}")
-            return False, self.last_error
-
-    def _get_chrome_version(self, binary_path):
-        """Detects the major version of the installed Chrome browser."""
-        if not binary_path or not os.path.exists(binary_path):
-            return 146 # Fallback to 146 as seen in user error
-        
-        try:
-            if os.name == 'nt':
-                cmd = f'powershell -command "(Get-Item \'{binary_path}\').VersionInfo.ProductVersion"'
-                res = subprocess.check_output(cmd, shell=True).decode().strip()
-                if res:
-                    return int(res.split('.')[0])
-            else:
-                res = subprocess.check_output([binary_path, "--version"]).decode().strip()
-                # Google Chrome 146.0.7680.178
-                match = re.search(r'(\d+)\.', res)
-                if match:
-                    return int(match.group(1))
-        except:
-            pass
-        return 146 # Default fallback
-
-    def _find_chrome_binary(self):
+        # Find Chrome binary (Windows & Linux)
         binary = None
-        if os.name == 'nt':
+        if os.name == 'nt': # Windows
             win_paths = [
                 os.environ.get("PROGRAMFILES", "C:\\Program Files") + "\\Google\\Chrome\\Application\\chrome.exe",
                 os.environ.get("PROGRAMFILES(X86)", "C:\\Program Files (x86)") + "\\Google\\Chrome\\Application\\chrome.exe",
@@ -134,13 +83,42 @@ class WhatsAppService:
                 if os.path.exists(b):
                     binary = b
                     break
-        else:
-            chrome_bins = ["/usr/bin/chromium", "/usr/bin/google-chrome", "/usr/bin/google-chrome-stable"]
+        else: # Linux
+            chrome_bins = [
+                "/usr/bin/chromium", "/usr/bin/chromium-browser", 
+                "/usr/bin/google-chrome", "/usr/bin/google-chrome-stable",
+                "/snap/bin/chromium"
+            ]
             for b in chrome_bins:
                 if os.path.exists(b):
                     binary = b
                     break
-        return binary
+        
+        try:
+            # Use Undetected Chromedriver (UC)
+            # UC manages its own driver, so we don't need Service() usually
+            self.driver = uc.Chrome(
+                options=opts, 
+                browser_executable_path=binary,
+                version_main=123 # Attempt to match modern version
+            )
+            self.driver.get("https://web.whatsapp.com")
+            return True, "Ready (Powered by UC Stealth)"
+        except Exception as e:
+            self.last_error = f"UC Error: {str(e)[:100]}"
+            # Fallback to standard if UC fails
+            try:
+                from selenium import webdriver
+                from selenium.webdriver.chrome.options import Options as StdOptions
+                std_opts = StdOptions()
+                if headless: std_opts.add_argument("--headless")
+                std_opts.add_argument(f"user-data-dir={self.session_path}")
+                self.driver = webdriver.Chrome(options=std_opts)
+                self.driver.get("https://web.whatsapp.com")
+                return True, "Ready (Standard Fallback - Vulnerable)"
+            except Exception as e2:
+                self.last_error += f" | Standard Error: {str(e2)[:60]}"
+                return False, self.last_error
 
 
     def get_status(self):
@@ -193,14 +171,9 @@ class WhatsAppService:
             except:
                 return None
 
-    def get_screenshot(self):
-        if not self.driver: return None
-        try: return self.driver.get_screenshot_as_png()
-        except: return None
-
     def get_diagnostic_screenshot(self):
         if not self.driver: return None
-        try: return self.driver.get_screenshot_as_png()
+        try: return self.driver.get_screenshot_as_base64()
         except: return None
 
 

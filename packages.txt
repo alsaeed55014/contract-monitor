@@ -2,12 +2,3 @@ chromium
 chromium-driver
 tesseract-ocr
 libtesseract-dev
-libnss3
-libgdk-pixbuf2.0-0
-libgtk-3-0
-libx11-xcb1
-libxss1
-libasound2
-fonts-liberation
-libappindicator3-1
-xdg-utils
