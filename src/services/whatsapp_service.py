@@ -41,35 +41,37 @@ class WhatsAppService:
                 if os.path.exists(p): os.remove(p)
             except: pass
         
-        import undetected_chromedriver as uc
-        
-        opts = uc.ChromeOptions()
-        if headless:
-            opts.add_argument("--headless")
-        
-        opts.add_argument("--no-sandbox")
-        opts.add_argument("--disable-dev-shm-usage")
-        opts.add_argument("--disable-gpu")
-        opts.add_argument("--window-size=1920,1080")
-        opts.add_argument(f"--user-data-dir={self.session_path}")
-        
-        # 2026 Advanced Stealth User Agents (Updated for 125+)
+        # 2026 Advanced Stealth User Agents (Updated for 132+)
         USER_AGENTS = [
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
-            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
-            "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36 Edg/124.0.0.0"
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36",
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36",
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+            "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36",
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36 Edg/132.0.0.0"
         ]
         ua = random.choice(USER_AGENTS)
-        opts.add_argument(f"--user-agent={ua}")
-        opts.add_argument("--lang=en-US,en;q=0.9")
         
-        # Bypassing Detection: Force Automation Controlled disable
-        opts.add_argument("--disable-blink-features=AutomationControlled")
-        opts.add_argument("--use-fake-ui-for-media-stream")
-        opts.add_argument("--disable-notifications")
-        opts.add_argument("--remote-debugging-port=9222")
-        
+        def apply_stealth_args(o):
+            if headless:
+                # Use --headless=new for modern chrome/chromium versions
+                o.add_argument("--headless=new")
+                o.add_argument("--disable-gpu")
+            
+            o.add_argument("--no-sandbox")
+            o.add_argument("--disable-dev-shm-usage")
+            o.add_argument("--window-size=1920,1080")
+            o.add_argument(f"--user-data-dir={self.session_path}")
+            o.add_argument(f"--user-agent={ua}")
+            o.add_argument("--lang=en-US,en;q=0.9")
+            o.add_argument("--disable-blink-features=AutomationControlled")
+            o.add_argument("--use-fake-ui-for-media-stream")
+            o.add_argument("--disable-notifications")
+            o.add_argument("--remote-debugging-port=9222")
+            # Extra flags for WhatsApp
+            o.add_argument("--disable-extensions")
+            o.add_argument("--profile-directory=Default")
+            o.add_argument("--incognito") # Sometimes helps skip "update" by having clean state
+
         # Find Chrome binary (Windows & Linux)
         binary = None
         if os.name == 'nt': # Windows
@@ -94,27 +96,33 @@ class WhatsAppService:
                     break
         
         try:
-            # Use Undetected Chromedriver (UC)
-            # UC manages its own driver, so we don't need Service() usually
-            # Attempt to match modern version, but let uc auto-detect if possible
+            import undetected_chromedriver as uc
+            opts = uc.ChromeOptions()
+            apply_stealth_args(opts)
+            
             self.driver = uc.Chrome(
                 options=opts, 
-                browser_executable_path=binary
+                browser_executable_path=binary,
+                headless=headless # Pass headless explicitly to UC if needed
             )
+            self.driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
             self.driver.get("https://web.whatsapp.com")
             return True, "Ready (Powered by UC Stealth)"
         except Exception as e:
             self.last_error = f"UC Error: {str(e)[:100]}"
-            # Fallback to standard if UC fails
+            # Fallback to standard if UC fails (Very common in Streamlit Cloud)
             try:
                 from selenium import webdriver
                 from selenium.webdriver.chrome.options import Options as StdOptions
+                from selenium.webdriver.chrome.service import Service as StdService
                 std_opts = StdOptions()
-                if headless: std_opts.add_argument("--headless")
-                std_opts.add_argument(f"user-data-dir={self.session_path}")
+                apply_stealth_args(std_opts)
+                
+                # Standard fallback usually needs Service for the driver path
                 self.driver = webdriver.Chrome(options=std_opts)
+                self.driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
                 self.driver.get("https://web.whatsapp.com")
-                return True, "Ready (Standard Fallback - Vulnerable)"
+                return True, "Ready (Safe Fallback Mode)"
             except Exception as e2:
                 self.last_error += f" | Standard Error: {str(e2)[:60]}"
                 return False, self.last_error
