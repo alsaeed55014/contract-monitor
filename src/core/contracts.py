@@ -1,10 +1,8 @@
 from datetime import datetime, date
 from dateutil import parser
-import streamlit as st
 
 class ContractManager:
     @staticmethod
-    @st.cache_data(ttl=3600, show_spinner=False)
     def parse_date(date_str):
         if not date_str:
             return None
@@ -17,7 +15,6 @@ class ContractManager:
             return None
 
     @staticmethod
-    @st.cache_data(ttl=3600, show_spinner=False)
     def calculate_status(expiry_date_str):
         today = date.today()
         expiry = ContractManager.parse_date(expiry_date_str)

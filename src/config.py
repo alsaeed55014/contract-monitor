@@ -5,7 +5,6 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ASSETS_DIR = os.path.join(BASE_DIR, "image")
 CREDENTIALS_FILE = os.path.join(BASE_DIR, "credentials.json")
 USERS_FILE = os.path.join(BASE_DIR, "users.json")
-WA_HISTORY_FILE = os.path.join(BASE_DIR, "whatsapp_history.json")
 IGNORED_FILE = os.path.join(BASE_DIR, "ignored_rows.json")
 BENGALI_DATA_FILE = os.path.join(BASE_DIR, "bengali_data.json")
 

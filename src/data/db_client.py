@@ -10,8 +10,7 @@ class DBClient:
     _instance = None
     _data_caches = {}
     _last_fetches = {}
-    CACHE_DURATION = 300  # Increased to 5 Minutes for better performance
-    NOTIF_CACHE_DURATION = 30  # Increased to 30s for background checks
+    CACHE_DURATION = 300  # 5 Minutes
 
     def __new__(cls):
         if cls._instance is None:
@@ -25,18 +24,14 @@ class DBClient:
         self.client = None
         
         # 1. Try connecting via Streamlit Secrets (Recommended for Cloud)
-        # Try multiple possible key names
-        secret_keys = ["gcp_service_account", "google_credentials", "google"]
-        for key in secret_keys:
-            try:
-                if hasattr(st, "secrets") and key in st.secrets:
-                    key_dict = dict(st.secrets[key])
-                    self.client = gspread.service_account_from_dict(key_dict)
-                    print(f"[DEBUG] Connected via Streamlit Secrets (key: {key})")
-                    return
-            except Exception as e:
-                print(f"[DEBUG] Failed with key '{key}': {e}")
-                continue
+        try:
+            if hasattr(st, "secrets") and "gcp_service_account" in st.secrets:
+                key_dict = dict(st.secrets["gcp_service_account"])
+                self.client = gspread.service_account_from_dict(key_dict)
+                print("[DEBUG] Connected via Streamlit Secrets")
+                return
+        except Exception as e:
+            print(f"[DEBUG] st.secrets check skipped or failed: {e}")
         
         # 2. Fallback to local file (Recommended for Local Dev)
         try:
@@ -57,7 +52,7 @@ class DBClient:
             self._error_msg = f"Local file auth failed: {e}"
             print(f"[ERROR] {self._error_msg}")
 
-    def fetch_data(self, url=None, force=False, retries=3, is_notif_check=False):
+    def fetch_data(self, url=None, force=False, retries=3):
         """Fetches data from Google Sheets with caching and automatic retries."""
         if url is None:
             url = "https://docs.google.com/spreadsheets/d/1u87sScIve_-xT_jDG56EKFMXegzAxOqwVJCh3Irerrw/edit"
@@ -71,11 +66,9 @@ class DBClient:
         if not hasattr(self, '_last_fetches'): self._last_fetches = {}
 
         # Cache check
-        effective_duration = self.NOTIF_CACHE_DURATION if is_notif_check else self.CACHE_DURATION
-        
         if not force and cache_key in self._data_caches:
-            if (current_time - self._last_fetches.get(last_fetch_key, 0) < effective_duration):
-                print(f"[DEBUG] Cache Hit ({'Notif' if is_notif_check else 'Main'}) for {url[:30]}...")
+            if (current_time - self._last_fetches.get(last_fetch_key, 0) < self.CACHE_DURATION):
+                print(f"[DEBUG] Cache Hit for {url[:30]}...")
                 return self._data_caches[cache_key]
 
         if not self.client:
@@ -127,10 +120,10 @@ class DBClient:
                 print(f"[ERROR] Spreadsheets API Error for {url[:30]}: {e}")
                 raise e
 
-    def fetch_customer_requests(self, force=False, is_notif_check=False):
+    def fetch_customer_requests(self, force=False):
         """Specifically fetches the Customer Requests sheet."""
         url = "https://docs.google.com/spreadsheets/d/1ZlLGXqbFSnKrr2J-PRnxRhxykwrNOgOE6Mb34Zei_FU/edit"
-        return self.fetch_data(url=url, force=force, is_notif_check=is_notif_check)
+        return self.fetch_data(url=url, force=force)
 
     def find_row_by_data(self, worker_name, phone="", url=None):
         """Tries to find the row index by matching name and optionally phone."""

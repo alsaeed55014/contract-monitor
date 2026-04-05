@@ -19,7 +19,6 @@ class WhatsAppService:
         self.driver = None
         self.last_error = ""
 
-
     def start_driver(self, headless=True, force_clean=False):
         if self.driver: 
             try:
@@ -40,27 +39,25 @@ class WhatsAppService:
                 if os.path.exists(p): os.remove(p)
             except: pass
         
-        import undetected_chromedriver as uc
-        
-        opts = uc.ChromeOptions()
+        opts = Options()
         if headless:
             opts.add_argument("--headless")
         
         opts.add_argument("--no-sandbox")
         opts.add_argument("--disable-dev-shm-usage")
         opts.add_argument("--disable-gpu")
+        opts.add_argument("--disable-setuid-sandbox")
+        opts.add_argument("--remote-debugging-port=9222")
+        opts.add_argument("--disable-software-rasterizer")
+        opts.add_argument("--disable-infobars")
+        opts.add_argument("--disable-notifications")
         opts.add_argument("--window-size=1920,1080")
-        opts.add_argument(f"--user-data-dir={self.session_path}")
-        
-        # Modern User Agent (Rotated for 2026 Stealth)
-        ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36"
-        opts.add_argument(f"user-agent={ua}")
-        
-        # Bypassing Detection
-        opts.add_argument("--disable-blink-features=AutomationControlled")
+        opts.add_argument(f"user-data-dir={self.session_path}")
+        opts.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36")
+        opts.add_argument("--disable-extensions")
+        opts.page_load_strategy = "eager"
         
         # Find Chrome binary (Windows & Linux)
-        binary = None
         if os.name == 'nt': # Windows
             win_paths = [
                 os.environ.get("PROGRAMFILES", "C:\\Program Files") + "\\Google\\Chrome\\Application\\chrome.exe",
@@ -69,7 +66,7 @@ class WhatsAppService:
             ]
             for b in win_paths:
                 if os.path.exists(b):
-                    binary = b
+                    opts.binary_location = b
                     break
         else: # Linux
             chrome_bins = [
@@ -79,35 +76,46 @@ class WhatsAppService:
             ]
             for b in chrome_bins:
                 if os.path.exists(b):
-                    binary = b
+                    opts.binary_location = b
                     break
         
-        try:
-            # Use Undetected Chromedriver (UC)
-            # UC manages its own driver, so we don't need Service() usually
-            self.driver = uc.Chrome(
-                options=opts, 
-                browser_executable_path=binary,
-                version_main=123 # Attempt to match modern version
-            )
-            self.driver.get("https://web.whatsapp.com")
-            return True, "Ready (Powered by UC Stealth)"
-        except Exception as e:
-            self.last_error = f"UC Error: {str(e)[:100]}"
-            # Fallback to standard if UC fails
-            try:
-                from selenium import webdriver
-                from selenium.webdriver.chrome.options import Options as StdOptions
-                std_opts = StdOptions()
-                if headless: std_opts.add_argument("--headless")
-                std_opts.add_argument(f"user-data-dir={self.session_path}")
-                self.driver = webdriver.Chrome(options=std_opts)
-                self.driver.get("https://web.whatsapp.com")
-                return True, "Ready (Standard Fallback - Vulnerable)"
-            except Exception as e2:
-                self.last_error += f" | Standard Error: {str(e2)[:60]}"
-                return False, self.last_error
+        errors = []
+        
+        # Attempt 1: Direct lookup (Best for Linux/Streamlit Cloud)
+        driver_paths = ["/usr/bin/chromedriver", "/usr/lib/chromium/chromedriver"]
+        for dp in driver_paths:
+            if os.path.exists(dp):
+                try:
+                    service = Service(executable_path=dp)
+                    self.driver = webdriver.Chrome(service=service, options=opts)
+                    self.driver.get("https://web.whatsapp.com")
+                    return True, "Ready (Cloud Path)"
+                except Exception as e:
+                    errors.append(f"CloudPath: {str(e)[:60]}")
+                    self.driver = None
 
+        # Attempt 2: webdriver-manager (Best for Desktop/Local)
+        try:
+            from webdriver_manager.chrome import ChromeDriverManager
+            service = Service(ChromeDriverManager().install())
+            self.driver = webdriver.Chrome(service=service, options=opts)
+            self.driver.get("https://web.whatsapp.com")
+            return True, "Ready (Local Engine)"
+        except Exception as e:
+            errors.append(f"Local: {str(e)[:60]}")
+            self.driver = None
+
+        # Attempt 3: Auto-detect
+        try:
+            self.driver = webdriver.Chrome(options=opts)
+            self.driver.get("https://web.whatsapp.com")
+            return True, "Ready (Auto)"
+        except Exception as e:
+            errors.append(f"Auto: {str(e)[:60]}")
+            self.driver = None
+        
+        self.last_error = " | ".join(errors)
+        return False, self.last_error
 
     def get_status(self):
         if not self.driver: return "Disconnected"
@@ -164,82 +172,70 @@ class WhatsAppService:
         try: return self.driver.get_screenshot_as_base64()
         except: return None
 
-
     def send_message(self, phone, message, attachment_path=None):
         if not self.driver: return False, "Engine Offline"
         try:
-            import random
             from selenium.webdriver.common.action_chains import ActionChains
             
             clean_phone = "".join(filter(str.isdigit, str(phone)))
-            
-            # 1. Length Validation
-            if len(clean_phone) < 8:
-                return False, "رقم قصير جداً" 
-            
-            # Open the chat window with a brief random wait
-            time.sleep(random.uniform(1.0, 3.0))
+            # Open the chat window first
             url = f"https://web.whatsapp.com/send?phone={clean_phone}"
             self.driver.get(url)
             
             wait = WebDriverWait(self.driver, 45)
             
-            # Wait for text box
+            # Wait for either the text box (connected) or the error popup (invalid number)
             try:
                 msg_input = wait.until(EC.presence_of_element_located(
                     (By.XPATH, '//div[@contenteditable="true"][@data-tab="10"]')
                 ))
             except:
-                src = self.driver.page_source.lower()
-                if "invalid" in src or "غير صحيح" in src:
-                    return False, "رقم غير مسجل في الواتساب"
-                return False, "فشل في التحميل"
+                # Check for "Phone number shared via url is invalid" popup
+                if "invalid" in self.driver.page_source.lower() or "غير صحيح" in self.driver.page_source:
+                    return False, "Invalid Number"
+                return False, "Load Timeout"
 
-            time.sleep(random.uniform(1.5, 3.0)) # Human-like pause after loading
+            time.sleep(2) # Stability
 
             if attachment_path and os.path.exists(attachment_path):
-                # Attach file
+                # 1. Click Attach button (the '+' or paperclip)
                 attach_btn = wait.until(EC.element_to_be_clickable(
                     (By.XPATH, '//div[@title="Attach"] | //span[@data-icon="plus"] | //span[@data-icon="attach-menu-plus"]')
                 ))
-                time.sleep(random.uniform(0.5, 1.2))
                 attach_btn.click()
-                time.sleep(random.uniform(1.0, 2.0))
+                time.sleep(1)
 
+                # 2. Find the hidden input for documents/images
+                # We target the common hidden input for all files
                 file_input = self.driver.find_element(By.XPATH, '//input[@type="file"]')
                 file_input.send_keys(attachment_path)
                 
+                # 3. Wait for preview/caption box to appear
+                # The input box in the preview screen
                 caption_input = wait.until(EC.presence_of_element_located(
                     (By.XPATH, '//div[@contenteditable="true"][@data-tab="10"] | //div[@contenteditable="true" and contains(@class, "copyable-text")]')
                 ))
                 
+                # Some versions of WA scroll or autofocus differently. 
+                # Let's clear and type the message as a caption
                 if message:
-                    time.sleep(random.uniform(1.0, 2.5))
+                    # Using ActionChains to ensure the text is typed into the caption
                     actions = ActionChains(self.driver)
-                    actions.move_to_element(caption_input).click().perform()
-                    # Speed typing simulation
-                    for char in message:
-                        caption_input.send_keys(char)
-                        if random.random() > 0.8: time.sleep(random.uniform(0.01, 0.05))
-                    time.sleep(0.5)
+                    actions.move_to_element(caption_input).click().send_keys(message).perform()
+                    time.sleep(1)
                 
                 caption_input.send_keys(Keys.ENTER)
             else:
                 # Simple text message
                 if message:
-                    # Slow typing simulation for humans
-                    for char in message:
-                        msg_input.send_keys(char)
-                        if random.random() > 0.9: time.sleep(random.uniform(0.01, 0.04))
-                    
-                    time.sleep(random.uniform(0.5, 1.5))
+                    msg_input.send_keys(message)
+                    time.sleep(1)
                     msg_input.send_keys(Keys.ENTER)
             
-            time.sleep(random.uniform(2.0, 4.0)) # Wait for send
+            time.sleep(3) # Wait for send to complete
             return True, "Done"
         except Exception as e:
-            return False, f"Err: {str(e)[:40]}"
-
+            return False, f"Error: {str(e)[:50]}"
 
     def close(self):
         if self.driver:
