@@ -6,6 +6,7 @@ import json
 import hashlib
 import time
 from datetime import datetime, timedelta
+<<<<<<< HEAD
 import pytz
 import base64
 import re
@@ -22,7 +23,16 @@ def get_saudi_time():
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 ROOT_DIR = BASE_DIR
 PERSIST_FILE = os.path.join(BASE_DIR, 'src', '.persist_login.json')
+=======
+import base64
 
+# 1. Ensure project root is in path (Robust Injection)
+import os
+import sys
+
+# Get the absolute path of the directory containing app.py
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+>>>>>>> 947f1af (update)
 if BASE_DIR not in sys.path:
     sys.path.insert(0, BASE_DIR)
 
@@ -34,14 +44,22 @@ if SRC_DIR not in sys.path:
 try:
     from src.core.contracts import ContractManager
     from src.data.bengali_manager import BengaliDataManager
+<<<<<<< HEAD
     from src.utils.phone_utils import create_pasha_whatsapp_excel, format_phone_number, save_to_local_desktop, render_pasha_export_button, is_local_windows_pc
     from src.core.matcher import CandidateMatcher, format_match_result, _find_city_region, _fuzzy_match, REGION_PROXIMITY, REGION_MAP
+=======
+    from src.utils.phone_utils import create_pasha_whatsapp_excel, format_phone_number
+>>>>>>> 947f1af (update)
 except ImportError:
     # Fallback for different environment path configurations
     from core.contracts import ContractManager
     from data.bengali_manager import BengaliDataManager
+<<<<<<< HEAD
     from utils.phone_utils import create_pasha_whatsapp_excel, format_phone_number, save_to_local_desktop, render_pasha_export_button, is_local_windows_pc
     from core.matcher import CandidateMatcher, format_match_result, _find_city_region, _fuzzy_match, REGION_PROXIMITY, REGION_MAP
+=======
+    from utils.phone_utils import create_pasha_whatsapp_excel, format_phone_number
+>>>>>>> 947f1af (update)
 
 # 2. Local Auth Class to prevent Import/Sync Errors
 class AuthManager:
