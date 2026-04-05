@@ -1,0 +1,1 @@
+(label: 'str | None' = None, *, width: 'ColumnWidth | None' = None, help: 'str | None' = None, disabled: 'bool | None' = None, required: 'bool | None' = None, pinned: 'bool | None' = None) -> 'ColumnConfig'

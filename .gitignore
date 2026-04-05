@@ -1,0 +1,24 @@
+# Credentials (NEVER upload to GitHub)
+credentials.json
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.env
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Local files
+gui_monitor.py
+monitor.py
+users.json
+app_icon.ico
+profile.jpg
+image/

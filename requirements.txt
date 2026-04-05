@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 streamlit>=1.36.0
 pandas
 gspread
@@ -18,3 +19,18 @@ pytesseract
 undetected-chromedriver
 streamlit-cropper
 numpy
+=======
+streamlit>=1.36.0
+pandas
+gspread
+oauth2client
+python-dateutil
+Pillow
+deep-translator
+pdfplumber
+requests
+python-docx>=0.8.11
+selenium
+webdriver-manager
+openpyxl
+>>>>>>> 947f1af (update)

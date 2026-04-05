@@ -1,0 +1,11 @@
+1083: if not str(col).startswith("🚩_"):
+1092: flag_col = f"🚩_{col}"
+1140: subset=[c for c in styled_df.columns if not str(c).startswith("🚩_")]
+2377: # For streamlit object like ImageColumn
+2546: final_cfg[f"🚩_{col}"] = st.column_config.ImageColumn(" ", width="small")
+2908: column_config[f"🚩_{col}"] = st.column_config.ImageColumn(" ", width="small")
+4089: col_cfg_city[f"🚩_{col}"] = st.column_config.ImageColumn(" ", width="small")
+4136: col_cfg_reg[f"🚩_{col}"] = st.column_config.ImageColumn(" ", width="small")
+4173: col_cfg_oth[f"🚩_{col}"] = st.column_config.ImageColumn(" ", width="small")
+4506: col_cfg_match[f"🚩_{col}"] = st.column_config.ImageColumn(" ", width="small")
+4755: col_cfg_b[f"🚩_{col}"] = st.column_config.ImageColumn(" ", width="small")

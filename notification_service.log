@@ -1,0 +1,307 @@
+2026-03-13 04:44:54,181 - INFO - بدء مراقبة Google Sheet...
+2026-03-13 04:44:59,182 - INFO - محاولة الاتصال بـ Google Sheets باستخدام credentials.json...
+2026-03-13 04:45:01,354 - INFO - تم الاتصال بنجاح بـ Google Sheets.
+2026-03-13 04:45:01,354 - INFO - تم استعادة الحالة: آخر صف تمت رؤيته هو 775
+2026-03-13 04:45:02,420 - INFO - فحص... الصفوف الحالية: 775, آخر صف مسجل: 775
+2026-03-13 04:45:23,451 - INFO - فحص... الصفوف الحالية: 775, آخر صف مسجل: 775
+2026-03-13 04:45:44,520 - INFO - فحص... الصفوف الحالية: 775, آخر صف مسجل: 775
+2026-03-13 04:46:05,653 - INFO - فحص... الصفوف الحالية: 775, آخر صف مسجل: 775
+2026-03-13 04:46:26,419 - INFO - فحص... الصفوف الحالية: 775, آخر صف مسجل: 775
+2026-03-13 04:46:47,215 - INFO - فحص... الصفوف الحالية: 775, آخر صف مسجل: 775
+2026-03-13 04:47:08,296 - INFO - فحص... الصفوف الحالية: 775, آخر صف مسجل: 775
+2026-03-13 04:47:28,971 - INFO - فحص... الصفوف الحالية: 775, آخر صف مسجل: 775
+2026-03-13 04:47:49,581 - INFO - فحص... الصفوف الحالية: 775, آخر صف مسجل: 775
+2026-03-13 04:48:10,662 - INFO - فحص... الصفوف الحالية: 775, آخر صف مسجل: 775
+2026-03-13 04:48:31,813 - INFO - فحص... الصفوف الحالية: 775, آخر صف مسجل: 775
+2026-03-13 04:48:52,460 - INFO - فحص... الصفوف الحالية: 775, آخر صف مسجل: 775
+2026-03-13 04:49:13,575 - INFO - فحص... الصفوف الحالية: 775, آخر صف مسجل: 775
+2026-03-13 04:49:34,336 - INFO - فحص... الصفوف الحالية: 775, آخر صف مسجل: 775
+2026-03-13 04:49:55,088 - INFO - فحص... الصفوف الحالية: 775, آخر صف مسجل: 775
+2026-03-13 04:50:35,401 - INFO - ===== بدء تشغيل خدمة الإشعارات =====
+2026-03-13 04:50:35,403 - INFO - بدء مراقبة Google Sheet...
+2026-03-13 04:50:35,403 - INFO - تم بدء مراقبة Google Sheets في الخلفية.
+2026-03-13 04:50:40,404 - INFO - محاولة الاتصال بـ Google Sheets باستخدام credentials.json...
+2026-03-13 04:50:42,968 - INFO - تم الاتصال بنجاح بـ Google Sheets.
+2026-03-13 04:50:42,969 - INFO - تم استعادة الحالة: آخر صف تمت رؤيته هو 775
+2026-03-13 04:50:44,090 - INFO - فحص... الصفوف الحالية: 775, آخر صف مسجل: 775
+2026-03-13 04:51:05,210 - INFO - فحص... الصفوف الحالية: 775, آخر صف مسجل: 775
+2026-03-13 04:51:25,883 - INFO - فحص... الصفوف الحالية: 775, آخر صف مسجل: 775
+2026-03-13 04:51:46,998 - INFO - فحص... الصفوف الحالية: 775, آخر صف مسجل: 775
+2026-03-13 04:52:08,073 - INFO - فحص... الصفوف الحالية: 775, آخر صف مسجل: 775
+2026-03-13 04:52:29,217 - INFO - فحص... الصفوف الحالية: 775, آخر صف مسجل: 775
+2026-03-13 04:52:50,001 - INFO - فحص... الصفوف الحالية: 775, آخر صف مسجل: 775
+2026-03-13 04:53:11,171 - INFO - فحص... الصفوف الحالية: 775, آخر صف مسجل: 775
+2026-03-13 04:53:31,875 - INFO - فحص... الصفوف الحالية: 775, آخر صف مسجل: 775
+2026-03-13 04:56:21,481 - INFO - ===== بدء تشغيل خدمة الإشعارات =====
+2026-03-13 04:56:21,485 - INFO - بدء مراقبة الجداول...
+2026-03-13 04:56:21,486 - INFO - تم بدء مراقبة Google Sheets في الخلفية.
+2026-03-13 04:56:21,486 - INFO - محاولة الاتصال بـ Google Sheets: https://docs.google.com/spreadsheets/d/1u87sScIve_-xT_jDG56EKFMXegzAxOqwVJCh3Irerrw/edit...
+2026-03-13 04:56:24,250 - INFO - تم الاتصال بنجاح بـ الجدول.
+2026-03-13 04:56:24,990 - INFO - جدول المرشحين: أول تشغيل، تم تعيين البداية عند 775
+2026-03-13 04:56:24,992 - INFO - محاولة الاتصال بـ Google Sheets: https://docs.google.com/spreadsheets/d/1ZlLGXqbFSnKrr2J-PRnxRhxykwrNOgOE6Mb34Zei_FU/edit...
+2026-03-13 04:56:27,303 - INFO - تم الاتصال بنجاح بـ الجدول.
+2026-03-13 04:56:28,259 - INFO - جدول طلبات العملاء: أول تشغيل، تم تعيين البداية عند 26
+2026-03-13 04:56:28,989 - INFO - فحص المرشحين... الحالي: 775, المسجل: 775
+2026-03-13 04:56:29,370 - INFO - فحص طلبات العملاء... الحالي: 26, المسجل: 26
+2026-03-13 04:57:00,531 - INFO - فحص المرشحين... الحالي: 775, المسجل: 775
+2026-03-13 04:57:01,352 - INFO - فحص طلبات العملاء... الحالي: 26, المسجل: 26
+2026-03-13 04:57:32,088 - INFO - فحص المرشحين... الحالي: 775, المسجل: 775
+2026-03-13 04:57:32,573 - INFO - فحص طلبات العملاء... الحالي: 26, المسجل: 26
+2026-03-13 04:58:03,787 - INFO - فحص المرشحين... الحالي: 775, المسجل: 775
+2026-03-13 04:58:04,251 - INFO - فحص طلبات العملاء... الحالي: 26, المسجل: 26
+2026-03-13 04:58:34,980 - INFO - فحص المرشحين... الحالي: 775, المسجل: 775
+2026-03-13 04:58:35,794 - INFO - فحص طلبات العملاء... الحالي: 26, المسجل: 26
+2026-03-13 04:59:06,582 - INFO - فحص المرشحين... الحالي: 775, المسجل: 775
+2026-03-13 04:59:06,974 - INFO - فحص طلبات العملاء... الحالي: 26, المسجل: 26
+2026-03-13 04:59:37,705 - INFO - فحص المرشحين... الحالي: 775, المسجل: 775
+2026-03-13 04:59:38,528 - INFO - فحص طلبات العملاء... الحالي: 26, المسجل: 26
+2026-03-13 08:17:06,395 - INFO - ===== بدء تشغيل خدمة الإشعارات =====
+2026-03-13 08:17:07,849 - INFO - إرسال إشعار عبر PowerShell: Antigravity
+2026-03-13 08:17:07,850 - INFO - بدء مراقبة الجداول...
+2026-03-13 08:17:07,850 - INFO - تم بدء مراقبة Google Sheets في الخلفية.
+2026-03-13 08:17:07,851 - INFO - محاولة الاتصال بـ Google Sheets: https://docs.google.com/spreadsheets/d/1u87sScIve_-xT_jDG56EKFMXegzAxOqwVJCh3Irerrw/edit...
+2026-03-13 08:17:11,026 - INFO - تم الاتصال بنجاح بـ الجدول.
+2026-03-13 08:17:11,026 - INFO - جدول المرشحين: استعادة الحالة (775 صفوف)
+2026-03-13 08:17:11,027 - INFO - محاولة الاتصال بـ Google Sheets: https://docs.google.com/spreadsheets/d/1ZlLGXqbFSnKrr2J-PRnxRhxykwrNOgOE6Mb34Zei_FU/edit...
+2026-03-13 08:17:14,250 - INFO - تم الاتصال بنجاح بـ الجدول.
+2026-03-13 08:17:14,250 - INFO - جدول طلبات العملاء: استعادة الحالة (28 صفوف)
+2026-03-13 08:17:15,408 - INFO - فحص المرشحين... الحالي: 775, المسجل: 775
+2026-03-13 08:17:16,260 - INFO - فحص طلبات العملاء... الحالي: 24, المسجل: 28
+2026-03-13 08:17:46,960 - INFO - فحص المرشحين... الحالي: 775, المسجل: 775
+2026-03-13 08:17:47,806 - INFO - فحص طلبات العملاء... الحالي: 24, المسجل: 28
+2026-03-13 08:18:18,567 - INFO - فحص المرشحين... الحالي: 775, المسجل: 775
+2026-03-13 08:18:19,027 - INFO - فحص طلبات العملاء... الحالي: 24, المسجل: 28
+2026-03-13 08:18:50,612 - INFO - فحص المرشحين... الحالي: 775, المسجل: 775
+2026-03-13 08:18:51,028 - INFO - فحص طلبات العملاء... الحالي: 24, المسجل: 28
+2026-03-13 08:19:22,184 - INFO - فحص المرشحين... الحالي: 775, المسجل: 775
+2026-03-13 08:19:22,707 - INFO - فحص طلبات العملاء... الحالي: 24, المسجل: 28
+2026-03-13 08:19:53,808 - INFO - فحص المرشحين... الحالي: 775, المسجل: 775
+2026-03-13 08:19:54,630 - INFO - فحص طلبات العملاء... الحالي: 24, المسجل: 28
+2026-03-13 08:20:25,446 - INFO - فحص المرشحين... الحالي: 775, المسجل: 775
+2026-03-13 08:20:26,371 - INFO - فحص طلبات العملاء... الحالي: 24, المسجل: 28
+2026-03-13 08:20:57,135 - INFO - فحص المرشحين... الحالي: 775, المسجل: 775
+2026-03-13 08:20:57,644 - INFO - فحص طلبات العملاء... الحالي: 24, المسجل: 28
+2026-03-13 08:21:28,394 - INFO - فحص المرشحين... الحالي: 775, المسجل: 775
+2026-03-13 08:21:29,225 - INFO - فحص طلبات العملاء... الحالي: 24, المسجل: 28
+2026-03-13 08:21:59,930 - INFO - فحص المرشحين... الحالي: 775, المسجل: 775
+2026-03-13 08:22:00,751 - INFO - فحص طلبات العملاء... الحالي: 24, المسجل: 28
+2026-03-13 08:22:31,443 - INFO - فحص المرشحين... الحالي: 775, المسجل: 775
+2026-03-13 08:22:31,797 - INFO - فحص طلبات العملاء... الحالي: 24, المسجل: 28
+2026-03-13 08:23:02,492 - INFO - فحص المرشحين... الحالي: 775, المسجل: 775
+2026-03-13 08:23:03,320 - INFO - فحص طلبات العملاء... الحالي: 24, المسجل: 28
+2026-03-13 08:23:34,497 - INFO - فحص المرشحين... الحالي: 775, المسجل: 775
+2026-03-13 08:23:34,861 - INFO - فحص طلبات العملاء... الحالي: 24, المسجل: 28
+2026-03-13 08:24:05,650 - INFO - فحص المرشحين... الحالي: 775, المسجل: 775
+2026-03-13 08:24:06,011 - INFO - فحص طلبات العملاء... الحالي: 24, المسجل: 28
+2026-03-13 08:24:36,777 - INFO - فحص المرشحين... الحالي: 775, المسجل: 775
+2026-03-13 08:24:37,141 - INFO - فحص طلبات العملاء... الحالي: 24, المسجل: 28
+2026-03-13 08:25:07,914 - INFO - فحص المرشحين... الحالي: 775, المسجل: 775
+2026-03-13 08:25:08,736 - INFO - فحص طلبات العملاء... الحالي: 25, المسجل: 28
+2026-03-13 08:25:39,441 - INFO - فحص المرشحين... الحالي: 775, المسجل: 775
+2026-03-13 08:25:40,372 - INFO - فحص طلبات العملاء... الحالي: 25, المسجل: 28
+2026-03-13 08:26:11,536 - INFO - فحص المرشحين... الحالي: 775, المسجل: 775
+2026-03-13 08:26:12,469 - INFO - فحص طلبات العملاء... الحالي: 25, المسجل: 28
+2026-03-13 08:26:43,652 - INFO - فحص المرشحين... الحالي: 775, المسجل: 775
+2026-03-13 08:26:44,468 - INFO - فحص طلبات العملاء... الحالي: 25, المسجل: 28
+2026-03-13 08:27:15,242 - INFO - فحص المرشحين... الحالي: 775, المسجل: 775
+2026-03-13 08:27:15,614 - INFO - فحص طلبات العملاء... الحالي: 25, المسجل: 28
+2026-03-13 08:27:46,279 - INFO - فحص المرشحين... الحالي: 775, المسجل: 775
+2026-03-13 08:27:47,091 - INFO - فحص طلبات العملاء... الحالي: 25, المسجل: 28
+2026-03-13 08:28:18,459 - INFO - فحص المرشحين... الحالي: 775, المسجل: 775
+2026-03-13 08:28:18,872 - INFO - فحص طلبات العملاء... الحالي: 25, المسجل: 28
+2026-03-13 08:28:49,717 - INFO - فحص المرشحين... الحالي: 775, المسجل: 775
+2026-03-13 08:28:50,551 - INFO - فحص طلبات العملاء... الحالي: 25, المسجل: 28
+2026-03-13 08:29:21,729 - INFO - فحص المرشحين... الحالي: 775, المسجل: 775
+2026-03-13 08:29:22,556 - INFO - فحص طلبات العملاء... الحالي: 25, المسجل: 28
+2026-03-13 08:29:53,702 - INFO - فحص المرشحين... الحالي: 775, المسجل: 775
+2026-03-13 08:29:54,233 - INFO - فحص طلبات العملاء... الحالي: 25, المسجل: 28
+2026-03-13 08:30:24,999 - INFO - فحص المرشحين... الحالي: 775, المسجل: 775
+2026-03-13 08:30:25,839 - INFO - فحص طلبات العملاء... الحالي: 25, المسجل: 28
+2026-03-13 08:30:56,656 - INFO - فحص المرشحين... الحالي: 775, المسجل: 775
+2026-03-13 08:30:57,592 - INFO - فحص طلبات العملاء... الحالي: 25, المسجل: 28
+2026-03-13 08:31:19,907 - INFO - ===== خدمة الإشعارات نشطة =====
+2026-03-13 08:31:22,043 - INFO - إرسال إشعار عبر PowerShell: Antigravity
+2026-03-13 08:31:22,044 - INFO - بدء مراقبة الجداول...
+2026-03-13 08:31:22,045 - INFO - محاولة الاتصال بـ Google Sheets: https://docs.google.com/spreadsheets/d/1u87sScIve_-xT_jDG56EKFMXegzAxOqwVJCh3Irerrw/edit...
+2026-03-13 08:31:24,938 - INFO - محاولة الاتصال بـ Google Sheets: https://docs.google.com/spreadsheets/d/1ZlLGXqbFSnKrr2J-PRnxRhxykwrNOgOE6Mb34Zei_FU/edit...
+2026-03-13 08:31:29,911 - INFO - نقص عدد الصفوف في طلبات العملاء (28 -> 25).
+2026-03-13 08:35:11,418 - INFO - تم العثور على 1 تحديثات في طلبات العملاء
+2026-03-13 08:35:12,718 - INFO - إرسال إشعار عبر PowerShell: طلب عميل جديد
+2026-03-13 08:37:43,331 - INFO - ===== خدمة الإشعارات نشطة =====
+2026-03-13 08:37:44,490 - INFO - إرسال إشعار عبر PowerShell: Antigravity
+2026-03-13 08:37:44,491 - INFO - بدء مراقبة الجداول...
+2026-03-13 08:37:44,492 - INFO - محاولة الاتصال بـ Google Sheets: https://docs.google.com/spreadsheets/d/1u87sScIve_-xT_jDG56EKFMXegzAxOqwVJCh3Irerrw/edit...
+2026-03-13 08:37:48,157 - INFO - محاولة الاتصال بـ Google Sheets: https://docs.google.com/spreadsheets/d/1ZlLGXqbFSnKrr2J-PRnxRhxykwrNOgOE6Mb34Zei_FU/edit...
+2026-03-13 08:40:30,552 - INFO - تم العثور على 1 تحديثات في طلبات العملاء
+2026-03-13 08:40:30,552 - ERROR - خطأ في طلبات العملاء: name 'load_cached_notifications' is not defined
+2026-03-13 08:41:01,296 - INFO - محاولة الاتصال بـ Google Sheets: https://docs.google.com/spreadsheets/d/1ZlLGXqbFSnKrr2J-PRnxRhxykwrNOgOE6Mb34Zei_FU/edit...
+2026-03-13 08:41:04,473 - INFO - تم العثور على 1 تحديثات في طلبات العملاء
+2026-03-13 08:41:04,473 - ERROR - خطأ في طلبات العملاء: name 'load_cached_notifications' is not defined
+2026-03-13 08:41:35,625 - INFO - محاولة الاتصال بـ Google Sheets: https://docs.google.com/spreadsheets/d/1ZlLGXqbFSnKrr2J-PRnxRhxykwrNOgOE6Mb34Zei_FU/edit...
+2026-03-13 08:41:39,833 - INFO - تم العثور على 1 تحديثات في طلبات العملاء
+2026-03-13 08:41:39,833 - ERROR - خطأ في طلبات العملاء: name 'load_cached_notifications' is not defined
+2026-03-13 08:42:10,630 - INFO - محاولة الاتصال بـ Google Sheets: https://docs.google.com/spreadsheets/d/1ZlLGXqbFSnKrr2J-PRnxRhxykwrNOgOE6Mb34Zei_FU/edit...
+2026-03-13 08:42:13,827 - INFO - تم العثور على 1 تحديثات في طلبات العملاء
+2026-03-13 08:42:13,827 - ERROR - خطأ في طلبات العملاء: name 'load_cached_notifications' is not defined
+2026-03-13 08:42:44,962 - INFO - محاولة الاتصال بـ Google Sheets: https://docs.google.com/spreadsheets/d/1ZlLGXqbFSnKrr2J-PRnxRhxykwrNOgOE6Mb34Zei_FU/edit...
+2026-03-13 08:42:47,872 - INFO - تم العثور على 1 تحديثات في طلبات العملاء
+2026-03-13 08:42:47,873 - ERROR - خطأ في طلبات العملاء: name 'load_cached_notifications' is not defined
+2026-03-13 08:43:04,741 - INFO - ===== خدمة الإشعارات نشطة =====
+2026-03-13 08:43:16,797 - INFO - إرسال إشعار عبر PowerShell: Antigravity
+2026-03-13 08:43:16,798 - INFO - بدء مراقبة الجداول...
+2026-03-13 08:43:16,798 - INFO - محاولة الاتصال بـ Google Sheets: https://docs.google.com/spreadsheets/d/1u87sScIve_-xT_jDG56EKFMXegzAxOqwVJCh3Irerrw/edit...
+2026-03-13 08:43:19,680 - INFO - محاولة الاتصال بـ Google Sheets: https://docs.google.com/spreadsheets/d/1ZlLGXqbFSnKrr2J-PRnxRhxykwrNOgOE6Mb34Zei_FU/edit...
+2026-03-13 08:45:29,434 - INFO - تم العثور على 1 تحديثات في طلبات العملاء
+2026-03-13 08:45:37,692 - INFO - إرسال إشعار عبر PowerShell: طلب عميل جديد
+2026-03-13 08:53:40,393 - INFO - ===== خدمة الإشعارات نشطة =====
+2026-03-13 08:53:47,702 - INFO - إرسال إشعار عبر PowerShell: Antigravity
+2026-03-13 08:53:47,703 - INFO - بدء مراقبة الجداول...
+2026-03-13 08:53:47,703 - INFO - محاولة الاتصال بـ Google Sheets: https://docs.google.com/spreadsheets/d/1u87sScIve_-xT_jDG56EKFMXegzAxOqwVJCh3Irerrw/edit...
+2026-03-13 08:53:50,314 - INFO - محاولة الاتصال بـ Google Sheets: https://docs.google.com/spreadsheets/d/1ZlLGXqbFSnKrr2J-PRnxRhxykwrNOgOE6Mb34Zei_FU/edit...
+2026-03-13 08:55:28,340 - INFO - تم العثور على 1 تحديثات في طلبات العملاء
+2026-03-13 08:55:36,123 - INFO - إرسال إشعار عبر PowerShell: 🔔 طلب عميل جديد | New Customer Request
+2026-03-13 08:58:09,071 - INFO - ===== خدمة الإشعارات نشطة =====
+2026-03-13 08:58:16,590 - INFO - إرسال إشعار عبر PowerShell: Antigravity
+2026-03-13 08:58:16,590 - INFO - بدء مراقبة الجداول...
+2026-03-13 08:58:16,591 - INFO - محاولة الاتصال بـ Google Sheets: https://docs.google.com/spreadsheets/d/1u87sScIve_-xT_jDG56EKFMXegzAxOqwVJCh3Irerrw/edit...
+2026-03-13 08:58:19,357 - INFO - محاولة الاتصال بـ Google Sheets: https://docs.google.com/spreadsheets/d/1ZlLGXqbFSnKrr2J-PRnxRhxykwrNOgOE6Mb34Zei_FU/edit...
+2026-03-13 09:00:46,505 - INFO - ===== خدمة الإشعارات نشطة =====
+2026-03-13 09:00:54,377 - INFO - إرسال إشعار عبر PowerShell: Antigravity
+2026-03-13 09:00:54,377 - INFO - بدء مراقبة الجداول...
+2026-03-13 09:00:54,378 - INFO - محاولة الاتصال بـ Google Sheets: https://docs.google.com/spreadsheets/d/1u87sScIve_-xT_jDG56EKFMXegzAxOqwVJCh3Irerrw/edit...
+2026-03-13 09:00:57,440 - INFO - محاولة الاتصال بـ Google Sheets: https://docs.google.com/spreadsheets/d/1ZlLGXqbFSnKrr2J-PRnxRhxykwrNOgOE6Mb34Zei_FU/edit...
+2026-03-13 09:10:08,812 - INFO - ===== خدمة الإشعارات نشطة =====
+2026-03-13 09:10:18,576 - INFO - إرسال إشعار عبر PowerShell: Antigravity
+2026-03-13 09:10:18,577 - INFO - بدء مراقبة الجداول...
+2026-03-13 09:10:18,584 - INFO - محاولة الاتصال بـ Google Sheets: https://docs.google.com/spreadsheets/d/1u87sScIve_-xT_jDG56EKFMXegzAxOqwVJCh3Irerrw/edit...
+2026-03-13 09:10:21,596 - INFO - محاولة الاتصال بـ Google Sheets: https://docs.google.com/spreadsheets/d/1ZlLGXqbFSnKrr2J-PRnxRhxykwrNOgOE6Mb34Zei_FU/edit...
+2026-03-13 09:11:51,935 - INFO - ===== خدمة الإشعارات نشطة =====
+2026-03-13 09:12:00,440 - INFO - إرسال إشعار عبر PowerShell: Antigravity
+2026-03-13 09:12:00,440 - INFO - بدء مراقبة الجداول...
+2026-03-13 09:12:00,441 - INFO - محاولة الاتصال بـ Google Sheets: https://docs.google.com/spreadsheets/d/1u87sScIve_-xT_jDG56EKFMXegzAxOqwVJCh3Irerrw/edit...
+2026-03-13 09:12:03,201 - INFO - محاولة الاتصال بـ Google Sheets: https://docs.google.com/spreadsheets/d/1ZlLGXqbFSnKrr2J-PRnxRhxykwrNOgOE6Mb34Zei_FU/edit...
+2026-03-13 09:18:22,328 - INFO - نقص عدد الصفوف في طلبات العملاء (29 -> 28).
+2026-03-13 09:19:24,485 - INFO - نقص عدد الصفوف في طلبات العملاء (28 -> 27).
+2026-03-13 09:19:56,004 - INFO - نقص عدد الصفوف في طلبات العملاء (27 -> 26).
+2026-03-13 09:20:27,807 - INFO - نقص عدد الصفوف في طلبات العملاء (26 -> 25).
+2026-03-13 09:20:58,928 - INFO - نقص عدد الصفوف في طلبات العملاء (25 -> 23).
+2026-03-13 09:22:01,246 - INFO - نقص عدد الصفوف في طلبات العملاء (23 -> 22).
+2026-03-13 09:22:32,416 - INFO - نقص عدد الصفوف في طلبات العملاء (22 -> 21).
+2026-03-13 09:23:34,885 - INFO - تم العثور على 1 تحديثات في طلبات العملاء
+2026-03-13 09:23:42,490 - INFO - إرسال إشعار عبر PowerShell: طلب عميل جديد | New Customer Request
+2026-03-13 09:27:45,369 - INFO - ===== خدمة الإشعارات نشطة =====
+2026-03-13 09:27:52,566 - INFO - إرسال إشعار عبر PowerShell: Antigravity
+2026-03-13 09:27:52,567 - INFO - بدء مراقبة الجداول...
+2026-03-13 09:27:52,567 - INFO - محاولة الاتصال بـ Google Sheets: https://docs.google.com/spreadsheets/d/1u87sScIve_-xT_jDG56EKFMXegzAxOqwVJCh3Irerrw/edit...
+2026-03-13 09:27:55,045 - INFO - محاولة الاتصال بـ Google Sheets: https://docs.google.com/spreadsheets/d/1ZlLGXqbFSnKrr2J-PRnxRhxykwrNOgOE6Mb34Zei_FU/edit...
+2026-03-13 09:30:07,317 - INFO - ===== خدمة الإشعارات نشطة =====
+2026-03-13 09:30:14,465 - INFO - إرسال إشعار عبر PowerShell: Antigravity
+2026-03-13 09:30:14,465 - INFO - بدء مراقبة الجداول...
+2026-03-13 09:30:14,466 - INFO - محاولة الاتصال بـ Google Sheets: https://docs.google.com/spreadsheets/d/1u87sScIve_-xT_jDG56EKFMXegzAxOqwVJCh3Irerrw/edit...
+2026-03-13 09:30:17,135 - INFO - محاولة الاتصال بـ Google Sheets: https://docs.google.com/spreadsheets/d/1ZlLGXqbFSnKrr2J-PRnxRhxykwrNOgOE6Mb34Zei_FU/edit...
+2026-03-13 09:31:54,087 - INFO - تم العثور على 1 تحديثات في طلبات العملاء
+2026-03-13 09:32:01,108 - INFO - إرسال إشعار عبر PowerShell: طلب عميل جديد
+2026-03-13 09:35:14,914 - INFO - ===== خدمة الإشعارات نشطة =====
+2026-03-13 09:35:21,855 - INFO - إرسال إشعار عبر PowerShell: Antigravity
+2026-03-13 09:35:21,855 - INFO - بدء مراقبة الجداول...
+2026-03-13 09:35:21,856 - INFO - محاولة الاتصال بـ Google Sheets: https://docs.google.com/spreadsheets/d/1u87sScIve_-xT_jDG56EKFMXegzAxOqwVJCh3Irerrw/edit...
+2026-03-13 09:35:24,782 - INFO - محاولة الاتصال بـ Google Sheets: https://docs.google.com/spreadsheets/d/1ZlLGXqbFSnKrr2J-PRnxRhxykwrNOgOE6Mb34Zei_FU/edit...
+2026-03-13 09:36:28,921 - INFO - ===== خدمة الإشعارات نشطة =====
+2026-03-13 09:36:35,729 - INFO - إرسال إشعار عبر PowerShell: Antigravity
+2026-03-13 09:36:35,729 - INFO - بدء مراقبة الجداول...
+2026-03-13 09:36:35,730 - INFO - محاولة الاتصال بـ Google Sheets: https://docs.google.com/spreadsheets/d/1u87sScIve_-xT_jDG56EKFMXegzAxOqwVJCh3Irerrw/edit...
+2026-03-13 09:36:37,932 - INFO - محاولة الاتصال بـ Google Sheets: https://docs.google.com/spreadsheets/d/1ZlLGXqbFSnKrr2J-PRnxRhxykwrNOgOE6Mb34Zei_FU/edit...
+2026-03-13 09:38:14,963 - INFO - تم العثور على 1 تحديثات في طلبات العملاء
+2026-03-13 09:38:14,964 - INFO - Processing customer request. Row keys: ['طابع زمني', 'اسم الشركه او المؤسسة | Company or institution name', 'اسم المسؤول', 'رقم الموبيل | Mobile number', 'أذكر الفئة المطلوبة | Specify the required category', 'الجنسية المطلوبة | Required nationality', 'موقع العمل | Work location', 'عدد الموظفين المطلوب | Number of employees required', "طبيعة عمل العامل  |  Nature of the worker's work", 'نقل الكفالة بعد كم يوم | Transfer of sponsorship after how many days?', 'الراتب المتوقع | Expected salary', 'عدد ساعات العمل | Working hours per day', 'هل توجد إجازة أسبوعية؟ | Is there a weekly day off?', 'ملاحظات إضافية | Additional notes (optional)']
+2026-03-13 09:38:23,041 - INFO - إرسال إشعار عبر PowerShell: 🔔 طلب عميل جديد
+2026-03-13 09:43:45,221 - INFO - ===== خدمة الإشعارات نشطة =====
+2026-03-13 09:43:53,341 - INFO - إرسال إشعار عبر PowerShell: Antigravity
+2026-03-13 09:43:53,341 - INFO - بدء مراقبة الجداول...
+2026-03-13 09:43:53,342 - INFO - محاولة الاتصال بـ Google Sheets: https://docs.google.com/spreadsheets/d/1u87sScIve_-xT_jDG56EKFMXegzAxOqwVJCh3Irerrw/edit...
+2026-03-13 09:43:56,163 - INFO - محاولة الاتصال بـ Google Sheets: https://docs.google.com/spreadsheets/d/1ZlLGXqbFSnKrr2J-PRnxRhxykwrNOgOE6Mb34Zei_FU/edit...
+2026-03-13 09:45:33,154 - INFO - تم العثور على 1 تحديثات في طلبات العملاء
+2026-03-13 09:45:33,154 - INFO - Processing customer request. Row keys: ['طابع زمني', 'اسم الشركه او المؤسسة | Company or institution name', 'اسم المسؤول', 'رقم الموبيل | Mobile number', 'أذكر الفئة المطلوبة | Specify the required category', 'الجنسية المطلوبة | Required nationality', 'موقع العمل | Work location', 'عدد الموظفين المطلوب | Number of employees required', "طبيعة عمل العامل  |  Nature of the worker's work", 'نقل الكفالة بعد كم يوم | Transfer of sponsorship after how many days?', 'الراتب المتوقع | Expected salary', 'عدد ساعات العمل | Working hours per day', 'هل توجد إجازة أسبوعية؟ | Is there a weekly day off?', 'ملاحظات إضافية | Additional notes (optional)']
+2026-03-13 09:45:40,729 - INFO - إرسال إشعار عبر PowerShell: 🔔 طلب عميل جديد
+2026-03-13 09:48:42,251 - INFO - ===== خدمة الإشعارات نشطة =====
+2026-03-13 09:48:53,920 - INFO - إرسال إشعار عبر PowerShell: Antigravity
+2026-03-13 09:48:53,920 - INFO - بدء مراقبة الجداول...
+2026-03-13 09:48:53,921 - INFO - محاولة الاتصال بـ Google Sheets: https://docs.google.com/spreadsheets/d/1u87sScIve_-xT_jDG56EKFMXegzAxOqwVJCh3Irerrw/edit...
+2026-03-13 09:48:56,984 - INFO - محاولة الاتصال بـ Google Sheets: https://docs.google.com/spreadsheets/d/1ZlLGXqbFSnKrr2J-PRnxRhxykwrNOgOE6Mb34Zei_FU/edit...
+2026-03-13 09:52:40,332 - INFO - تم العثور على 1 تحديثات في طلبات العملاء
+2026-03-13 09:52:40,333 - INFO - Processing customer request. Row keys: ['طابع زمني', 'اسم الشركه او المؤسسة | Company or institution name', 'اسم المسؤول', 'رقم الموبيل | Mobile number', 'أذكر الفئة المطلوبة | Specify the required category', 'الجنسية المطلوبة | Required nationality', 'موقع العمل | Work location', 'عدد الموظفين المطلوب | Number of employees required', "طبيعة عمل العامل  |  Nature of the worker's work", 'نقل الكفالة بعد كم يوم | Transfer of sponsorship after how many days?', 'الراتب المتوقع | Expected salary', 'عدد ساعات العمل | Working hours per day', 'هل توجد إجازة أسبوعية؟ | Is there a weekly day off?', 'ملاحظات إضافية | Additional notes (optional)']
+2026-03-13 09:52:49,171 - INFO - إرسال إشعار عبر PowerShell: 🔔 طلب عميل جديد
+2026-03-13 09:57:32,310 - INFO - تم العثور على 1 تحديثات في المرشحين
+2026-03-13 09:57:40,776 - INFO - إرسال إشعار عبر PowerShell: 🆕 تسجيل عامل جديد
+2026-03-13 10:29:28,496 - INFO - نقص عدد الصفوف في المرشحين (776 -> 774).
+2026-03-13 10:40:24,029 - INFO - نقص عدد الصفوف في طلبات العملاء (26 -> 23).
+2026-03-13 10:40:55,205 - INFO - نقص عدد الصفوف في طلبات العملاء (23 -> 22).
+2026-03-13 10:41:26,254 - INFO - نقص عدد الصفوف في طلبات العملاء (22 -> 21).
+2026-03-19 05:04:57,923 - INFO - ===== خدمة الإشعارات نشطة =====
+2026-03-19 05:05:01,916 - INFO - إرسال إشعار عبر PowerShell: Antigravity
+2026-03-19 05:05:01,916 - INFO - بدء مراقبة الجداول...
+2026-03-19 05:05:01,917 - INFO - محاولة الاتصال بـ Google Sheets: https://docs.google.com/spreadsheets/d/1u87sScIve_-xT_jDG56EKFMXegzAxOqwVJCh3Irerrw/edit...
+2026-03-19 05:05:06,802 - INFO - محاولة الاتصال بـ Google Sheets: https://docs.google.com/spreadsheets/d/1ZlLGXqbFSnKrr2J-PRnxRhxykwrNOgOE6Mb34Zei_FU/edit...
+2026-03-19 05:05:45,507 - INFO - نقص عدد الصفوف في طلبات العملاء (27 -> 26).
+2026-03-19 05:08:26,382 - INFO - تم العثور على 1 تحديثات في طلبات العملاء
+2026-03-19 05:08:26,383 - INFO - Processing customer request. Row keys: ['طابع زمني', 'اسم الشركه او المؤسسة | Company or institution name', 'اسم المسؤول', 'رقم الموبيل | Mobile number', 'أذكر الفئة المطلوبة | Specify the required category', 'الجنسية المطلوبة | Required nationality', 'موقع العمل | Work location', 'عدد الموظفين المطلوب | Number of employees required', "طبيعة عمل العامل  |  Nature of the worker's work", 'نقل الكفالة بعد كم يوم | Transfer of sponsorship after how many days?', 'الراتب المتوقع | Expected salary', 'عدد ساعات العمل | Working hours per day', 'هل توجد إجازة أسبوعية؟ | Is there a weekly day off?', 'ملاحظات إضافية | Additional notes (optional)']
+2026-03-19 05:08:30,318 - INFO - إرسال إشعار عبر PowerShell: 🔔 طلب عميل جديد
+2026-03-19 05:19:41,839 - INFO - نقص عدد الصفوف في طلبات العملاء (27 -> 26).
+2026-03-19 05:20:45,619 - INFO - تم العثور على 1 تحديثات في طلبات العملاء
+2026-03-19 05:20:45,622 - INFO - Processing customer request. Row keys: ['طابع زمني', 'اسم الشركه او المؤسسة | Company or institution name', 'اسم المسؤول', 'رقم الموبيل | Mobile number', 'أذكر الفئة المطلوبة | Specify the required category', 'الجنسية المطلوبة | Required nationality', 'موقع العمل | Work location', 'عدد الموظفين المطلوب | Number of employees required', "طبيعة عمل العامل  |  Nature of the worker's work", 'نقل الكفالة بعد كم يوم | Transfer of sponsorship after how many days?', 'الراتب المتوقع | Expected salary', 'عدد ساعات العمل | Working hours per day', 'هل توجد إجازة أسبوعية؟ | Is there a weekly day off?', 'ملاحظات إضافية | Additional notes (optional)']
+2026-03-19 05:20:50,073 - INFO - إرسال إشعار عبر PowerShell: 🔔 طلب عميل جديد
+2026-03-19 05:30:56,207 - INFO - تم العثور على 1 تحديثات في طلبات العملاء
+2026-03-19 05:30:56,208 - INFO - Processing customer request. Row keys: ['طابع زمني', 'اسم الشركه او المؤسسة | Company or institution name', 'اسم المسؤول', 'رقم الموبيل | Mobile number', 'أذكر الفئة المطلوبة | Specify the required category', 'الجنسية المطلوبة | Required nationality', 'موقع العمل | Work location', 'عدد الموظفين المطلوب | Number of employees required', "طبيعة عمل العامل  |  Nature of the worker's work", 'نقل الكفالة بعد كم يوم | Transfer of sponsorship after how many days?', 'الراتب المتوقع | Expected salary', 'عدد ساعات العمل | Working hours per day', 'هل توجد إجازة أسبوعية؟ | Is there a weekly day off?', 'ملاحظات إضافية | Additional notes (optional)']
+2026-03-19 05:31:00,667 - INFO - إرسال إشعار عبر PowerShell: 🔔 طلب عميل جديد
+2026-03-19 05:31:33,907 - INFO - نقص عدد الصفوف في طلبات العملاء (28 -> 27).
+2026-03-19 05:32:05,647 - INFO - تم العثور على 1 تحديثات في طلبات العملاء
+2026-03-19 05:32:05,647 - INFO - Processing customer request. Row keys: ['طابع زمني', 'اسم الشركه او المؤسسة | Company or institution name', 'اسم المسؤول', 'رقم الموبيل | Mobile number', 'أذكر الفئة المطلوبة | Specify the required category', 'الجنسية المطلوبة | Required nationality', 'موقع العمل | Work location', 'عدد الموظفين المطلوب | Number of employees required', "طبيعة عمل العامل  |  Nature of the worker's work", 'نقل الكفالة بعد كم يوم | Transfer of sponsorship after how many days?', 'الراتب المتوقع | Expected salary', 'عدد ساعات العمل | Working hours per day', 'هل توجد إجازة أسبوعية؟ | Is there a weekly day off?', 'ملاحظات إضافية | Additional notes (optional)']
+2026-03-19 05:32:09,037 - INFO - إرسال إشعار عبر PowerShell: 🔔 طلب عميل جديد
+2026-03-19 05:32:43,160 - INFO - نقص عدد الصفوف في طلبات العملاء (28 -> 27).
+2026-03-19 05:33:14,831 - INFO - نقص عدد الصفوف في طلبات العملاء (27 -> 26).
+2026-03-19 06:01:09,224 - INFO - تم العثور على 1 تحديثات في طلبات العملاء
+2026-03-19 06:01:09,237 - INFO - Processing customer request. Row keys: ['طابع زمني', 'اسم الشركه او المؤسسة | Company or institution name', 'اسم المسؤول', 'رقم الموبيل | Mobile number', 'أذكر الفئة المطلوبة | Specify the required category', 'الجنسية المطلوبة | Required nationality', 'موقع العمل | Work location', 'عدد الموظفين المطلوب | Number of employees required', "طبيعة عمل العامل  |  Nature of the worker's work", 'نقل الكفالة بعد كم يوم | Transfer of sponsorship after how many days?', 'الراتب المتوقع | Expected salary', 'عدد ساعات العمل | Working hours per day', 'هل توجد إجازة أسبوعية؟ | Is there a weekly day off?', 'ملاحظات إضافية | Additional notes (optional)']
+2026-03-19 06:01:15,081 - INFO - إرسال إشعار عبر PowerShell: 🔔 طلب عميل جديد
+2026-03-19 06:11:20,060 - INFO - تم العثور على 1 تحديثات في طلبات العملاء
+2026-03-19 06:11:20,061 - INFO - Processing customer request. Row keys: ['طابع زمني', 'اسم الشركه او المؤسسة | Company or institution name', 'اسم المسؤول', 'رقم الموبيل | Mobile number', 'أذكر الفئة المطلوبة | Specify the required category', 'الجنسية المطلوبة | Required nationality', 'موقع العمل | Work location', 'عدد الموظفين المطلوب | Number of employees required', "طبيعة عمل العامل  |  Nature of the worker's work", 'نقل الكفالة بعد كم يوم | Transfer of sponsorship after how many days?', 'الراتب المتوقع | Expected salary', 'عدد ساعات العمل | Working hours per day', 'هل توجد إجازة أسبوعية؟ | Is there a weekly day off?', 'ملاحظات إضافية | Additional notes (optional)']
+2026-03-19 06:11:24,093 - INFO - إرسال إشعار عبر PowerShell: 🔔 طلب عميل جديد
+2026-03-19 06:18:49,022 - INFO - تم العثور على 1 تحديثات في طلبات العملاء
+2026-03-19 06:18:49,024 - INFO - Processing customer request. Row keys: ['طابع زمني', 'اسم الشركه او المؤسسة | Company or institution name', 'اسم المسؤول', 'رقم الموبيل | Mobile number', 'أذكر الفئة المطلوبة | Specify the required category', 'الجنسية المطلوبة | Required nationality', 'موقع العمل | Work location', 'عدد الموظفين المطلوب | Number of employees required', "طبيعة عمل العامل  |  Nature of the worker's work", 'نقل الكفالة بعد كم يوم | Transfer of sponsorship after how many days?', 'الراتب المتوقع | Expected salary', 'عدد ساعات العمل | Working hours per day', 'هل توجد إجازة أسبوعية؟ | Is there a weekly day off?', 'ملاحظات إضافية | Additional notes (optional)']
+2026-03-19 06:18:52,901 - INFO - إرسال إشعار عبر PowerShell: 🔔 طلب عميل جديد
+2026-03-19 06:21:00,314 - INFO - تم العثور على 1 تحديثات في طلبات العملاء
+2026-03-19 06:21:00,316 - INFO - Processing customer request. Row keys: ['طابع زمني', 'اسم الشركه او المؤسسة | Company or institution name', 'اسم المسؤول', 'رقم الموبيل | Mobile number', 'أذكر الفئة المطلوبة | Specify the required category', 'الجنسية المطلوبة | Required nationality', 'موقع العمل | Work location', 'عدد الموظفين المطلوب | Number of employees required', "طبيعة عمل العامل  |  Nature of the worker's work", 'نقل الكفالة بعد كم يوم | Transfer of sponsorship after how many days?', 'الراتب المتوقع | Expected salary', 'عدد ساعات العمل | Working hours per day', 'هل توجد إجازة أسبوعية؟ | Is there a weekly day off?', 'ملاحظات إضافية | Additional notes (optional)']
+2026-03-19 06:21:03,329 - INFO - إرسال إشعار عبر PowerShell: 🔔 طلب عميل جديد
+2026-03-19 06:30:30,964 - INFO - تم العثور على 1 تحديثات في طلبات العملاء
+2026-03-19 06:30:30,967 - INFO - Processing customer request. Row keys: ['طابع زمني', 'اسم الشركه او المؤسسة | Company or institution name', 'اسم المسؤول', 'رقم الموبيل | Mobile number', 'أذكر الفئة المطلوبة | Specify the required category', 'الجنسية المطلوبة | Required nationality', 'موقع العمل | Work location', 'عدد الموظفين المطلوب | Number of employees required', "طبيعة عمل العامل  |  Nature of the worker's work", 'نقل الكفالة بعد كم يوم | Transfer of sponsorship after how many days?', 'الراتب المتوقع | Expected salary', 'عدد ساعات العمل | Working hours per day', 'هل توجد إجازة أسبوعية؟ | Is there a weekly day off?', 'ملاحظات إضافية | Additional notes (optional)']
+2026-03-19 06:30:34,451 - INFO - إرسال إشعار عبر PowerShell: 🔔 طلب عميل جديد
+2026-03-19 06:33:44,609 - INFO - نقص عدد الصفوف في طلبات العملاء (31 -> 29).
+2026-03-19 06:34:15,953 - INFO - نقص عدد الصفوف في طلبات العملاء (29 -> 27).
+2026-03-19 06:34:47,591 - INFO - نقص عدد الصفوف في طلبات العملاء (27 -> 26).
+2026-03-19 06:35:50,630 - INFO - تم العثور على 1 تحديثات في طلبات العملاء
+2026-03-19 06:35:50,632 - INFO - Processing customer request. Row keys: ['طابع زمني', 'اسم الشركه او المؤسسة | Company or institution name', 'اسم المسؤول', 'رقم الموبيل | Mobile number', 'أذكر الفئة المطلوبة | Specify the required category', 'الجنسية المطلوبة | Required nationality', 'موقع العمل | Work location', 'عدد الموظفين المطلوب | Number of employees required', "طبيعة عمل العامل  |  Nature of the worker's work", 'نقل الكفالة بعد كم يوم | Transfer of sponsorship after how many days?', 'الراتب المتوقع | Expected salary', 'عدد ساعات العمل | Working hours per day', 'هل توجد إجازة أسبوعية؟ | Is there a weekly day off?', 'ملاحظات إضافية | Additional notes (optional)']
+2026-03-19 06:35:53,683 - INFO - إرسال إشعار عبر PowerShell: 🔔 طلب عميل جديد
+2026-03-19 06:44:49,903 - INFO - تم العثور على 1 تحديثات في طلبات العملاء
+2026-03-19 06:44:49,904 - INFO - Processing customer request. Row keys: ['طابع زمني', 'اسم الشركه او المؤسسة | Company or institution name', 'اسم المسؤول', 'رقم الموبيل | Mobile number', 'أذكر الفئة المطلوبة | Specify the required category', 'الجنسية المطلوبة | Required nationality', 'موقع العمل | Work location', 'عدد الموظفين المطلوب | Number of employees required', "طبيعة عمل العامل  |  Nature of the worker's work", 'نقل الكفالة بعد كم يوم | Transfer of sponsorship after how many days?', 'الراتب المتوقع | Expected salary', 'عدد ساعات العمل | Working hours per day', 'هل توجد إجازة أسبوعية؟ | Is there a weekly day off?', 'ملاحظات إضافية | Additional notes (optional)']
+2026-03-19 06:44:53,469 - INFO - إرسال إشعار عبر PowerShell: 🔔 طلب عميل جديد
+2026-03-19 06:47:01,879 - INFO - نقص عدد الصفوف في طلبات العملاء (28 -> 27).
+2026-03-19 06:47:33,098 - INFO - تم العثور على 1 تحديثات في طلبات العملاء
+2026-03-19 06:47:33,100 - INFO - Processing customer request. Row keys: ['طابع زمني', 'اسم الشركه او المؤسسة | Company or institution name', 'اسم المسؤول', 'رقم الموبيل | Mobile number', 'أذكر الفئة المطلوبة | Specify the required category', 'الجنسية المطلوبة | Required nationality', 'موقع العمل | Work location', 'عدد الموظفين المطلوب | Number of employees required', "طبيعة عمل العامل  |  Nature of the worker's work", 'نقل الكفالة بعد كم يوم | Transfer of sponsorship after how many days?', 'الراتب المتوقع | Expected salary', 'عدد ساعات العمل | Working hours per day', 'هل توجد إجازة أسبوعية؟ | Is there a weekly day off?', 'ملاحظات إضافية | Additional notes (optional)']
+2026-03-19 06:47:36,556 - INFO - إرسال إشعار عبر PowerShell: 🔔 طلب عميل جديد
+2026-03-19 06:49:12,599 - INFO - تم العثور على 1 تحديثات في طلبات العملاء
+2026-03-19 06:49:12,600 - INFO - Processing customer request. Row keys: ['طابع زمني', 'اسم الشركه او المؤسسة | Company or institution name', 'اسم المسؤول', 'رقم الموبيل | Mobile number', 'أذكر الفئة المطلوبة | Specify the required category', 'الجنسية المطلوبة | Required nationality', 'موقع العمل | Work location', 'عدد الموظفين المطلوب | Number of employees required', "طبيعة عمل العامل  |  Nature of the worker's work", 'نقل الكفالة بعد كم يوم | Transfer of sponsorship after how many days?', 'الراتب المتوقع | Expected salary', 'عدد ساعات العمل | Working hours per day', 'هل توجد إجازة أسبوعية؟ | Is there a weekly day off?', 'ملاحظات إضافية | Additional notes (optional)']
+2026-03-19 06:49:15,563 - INFO - إرسال إشعار عبر PowerShell: 🔔 طلب عميل جديد
+2026-03-19 07:16:41,286 - INFO - تم العثور على 1 تحديثات في طلبات العملاء
+2026-03-19 07:16:41,290 - INFO - Processing customer request. Row keys: ['طابع زمني', 'اسم الشركه او المؤسسة | Company or institution name', 'اسم المسؤول', 'رقم الموبيل | Mobile number', 'أذكر الفئة المطلوبة | Specify the required category', 'الجنسية المطلوبة | Required nationality', 'موقع العمل | Work location', 'عدد الموظفين المطلوب | Number of employees required', "طبيعة عمل العامل  |  Nature of the worker's work", 'نقل الكفالة بعد كم يوم | Transfer of sponsorship after how many days?', 'الراتب المتوقع | Expected salary', 'عدد ساعات العمل | Working hours per day', 'هل توجد إجازة أسبوعية؟ | Is there a weekly day off?', 'ملاحظات إضافية | Additional notes (optional)']
+2026-03-19 07:16:44,851 - INFO - إرسال إشعار عبر PowerShell: 🔔 طلب عميل جديد
+2026-03-19 07:18:52,939 - INFO - نقص عدد الصفوف في طلبات العملاء (30 -> 29).
+2026-03-19 07:19:24,705 - INFO - نقص عدد الصفوف في طلبات العملاء (29 -> 28).
+2026-03-19 07:20:27,028 - INFO - تم العثور على 1 تحديثات في طلبات العملاء
+2026-03-19 07:20:27,031 - INFO - Processing customer request. Row keys: ['طابع زمني', 'اسم الشركه او المؤسسة | Company or institution name', 'اسم المسؤول', 'رقم الموبيل | Mobile number', 'أذكر الفئة المطلوبة | Specify the required category', 'الجنسية المطلوبة | Required nationality', 'موقع العمل | Work location', 'عدد الموظفين المطلوب | Number of employees required', "طبيعة عمل العامل  |  Nature of the worker's work", 'نقل الكفالة بعد كم يوم | Transfer of sponsorship after how many days?', 'الراتب المتوقع | Expected salary', 'عدد ساعات العمل | Working hours per day', 'هل توجد إجازة أسبوعية؟ | Is there a weekly day off?', 'ملاحظات إضافية | Additional notes (optional)']
+2026-03-19 07:20:32,396 - INFO - إرسال إشعار عبر PowerShell: 🔔 طلب عميل جديد
+2026-03-19 07:22:08,857 - INFO - نقص عدد الصفوف في طلبات العملاء (29 -> 28).
+2026-03-19 07:22:40,410 - INFO - نقص عدد الصفوف في طلبات العملاء (28 -> 27).
+2026-03-19 07:31:31,996 - INFO - نقص عدد الصفوف في المرشحين (774 -> 773).
+2026-03-19 07:37:17,663 - INFO - تم العثور على 1 تحديثات في طلبات العملاء
+2026-03-19 07:37:17,665 - INFO - Processing customer request. Row keys: ['طابع زمني', 'اسم الشركه او المؤسسة | Company or institution name', 'اسم المسؤول', 'رقم الموبيل | Mobile number', 'أذكر الفئة المطلوبة | Specify the required category', 'الجنسية المطلوبة | Required nationality', 'موقع العمل | Work location', 'عدد الموظفين المطلوب | Number of employees required', "طبيعة عمل العامل  |  Nature of the worker's work", 'نقل الكفالة بعد كم يوم | Transfer of sponsorship after how many days?', 'الراتب المتوقع | Expected salary', 'عدد ساعات العمل | Working hours per day', 'هل توجد إجازة أسبوعية؟ | Is there a weekly day off?', 'ملاحظات إضافية | Additional notes (optional)']
+2026-03-19 07:37:21,654 - INFO - إرسال إشعار عبر PowerShell: 🔔 طلب عميل جديد
+2026-03-19 07:38:26,487 - INFO - نقص عدد الصفوف في طلبات العملاء (28 -> 27).
+2026-03-19 07:38:57,544 - INFO - نقص عدد الصفوف في طلبات العملاء (27 -> 26).

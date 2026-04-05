@@ -25,6 +25,7 @@ else:
             self.root.withdraw()
             self.auth_manager = AuthManager(USERS_FILE)
             StyleManager.setup_styles(self.root)
+<<<<<<< HEAD
             self.start_notification_service()
             self.show_login()
 
@@ -45,6 +46,10 @@ else:
             except Exception as e:
                 print(f"Failed to start notification service: {e}")
 
+=======
+            self.show_login()
+
+>>>>>>> 947f1af (update)
         def show_login(self):
             self.login_window = tk.Toplevel(self.root)
             LoginScreen(self.login_window, self.auth_manager, self.on_login_success)

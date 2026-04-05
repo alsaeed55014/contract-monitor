@@ -1,0 +1,18 @@
+  'مصفف شعر' => [['Hairdresser', 'مصفف شعر', 'Hair Stylist']]
+
+  'مصفف' => [['Hairdresser', 'مصفف', 'Hair Stylist', 'Stylist']]
+
+  'مصففة شعر' => [['Hairdresser', 'Hair Stylist', 'مصففة شعر']]
+
+  'كوافيرة' => [['كوافيرة', 'Hairdresser', 'Hair Stylist']]
+
+  'سائق' => [['Driver', 'سائق']]
+
+  'فلبيني سائق' => [['Filipino', 'فلبيني'], ['Driver', 'سائق']]
+
+  'نجار' => [['نجار', 'joiner']]
+
+  'كهربائي' => [['electrical', 'كهربائي']]
+
+  'خياط' => [['خياط', 'tailor']]
+
