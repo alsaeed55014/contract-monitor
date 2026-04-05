@@ -202,14 +202,22 @@ def render_whatsapp_page():
                 st.rerun()
 
     # 2. QR CODE SECTION
-    if status == "Awaiting Login":
-        qr_b64 = st.session_state.wa_service.get_qr_hd()
-        if qr_b64:
-            src = qr_b64 if qr_b64.startswith("data:") else f"data:image/png;base64,{qr_b64}"
-            st.markdown(f'<div style="background: #FFFFFF; padding: 25px; border-radius: 20px; max-width: 420px; margin: 15px auto; text-align: center; box-shadow: 0 0 40px rgba(255,255,255,0.4);"><img src="{src}" style="width: 350px; height: 350px; image-rendering: pixelated; image-rendering: crisp-edges;" /></div>', unsafe_allow_html=True)
+    if status in ["Awaiting Login", "Loading..."]:
+        if status == "Awaiting Login":
+            qr_b64 = st.session_state.wa_service.get_qr_hd()
+            if qr_b64:
+                src = qr_b64 if qr_b64.startswith("data:") else f"data:image/png;base64,{qr_b64}"
+                st.markdown(f'<div style="background: #FFFFFF; padding: 25px; border-radius: 20px; max-width: 420px; margin: 15px auto; text-align: center; box-shadow: 0 0 40px rgba(255,255,255,0.4);"><img src="{src}" style="width: 350px; height: 350px; image-rendering: pixelated; image-rendering: crisp-edges;" /></div>', unsafe_allow_html=True)
+            else:
+                st.info(lbl['qr_loading'])
         else:
-            st.info(lbl['qr_loading'])
-        
+            # Loading status: Show a mini screenshot to inform user
+            with st.status(lbl['loading'], expanded=True):
+                shot = st.session_state.wa_service.get_screenshot()
+                if shot: st.image(shot, caption="Live Engine View")
+                st.write("Waiting for WhatsApp Web to initialize...")
+
+        # Auto-refresh logic for login/loading
         b1, b2 = st.columns(2)
         with b1:
             if st.button(lbl['refresh_qr'], use_container_width=True):
@@ -224,6 +232,10 @@ def render_whatsapp_page():
                 else:
                     st.error(lbl['not_connected'])
                 st.rerun()
+        
+        # Automatic refresh every 5 seconds if waiting for login/loading
+        time.sleep(5)
+        st.rerun()
 
     # 3. INPUT + BROADCAST
     if status == "Connected":
@@ -719,4 +731,4 @@ Abu Fahd"""
         with st.expander(lbl['diag']):
             if st.button(lbl['screenshot']):
                 img = st.session_state.wa_service.get_diagnostic_screenshot()
-                if img: st.image(f"data:image/png;base64,{img}")
+                if img: st.image(img)
