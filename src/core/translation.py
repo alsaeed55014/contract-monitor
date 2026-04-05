@@ -1,8 +1,11 @@
 # src/core/translation.py
 import re
 import io
+<<<<<<< HEAD
 import streamlit as st
 import hashlib
+=======
+>>>>>>> 947f1af (update)
 
 try:
     import pdfplumber
@@ -11,10 +14,15 @@ try:
 except ImportError:
     HAS_DEPS = False
 
+<<<<<<< HEAD
 class TranslationManager:
     # Use class-level cache to persist across re-initializations
     _google_cache = {}
 
+=======
+
+class TranslationManager:
+>>>>>>> 947f1af (update)
     def __init__(self):
 
         # -------------------------
@@ -34,6 +42,7 @@ class TranslationManager:
             "ممرضة": "Nurse",
             "طبيب": "Doctor",
             "نظافة": "Cleaner",
+<<<<<<< HEAD
             "بائع": "Sales",
             "بائع زهور": "Florist",
             "بائع ورد": "Florist",
@@ -42,10 +51,13 @@ class TranslationManager:
             "منسق ورد": "Florist",
             "زهور": ["Florist", "Flowers"],
             "ورد": ["Florist", "Flowers"],
+=======
+>>>>>>> 947f1af (update)
             "عامل نظافة": "Cleaner",
             "عاملة نظافة": "Cleaner",
 
             # Beauty / Salon
+<<<<<<< HEAD
             "بدكير": ["Pedicure", "Nail"],
             "منكير": ["Manicure", "Nail"],
             "حلاق": "Barber",
@@ -58,6 +70,13 @@ class TranslationManager:
             "مصففة شعر": ["Hairdresser", "Hair Stylist"],
             "تجميل": ["Beauty", "Beautician", "Salon"],
             "صالون": ["Salon", "Beauty"],
+=======
+            "بدكير": ["Pedicure", "Technician"],
+            "منكير": ["Manicure", "Technician"],
+            "حلاق": "Barber",
+            "كوافير": ["Hairdresser", "Hair Stylist"],
+            "مصففة": ["Hairdresser", "Hair Stylist"],
+>>>>>>> 947f1af (update)
             "بشرة": "Skin",
             "بروتين": "Protein",
             "شعر": "Hair",
@@ -109,17 +128,22 @@ class TranslationManager:
             "اوغندية": "Ugandan",
             "اثيوبي": "Ethiopian",
             "اثيوبية": "Ethiopian",
+<<<<<<< HEAD
             "اندونيسي": ["Indonesian", "Indonesia"],
             "اندونيسية": ["Indonesian", "Indonesia"],
             "اندونيسيا": "Indonesia",
             "اندونيسا": "Indonesia",
             "اندونيسيه": ["Indonesian", "Indonesia"],
+=======
+            "اندونيسي": "Indonesian",
+>>>>>>> 947f1af (update)
             "مغربي": "Moroccan",
             "مغربية": "Moroccan",
             "سوداني": "Sudanese",
             "سودانية": "Sudanese",
             "يمني": "Yemeni",
             "يمنية": "Yemeni",
+<<<<<<< HEAD
             "رواندي": ["Rwandan", "Rwanda"],
             "رواندية": ["Rwandan", "Rwanda"],
             "روندي": ["Rwandan", "Rwanda"],
@@ -136,6 +160,10 @@ class TranslationManager:
             "نيجرية": ["Nigerian", "Nigeria"],
             "نيجريا": "Nigeria",
             "نيجيريا": "Nigeria",
+=======
+            "نيجيري": "Nigerian",
+            "نيجيرية": "Nigerian",
+>>>>>>> 947f1af (update)
             "غاني": "Ghanaian",
             "غانية": "Ghanaian",
             "سنغالي": "Senegalese",
@@ -144,9 +172,12 @@ class TranslationManager:
             "تونسية": "Tunisian",
             "تنزاني": "Tanzanian",
             "تنزانية": "Tanzanian",
+<<<<<<< HEAD
             "كينيا": "Kenya",
             "اوغندا": "Uganda",
             "اثيوبيا": "Ethiopia",
+=======
+>>>>>>> 947f1af (update)
 
             # Africa Continent Mapping
             "افريقي": [
@@ -174,11 +205,17 @@ class TranslationManager:
             "القطيف": "Qatif",
             "حفر الباطن": "Hafar Al-Batin",
             "الخفجي": "Khafji",
+<<<<<<< HEAD
             "سيهات": "Saihat",
             "بقيق": "Abqaiq",
             "بريدة": ["Buraydah", "Qassim"],
             "عنيزة": ["Unaizah", "Qassim"],
             "الرس": ["Ar Rass", "Qassim"],
+=======
+            "بريدة": "Buraydah",
+            "عنيزة": "Unaizah",
+            "الرس": "Ar Rass",
+>>>>>>> 947f1af (update)
             "حائل": "Hail",
             "تبوك": "Tabuk",
             "أبها": "Abha",
@@ -191,11 +228,19 @@ class TranslationManager:
             "القريات": "Al Qurayyat",
             "ينبع": "Yanbu",
             "الطائف": "Taif",
+<<<<<<< HEAD
             "الخرج": ["Al Kharj", "Al-Kharj", "Central", "Alkharj", "Kharj"],
             "الدوادمي": ["Al-Duwadmi", "Duwadmi"],
             "المجمعة": ["Al Majma'ah", "Majmaah"],
             "الزلفي": ["Zulfi", "Az Zulfi"],
             "وادي الدواسر": ["Wadi ad-Dawasir", "Wadi Aldawasir"],
+=======
+            "الخرج": "Al-Kharj",
+            "الدوادمي": "Al-Duwadmi",
+            "المجمعة": "Al Majma'ah",
+            "الزلفي": "Zulfi",
+            "وادي الدواسر": "Wadi ad-Dawasir",
+>>>>>>> 947f1af (update)
             "شرورة": "Sharurah",
             "صبيا": "Sabya",
             "بيشة": "Bisha",
@@ -257,11 +302,17 @@ class TranslationManager:
             "المنطقة الشرقية": ["Eastern", "Dammam", "Khobar", "Jubail", "Al-Ahsa", "Dhahran", "Qatif", "Hafar Al-Batin"],
             "منطقة عسير": ["Asir", "Abha", "Khamis Mushait", "Bisha", "Mahayil", "Al Namas", "Tanomah"],
             "المنطقة الجنوبية": ["South", "Jizan", "Najran", "Asir", "Abha", "Jazan", "Sabya", "Abu Arish"],
+<<<<<<< HEAD
             "المنطقة الوسطى": ["Central", "Riyadh", "Al-Kharj", "Al Kharj", "Al Majma'ah", "Zulfi", "Wadi ad-Dawasir"],
             "المنطقة الغربية": ["Western", "Jeddah", "Makkah", "Madinah", "Taif", "Yanbu", "Rabigh", "Al Lith", "Al Qunfudhah"],
             "الوسطى": ["Central", "Riyadh", "Al-Kharj", "Al Kharj", "Al Majma'ah", "Zulfi"],
             "القصيم": ["Qassim", "Buraydah", "Unaizah", "Ar Rass", "Al Qassim", "AL QASSIM", "Qassim Region"],
             "منطقة القصيم": ["Qassim", "Buraydah", "Unaizah", "Ar Rass"],
+=======
+            "المنطقة الوسطى": ["Central", "Riyadh", "Al-Kharj", "Al Majma'ah", "Zulfi", "Buraydah", "Unaizah", "Ar Rass", "Hail", "Wadi ad-Dawasir"],
+            "المنطقة الغربية": ["Western", "Jeddah", "Makkah", "Madinah", "Taif", "Yanbu", "Rabigh", "Al Lith", "Al Qunfudhah"],
+            "الوسطى": ["Central", "Riyadh", "Al-Kharj", "Al Majma'ah", "Zulfi", "Buraydah", "Unaizah", "Ar Rass", "Hail"],
+>>>>>>> 947f1af (update)
             "الغربية": ["Western", "Jeddah", "Makkah", "Madinah", "Taif", "Yanbu", "Rabigh", "Al Lith", "Al Qunfudhah"],
             "نجد": ["Central", "Riyadh", "Qassim", "Hail"],
             "الحجاز": ["Western", "Jeddah", "Makkah", "Madinah", "Taif"],
@@ -312,6 +363,7 @@ class TranslationManager:
                 return v
         return word
 
+<<<<<<< HEAD
     def _is_arabic(self, text):
         """Check if text contains Arabic characters."""
         return bool(re.search(r'[\u0600-\u06FF]', str(text)))
@@ -338,6 +390,8 @@ class TranslationManager:
             pass
         return None
 
+=======
+>>>>>>> 947f1af (update)
     # ---------------------------------
     # Query Analyzer
     # ---------------------------------
@@ -346,6 +400,7 @@ class TranslationManager:
         return self.normalize_text(word)
 
     def analyze_query(self, query):
+<<<<<<< HEAD
         clean_query = query.lower().strip()
         ignore_words = ["جميع", "كل", "دول", "دولة", "قارة", "قاره"]
         bundle_list = []
@@ -374,11 +429,24 @@ class TranslationManager:
 
         for word in words:
             if not word or word in ignore_words or len(word) < 2:
+=======
+
+        clean_query = query.lower().strip()
+        ignore_words = ["جميع", "كل", "دول", "دولة", "قارة", "قاره"]
+
+        # Split by spaces and common separators like commas
+        words = re.split(r'[\s,،/\\|]+', clean_query)
+        bundle_list = []
+
+        for word in words:
+            if word in ignore_words or len(word) < 2:
+>>>>>>> 947f1af (update)
                 continue
             
             # Use a Set to avoid duplicates
             synonyms = {word}
             
+<<<<<<< HEAD
             # 1. Direct translation from local dictionary
             trans = self.translate_word(word)
             found_local = False
@@ -404,6 +472,28 @@ class TranslationManager:
             if full_google:
                 bundle_list.append([clean_query, full_google])
 
+=======
+            # 1. Direct translation
+            trans = self.translate_word(word)
+            
+            if isinstance(trans, list):
+                for t in trans: synonyms.add(t)
+            elif trans and trans.lower() != word.lower():
+                synonyms.add(trans)
+                
+            # 2. Check for compound word matches in dictionary keys
+            # (Simple heuristic: if word is part of a key, add the value)
+            norm_word = self.normalize_text(word)
+            for k, v in self.dictionary.items():
+                if norm_word in self.normalize_text(k) and len(k.split()) > 1:
+                     if isinstance(v, list):
+                         for t in v: synonyms.add(t)
+                     else:
+                         synonyms.add(v)
+
+            bundle_list.append(list(synonyms))
+
+>>>>>>> 947f1af (update)
         return bundle_list
 
     # ---------------------------------
@@ -431,6 +521,7 @@ class TranslationManager:
         if not text:
             return ""
 
+<<<<<<< HEAD
         # Global Cache check
         cache_key = f"{target_lang}_{hashlib.md5(str(text).strip().encode()).hexdigest()}"
         if 'translation_cache' not in st.session_state:
@@ -439,6 +530,8 @@ class TranslationManager:
         if cache_key in st.session_state.translation_cache:
             return st.session_state.translation_cache[cache_key]
 
+=======
+>>>>>>> 947f1af (update)
         try:
             chunks = [text[i:i+4000] for i in range(0, len(text), 4000)]
             translated_text = ""
@@ -447,12 +540,16 @@ class TranslationManager:
             for chunk in chunks:
                 translated_text += translator.translate(chunk) + "\n"
 
+<<<<<<< HEAD
             # Save to session cache
             st.session_state.translation_cache[cache_key] = translated_text
+=======
+>>>>>>> 947f1af (update)
             return translated_text
 
         except Exception as e:
             return f"Translation Error: {str(e)}"
+<<<<<<< HEAD
 
     def translate_ui_value(self, val, target_lang='ar'):
         """Bidirectional UI value translation using dictionaries and heuristics."""
@@ -513,6 +610,8 @@ class TranslationManager:
                     return v[0] if isinstance(v, list) else v
             return val
 
+=======
+>>>>>>> 947f1af (update)
 AR_TO_EN = {
     "بدكير": ["Manicure", "Nail Technician"],
     "منكير": ["Pedicure", "Nail Technician"],
@@ -527,10 +626,16 @@ AR_TO_EN = {
     "باريستا": ["Barista"],
     "افريقي": ["Nigeria", "Kenya", "Ghana", "Ethiopia", "Sudan", "Morocco", "Tunisia", "Senegal"],
     "افريقية": ["Nigeria", "Kenya", "Ghana", "Ethiopia", "Sudan", "Morocco", "Tunisia", "Senegal"],
+<<<<<<< HEAD
     "لا توجد خبرة": "No experience",
     "خبرة": "Experience",
 }
 
+=======
+}
+
+
+>>>>>>> 947f1af (update)
 def translate_to_english(keyword: str):
     keyword = keyword.strip().lower()
     return AR_TO_EN.get(keyword, [])
