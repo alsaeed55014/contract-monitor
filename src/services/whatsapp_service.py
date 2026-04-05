@@ -50,12 +50,28 @@ class WhatsAppService:
         opts.add_argument("--no-sandbox")
         opts.add_argument("--disable-dev-shm-usage")
         
+        # 2026 High Compatibility User Agent
+        ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+        opts.add_argument(f"user-agent={ua}")
+        
+        # Stability & Anti-Bot flags
+        opts.add_argument("--disable-blink-features=AutomationControlled")
+        opts.add_argument("--disable-infobars")
+        opts.add_argument("--no-first-run")
+        opts.add_argument("--no-service-autorun")
+        opts.add_argument("--password-store=basic")
+        
         # Find Chrome binary
         binary = self._find_chrome_binary()
-        v_main = self._get_chrome_version(binary)
+        
+        # In Cloud environment, we should be careful with version_main
+        # If detection fails or we are in cloud, it's safer to let UC handle it
+        v_main = None
+        if os.name == 'nt':
+            v_main = self._get_chrome_version(binary)
         
         try:
-            # UC initialization with explicit version support
+            # UC initialization
             self.driver = uc.Chrome(
                 options=opts, 
                 browser_executable_path=binary,
