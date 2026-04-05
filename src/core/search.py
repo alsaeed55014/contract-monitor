@@ -1,8 +1,10 @@
 from .translation import TranslationManager
+from .matcher import _find_city_region, _fuzzy_match, REGION_PROXIMITY, REGION_MAP, CITY_KEYWORDS
 import re
 import pandas as pd
 from datetime import date
 from dateutil import parser as dateutil_parser
+import hashlib
 
 class SmartSearchEngine:
     def __init__(self, data_frame=None):
@@ -21,17 +23,24 @@ class SmartSearchEngine:
         050... -> 50...
         +966 59 422 3552 -> 594223552
         """
-        digits = re.sub(r'\D', '', str(text))
+        arabic_to_western = str.maketrans('٠١٢٣٤٥٦٧٨٩', '0123456789')
+        s = str(text).translate(arabic_to_western)
+        digits = re.sub(r'\D', '', s)
+        if not digits:
+            return ""
+        if digits.startswith('00'):
+            digits = digits[2:]
         if digits.startswith('966'):
             digits = digits[3:]
-        if digits.startswith('0'):
+        while digits.startswith('0'):
             digits = digits[1:]
         return digits
 
     def is_phone_query(self, query):
         """Detects if the query is likely a phone number."""
         # Strip spaces, plus, dashes first
-        clean = re.sub(r'[\s\+\-\(\)]', '', str(query))
+        arabic_to_western = str.maketrans('٠١٢٣٤٥٦٧٨٩', '0123456789')
+        clean = re.sub(r'[\s\+\-\(\)]', '', str(query)).translate(arabic_to_western)
         return clean.isdigit() and len(clean) >= 5
 
     def search(self, query, filters=None):
@@ -57,6 +66,16 @@ class SmartSearchEngine:
         # Clean query
         query_clean = str(query).strip() if query else ""
         
+        # New: Auto-clean phone numbers from edges (User Request 2026-03-07)
+        # Removes anything not a digit or '+' from the beginning and end of the query
+        if query_clean:
+            temp_clean = re.sub(r'^[^\d+]+', '', query_clean)
+            temp_clean = re.sub(r'[^\d]+$', '', temp_clean)
+            
+            # Switch to the purified query only if it represents a valid phone number search
+            if temp_clean and self.is_phone_query(temp_clean):
+                query_clean = temp_clean
+
         # 1. Text Search
         if query_clean:
             if self.is_phone_query(query_clean):
@@ -100,51 +119,123 @@ class SmartSearchEngine:
                     # No meaningful search terms found → return all results
                     self.last_debug['note'] = 'Empty bundles, returning all'
                 else:
-                    def text_match(row):
+                    # --- NEW: Geographic Expansion Detection ---
+                    geo_targets = [] # List of (target_city/region, region_key)
+                    for bundle in bundles:
+                        for term in bundle:
+                            # Is this a region?
+                            is_r = False
+                            for rk, rd in REGION_MAP.items():
+                                if any(term.lower() == a.lower() or term in a or a in term for a in rd["aliases_ar"] + rd["aliases_en"]):
+                                    geo_targets.append(('region', rk))
+                                    is_r = True
+                                    break
+                            if is_r: break
+                            
+                            # Is this a city?
+                            rk = _find_city_region(term)
+                            if rk:
+                                geo_targets.append((term, rk))
+                                break
+                    
+                    self.last_debug['geo_targets'] = geo_targets
+                    
+                    def text_match_with_geo(row):
                         # Join row to single string and normalize
-                        # Skip internal columns
                         parts = []
+                        row_city_val = ""
+                        
+                        # Find city column to evaluate geo tier separately
+                        found_city_col = None
                         for col in row.index:
                             if not str(col).startswith('__'):
-                                parts.append(str(row[col]))
+                                col_norm = str(col).lower()
+                                val = str(row[col])
+                                parts.append(val)
+                                if any(kw.lower() in col_norm for kw in CITY_KEYWORDS):
+                                    found_city_col = col
+                                    row_city_val = val
+
                         row_text = " ".join(parts).lower()
-                        
-                        # Normalize: only apply Arabic letter normalization, NOT ال-stripping
                         row_text_norm = (
                             row_text
-                            .replace("أ", "ا")
-                            .replace("إ", "ا")
-                            .replace("آ", "ا")
-                            .replace("ة", "ه")
-                            .replace("ى", "ي")
+                            .replace("أ", "ا").replace("إ", "ا").replace("آ", "ا")
+                            .replace("ة", "ه").replace("ى", "ي")
                         )
                         
-                        # AND Logic: Every bundle must have at least one synonym matching
+                        geo_tier = 99
+                        match_count = 0
+                        
                         for bundle in bundles:
-                            found_match_for_bundle = False
-                            for syn in bundle:
-                                syn_norm = self.translator._normalize_query_word(syn)
-                                # Use word-boundary matching for short terms to avoid
-                                # substring false positives (e.g. "male" in "female")
-                                if len(syn_norm) <= 6:
-                                    # Word boundary match
-                                    pattern = r'(?:^|[\s,:;.\-/])' + re.escape(syn_norm) + r'(?:[\s,:;.\-/]|$)'
-                                    if re.search(pattern, row_text_norm):
-                                        found_match_for_bundle = True
-                                        break
-                                else:
-                                    # Longer terms: substring match is safe
-                                    if syn_norm in row_text_norm:
-                                        found_match_for_bundle = True
-                                        break
+                            found_bundle = False
+                            bundle_geo_target = None
                             
-                            if not found_match_for_bundle:
-                                return False
-                                
-                        return True
+                            # Check if this bundle is one of our geo targets
+                            for term in bundle:
+                                for gt_val, rk in geo_targets:
+                                    if term == gt_val or (gt_val == 'region' and any(term.lower() == a.lower() for a in REGION_MAP[rk]["aliases_ar"] + REGION_MAP[rk]["aliases_en"])):
+                                        bundle_geo_target = (gt_val, rk)
+                                        break
+                                if bundle_geo_target: break
 
-                    mask = results.apply(text_match, axis=1)
-                    results = results[mask]
+                            if bundle_geo_target:
+                                # Special Geo Matching
+                                gt_val, rk = bundle_geo_target
+                                if gt_val == 'region':
+                                    # Query was for a region name
+                                    worker_rk = _find_city_region(row_city_val)
+                                    if worker_rk == rk:
+                                        geo_tier = min(geo_tier, 1)
+                                        found_bundle = True
+                                else:
+                                    # Query was for a specific city
+                                    if _fuzzy_match(row_city_val, gt_val):
+                                        geo_tier = min(geo_tier, 0)
+                                        found_bundle = True
+                                    else:
+                                        worker_rk = _find_city_region(row_city_val)
+                                        if worker_rk == rk:
+                                            geo_tier = min(geo_tier, 1)
+                                            found_bundle = True
+                                        elif rk in REGION_PROXIMITY:
+                                            ordered = REGION_PROXIMITY[rk]
+                                            if worker_rk in ordered:
+                                                curr_t = 2 + ordered.index(worker_rk)
+                                                geo_tier = min(geo_tier, curr_t)
+                                                found_bundle = True
+                            
+                            if not found_bundle:
+                                # Standard keyword match
+                                for syn in bundle:
+                                    syn_norm = self.translator._normalize_query_word(syn)
+                                    syn_flex = re.sub(r'[\s\-]', '', syn_norm)
+                                    row_text_flex = re.sub(r'[\s\-]', '', row_text_norm)
+                                    
+                                    if len(syn_norm) <= 4:
+                                        pattern = r'(?:^|[\s,:;.\-/])' + re.escape(syn_norm) + r'(?:[\s,:;.\-/]|$)'
+                                        if re.search(pattern, row_text_norm):
+                                            found_bundle = True
+                                            break
+                                    else:
+                                        if syn_flex in row_text_flex:
+                                            found_bundle = True
+                                            break
+                            
+                            if not found_bundle:
+                                return False, 99
+                                
+                        return True, geo_tier
+
+                    # Apply and store tier
+                    match_results = results.apply(text_match_with_geo, axis=1)
+                    results['__is_match'] = [m[0] for m in match_results]
+                    results['__geo_tier'] = [m[1] for m in match_results]
+                    
+                    results = results[results['__is_match']]
+                    results = results.drop(columns=['__is_match'])
+                    
+                    # Sort primarily by geo_tier
+                    results = results.sort_values(by='__geo_tier', ascending=True)
                     self.last_debug['matched_count'] = len(results)
 
         # 2. Apply Filters
