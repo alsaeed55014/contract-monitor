@@ -4990,6 +4990,16 @@ def render_order_processing_content():
                 if other_list:
                     other_df, other_idx_map = build_worker_table(other_list, other_scores)
                     if not other_df.empty:
+                        # Export
+                        c_oth_2 = st.columns([4, 1])[1]
+                        with c_oth_2:
+                            xl_oth = create_pasha_whatsapp_excel(other_df, lang=lang)
+                            if xl_oth:
+                                _, xl_df_oth = xl_oth
+                                btn_exp = "📤 " + ("تصدير للواتساب" if lang == 'ar' else "Export to WhatsApp")
+                                render_pasha_export_button(xl_df_oth, btn_exp, f"Other_Cities_Match_{idx+1}.xlsx", 
+                                                          f"Other_Cities_Match_{idx+1}", key=f"dl_op_oth_{idx}")
+
                         label_other = "🌍 عمال في مدن أخرى (مرتبين حسب القرب)" if lang == 'ar' else f"🌍 Workers in other cities (sorted by proximity)"
                         render_segment_header(label_other, len(other_df), color="#FFFFFF")
                         
@@ -5000,12 +5010,19 @@ def render_order_processing_content():
 
                         other_df = render_table_translator(other_df, key_prefix=f"op_other_{idx}")
                         other_styled = style_df(other_df.drop(columns=["__uid"]))
-                        st.dataframe(
+                        
+                        df_oth_h = min((len(other_df) + 1) * 35 + 40, 400)
+                        ev_oth = st.dataframe(
                             other_styled, 
-                            use_container_width=True, hide_index=True,
-                            column_config=__apply_pinned_columns(other_styled, col_cfg_other),
-                            key=f"op_other_table_{idx}"
+                            use_container_width=True, hide_index=True, on_select="rerun",
+                            selection_mode="single-row", column_config=__apply_pinned_columns(other_styled, col_cfg_other),
+                            key=f"op_other_table_{idx}", height=df_oth_h
                         )
+                        if ev_oth.selection and ev_oth.selection.get("rows"):
+                             sel_idx = ev_oth.selection["rows"][0]
+                             w_row = other_list[other_idx_map[sel_idx]]
+                             w_uid = other_df.iloc[sel_idx]["__uid"]
+                             render_cv_detail_panel(w_row, sel_idx, lang, key_prefix=f"op_other_{idx}", worker_uid=w_uid)
 
 
             # --- Hide Request Button (Admin Only) ---
