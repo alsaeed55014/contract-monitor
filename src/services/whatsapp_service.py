@@ -67,7 +67,7 @@ class WhatsAppService:
         # Bypassing Detection & Stealth flags
         opts.add_argument("--disable-blink-features=AutomationControlled")
         opts.add_argument("--disable-infobars")
-        opts.add_argument("--excludeSwitches", ["enable-automation"])
+        opts.add_experimental_option("excludeSwitches", ["enable-automation"])
         opts.add_argument("--use-fake-ui-for-media-stream")
         opts.add_argument("--disable-notifications")
         
