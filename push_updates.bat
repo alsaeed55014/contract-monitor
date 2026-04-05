@@ -1,43 +1,33 @@
 @echo off
 echo ==================================================
-echo   🚀 Pasha Emergency Upload - OVERWRITE MODE
+echo   🚀 Pasha Final Sync - Simple Mode
 echo ==================================================
 echo.
 
 set REPO_URL=https://github.com/alsaeed55014/contract-monitor.git
 
-:: 0. Abort any stuck rebase
-echo [1/4] Cleaning up stuck processes...
-git rebase --abort >nul 2>nul
-git merge --abort >nul 2>nul
+:: Connect
+echo [1/3] Connecting to GitHub...
 git remote remove origin >nul 2>nul
 git remote add origin %REPO_URL%
 
-:: 1. Detect Local Branch
+:: Detect Branch
 for /f "tokens=*" %%i in ('git branch --show-current') do set branch=%%i
 if "%branch%"=="" set branch=master
-echo Current Branch: %branch%
 
-:: 2. Package
-echo [2/4] Packaging local updates...
+:: Add & Commit
+echo [2/3] Saving local updates...
 git add .
-git commit -m "Emergency Update - Force Sync"
+git commit -m "Comprehensive Update - logic and security"
 
-:: 3. Force Push (Overwrites GitHub with your current local files)
-echo [3/4] Overwriting GitHub with your local files...
+:: Push
+echo [3/3] Sending to GitHub (Master to Main)...
 git push origin %branch%:main --force
 
 echo.
 if %errorlevel% == 0 (
-    echo ==================================================
-    echo   ✅ SUCCESS! Your project is now LIVE on GitHub.
-    echo ==================================================
+    echo ✅ DONE! Success.
 ) else (
-    echo ==================================================
-    echo   ❌ FAILED! If it asks for password/login, please do it.
-    echo ==================================================
+    echo ❌ FAILED! If it asks for login, please do it.
 )
-
-echo.
-echo Press any key to close this window...
 pause

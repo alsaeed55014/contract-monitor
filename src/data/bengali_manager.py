@@ -283,6 +283,27 @@ class BengaliDataManager:
         self.save_data()
         return True
 
+    def add_supplier(self, supplier):
+        """Add ONLY a supplier."""
+        s_entry = {"name": supplier["name"], "phone": supplier["phone"]}
+        if s_entry not in self.data["suppliers"]:
+            self.data["suppliers"].append(s_entry)
+            self.save_data()
+        return True
+
+    def add_employer(self, employer):
+        """Add ONLY an employer."""
+        e_entry = {
+            "name": employer["name"], 
+            "cafe": employer["cafe"], 
+            "mobile": employer["mobile"], 
+            "city": employer["city"]
+        }
+        if e_entry not in self.data["employers"]:
+            self.data["employers"].append(e_entry)
+            self.save_data()
+        return True
+
     def add_worker(self, worker_data):
         import uuid
         if "id" not in worker_data or not worker_data["id"]:

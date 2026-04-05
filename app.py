@@ -6646,6 +6646,7 @@ def render_bengali_supply_content():
     with tab1:
         st.markdown(f'### 🏗️ {t("form_supplier_employer", lang)}')
 <<<<<<< HEAD
+<<<<<<< HEAD
         col1, col2 = st.columns(2)
         with col1:
             with st.container(border=True):
@@ -7024,6 +7025,49 @@ else:
                     st.rerun()
                 else:
                     show_toast("يرجى إكمال البيانات الأساسية", "error")
+=======
+        
+        # We split the form into two columns, each with its own form
+        col_sup, col_emp = st.columns(2)
+        
+        with col_sup:
+            with st.container(border=True):
+                st.markdown(f"#### 📦 إضافة مورد جديد")
+                with st.form("supplier_only_form", clear_on_submit=True):
+                    st.markdown(f"**👤 {t('supplier_name', lang)}**")
+                    s_name = st.text_input(t("supplier_name", lang), label_visibility="collapsed")
+                    st.markdown(f"**📞 {t('supplier_phone', lang)}**")
+                    s_phone = st.text_input(t("supplier_phone", lang), label_visibility="collapsed")
+                    
+                    if st.form_submit_button(t("add_supplier_btn", lang) + " المورد", use_container_width=True):
+                        if s_name:
+                            bm.add_supplier({"name": s_name, "phone": s_phone})
+                            st.session_state.bengali_msg = ("success", f"تم إضافة المورد: {s_name} بنجاح")
+                            st.rerun()
+                        else:
+                            show_toast("يرجى إدخال اسم المورد على الأقل", "error")
+
+        with col_emp:
+            with st.container(border=True):
+                st.markdown(f"#### 🏢 إضافة عميل (صاحب عمل) جديد")
+                with st.form("employer_only_form", clear_on_submit=True):
+                    st.markdown(f"**🏢 {t('employer_name', lang)}**")
+                    e_name = st.text_input(t("employer_name", lang), label_visibility="collapsed")
+                    st.markdown(f"**☕ {t('cafe_name', lang)}**")
+                    e_cafe = st.text_input(t("cafe_name", lang), label_visibility="collapsed")
+                    st.markdown(f"**📱 {t('employer_mobile', lang)}**")
+                    e_mobile = st.text_input(t("employer_mobile", lang), label_visibility="collapsed")
+                    st.markdown(f"**📍 {t('city', lang)}**")
+                    e_city = st.text_input(t("city", lang), label_visibility="collapsed")
+                    
+                    if st.form_submit_button(t("add_supplier_btn", lang) + " صاحب العمل", use_container_width=True):
+                        if e_name:
+                            bm.add_employer({"name": e_name, "cafe": e_cafe, "mobile": e_mobile, "city": e_city})
+                            st.session_state.bengali_msg = ("success", f"تم إضافة صاحب العمل: {e_name} بنجاح")
+                            st.rerun()
+                        else:
+                            show_toast("يرجى إدخال اسم صاحب العمل على الأقل", "error")
+>>>>>>> 8795180 (Update Bengali search table to add vertical and horizontal scrolling and search on enter)
 
     with tab2:
         st.markdown(f'### 👷 {t("form_worker_details", lang)}')
@@ -7090,6 +7134,8 @@ else:
         col_stats2.metric("📦 Suppliers - الموردين", len(suppliers_all))
         col_stats3.metric("🏢 Employers - العملاء", len(employers_all))
         
+        # Added a hint to press Enter for search
+        st.caption("⌨️ اكتب للبحث واضغط Enter (يتم البحث في جميع البيانات: عمال، عملاء، موردين)")
         search_q = st.text_input(t("search_manage_title", lang), placeholder=t("search_placeholder_bengali", lang), label_visibility="collapsed", key="bengali_search_q")
         
         def normalize_ar(text):
@@ -7108,6 +7154,7 @@ else:
                        q in normalize_ar(w.get("name", "")) or 
                        q in normalize_ar(w.get("supplier", "")) or 
                        q in normalize_ar(w.get("employer", "")) or 
+                       q in normalize_ar(w.get("mobile", "")) or 
                        q in normalize_ar(w.get("id", ""))]
         
         if not workers:
@@ -7117,6 +7164,25 @@ else:
                 st.info(t("no_records_found", lang))
         else:
             st.success(f"🔍 Found {len(workers)} records - تم العثور على {len(workers)} سجلات")
+            
+            # --- Table View with Scrolling ---
+            df_data = []
+            for w in sorted(workers, key=lambda x: x.get("timestamp", ""), reverse=True):
+                df_data.append({
+                    "العامل": w.get("name", "N/A"),
+                    "صاحب العمل": w.get("employer", "N/A"),
+                    "المورد": w.get("supplier", "N/A"),
+                    "الجوال": w.get("mobile", "N/A"),
+                    "الهوية/الجواز": w.get("id", "N/A"),
+                    "التاريخ": w.get("timestamp", "N/A")
+                })
+            
+            # Set height to enable vertical scroll, explicitly allowing it to overflow horizontally
+            st.dataframe(pd.DataFrame(df_data), height=400, hide_index=True)
+            
+            st.markdown("---")
+            st.markdown("### 📄 تفاصيل السجلات (للحذف)")
+            
             for w in sorted(workers, key=lambda x: x.get("timestamp", ""), reverse=True):
                 with st.container(border=True):
                     # Header with Worker Name and Delete button
