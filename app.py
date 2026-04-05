@@ -4990,15 +4990,15 @@ def render_order_processing_content():
                 if other_list:
                     other_df, other_idx_map = build_worker_table(other_list, other_scores)
                     if not other_df.empty:
-                        # Export
-                        c_oth_2 = st.columns([4, 1])[1]
-                        with c_oth_2:
-                            xl_oth = create_pasha_whatsapp_excel(other_df, lang=lang)
-                            if xl_oth:
-                                _, xl_df_oth = xl_oth
-                                btn_exp = "📤 " + ("تصدير للواتساب" if lang == 'ar' else "Export to WhatsApp")
-                                render_pasha_export_button(xl_df_oth, btn_exp, f"Other_Cities_Match_{idx+1}.xlsx", 
-                                                          f"Other_Cities_Match_{idx+1}", key=f"dl_op_oth_{idx}")
+                        # Export Section
+                        exp_oth_col = st.columns([4, 1])[1]
+                        with exp_oth_col:
+                            xl_oth_data = create_pasha_whatsapp_excel(other_df, lang=lang)
+                            if xl_oth_data:
+                                _, xl_oth_df = xl_oth_data
+                                btn_exp_lbl = "📤 " + ("تصدير للواتساب" if lang == 'ar' else "Export to WhatsApp")
+                                render_pasha_export_button(xl_oth_df, btn_exp_lbl, f"Workers_Other_Cities_{idx+1}.xlsx", 
+                                                          f"Other_Cities_Table_{idx+1}", key=f"btn_xl_oth_stable_{idx}")
 
                         label_other = "🌍 عمال في مدن أخرى (مرتبين حسب القرب)" if lang == 'ar' else f"🌍 Workers in other cities (sorted by proximity)"
                         render_segment_header(label_other, len(other_df), color="#FFFFFF")
