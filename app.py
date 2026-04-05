@@ -5027,12 +5027,173 @@ def render_order_processing_content():
 
 def render_duplicate_remover_content():
     lang = st.session_state.lang
+    is_ar = lang == 'ar'
     st.title("🗑️ " + t('duplicate_remover', lang))
+    
+    st.markdown(f"""
+    <div style="background: rgba(255,255,255,0.02); padding: 20px; border-radius: 15px; border: 1px solid rgba(255,255,255,0.05); margin-bottom: 20px;">
+        <h4 style="color: #D4AF37; margin-bottom: 15px;">{'تعليمات الأداة' if is_ar else 'Tool Instructions'}</h4>
+        <ul style="color: #CCC; font-size: 0.95rem;">
+            <li>{'ارفع ملف أو عدة ملفات إكسل بصيغة .xlsx' if is_ar else 'Upload one or more Excel files (.xlsx)'}</li>
+            <li>{'سيقوم النظام بدمج الملفات وحذف الصفوف المكررة تماماً' if is_ar else 'The system will merge files and remove duplicate rows'}</li>
+            <li>{'يمكنك اختيار عمود معين ليتم الحذف بناءً عليه (مثل رقم الجوال)' if is_ar else 'You can select a specific column to base the removal on (e.g. Mobile Number)'}</li>
+        </ul>
+    </div>
+    """, unsafe_allow_html=True)
+    
     uploaded_files = st.file_uploader(t("upload_file_label", lang), type=["xlsx"], accept_multiple_files=True, key="dupe_rem_up")
+    
     if uploaded_files:
-        if st.button("🚀 " + ("بدء المعالجة" if lang == 'ar' else "Start Processing"), type="primary", use_container_width=True):
-            st.info("Searching for duplicates...")
-            # Logic here...
+        # Load all data
+        combined_df = pd.DataFrame()
+        with st.status("📁 " + ("جاري قراءة الملفات..." if is_ar else "Reading files...")) as status:
+            for uploaded_file in uploaded_files:
+                try:
+                    df = pd.read_excel(uploaded_file)
+                    combined_df = pd.concat([combined_df, df], ignore_index=True)
+                    st.write(f"✅ {uploaded_file.name} ({len(df)} " + ("صف" if is_ar else "rows") + ")")
+                except Exception as e:
+                    st.error(f"❌ Error loading {uploaded_file.name}: {e}")
+            
+            if not combined_df.empty:
+                status.update(label=("تم تحميل البيانات" if is_ar else "Data loaded"), state="complete")
+        
+        if not combined_df.empty:
+            st.divider()
+            
+            # Options
+            st.subheader("⚙️ " + ("إعدادات التصفية" if is_ar else "Filter Settings"))
+            
+            # Let user pick column or ALL
+            all_cols_option = "كل الأعمدة (تطابق كامل)" if is_ar else "All Columns (Exact Match)"
+            options = [all_cols_option] + list(combined_df.columns)
+            
+            col_to_check = st.selectbox(
+                "اختر العمود الأساسي للبحث عن المكرر" if is_ar else "Select base column for duplicate search",
+                options=options,
+                index=0
+            )
+
+            # --- Professional Cleaning Rules Toggle ---
+            st.markdown("---")
+            st.markdown(f"#### 🧹 {'الفلترة والتدقيق الاحترافي' if is_ar else 'Professional Filtering & Validation'}")
+            do_pro_clean = st.checkbox(
+                "تطبيق قواعد التدقيق (رقم الإقامة 10 أرقام + الجوال 12 رقم)" if is_ar else "Apply Validation Rules (Iqama 10-digits + Phone 12-digits max)",
+                value=True,
+                help="سيتم حذف الأسطر الفارغة، الرموز، النصوص، والأرقام غير الصالحة تلقائياً." if is_ar else "Automatically removes empty rows, symbols, text, and invalid numbers."
+            )
+            
+            smart_normalize = False
+            if col_to_check != all_cols_option and not do_pro_clean:
+                # If it's a phone column, offer smart normalization (only if pro clean is off)
+                if any(kw in str(col_to_check).lower() for kw in ["phone", "mobile", "جوال", "هاتف", "واتساب"]):
+                    smart_normalize = st.checkbox(
+                        "استخدام تنظيف الأرقام الذكي (لدمج الأرقام بصيغ مختلفة)" if is_ar else "Use Smart Phone Normalization",
+                        value=True
+                    )
+            
+            if st.button("🚀 " + ("بدء المعالجة" if is_ar else "Start Processing"), type="primary", use_container_width=True):
+                original_count = len(combined_df)
+                import re
+                
+                with st.status("⏳ " + ("جاري معالجة وتدقيق البيانات..." if is_ar else "Processing & Validating...")) as status:
+                    # Internal Working DF
+                    data = combined_df.copy()
+                    
+                    # Pre-clean: Remove completely empty rows
+                    data = data.dropna(how='all')
+                    
+                    if do_pro_clean:
+                        # 1. Identify Key Columns with better matching
+                        iqama_keywords = ["رقم الاقامة", "رقم الإقامة", "iqama", "رقم الهوية", "national id"]
+                        phone_keywords = ["رقم الهاتف", "جوال", "mobile", "phone", "whatsapp", "واتساب", "رقم الجوال"]
+                        
+                        iqama_col = next((c for c in data.columns if any(k in str(c).lower().strip() for k in iqama_keywords)), None)
+                        phone_col = next((c for c in data.columns if any(k in str(c).lower().strip() for k in phone_keywords)), None)
+                        
+                        def clean_iqama(val):
+                            if pd.isna(val) or str(val).strip() == "": return None
+                            # Keep only Western digits (0-9)
+                            s_val = str(val)
+                            # Convert Arabic digits to Western
+                            arabic_to_western = str.maketrans('٠١٢٣٤٥٦٧٨٩', '0123456789')
+                            digits = s_val.translate(arabic_to_western)
+                            # Remove EVERYTHING that is not a digit (removes Arabic/English text, symbols)
+                            digits = re.sub(r'[^\d]', '', digits)
+                            # Rule: Min 10 digits
+                            if len(digits) < 10: return None
+                            return digits
+
+                        def clean_phone_val(val):
+                            from src.utils.phone_utils import format_phone_number
+                            if pd.isna(val) or str(val).strip() == "": return None
+                            formatted = format_phone_number(val)
+                            if not formatted: return None
+                            # Rule: Delete if digits after + exceeds 12
+                            after_plus = formatted.replace("+", "")
+                            if len(after_plus) > 12: return None
+                            return formatted
+
+                        # Apply Rules & Remove Invalid Rows
+                        if iqama_col:
+                            st.write(f"🔍 {'تنظيف عمود الإقامة' if is_ar else 'Cleaning Iqama column'}: `{iqama_col}`")
+                            data[iqama_col] = data[iqama_col].apply(clean_iqama)
+                            data = data.dropna(subset=[iqama_col])
+                        
+                        if phone_col:
+                            st.write(f"📱 {'تنظيف عمود الجوال' if is_ar else 'Cleaning Phone column'}: `{phone_col}`")
+                            data[phone_col] = data[phone_col].apply(clean_phone_val)
+                            data = data.dropna(subset=[phone_col])
+                        
+                        # After cleaning, if col_to_check is the identified primary column, keep it. 
+                        # Otherwise, if "All Columns" is selected but we have a strong ID column, use it for smarter deduplication.
+                        dedup_subset = None
+                        if col_to_check == all_cols_option:
+                            if iqama_col: dedup_subset = [iqama_col]
+                            elif phone_col: dedup_subset = [phone_col]
+                        else:
+                            dedup_subset = [col_to_check]
+                        
+                        if dedup_subset:
+                            clean_df = data.drop_duplicates(subset=dedup_subset, keep='first')
+                        else:
+                            clean_df = data.drop_duplicates()
+                    else:
+                        # Standard handling without pro-cleaning
+                        if col_to_check == all_cols_option:
+                            clean_df = data.drop_duplicates()
+                        else:
+                            if smart_normalize:
+                                from src.utils.phone_utils import format_phone_number
+                                norm_col = "__norm_check"
+                                data[norm_col] = data[col_to_check].apply(lambda x: format_phone_number(str(x)))
+                                clean_df = data.drop_duplicates(subset=[norm_col], keep='first').drop(columns=[norm_col])
+                            else:
+                                clean_df = data.drop_duplicates(subset=[col_to_check], keep='first')
+                    
+                    status.update(label=("تم الانتهاء من المعالجة" if is_ar else "Processing complete"), state="complete")
+                
+                removed_count = original_count - len(clean_df)
+                
+                # Show Results
+                if removed_count > 0:
+                    st.success(f"🎊 {('تم الانتهاء! تم حذف' if is_ar else 'Done! Removed')} **{removed_count}** {('سجل مكرر.' if is_ar else 'duplicates.')}")
+                else:
+                    st.info("✅ " + ("لم يتم العثور على أي سجل مكرر." if is_ar else "No duplicates found."))
+                
+                # Stats
+                c1, c2, c3 = st.columns(3)
+                c1.metric("📊 " + ("الإجمالي الأصلي" if is_ar else "Original Total"), original_count)
+                c2.metric("✂️ " + ("المكرر المحذوف" if is_ar else "Duplicates Removed"), removed_count)
+                c3.metric("✨ " + ("الإجمالي النظيف" if is_ar else "Clean Total"), len(clean_df))
+                
+                # Download
+                st.divider()
+                st.markdown("### ⬇️ " + ("تحميل الملف المنظف" if is_ar else "Download Cleaned File"))
+                
+                from src.utils.phone_utils import render_pasha_export_button
+                fn = f"Cleaned_Data_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx"
+                render_pasha_export_button(clean_df, "📤 " + ("تحميل الملف الآن" if is_ar else "Download Now"), fn, "Cleaned_File", key="download_cleaned")
 
 def render_bengali_supply_content():
     lang = st.session_state.lang

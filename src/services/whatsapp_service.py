@@ -15,7 +15,8 @@ from selenium.webdriver.common.keys import Keys
 
 class WhatsAppService:
     def __init__(self, session_id="wa_pasha_stable"):
-        self.session_path = os.path.join(tempfile.gettempdir(), session_id)
+        # Stable project-relative session for persistence (Better for WhatsApp trust)
+        self.session_path = os.path.abspath(".wa_session_data")
         self.driver = None
         self.last_error = ""
 
@@ -52,12 +53,23 @@ class WhatsAppService:
         opts.add_argument("--window-size=1920,1080")
         opts.add_argument(f"--user-data-dir={self.session_path}")
         
-        # Modern User Agent (Rotated for 2026 Stealth)
-        ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36"
+        # 2026 Advanced Stealth User Agents
+        USER_AGENTS = [
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
+            "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36 Edg/122.0.0.0",
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:124.0) Gecko/20100101 Firefox/124.0"
+        ]
+        ua = random.choice(USER_AGENTS)
         opts.add_argument(f"user-agent={ua}")
         
-        # Bypassing Detection
+        # Bypassing Detection & Stealth flags
         opts.add_argument("--disable-blink-features=AutomationControlled")
+        opts.add_argument("--disable-infobars")
+        opts.add_argument("--excludeSwitches", ["enable-automation"])
+        opts.add_argument("--use-fake-ui-for-media-stream")
+        opts.add_argument("--disable-notifications")
         
         # Find Chrome binary (Windows & Linux)
         binary = None
@@ -217,22 +229,30 @@ class WhatsAppService:
                     time.sleep(random.uniform(1.0, 2.5))
                     actions = ActionChains(self.driver)
                     actions.move_to_element(caption_input).click().perform()
-                    # Speed typing simulation
+                    
+                    # Human-like typing with variable speed and occasional "mistakes" (simulated by pauses)
                     for char in message:
                         caption_input.send_keys(char)
-                        if random.random() > 0.8: time.sleep(random.uniform(0.01, 0.05))
-                    time.sleep(0.5)
+                        # More natural typing rhythm
+                        if random.random() > 0.85:
+                            time.sleep(random.uniform(0.02, 0.15))
+                        elif random.random() > 0.98:
+                            time.sleep(random.uniform(0.5, 1.2)) # Thinking pause
+                    time.sleep(random.uniform(0.8, 1.5))
                 
                 caption_input.send_keys(Keys.ENTER)
             else:
                 # Simple text message
                 if message:
-                    # Slow typing simulation for humans
+                    # Slow/Natural typing simulation
                     for char in message:
                         msg_input.send_keys(char)
-                        if random.random() > 0.9: time.sleep(random.uniform(0.01, 0.04))
+                        if random.random() > 0.90:
+                            time.sleep(random.uniform(0.01, 0.12))
+                        elif random.random() > 0.99:
+                            time.sleep(random.uniform(0.4, 0.9))
                     
-                    time.sleep(random.uniform(0.5, 1.5))
+                    time.sleep(random.uniform(1.2, 2.5))
                     msg_input.send_keys(Keys.ENTER)
             
             time.sleep(random.uniform(2.0, 4.0)) # Wait for send

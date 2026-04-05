@@ -15,4 +15,6 @@ openpyxl
 easyocr
 opencv-python-headless
 pytesseract
+undetected-chromedriver
 streamlit-cropper
+numpy

@@ -604,13 +604,13 @@ Abu Fahd"""
                         current_msg_body = st.session_state.wa_messages[st.session_state.wa_msg_index]
                         final_msg = current_msg_body
                         
-                        # Check for CV placeholder variations
+                        # PRE-CALCULATE placeholders for the entire batch to avoid repeated loops
                         cv_placeholders = ["{CV}", "{cv}", "{السيرة}"]
-                        if 'wa_review_targets' in st.session_state and st.session_state.wa_review_targets:
-                            first_trg = st.session_state.wa_review_targets[0]
+                        if st.session_state.get('wa_active_targets'):
+                            first_trg = st.session_state.wa_active_targets[0]
                             for k in first_trg.keys():
-                                if any(x in k.lower() for x in ["سيرة", "cv", "resume", "link"]):
-                                    cv_placeholders.append("{" + k + "}")
+                                if any(x in str(k).lower() for x in ["سيرة", "cv", "resume", "link"]):
+                                    cv_placeholders.append("{" + str(k) + "}")
                         
                         # If CV is empty, remove lines containing CV placeholders
                         if not v or v.lower() == 'nan':
@@ -655,6 +655,9 @@ Abu Fahd"""
                             # Move to next message if available, otherwise stay on the last one
                             if st.session_state.wa_msg_index < len(st.session_state.wa_messages) - 1:
                                 st.session_state.wa_msg_index += 1
+                        
+                        # Anti-ban: Secondary random micro-rest
+                        time.sleep(random.uniform(1.0, 3.0))
 
                     st.session_state.wa_idx += 1
                     
