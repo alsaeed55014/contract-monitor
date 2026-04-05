@@ -8,12 +8,10 @@ Pillow
 deep-translator
 pdfplumber
 requests
-python-docx>=0.8.11
+python-docx
 selenium
-webdriver-manager
 undetected-chromedriver
 openpyxl
-easyocr
 opencv-python-headless
 pytesseract
 streamlit-cropper
