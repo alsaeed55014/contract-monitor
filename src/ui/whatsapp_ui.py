@@ -579,22 +579,28 @@ Abu Fahd"""
                             return f"{m} دقيقة و {s} ثانية" if is_ar else f"{m}m {s}s"
                         return f"{s} ثانية" if is_ar else f"{s}s"
 
-                    wait_ph = st.empty()
                     is_batch_pause = batch_size > 0 and st.session_state.wa_idx % batch_size == 0
                     
                     # 2026 Advanced Anti-Pattern: Jittered Delay (Randomized intervals)
                     if is_batch_pause:
                         current_delay = int(random.uniform(batch_delay * 0.9, batch_delay * 1.3))
+                        prefix = "🛡️ " + ("استراحة تمويهية عشوائية" if is_ar else "Randomized Anti-Ban Pause")
                     else:
-                        # Allow 15% variance from the base delay to look human
+                        # Allow variance from the base delay to look human
                         current_delay = int(random.uniform(delay * 0.85, delay * 1.5))
+                        prefix = "🛡️ " + ("مهلة عشوائية" if is_ar else "Randomized Delay")
                         
                     delay_lbl = lbl['pausing'] if is_batch_pause else lbl['next_msg_in']
                     
                     wait_ph = st.empty()
                     for i in range(current_delay, 0, -1):
                         if not st.session_state.wa_running: break
-                        wait_ph.warning(delay_lbl.format(format_time(i))) if is_batch_pause else wait_ph.info(delay_lbl.format(format_time(i)))
+                        # Displaying the current countdown + total randomized time to show it's working
+                        status_text = f"{prefix}: {format_time(i)} / {format_time(current_delay)}"
+                        if is_batch_pause:
+                            wait_ph.warning(status_text)
+                        else:
+                            wait_ph.info(status_text)
                         time.sleep(1)
                     wait_ph.empty()
 
