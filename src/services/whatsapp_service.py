@@ -66,11 +66,13 @@ class WhatsAppService:
             o.add_argument("--disable-blink-features=AutomationControlled")
             o.add_argument("--use-fake-ui-for-media-stream")
             o.add_argument("--disable-notifications")
-            o.add_argument("--remote-debugging-port=9222")
-            # Extra flags for WhatsApp
+            o.add_argument("--remote-debugging-port=0") # Port 0 lets system choose or avoids detection of fixed port
             o.add_argument("--disable-extensions")
             o.add_argument("--profile-directory=Default")
-            o.add_argument("--incognito") # Sometimes helps skip "update" by having clean state
+            # Removed --incognito to allow session persistence and trust
+            o.add_argument("--disable-infobars")
+            o.add_argument("--allow-running-insecure-content")
+            o.add_argument("--ignore-certificate-errors")
 
         # Find Chrome binary (Windows & Linux)
         binary = None
@@ -246,6 +248,8 @@ class WhatsAppService:
                             time.sleep(random.uniform(0.5, 1.2)) # Thinking pause
                     time.sleep(random.uniform(0.8, 1.5))
                 
+                # Natural pause before ENTER
+                time.sleep(random.uniform(0.5, 1.2))
                 caption_input.send_keys(Keys.ENTER)
             else:
                 # Simple text message
@@ -259,6 +263,8 @@ class WhatsAppService:
                             time.sleep(random.uniform(0.4, 0.9))
                     
                     time.sleep(random.uniform(1.2, 2.5))
+                    # Natural pause before ENTER
+                    time.sleep(random.uniform(0.5, 1.2))
                     msg_input.send_keys(Keys.ENTER)
             
             time.sleep(random.uniform(2.0, 4.0)) # Wait for send
