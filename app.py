@@ -3220,7 +3220,7 @@ def render_dashboard_content():
         
         event = st.dataframe(
             styled_final, 
-            use_container_width=True, 
+            use_container_width=False, 
             column_config=__apply_pinned_columns(styled_final, final_cfg),
             on_select="rerun",
             selection_mode="single-row",
@@ -3592,7 +3592,7 @@ def render_search_content():
             df_height = min((len(res_display) + 1) * 35 + 40, 600)
             event = st.dataframe(
                 style_df(res_display), 
-                use_container_width=True,
+                use_container_width=False,
                 on_select="rerun",
                 selection_mode="single-row",
                 hide_index=True,
@@ -4931,7 +4931,7 @@ def render_order_processing_content():
                         df_city_height = min((len(city_df) + 1) * 35 + 40, 500)
                         event_city = st.dataframe(
                             city_styled,
-                            use_container_width=True, hide_index=True, on_select="rerun",
+                            use_container_width=False, hide_index=True, on_select="rerun",
                             selection_mode="single-row", column_config=__apply_pinned_columns(city_styled, col_cfg_city),
                             key=f"op_city_table_{idx}", height=df_city_height
                         )
