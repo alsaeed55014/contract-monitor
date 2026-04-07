@@ -120,10 +120,8 @@ def render_table_translator(df, key_prefix="table"):
         return df
 
     target_keywords = [
-        "الوظيفة المطلوبة", "Requested Job", "Job Requested", "Which job are you looking for",
-        "مهارات أخرى", "Other Skills", "What other jobs can you do",
-        "المهنة في الإقامة", "Iqama Profession", "What is the occupation listed on your Iqama",
-        "Iqama Job", "occupation listed on your Iqama"
+        "وظيفة", "الوظيفة", "مهنة", "المهنة", "مهارة", "مهارات", "خبرة", "الخبرة",
+        "job", "profession", "skill", "experience", "occupation"
     ]
     cols_to_translate = [c for c in df.columns if any(kw.lower() in str(c).lower() for kw in target_keywords)]
 
@@ -136,30 +134,29 @@ def render_table_translator(df, key_prefix="table"):
     st.markdown('<div class="table-translator-container">', unsafe_allow_html=True)
     ct1, ct2 = st.columns(2)
     
+    t_state_key = f"table_trans_{key_prefix}"
+    
     with ct1:
         st.markdown('<div class="table-translator-btn">', unsafe_allow_html=True)
         if st.button("🇸🇦 الترجمة للعربية", key=f"btn_ar_{key_prefix}", use_container_width=True):
-            with st.spinner("جارِ الترجمة للعربية..."):
-                for col in cols_to_translate:
-                    unique_vals = [v for v in df[col].unique() if v and isinstance(v, str)]
-                    if unique_vals:
-                        translations = {val: tm.translate_full_text(val, target_lang='ar') for val in unique_vals}
-                        df[col] = df[col].map(translations).fillna(df[col])
-                st.success("✅ تم")
+            st.session_state[t_state_key] = "ar"
         st.markdown('</div>', unsafe_allow_html=True)
 
     with ct2:
         st.markdown('<div class="table-translator-btn">', unsafe_allow_html=True)
-        if st.button("🇵🇭 Isalin sa Tagalog", key=f"btn_tl_{key_prefix}", use_container_width=True):
-            with st.spinner("Isinasalin sa Tagalog..."):
-                for col in cols_to_translate:
-                    unique_vals = [v for v in df[col].unique() if v and isinstance(v, str)]
-                    if unique_vals:
-                        translations = {val: tm.translate_full_text(val, target_lang='tl') for val in unique_vals}
-                        df[col] = df[col].map(translations).fillna(df[col])
-                st.success("✅ Tapos na")
+        if st.button("🇵🇭 ISALIN SA TAGALOG", key=f"btn_tl_{key_prefix}", use_container_width=True):
+            st.session_state[t_state_key] = "tl"
         st.markdown('</div>', unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)
+    
+    target_lang = st.session_state.get(t_state_key)
+    if target_lang in ['ar', 'tl']:
+        with st.spinner("جارِ الترجمة..." if target_lang == 'ar' else "Isinasalin..."):
+            for col in cols_to_translate:
+                unique_vals = [v for v in df[col].unique() if v and isinstance(v, str)]
+                if unique_vals:
+                    translations = {val: tm.translate_full_text(val, target_lang=target_lang) for val in unique_vals}
+                    df[col] = df[col].map(translations).fillna(df[col])
     
     return df
 

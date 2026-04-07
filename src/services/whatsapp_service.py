@@ -51,28 +51,26 @@ class WhatsAppService:
         ]
         ua = random.choice(USER_AGENTS)
         
-        def apply_stealth_args(o):
+        def apply_stealth_args(o, is_uc=False):
             if headless:
-                # Use --headless=new for modern chrome/chromium versions
                 o.add_argument("--headless=new")
                 o.add_argument("--disable-gpu")
             
             o.add_argument("--no-sandbox")
             o.add_argument("--disable-dev-shm-usage")
-            o.add_argument("--window-size=1920,1080")
             o.add_argument(f"--user-data-dir={self.session_path}")
             o.add_argument(f"--user-agent={ua}")
             o.add_argument("--lang=en-US,en;q=0.9")
             o.add_argument("--disable-blink-features=AutomationControlled")
             o.add_argument("--use-fake-ui-for-media-stream")
             o.add_argument("--disable-notifications")
-            o.add_argument("--remote-debugging-port=0") # Port 0 lets system choose or avoids detection of fixed port
+            o.add_argument("--remote-debugging-port=0") # Port 0 lets system choose
             o.add_argument("--disable-extensions")
             o.add_argument("--profile-directory=Default")
-            # Removed --incognito to allow session persistence and trust
             o.add_argument("--disable-infobars")
             o.add_argument("--allow-running-insecure-content")
             o.add_argument("--ignore-certificate-errors")
+            o.add_argument("--disable-crash-reporter") # Helps prevent hanging processes when crashe
 
         # Find Chrome binary (Windows & Linux)
         binary = None
@@ -97,37 +95,58 @@ class WhatsAppService:
                     binary = b
                     break
         
-        try:
-            import undetected_chromedriver as uc
-            opts = uc.ChromeOptions()
-            apply_stealth_args(opts)
-            
-            self.driver = uc.Chrome(
-                options=opts, 
-                browser_executable_path=binary,
-                headless=headless # Pass headless explicitly to UC if needed
-            )
-            self.driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
-            self.driver.get("https://web.whatsapp.com")
-            return True, "Ready (Powered by UC Stealth)"
-        except Exception as e:
-            self.last_error = f"UC Error: {str(e)[:100]}"
-            # Fallback to standard if UC fails (Very common in Streamlit Cloud)
+        # --- Retry Logic: try to launch, if it crashes, nuke user dir and try again ---
+        attempts = 2
+        for attempt in range(attempts):
             try:
-                from selenium import webdriver
-                from selenium.webdriver.chrome.options import Options as StdOptions
-                from selenium.webdriver.chrome.service import Service as StdService
-                std_opts = StdOptions()
-                apply_stealth_args(std_opts)
+                import undetected_chromedriver as uc
+                opts = uc.ChromeOptions()
+                apply_stealth_args(opts, is_uc=True)
                 
-                # Standard fallback usually needs Service for the driver path
-                self.driver = webdriver.Chrome(options=std_opts)
+                self.driver = uc.Chrome(
+                    options=opts, 
+                    browser_executable_path=binary,
+                    headless=False, # We use --headless=new in opts, so we MUST tell UC false to avoid its broken legacy headless flag
+                    version_main=None # Let it figure it out
+                )
                 self.driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
                 self.driver.get("https://web.whatsapp.com")
-                return True, "Ready (Safe Fallback Mode)"
-            except Exception as e2:
-                self.last_error += f" | Standard Error: {str(e2)[:60]}"
-                return False, self.last_error
+                self.driver.set_window_size(1920, 1080)
+                return True, "Ready (Powered by UC Stealth)"
+            except Exception as e:
+                err_msg = str(e).lower()
+                self.last_error = f"UC Error: {str(e)[:100]}"
+                
+                # If it's a crash or session not created, forcefully clean dir before next attempt
+                if attempt == 0 and ("crashed" in err_msg or "session not created" in err_msg):
+                    try:
+                        if os.name == 'nt':
+                            os.system('taskkill /F /IM chromedriver.exe /T >nul 2>&1')
+                            os.system('taskkill /F /IM chrome.exe /FI "WINDOWTITLE eq chrome*" >nul 2>&1') # Kill only headless/invisible chrome
+                        shutil.rmtree(self.session_path, ignore_errors=True)
+                        time.sleep(1)
+                        # Switch to a slightly modified path to bypass OS-level locks from unkillable processes
+                        self.session_path = self.session_path + "_retry"
+                        os.makedirs(self.session_path, exist_ok=True)
+                    except: pass
+                    continue # Retry
+                
+                # Final Fallback to standard if UC completely fails
+                try:
+                    from selenium import webdriver
+                    from selenium.webdriver.chrome.options import Options as StdOptions
+                    std_opts = StdOptions()
+                    apply_stealth_args(std_opts, is_uc=False)
+                    
+                    self.driver = webdriver.Chrome(options=std_opts)
+                    self.driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
+                    self.driver.get("https://web.whatsapp.com")
+                    self.driver.set_window_size(1920, 1080)
+                    return True, "Ready (Safe Fallback Mode)"
+                except Exception as e2:
+                    self.last_error += f" | Standard Error: {str(e2)[:60]}"
+                    if attempt == attempts - 1:
+                        return False, self.last_error
 
 
     def get_status(self):
@@ -185,6 +204,15 @@ class WhatsAppService:
         try: return self.driver.get_screenshot_as_base64()
         except: return None
 
+    def _type_human_like(self, element, text):
+        """يحاكي الطباعة البشرية مع فواصل زمنية عشوائية لتجنب الحظر"""
+        for char in text:
+            element.send_keys(char)
+            if random.random() > 0.85:
+                time.sleep(random.uniform(0.02, 0.15))
+            elif random.random() > 0.98:
+                time.sleep(random.uniform(0.5, 1.2))
+
 
     def send_message(self, phone, message, attachment_path=None):
         if not self.driver: return False, "Engine Offline"
@@ -238,14 +266,8 @@ class WhatsAppService:
                     actions = ActionChains(self.driver)
                     actions.move_to_element(caption_input).click().perform()
                     
-                    # Human-like typing with variable speed and occasional "mistakes" (simulated by pauses)
-                    for char in message:
-                        caption_input.send_keys(char)
-                        # More natural typing rhythm
-                        if random.random() > 0.85:
-                            time.sleep(random.uniform(0.02, 0.15))
-                        elif random.random() > 0.98:
-                            time.sleep(random.uniform(0.5, 1.2)) # Thinking pause
+                    # استخدام دالة الكتابة البشرية لتجنب تكرار الكود
+                    self._type_human_like(caption_input, message)
                     time.sleep(random.uniform(0.8, 1.5))
                 
                 # Natural pause before ENTER
@@ -254,13 +276,8 @@ class WhatsAppService:
             else:
                 # Simple text message
                 if message:
-                    # Slow/Natural typing simulation
-                    for char in message:
-                        msg_input.send_keys(char)
-                        if random.random() > 0.90:
-                            time.sleep(random.uniform(0.01, 0.12))
-                        elif random.random() > 0.99:
-                            time.sleep(random.uniform(0.4, 0.9))
+                    # استخدام دالة الكتابة البشرية لتجنب تكرار الكود
+                    self._type_human_like(msg_input, message)
                     
                     time.sleep(random.uniform(1.2, 2.5))
                     # Natural pause before ENTER

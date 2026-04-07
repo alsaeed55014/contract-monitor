@@ -1137,6 +1137,15 @@ def get_css(lang='ar'):
                 box-shadow: 0 0 15px rgba(255, 0, 0, 0.4) !important;
             }}
 
+            /* === MOBILE NEON WHITE TEXT === */
+            /* Advanced Filtering Checkboxes */
+            div[data-testid="stExpander"] div[data-testid="stCheckbox"] label p,
+            .mobile-neon-text {{
+                color: #FFFFFF !important;
+                text-shadow: 0 0 8px #ffffff, 0 0 15px #ffffff, 0 0 25px #ffffff !important;
+                font-weight: bold !important;
+            }}
+
             /* Login Input Fields Mobile Overrides (Black text on Light background) */
             div[data-testid="stForm"] div[data-baseweb="input"] {{
                 background: rgba(255, 255, 255, 0.95) !important;
@@ -1340,13 +1349,10 @@ def render_table_translator(df, key_prefix="table"):
         return df
 
     # Search for target columns (Arabic, Original Sheet names, and English translations)
+    # Search for target columns using broad keywords to ensure match in any language UI
     target_keywords = [
-        "الوظيفة المطلوبة", "Requested Job", "Job Requested", "Which job are you looking for",
-        "مهارات أخرى", "Other Skills", "What other jobs can you do",
-        "المهنة في الإقامة", "Iqama Profession", "What is the occupation listed on your Iqama",
-        "Iqama Job", "occupation listed on your Iqama",
-        "الخبرة في هذا المجال", "Experience in this field",
-        "الخبرة (أخرى)", "Experience (Other)"
+        "وظيفة", "الوظيفة", "مهنة", "المهنة", "مهارة", "مهارات", "خبرة", "الخبرة",
+        "job", "profession", "skill", "experience", "occupation"
     ]
     cols_to_translate = [c for c in df.columns if any(kw.lower() in str(c).lower() for kw in target_keywords)]
 
@@ -1359,30 +1365,30 @@ def render_table_translator(df, key_prefix="table"):
     st.markdown('<div class="table-translator-container">', unsafe_allow_html=True)
     ct1, ct2 = st.columns(2)
     
+    t_state_key = f"table_trans_{key_prefix}"
+    
     with ct1:
         st.markdown('<div class="table-translator-btn">', unsafe_allow_html=True)
         if st.button("🇸🇦 الترجمة للعربية", key=f"btn_ar_{key_prefix}", use_container_width=True):
-            with st.spinner("جارِ الترجمة للعربية..."):
-                for col in cols_to_translate:
-                    unique_vals = [v for v in df[col].unique() if v and isinstance(v, str)]
-                    if unique_vals:
-                        translations = {val: tm.translate_full_text(val, target_lang='ar') for val in unique_vals}
-                        df[col] = df[col].map(translations).fillna(df[col])
-                st.success("✅ تم")
+            st.session_state[t_state_key] = "ar"
         st.markdown('</div>', unsafe_allow_html=True)
 
     with ct2:
         st.markdown('<div class="table-translator-btn">', unsafe_allow_html=True)
-        if st.button("🇵🇭 Isalin sa Tagalog", key=f"btn_tl_{key_prefix}", use_container_width=True):
-            with st.spinner("Isinasalin sa Tagalog..."):
-                for col in cols_to_translate:
-                    unique_vals = [v for v in df[col].unique() if v and isinstance(v, str)]
-                    if unique_vals:
-                        translations = {val: tm.translate_full_text(val, target_lang='tl') for val in unique_vals}
-                        df[col] = df[col].map(translations).fillna(df[col])
-                st.success("✅ Tapos na")
+        if st.button("🇵🇭 ISALIN SA TAGALOG", key=f"btn_tl_{key_prefix}", use_container_width=True):
+            st.session_state[t_state_key] = "tl"
         st.markdown('</div>', unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)
+    
+    target_lang = st.session_state.get(t_state_key)
+    if target_lang in ['ar', 'tl']:
+        # Only show spinner if it's the very first time translating in this session to avoid flicker
+        with st.spinner("جارِ الترجمة..." if target_lang == 'ar' else "Isinasalin..."):
+            for col in cols_to_translate:
+                unique_vals = [v for v in df[col].unique() if v and isinstance(v, str)]
+                if unique_vals:
+                    translations = {val: tm.translate_full_text(val, target_lang=target_lang) for val in unique_vals}
+                    df[col] = df[col].map(translations).fillna(df[col])
     
     return df
 
@@ -4148,7 +4154,7 @@ def render_order_processing_content():
 
     # --- NEW: Advanced Filtering Panel (Matching Image) ---
     ai_title = "(AI) البحث الذكي" if lang == 'ar' else "Smart Search (AI)"
-    st.markdown(f'<div style="color: #D4AF37; font-weight: 600; margin-bottom: 5px; font-family: \'Cairo\', sans-serif;">{ai_title}</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="mobile-neon-text" style="color: #D4AF37; font-weight: 600; margin-bottom: 5px; font-family: \'Cairo\', sans-serif;">{ai_title}</div>', unsafe_allow_html=True)
     
     with st.expander("🔍 " + ("تصفية متقدمة" if lang == 'ar' else "Advanced Filtering"), expanded=False):
         # 1. Row: Scheduling & Dates
@@ -4757,30 +4763,15 @@ def render_order_processing_content():
         with st.container():
             # Header with White Neon Glow Frame integrated
             user_role = st.session_state.user.get("role")
-            display_title = f"🏢 {company_val}" if user_role != "viewer" else "🏢 " + ("طلب عميل" if lang == 'ar' else f"Customer Request")
+            display_title = f"🏢 {company_val}" if user_role != "viewer" else '<span class="mobile-neon-text">🏢 ' + ("طلبات العملاء" if lang == "ar" else "Customer Requests") + '</span>'
             
-            # Start Neon Frame and Header
+            # Start Neon Frame and Header (Static CSS to avoid mobile lag)
             st.markdown(f"""
-<style>
-@keyframes neonWhitePulseCard {{
-    0% {{ box-shadow: 0 0 10px rgba(255, 255, 255, 0.3), 0 0 20px rgba(255, 255, 255, 0.1); }}
-    100% {{ box-shadow: 0 0 20px rgba(255, 255, 255, 0.6), 0 0 40px rgba(255, 255, 255, 0.3); }}
-}}
-.neon-wrapper-card {{
-    border: 1.5px solid rgba(255, 255, 255, 0.6);
-    border-radius: 18px;
-    padding: 15px;
-    margin: 15px 0;
-    background: rgba(10, 14, 26, 0.6);
-    animation: neonWhitePulseCard 3s ease-in-out infinite alternate;
-    direction: rtl;
-}}
-</style>
-<div class="neon-wrapper-card">
+<div style="border: 1.5px solid rgba(255, 255, 255, 0.4); border-radius: 18px; padding: 15px; margin: 15px 0; background: rgba(10, 14, 26, 0.6); box-shadow: 0 0 10px rgba(255, 255, 255, 0.2); direction: rtl;">
     <div style="background: linear-gradient(90deg, rgba(255,255,255,0.1), transparent); 
                 padding: 12px 20px; border-radius: 12px; border-right: 5px solid #FFFFFF; margin: 0 0 15px 0;
-                box-shadow: 0 0 15px rgba(255,255,255,0.2);">
-        <h3 style="color: #FFFFFF; margin: 0; font-family: 'Tajawal', sans-serif; text-shadow: 0 0 10px rgba(255,255,255,0.5);">
+                box-shadow: 0 0 12px rgba(255,255,255,0.2);">
+        <h3 style="color: #FFFFFF; margin: 0; font-family: 'Tajawal', sans-serif; text-shadow: 0 0 8px rgba(255,255,255,0.5);">
             {display_title} <span style="font-size: 0.8rem; color: #888;">#{idx+1}</span>
         </h3>
     </div>

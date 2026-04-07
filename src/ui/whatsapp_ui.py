@@ -293,7 +293,7 @@ def render_whatsapp_page():
                     })
                     seen_in_current_file.add(n)
             # Excel
-            elif st.session_state.wa_data is not None:
+            if st.session_state.wa_data is not None:
                 df_curr = st.session_state.wa_data
                 def find_c(keys):
                     for c in df_curr.columns:
