@@ -1015,14 +1015,18 @@ def get_css(lang='ar'):
                 stroke-width: 0.5px;
             }}
 
-            /* Pulse animation for Neon Red effect */
+            /* Pulse animation for Neon White effect */
+            button[aria-label*="sidebar"],
+            button[data-testid="stSidebarCollapseButton"],
             button[data-testid="stSidebarCollapse"] {{
-                animation: neon-red-pulse 2s infinite alternate;
+                animation: neon-white-pulse 2s infinite alternate !important;
+                background: rgba(255, 255, 255, 0.1) !important;
+                border: 1px solid #FFFFFF !important;
             }}
 
-            @keyframes neon-red-pulse {{
-                0% {{ box-shadow: 0 0 10px #FF0000, 0 0 20px rgba(255, 0, 0, 0.4); }}
-                100% {{ box-shadow: 0 0 20px #FF0000, 0 0 40px rgba(255, 0, 0, 0.8); }}
+            @keyframes neon-white-pulse {{
+                0% {{ box-shadow: 0 0 8px #FFFFFF, 0 0 15px rgba(255, 255, 255, 0.3); }}
+                100% {{ box-shadow: 0 0 15px #FFFFFF, 0 0 30px rgba(255, 255, 255, 0.6); }}
             }}
 
             /* 14) Log Message Cards */
@@ -4158,7 +4162,7 @@ def render_order_processing_content():
     
     with st.expander("🔍 " + ("تصفية متقدمة" if lang == 'ar' else "Advanced Filtering"), expanded=False):
         # 1. Row: Scheduling & Dates
-        st.markdown(f'<div style="color: #888; margin-bottom: 10px;">{"📅 جدولة وتواريخ" if lang == 'ar' else "📅 Scheduling & Dates"}</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="mobile-neon-text" style="color: #888; margin-bottom: 10px;">{"📅 جدولة وتواريخ" if lang == "ar" else "📅 Scheduling & Dates"}</div>', unsafe_allow_html=True)
         rc1, rc2, rc3 = st.columns(3)
         with rc3: # Rightmost (Arabic)
             age_enabled = st.checkbox("تفعيل العمر" if lang == 'ar' else "Enable Age", key="op_age_en")
@@ -4183,14 +4187,14 @@ def render_order_processing_content():
                 d_end = st.date_input("إلى", value=datetime.today(), key="op_date_end")
 
         # 2. Row: Advanced Smart Filtering
-        st.markdown(f'<div style="color: #888; margin-top: 15px; margin-bottom: 10px;">{"⚙️ تصفية ذكية متقدمة" if lang == 'ar' else "⚙️ Advanced Smart Filtering"}</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="mobile-neon-text" style="color: #888; margin-top: 15px; margin-bottom: 10px;">{"⚙️ تصفية ذكية متقدمة" if lang == "ar" else "⚙️ Advanced Smart Filtering"}</div>', unsafe_allow_html=True)
         sc1, sc2, sc3 = st.columns(3)
         with sc3:
             expired_only = st.checkbox("العقود المنتهية" if lang == 'ar' else "Expired Contracts", key="op_expired")
         with sc2:
             not_working_only = st.checkbox("No (هل يعمل حالياً؟)" if lang == 'ar' else "No (Working Now?)", key="op_not_working")
         with sc1:
-            st.markdown(f'<div style="font-size: 0.8rem; color: #888;">{"عدد نقل الكفالة" if lang == 'ar' else "Transfer Count"}</div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="mobile-neon-text" style="font-size: 0.8rem; color: #888;">{"عدد نقل الكفالة" if lang == "ar" else "Transfer Count"}</div>', unsafe_allow_html=True)
             trans_count = st.selectbox("", ["— الكل —", "1", "2", "3", "4+"], key="op_transfer", label_visibility="collapsed")
 
         # 3. Row: Status Flags
