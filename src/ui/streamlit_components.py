@@ -119,9 +119,12 @@ def render_table_translator(df, key_prefix="table"):
     if df is None or df.empty:
         return df
 
+    # Expanded Keywords to catch all relevant columns in any language
     target_keywords = [
         "وظيفة", "الوظيفة", "مهنة", "المهنة", "مهارة", "مهارات", "خبرة", "الخبرة",
-        "job", "profession", "skill", "experience", "occupation"
+        "جنسية", "الجنسية", "جنس", "الجنس", "حالة", "الحالة",
+        "job", "profession", "skill", "experience", "occupation",
+        "nationality", "gender", "status", "requested"
     ]
     cols_to_translate = [c for c in df.columns if any(kw.lower() in str(c).lower() for kw in target_keywords)]
 
@@ -151,12 +154,19 @@ def render_table_translator(df, key_prefix="table"):
     
     target_lang = st.session_state.get(t_state_key)
     if target_lang in ['ar', 'tl']:
-        with st.spinner("جارِ الترجمة..." if target_lang == 'ar' else "Isinasalin..."):
+        spinner_msg = "جارِ الترجمة..." if target_lang == 'ar' else "Isinasalin sa Tagalog..."
+        with st.spinner(spinner_msg):
             for col in cols_to_translate:
-                unique_vals = [v for v in df[col].unique() if v and isinstance(v, str)]
+                unique_vals = [v for v in df[col].unique() if v and isinstance(v, str) and len(str(v).strip()) > 0]
                 if unique_vals:
                     translations = {val: tm.translate_full_text(val, target_lang=target_lang) for val in unique_vals}
                     df[col] = df[col].map(translations).fillna(df[col])
+            
+            # Show toast only upon completion to confirm it worked
+            if 'last_trans_msg' not in st.session_state or st.session_state.last_trans_msg != f"{key_prefix}_{target_lang}":
+                msg = "✅ تمت الترجمة!" if target_lang == 'ar' else "✅ Tapos na ang pagsasalin!"
+                st.toast(msg)
+                st.session_state.last_trans_msg = f"{key_prefix}_{target_lang}"
     
     return df
 
