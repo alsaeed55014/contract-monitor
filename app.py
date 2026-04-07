@@ -2935,13 +2935,18 @@ def dashboard():
 def __apply_pinned_columns(df_or_style, cfg=None):
     if cfg is None: cfg = {}
     import streamlit as st
+    # Priority Keywords for Pinning
     pin_keywords = [
         "حالة العقد", "contract status", "status",
         "وقت", "طابع", "timestamp", "registration",
         "الاسم", "name", 
         "جنسية", "nationality", "🚩", "دولة", "country",
-        "جنس", "gender", "النوع"
+        "جنس", "gender"
     ]
+
+    # Keywords for Width Control
+    wide_keywords = ["job", "وظيفة", "skill", "مهارة", "note", "ملاحظات", "nature", "طبيعة", "details", "تفاصيل", "name", "الاسم"]
+    small_keywords = ["nationality", "جنسية", "جنس", "gender", "status", "حالة", "🚩", "age", "عمر"]
     
     # Handle both DataFrame and Styler
     if hasattr(df_or_style, 'data'):
@@ -2953,26 +2958,25 @@ def __apply_pinned_columns(df_or_style, cfg=None):
         
     for col in cols:
         col_str = str(col).lower()
+        
+        # Determine Width
+        is_wide = any(kw.lower() in col_str for kw in wide_keywords)
+        is_small = any(kw.lower() in col_str for kw in small_keywords)
+        target_width = "large" if is_wide else ("small" if is_small else "medium")
+        
+        # Determine Pinning
         should_pin = any(kw.lower() in col_str for kw in pin_keywords)
-        if should_pin:
-            if col not in cfg:
-                cfg[col] = st.column_config.Column(pinned=True)
-            else:
-                # Robust pinning update for any column config object
-                try:
-                    existing = cfg[col]
-                    if hasattr(existing, 'pinned'):
-                        # Streamlit column config objects are immutable in some versions
-                        # Try to set it, or just use it as is if it's already pinned
-                        pass 
-                    # The safest way is to ensure the config has pinned=True if it's a dict
-                    if isinstance(existing, dict):
-                        existing["pinned"] = True
-                    # If it's a Streamlit object, we hope it was created with pinned=True 
-                    # or we try to wrap it if possible. But better to just call this 
-                    # before creating complex configs if possible.
-                except:
-                    pass
+        
+        if col not in cfg:
+            # Create new column config with natural width fit
+            cfg[col] = st.column_config.Column(pinned=should_pin, width=target_width)
+        else:
+            # For existing config, only try to pin if needed
+            if isinstance(cfg[col], dict):
+                cfg[col]["pinned"] = should_pin
+                if "width" not in cfg[col]:
+                    cfg[col]["width"] = target_width
+    
     return cfg
 
 def render_dashboard_content():
