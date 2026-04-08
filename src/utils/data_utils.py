@@ -139,10 +139,10 @@ def style_df(df):
 
     def apply_colors(val):
         s_val = str(val).lower()
-        if any(k in s_val for k in ["🚹", "ذكر", "male"]):
-            return "color: #3498db; font-weight: bold;" 
         if any(k in s_val for k in ["🚺", "أنثى", "female"]):
             return "color: #e91e63; font-weight: bold;"
+        if any(k in s_val for k in ["🚹", "ذكر", "male"]):
+            return "color: #3498db; font-weight: bold;" 
         return "color: #4CAF50;"
 
     return styled_df.style.map(apply_colors, subset=[c for c in styled_df.columns if not str(c).startswith("🚩_")])

@@ -4,6 +4,7 @@ import time
 import base64
 from datetime import datetime
 from src.core.i18n import t
+from src.ui.styles import get_base64_image
 
 def show_toast(message, typ="success", duration=5, container=None):
     is_contextual = container is not None
@@ -142,13 +143,19 @@ def render_table_translator(df, key_prefix="table"):
     with ct1:
         st.markdown('<div class="table-translator-btn">', unsafe_allow_html=True)
         if st.button("🇸🇦 الترجمة للعربية", key=f"btn_ar_{key_prefix}", use_container_width=True):
-            st.session_state[t_state_key] = "ar"
+            if st.session_state.get(t_state_key) == "ar":
+                st.session_state[t_state_key] = None
+            else:
+                st.session_state[t_state_key] = "ar"
         st.markdown('</div>', unsafe_allow_html=True)
 
     with ct2:
         st.markdown('<div class="table-translator-btn">', unsafe_allow_html=True)
         if st.button("🇵🇭 ISALIN SA TAGALOG", key=f"btn_tl_{key_prefix}", use_container_width=True):
-            st.session_state[t_state_key] = "tl"
+            if st.session_state.get(t_state_key) == "tl":
+                st.session_state[t_state_key] = None
+            else:
+                st.session_state[t_state_key] = "tl"
         st.markdown('</div>', unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)
     

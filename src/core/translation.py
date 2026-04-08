@@ -439,6 +439,13 @@ class TranslationManager:
         if cache_key in st.session_state.translation_cache:
             return st.session_state.translation_cache[cache_key]
 
+        # Explicit Exceptions (Do not translate to Arabic, keep strictly in English)
+        if target_lang == 'ar':
+            lower_val = str(text).strip().lower()
+            if any(kw in lower_val for kw in ["aamal", "lebar", "labor"]):
+                st.session_state.translation_cache[cache_key] = text
+                return text
+
         try:
             chunks = [text[i:i+4000] for i in range(0, len(text), 4000)]
             translated_text = ""

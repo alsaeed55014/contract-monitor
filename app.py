@@ -1294,10 +1294,10 @@ def style_df(df):
     # 3. Apply Dynamic Styling (Optimized Styler)
     def apply_colors(val):
         s_val = str(val).lower()
-        if '🚹' in s_val or 'ذكر' in s_val or 'male' in s_val:
-            return "color: #3498db; font-weight: bold;" 
         if '🚺' in s_val or 'أنثى' in s_val or 'female' in s_val:
             return "color: #e91e63; font-weight: bold;"
+        if '🚹' in s_val or 'ذكر' in s_val or 'male' in s_val:
+            return "color: #3498db; font-weight: bold;" 
         return "color: #4CAF50;"
 
     return styled_df.style.map(
@@ -1375,13 +1375,19 @@ def render_table_translator(df, key_prefix="table"):
     with ct1:
         st.markdown('<div class="table-translator-btn">', unsafe_allow_html=True)
         if st.button("🇸🇦 الترجمة للعربية", key=f"btn_ar_{key_prefix}", use_container_width=True):
-            st.session_state[t_state_key] = "ar"
+            if st.session_state.get(t_state_key) == "ar":
+                st.session_state[t_state_key] = None
+            else:
+                st.session_state[t_state_key] = "ar"
         st.markdown('</div>', unsafe_allow_html=True)
 
     with ct2:
         st.markdown('<div class="table-translator-btn">', unsafe_allow_html=True)
         if st.button("🇵🇭 ISALIN SA TAGALOG", key=f"btn_tl_{key_prefix}", use_container_width=True):
-            st.session_state[t_state_key] = "tl"
+            if st.session_state.get(t_state_key) == "tl":
+                st.session_state[t_state_key] = None
+            else:
+                st.session_state[t_state_key] = "tl"
         st.markdown('</div>', unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)
     
@@ -2935,6 +2941,8 @@ def dashboard():
 def __apply_pinned_columns(df_or_style, cfg=None):
     if cfg is None: cfg = {}
     import streamlit as st
+    import pandas as pd
+    
     # Priority Keywords for Pinning
     pin_keywords = [
         "حالة العقد", "contract status", "status",
@@ -2943,39 +2951,70 @@ def __apply_pinned_columns(df_or_style, cfg=None):
         "جنسية", "nationality", "🚩", "دولة", "country",
         "جنس", "gender"
     ]
-
-    # Keywords for Width Control
-    wide_keywords = ["job", "وظيفة", "skill", "مهارة", "note", "ملاحظات", "nature", "طبيعة", "details", "تفاصيل", "name", "الاسم"]
-    small_keywords = ["nationality", "جنسية", "جنس", "gender", "status", "حالة", "🚩", "age", "عمر"]
     
     # Handle both DataFrame and Styler
+    df_temp = None
     if hasattr(df_or_style, 'data'):
-        cols = df_or_style.data.columns
+        df_temp = df_or_style.data
+        cols = df_temp.columns
     elif hasattr(df_or_style, 'columns'):
-        cols = df_or_style.columns
+        df_temp = df_or_style
+        cols = df_temp.columns
     else:
         return cfg
         
+    # Helper function to reliably estimate screen pixel width of a string in Streamlit's font
+    def estimate_px(text):
+        px = 0
+        for char in str(text):
+            if '\u0600' <= char <= '\u06FF': px += 8   # Arabic characters are wider
+            elif char.isupper(): px += 8.5            # Capital letters
+            elif char.isdigit(): px += 7.5            # Numbers
+            elif char.islower(): px += 6.5            # Lowercase letters
+            else: px += 5                             # Spaces and punctuation
+        return px
+        
     for col in cols:
-        col_str = str(col).lower()
-        
-        # Determine Width
-        is_wide = any(kw.lower() in col_str for kw in wide_keywords)
-        is_small = any(kw.lower() in col_str for kw in small_keywords)
-        target_width = "large" if is_wide else ("small" if is_small else "medium")
-        
+        col_str = str(col)
         # Determine Pinning
-        should_pin = any(kw.lower() in col_str for kw in pin_keywords)
+        should_pin = any(kw.lower() in col_str.lower() for kw in pin_keywords)
+        
+        # Calculate pixel width of the header
+        header_px = estimate_px(col_str)
+        max_px = header_px
+        
+        if df_temp is not None and col in df_temp.columns:
+            try:
+                # Find maximum pixel width among all items in the column efficiently
+                data_px = df_temp[col].astype(str).apply(estimate_px).max()
+                if pd.notna(data_px):
+                    max_px = max(max_px, data_px + 20) # +20px safety margin for the cell padding
+            except:
+                pass
+                
+        # Force the column to be as wide as the longest string by injecting non-breaking spaces (\xA0)
+        diff_px = max_px - header_px
+        padded_label = col_str
+        
+        if diff_px > 0:
+            # A non-breaking space in Streamlit's font is approx 3 pixels wide
+            pad_amount = int(diff_px / 3) + 8 # +8 extra spaces for margin
+            left_pad = pad_amount // 2
+            right_pad = pad_amount - left_pad
+            padded_label = ("\xA0" * left_pad) + col_str + ("\xA0" * right_pad)
+        else:
+            # Minimal default padding just in case
+            padded_label = ("\xA0" * 4) + col_str + ("\xA0" * 4)
         
         if col not in cfg:
-            # Create new column config with natural width fit
-            cfg[col] = st.column_config.Column(pinned=should_pin, width=target_width)
+            # Create new column config with padded width logic
+            cfg[col] = st.column_config.Column(pinned=should_pin, label=padded_label)
         else:
-            # For existing config, only try to pin if needed
+            # Update dictionary if passed as one
             if isinstance(cfg[col], dict):
                 cfg[col]["pinned"] = should_pin
-                if "width" not in cfg[col]:
-                    cfg[col]["width"] = target_width
+                if "label" not in cfg[col]:
+                    cfg[col]["label"] = padded_label
     
     return cfg
 
@@ -4133,7 +4172,7 @@ def render_permissions_content():
     
     # Stylized DataFrame
     df_users = pd.DataFrame(table_data)
-    st.dataframe(style_df(df_users), use_container_width=True, column_config=__apply_pinned_columns(style_df(df_users)))
+    st.dataframe(style_df(df_users), use_container_width=False, column_config=__apply_pinned_columns(style_df(df_users)))
 
 def render_order_processing_content():
     """Order Processing: Matches Customer Requests with available Workers."""
@@ -4981,7 +5020,7 @@ def render_order_processing_content():
                         df_reg_h = min((len(reg_df) + 1) * 35 + 40, 400)
                         ev_reg = st.dataframe(
                             reg_styled,
-                            use_container_width=True, hide_index=True, on_select="rerun",
+                            use_container_width=False, hide_index=True, on_select="rerun",
                             selection_mode="single-row", column_config=__apply_pinned_columns(reg_styled, col_cfg_reg),
                             key=f"op_reg_table_{idx}", height=df_reg_h
                         )
@@ -5020,7 +5059,7 @@ def render_order_processing_content():
                         df_oth_h = min((len(other_df) + 1) * 35 + 40, 400)
                         ev_oth = st.dataframe(
                             other_styled, 
-                            use_container_width=True, hide_index=True, on_select="rerun",
+                            use_container_width=False, hide_index=True, on_select="rerun",
                             selection_mode="single-row", column_config=__apply_pinned_columns(other_styled, col_cfg_other),
                             key=f"op_other_table_{idx}", height=df_oth_h
                         )
