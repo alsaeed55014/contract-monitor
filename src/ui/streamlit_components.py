@@ -135,44 +135,13 @@ def render_table_translator(df, key_prefix="table"):
     from src.core.translation import TranslationManager
     tm = TranslationManager()
 
-    # --- UPGRADED: Professional Luxury Record Count Header ---
+    # --- ADDED: Record Count Header ---
     count = len(df)
-    lang_curr = st.session_state.get('lang', 'ar')
-    count_label = "إجمالي السجلات" if lang_curr == 'ar' else "Total Records"
-    
-    # Modern Glassmorphism + Gold Gradient Style
+    count_label = "عدد السجلات" if st.session_state.get('lang', 'ar') == 'ar' else "Total Records"
     st.markdown(f"""
-        <div style="
-            display: flex; 
-            justify-content: space-between; 
-            align-items: center; 
-            padding: 12px 25px; 
-            background: linear-gradient(135deg, rgba(26, 26, 26, 0.95) 0%, rgba(0, 0, 0, 0.98) 100%);
-            border-radius: 12px; 
-            border: 1px solid #D4AF37; 
-            margin-bottom: 15px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.5), inset 0 0 15px rgba(212, 175, 55, 0.1);
-            position: relative;
-            overflow: hidden;
-            direction: {'rtl' if lang_curr == 'ar' else 'ltr'};
-        ">
-            <div style="position: absolute; top: -50%; left: -50%; width: 200%; height: 200%; 
-                        background: radial-gradient(circle, rgba(212, 175, 55, 0.05) 0%, transparent 70%); 
-                        pointer-events: none;"></div>
-            
-            <div style="display: flex; align-items: center; gap: 12px; z-index: 1;">
-                <div style="width: 10px; height: 10px; background: #D4AF37; border-radius: 50%; box-shadow: 0 0 10px #D4AF37;"></div>
-                <span style="color: #D4AF37; font-family: 'Cairo', sans-serif; font-weight: 700; font-size: 1rem; letter-spacing: 1px;">
-                    {count_label}
-                </span>
-            </div>
-            
-            <div style="display: flex; align-items: center; gap: 8px; z-index: 1;">
-                <span style="color: #FFF; font-family: 'Cinzel', serif; font-size: 1.6rem; font-weight: 900; 
-                             text-shadow: 0 0 15px rgba(212, 175, 55, 0.5);">
-                    {count}
-                </span>
-                <span style="font-size: 1.2rem;">✨</span>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; padding: 10px; background: rgba(212, 175, 55, 0.1); border-radius: 10px; border: 1px solid rgba(212, 175, 55, 0.2);">
+            <div style="color: #D4AF37; font-weight: bold; font-family: 'Cairo', sans-serif;">
+                ✨ {count_label}: <span style="font-size: 1.2rem; color: #FFF;">{count}</span>
             </div>
         </div>
     """, unsafe_allow_html=True)
