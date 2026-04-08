@@ -1180,29 +1180,83 @@ def get_css(lang='ar'):
             transform: scale(1.05) !important;
             box-shadow: 0 0 25px rgba(255, 255, 255, 0.6) !important;
         }}
+
+        /* 15) Worker Count 3D Badge */
+        .worker-count-container {{
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin: 15px 0;
+            gap: 12px;
+            direction: {direction};
+        }}
+        .worker-count-badge {{
+            background: linear-gradient(145deg, #1a1a1a, #0d0d0d);
+            border: 1px solid rgba(212, 175, 55, 0.3);
+            border-radius: 50px;
+            padding: 8px 18px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            box-shadow: 5px 5px 15px rgba(0,0,0,0.5), 
+                        inset 2px 2px 5px rgba(255,255,255,0.05);
+            transition: all 0.3s ease;
+        }}
+        .worker-count-badge:hover {{
+            border-color: #D4AF37;
+            box-shadow: 0 0 20px rgba(212, 175, 55, 0.3);
+            transform: translateY(-2px);
+        }}
+        .worker-count-circle {{
+            width: 38px;
+            height: 38px;
+            background: linear-gradient(135deg, #FFD700 0%, #D4AF37 100%);
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: #000;
+            font-weight: 800;
+            font-size: 1rem;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.4), 
+                        inset 0 2px 4px rgba(255,255,255,0.4);
+            border: 1px solid #B8860B;
+            text-shadow: 0 1px 1px rgba(255,255,255,0.3);
+        }}
+        .worker-count-label {{
+            color: #D4AF37;
+            font-weight: 700;
+            font-family: 'Cairo', sans-serif;
+            font-size: 0.95rem;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+        }}
     </style>
     """
 
 # --- Icon Mappings ---
 FLAG_MAP = {
     # Arabic
-    "هندي": "in", "هندية": "in", "الهند": "in",
-    "فلبيني": "ph", "فلبينية": "ph", "الفلبين": "ph",
-    "نيبالي": "np", "نيبالية": "np", "نيبال": "np",
-    "بنجلاديشي": "bd", "بنجالية": "bd", "بنجلاديش": "bd", "بنقالي": "bd",
-    "باكستاني": "pk", "باكستانية": "pk", "باكستان": "pk",
-    "مصري": "eg", "مصرية": "eg", "مصر": "eg",
-    "سوداني": "sd", "سودانية": "sd", "السودان": "sd",
-    "سيريلانكي": "lk", "سيريلانكية": "lk", "سيريلانكا": "lk",
-    "كيني": "ke", "كينية": "ke", "كينيا": "ke",
-    "اوغندي": "ug", "اوغندية": "ug", "اوغندا": "ug",
-    "اثيوبي": "et", "اثيوبية": "et", "اثيوبيا": "et",
-    "مغربي": "ma", "مغربية": "ma", "المغرب": "ma",
-    "يمني": "ye", "يمنية": "ye", "اليمن": "ye",
-    "اندونيسي": "id", "اندونيسية": "id", "اندونيسيا": "id", "اندونيسا": "id",
-    "رواندي": "rw", "رواندية": "rw", "رواندا": "rw", "روندا": "rw", "روندي": "rw", "روندية": "rw",
-    "افغاني": "af", "افغانية": "af", "افغانستان": "af", "افغان": "af",
-    "نيجيري": "ng", "نيجيرية": "ng", "نيجيريا": "ng", "نيجريا": "ng", "نيجري": "ng", "نيجرية": "ng",
+    "هندي": "in", "هنديه": "in", "الهند": "in", "هند": "in",
+    "فلبيني": "ph", "فلبينيه": "ph", "الفلبين": "ph", "فلبين": "ph",
+    "نيبالي": "np", "نيباليه": "np", "نيبال": "np",
+    "بنجلاديشي": "bd", "بنجاليه": "bd", "بنجلاديش": "bd", "بنقالي": "bd", "بنغالي": "bd", "بنغاليه": "bd",
+    "باكستاني": "pk", "باكستانيه": "pk", "باكستان": "pk",
+    "مصري": "eg", "مصريه": "eg", "مصر": "eg",
+    "سوداني": "sd", "سودانيه": "sd", "السودان": "sd",
+    "سيريلانكي": "lk", "سيريلانكيه": "lk", "سيريلانكا": "lk", "سيرلانكي": "lk", "سيرلانكيه": "lk",
+    "كيني": "ke", "كينيه": "ke", "كينيا": "ke",
+    "اوغندي": "ug", "اوغنديه": "ug", "اوغندا": "ug",
+    "اثيوبي": "et", "اثيوبيه": "et", "اثيوبيا": "et",
+    "مغربي": "ma", "مغربيه": "ma", "المغرب": "ma",
+    "يمني": "ye", "يمنيه": "ye", "اليمن": "ye",
+    "اندونيسي": "id", "اندونيسيه": "id", "اندونيسيا": "id", "اندونيسا": "id",
+    "رواندي": "rw", "روانديه": "rw", "رواندا": "rw", "روندا": "rw", "روندي": "rw", "رونديه": "rw",
+    "افغاني": "af", "افغانيه": "af", "افغانستان": "af", "افغان": "af",
+    "نيجيري": "ng", "نيجيريه": "ng", "نيجيريا": "ng", "نيجريا": "ng", "نيجري": "ng", "نيجرية": "ng",
+    "غاني": "gh", "غانيه": "gh", "غانا": "gh",
+    "فيتنام": "vn", "فيتنامي": "vn", "فيتناميه": "vn",
+    "سيراليون": "sl",
+    "بوروندي": "bi",
     # English
     "indian": "in", "filipino": "ph", "nepi": "np", "nepali": "np", "nepal": "np",
     "bangla": "bd", "bangladeshi": "bd", "pakistan": "pk", "pakistani": "pk",
@@ -1221,17 +1275,41 @@ GENDER_MAP = {
 @st.cache_data(ttl=600, show_spinner=False)
 def _get_flag_url_cached(val):
     if not val: return None
+    
+    # 1. Basic Cleaning
     s_val = str(val).strip().lower()
-    # Pre-sort keys by length descending for best match (done once at module level)
-    # For now, just use the global FLAG_MAP
+    
+    # 2. Arabic Normalization (Removal of AL and Hamzas)
+    # Remove definite article "ال"
+    if s_val.startswith("ال") and len(s_val) > 4:
+        s_val = s_val[2:]
+        
+    # Standardize Arabic characters
+    s_val = (s_val.replace("أ", "ا")
+                  .replace("إ", "ا")
+                  .replace("آ", "ا")
+                  .replace("ة", "ه")
+                  .replace("ى", "ي"))
+    
+    # 3. Match against FLAG_MAP
     for key, code in FLAG_MAP_SORTED:
-        if len(key) <= 3:
-            pattern = rf'(?:^|[\s,:;.\-/]){re.escape(key)}(?:[\s,:;.\-/]|$)'
+        # Normalize the key too for safety
+        norm_key = (key.replace("أ", "ا")
+                       .replace("إ", "ا")
+                       .replace("آ", "ا")
+                       .replace("ة", "ه")
+                       .replace("ى", "ي"))
+                       
+        if len(norm_key) <= 3:
+            # Short keys (like ISO codes if any) need strict word matching
+            pattern = rf'(?:^|[\s,:;.\-/]){re.escape(norm_key)}(?:[\s,:;.\-/]|$)'
             if re.search(pattern, s_val):
                 return f"https://flagsapi.com/{code.upper()}/flat/64.png"
         else:
-            if key in s_val:
+            # Longer names can be matched as substrings
+            if norm_key in s_val:
                 return f"https://flagsapi.com/{code.upper()}/flat/64.png"
+                
     return None
 
 # Pre-sort FLAG_MAP keys once at startup
@@ -1362,9 +1440,9 @@ def render_table_translator(df, key_prefix="table"):
     # Expanded Keywords to catch all relevant columns in any language
     target_keywords = [
         "وظيفة", "الوظيفة", "مهنة", "المهنة", "مهارة", "مهارات", "خبرة", "الخبرة",
-        "جنسية", "الجنسية", "جنس", "الجنس", "حالة", "الحالة",
+        "جنسية", "الجنسية", "جنس", "الجنس", "حالة", "الحالة", "جاهز", "هروب",
         "job", "profession", "skill", "experience", "occupation",
-        "nationality", "gender", "status", "requested"
+        "nationality", "gender", "status", "requested", "ready", "escape", "abscond"
     ]
     cols_to_translate = [c for c in df.columns if any(kw.lower() in str(c).lower() for kw in target_keywords)]
 
@@ -1373,17 +1451,6 @@ def render_table_translator(df, key_prefix="table"):
 
     from src.core.translation import TranslationManager
     tm = TranslationManager()
-
-    # --- ADDED: Record Count Header ---
-    count = len(df)
-    count_label = "عدد السجلات" if st.session_state.get('lang', 'ar') == 'ar' else "Total Records"
-    st.markdown(f"""
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; padding: 10px; background: rgba(212, 175, 55, 0.1); border-radius: 10px; border: 1px solid rgba(212, 175, 55, 0.2);">
-            <div style="color: #D4AF37; font-weight: bold; font-family: 'Cairo', sans-serif;">
-                ✨ {count_label}: <span style="font-size: 1.2rem; color: #FFF;">{count}</span>
-            </div>
-        </div>
-    """, unsafe_allow_html=True)
 
     st.markdown('<div class="table-translator-container">', unsafe_allow_html=True)
     ct1, ct2 = st.columns(2)
@@ -1408,6 +1475,22 @@ def render_table_translator(df, key_prefix="table"):
                 st.session_state[t_state_key] = "tl"
         st.markdown('</div>', unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)
+
+    # --- Worker Count (Badge) between buttons and table ---
+    count = len(df)
+    count_label = "عدد العمال" if st.session_state.get('lang', 'ar') == 'ar' else "Worker Count"
+    st.markdown(f"""
+        <div class="worker-count-container">
+            <div class="worker-count-badge">
+                <div class="worker-count-circle">
+                    {count}
+                </div>
+                <div class="worker-count-label">
+                    ✨ {count_label}
+                </div>
+            </div>
+        </div>
+    """, unsafe_allow_html=True)
     
     target_lang = st.session_state.get(t_state_key)
     if target_lang in ['ar', 'tl']:
@@ -2153,7 +2236,7 @@ if ('Notification' in window && Notification.permission === 'default') {
         title_text = f'Philippines Recruitment Program {ph_icon} {sa_icon}'
     
     # Absolute Top Main Title
-    st.markdown(f'<div class="luxury-main-title">{title_text}</div>', unsafe_allow_html=True)
+    st.markdown(f'<div id="login-container-wrapper"><div class="luxury-main-title">{title_text}</div>', unsafe_allow_html=True)
     
     def render_login_box(suffix):
         saved = load_saved_credentials()
@@ -2214,6 +2297,7 @@ if ('Notification' in window && Notification.permission === 'default') {
     col1, col2, col3 = st.columns([0.5, 2, 0.5]) 
     with col2:
         render_login_box("main")
+    st.markdown('</div>', unsafe_allow_html=True)
         
 
 @st.fragment(run_every="20s")
@@ -2620,8 +2704,13 @@ def dashboard():
     user = st.session_state.user
     lang = st.session_state.lang
 
-    # --- 1. Silent Notification Check (First thing in Dashboard) ---
-    check_notifications()
+    # --- 1. Emergency Clean-up CSS (Ensure login-specific wrapper is hidden) ---
+    st.markdown("""
+        <style>
+        #login-container-wrapper { display: none !important; opacity: 0 !important; visibility: hidden !important; pointer-events: none !important; }
+        .luxury-main-title { display: none !important; }
+        </style>
+    """, unsafe_allow_html=True)
     
     # --- 2. Welcome Message ---
     if st.session_state.get('show_welcome'):
@@ -2953,8 +3042,8 @@ def dashboard():
     elif page == "bengali_supply": render_bengali_supply_content()
     elif page == "whatsapp_marketing": render_whatsapp_page()
     elif page == "duplicate_remover": render_duplicate_remover_content()
-
-
+    # --- 3. Notification Check (Moved to BOTTOM to prevent hanging on login) ---
+    check_notifications()
 
 def __apply_pinned_columns(df_or_style, cfg=None):
     if cfg is None: cfg = {}
@@ -5619,7 +5708,15 @@ def render_bengali_supply_content():
 
 
 # 11. Main Entry
+# IMMEDIATE UI CLEANUP: Hide login screen elements the millisecond we are authenticated
+if st.session_state.get('user'):
+    st.markdown("<style>#login-container-wrapper { display: none !important; }</style>", unsafe_allow_html=True)
+
+# Using st.empty container to ensure the screen is fully cleared between login and dashboard states
+main_container = st.empty()
 if not st.session_state.user:
-    login_screen()
+    with main_container.container():
+        login_screen()
 else:
-    dashboard()
+    with main_container.container():
+        dashboard()

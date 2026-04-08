@@ -289,9 +289,17 @@ def _normalize(text):
 
 def _find_col(df, keywords):
     """Find a column in df that matches any of the given keywords (fuzzy)."""
+    # Excluded keywords for columns we NEVER want to use for matching/searching
+    EXCLUDED_COLS = ["المهنة في الإقامة", "المهنة في الاقامه", "iqama profession", "occupation listed on your iqama", "listed on your iqama"]
+    
     for col in df.columns:
         col_norm = _normalize(col)
         col_lower = str(col).lower().strip()
+        
+        # New check: Skip excluded columns
+        if any(exc.lower() in col_lower or _normalize(exc) in col_norm for exc in EXCLUDED_COLS):
+            continue
+            
         for kw in keywords:
             kw_norm = _normalize(kw)
             kw_lower = str(kw).lower().strip()

@@ -76,6 +76,56 @@ class SmartSearchEngine:
             if temp_clean and self.is_phone_query(temp_clean):
                 query_clean = temp_clean
 
+        # --- SPECIAL MODE: Iqama Profession Column Specific Search ---
+        iqama_triggers = [
+            "ابحث في المهنة في الإقامة", "ابحث في المهنة في الاقامة", 
+            "search in iqama profession", "المهنة في الإقامة", "المهنة في الاقامة",
+            "الإقامة", "الاقامة", "إقامة", "اقامة"
+        ]
+        
+        # Check if any trigger word exists in the query
+        active_iqama_trigger = next((t for t in iqama_triggers if t in query_clean.lower()), None)
+
+        if active_iqama_trigger and query_clean:
+            # Extract target: remove the trigger phrase
+            pattern = re.compile(re.escape(active_iqama_trigger), re.IGNORECASE)
+            target_val = pattern.sub("", query_clean.lower()).strip()
+            
+            # Remove symbols/connectors from START and END (handles "الاقامة & عامل")
+            target_val = re.sub(r'^[و&/\-\s]+', '', target_val).strip()
+            target_val = re.sub(r'[و&/\-\s]+$', '', target_val).strip()
+
+            self.last_debug['search_type'] = 'iqama_only'
+            self.last_debug['iqama_target'] = target_val
+            
+            # Find the correct column using multiple possible names
+            iqama_keywords = ["المهنة في الإقامة", "المهنة في الاقامه", "iqama profession", "listed on your iqama"]
+            iqama_col = next((c for c in results.columns if any(kw in str(c).lower() for kw in iqama_keywords)), None)
+            
+            if iqama_col:
+                if target_val:
+                    # Deep normalization for Arabic search
+                    def normalize_ar(text):
+                        if not text: return ""
+                        t = str(text).lower()
+                        t = re.sub(r'[أإآا]', 'ا', t)
+                        t = re.sub(r'[ةه]', 'ه', t)
+                        t = re.sub(r'[ىي]', 'ي', t)
+                        return t.strip()
+
+                    target_norm = normalize_ar(target_val)
+                    def iqama_match_calc(val):
+                        v_norm = normalize_ar(val)
+                        return target_norm in v_norm
+                    
+                    results = results[results[iqama_col].apply(iqama_match_calc)]
+                    self.last_debug['matched_count'] = len(results)
+                    query_clean = "" # Skip global search
+                else:
+                    results = results[results[iqama_col].astype(str).str.strip().str.len() > 0]
+                    self.last_debug['matched_count'] = len(results)
+                    query_clean = ""
+
         # 1. Text Search
         if query_clean:
             if self.is_phone_query(query_clean):
@@ -99,6 +149,13 @@ class SmartSearchEngine:
                     for col in row.index:
                         if str(col).startswith('__'):
                             continue
+                        
+                        # Use the same exclusion list for consistency
+                        EXCLUDED_COLS = ["المهنة في الإقامة", "المهنة في الاقامه", "iqama profession", "listed on your iqama"]
+                        col_lower = str(col).lower()
+                        if any(exc.lower() in col_lower for exc in EXCLUDED_COLS):
+                            continue
+                            
                         cell_val = str(row[col])
                         cell_digits = self.normalize_phone(cell_val)
                         if target_phone and len(cell_digits) >= 5 and target_phone in cell_digits:
@@ -147,12 +204,21 @@ class SmartSearchEngine:
                         
                         # Find city column to evaluate geo tier separately
                         found_city_col = None
+                        
+                        # Use a shared list for exclusion to ensure consistency
+                        EXCLUDED_COLS = ["المهنة في الإقامة", "المهنة في الاقامه", "iqama profession", "listed on your iqama"]
+                        
                         for col in row.index:
                             if not str(col).startswith('__'):
-                                col_norm = str(col).lower()
+                                col_lower = str(col).lower()
+                                
+                                # EXCLUDE "Iqama Profession" definitively from standard search content
+                                if any(exc.lower() in col_lower for exc in EXCLUDED_COLS):
+                                    continue
+                                    
                                 val = str(row[col])
                                 parts.append(val)
-                                if any(kw.lower() in col_norm for kw in CITY_KEYWORDS):
+                                if any(kw.lower() in col_lower for kw in CITY_KEYWORDS):
                                     found_city_col = col
                                     row_city_val = val
 
