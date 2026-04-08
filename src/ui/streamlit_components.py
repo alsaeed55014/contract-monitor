@@ -135,6 +135,17 @@ def render_table_translator(df, key_prefix="table"):
     from src.core.translation import TranslationManager
     tm = TranslationManager()
 
+    # --- ADDED: Record Count Header ---
+    count = len(df)
+    count_label = "عدد السجلات" if st.session_state.get('lang', 'ar') == 'ar' else "Total Records"
+    st.markdown(f"""
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; padding: 10px; background: rgba(212, 175, 55, 0.1); border-radius: 10px; border: 1px solid rgba(212, 175, 55, 0.2);">
+            <div style="color: #D4AF37; font-weight: bold; font-family: 'Cairo', sans-serif;">
+                ✨ {count_label}: <span style="font-size: 1.2rem; color: #FFF;">{count}</span>
+            </div>
+        </div>
+    """, unsafe_allow_html=True)
+
     st.markdown('<div class="table-translator-container">', unsafe_allow_html=True)
     ct1, ct2 = st.columns(2)
     

@@ -145,7 +145,12 @@ def style_df(df):
             return "color: #3498db; font-weight: bold;" 
         return "color: #4CAF50;"
 
-    return styled_df.style.map(apply_colors, subset=[c for c in styled_df.columns if not str(c).startswith("🚩_")])
+    return styled_df.style.format(
+        precision=2, 
+        thousands="", 
+        na_rep="",
+        subset=[c for c in styled_df.columns if styled_df[c].dtype in ['float64', 'int64']]
+    ).map(apply_colors, subset=[c for c in styled_df.columns if not str(c).startswith("🚩_")])
 
 def clean_date_display(df):
     if not isinstance(df, pd.DataFrame) or df.empty:
