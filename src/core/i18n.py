@@ -226,6 +226,13 @@ TRANSLATIONS = {
     "wa_show_cleaned": {"ar": "عرض الأرقام المنظفة", "en": "Show cleaned numbers"},
     "wa_export_report": {"ar": "تصدير التقرير (CSV)", "en": "Export Report (CSV)"},
     "wa_scan_msg": {"ar": "امسح الكود باستخدام الواتساب في جوالك", "en": "Scan with WhatsApp on your phone"},
+    "wa_templates_title": {"ar": "📁 مكتبة القوالب", "en": "📁 Templates Library"},
+    "wa_save_as_template": {"ar": "💾 حفظ كقالب جديد", "en": "💾 Save as New Template"},
+    "wa_template_name": {"ar": "اسم القالب", "en": "Template Name"},
+    "wa_manage_templates": {"ar": "⚙️ إدارة القوالب", "en": "⚙️ Manage Templates"},
+    "wa_use_template": {"ar": "📥 استخدام هذا القالب", "en": "📥 Use this template"},
+    "wa_delete_template": {"ar": "🗑️ حذف القالب", "en": "🗑️ Delete Template"},
+    "wa_placeholders_guide": {"ar": "💡 يمكنك استخدام: {Name} للاسم، {CV} للسيرة، {Phone} للجوال، أو أي اسم عمود من ملف الإكسل بين أقواس {}.", "en": "💡 Use: {Name} for name, {CV} for CV, {Phone} for mobile, or any column name from Excel inside {} brackets."},
 
 
     "bengali_supply_title": {"ar": "نظام توريد العمالة البنغالية", "en": "Bengali Labor Supply System"},

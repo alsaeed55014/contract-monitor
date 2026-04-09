@@ -7,7 +7,7 @@ from datetime import datetime
 # WhatsAppService is imported lazily inside render_whatsapp_page() to avoid blocking app startup with selenium
 from src.utils.phone_utils import validate_numbers, format_phone_number, save_to_local_desktop, render_pasha_export_button
 from src.core.i18n import t
-from src.config import WA_HISTORY_FILE
+from src.config import WA_HISTORY_FILE, WA_TEMPLATES_FILE
 import random
 
 # --- Smart Message Templates (Updated 2026-03-20) ---
@@ -49,12 +49,35 @@ SMART_TEMPLATES = {
     ]
 }
 
+def load_templates():
+    default_templates = {
+        "smart": SMART_TEMPLATES,
+        "custom": {
+            "Default Template": "Hello {Name},\n\nWe hope you are well.\n\nYou previously contacted us regarding job opportunities, and we would appreciate it if you are still interested and available for work.\n\nLink to your profile: {CV}\n\nSincerely,\nAbu Fahd"
+        }
+    }
+    if os.path.exists(WA_TEMPLATES_FILE):
+        try:
+            with open(WA_TEMPLATES_FILE, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except:
+            return default_templates
+    return default_templates
+
+def save_templates(templates):
+    try:
+        with open(WA_TEMPLATES_FILE, 'w', encoding='utf-8') as f:
+            json.dump(templates, f, ensure_ascii=False, indent=4)
+    except:
+        pass
+
 def generate_smart_message(name, cv_link, custom_job=""):
-    intro = random.choice(SMART_TEMPLATES["intro"])
-    b_start = random.choice(SMART_TEMPLATES["body_start"])
-    b_end = random.choice(SMART_TEMPLATES["body_end"])
-    closing = random.choice(SMART_TEMPLATES["closing"])
-    final_call = random.choice(SMART_TEMPLATES["final_call"])
+    templates = load_templates().get("smart", SMART_TEMPLATES)
+    intro = random.choice(templates.get("intro", ["Hello"]))
+    b_start = random.choice(templates.get("body_start", [""]))
+    b_end = random.choice(templates.get("body_end", [""]))
+    closing = random.choice(templates.get("closing", [""]))
+    final_call = random.choice(templates.get("final_call", [""]))
     
     # Handle custom job title injection
     job_part = f" in {custom_job}" if custom_job.strip() else ""
@@ -172,6 +195,13 @@ def render_whatsapp_page():
         'smart_msg_help': "سيتم إنشاء رسائل تلقائية بأسلوب مختلف لكل عميل لتجنب الحظر." if is_ar else "Generates unique variations for each message to avoid ban.",
         'job_title_label': "اسم الوظيفة (اختياري)" if is_ar else "Job Title (Optional)",
         'job_title_placeholder': "مثال: Driver, Nurse..." if is_ar else "e.g. Driver, Nurse...",
+        'wa_templates_title': t('wa_templates_title', lang),
+        'wa_save_as_template': t('wa_save_as_template', lang),
+        'wa_template_name': t('wa_template_name', lang),
+        'wa_manage_templates': t('wa_manage_templates', lang),
+        'wa_use_template': t('wa_use_template', lang),
+        'wa_delete_template': t('wa_delete_template', lang),
+        'wa_placeholders_guide': t('wa_placeholders_guide', lang),
     }
 
     # 1. Connection Status
@@ -341,8 +371,8 @@ def render_whatsapp_page():
 
         # --- 📋 Review Contacts Table ---
         if st.session_state.wa_review_targets:
-            pending_list = [t for t in st.session_state.wa_review_targets if not t['is_sent']]
-            excluded_list = [t for t in st.session_state.wa_review_targets if t['is_sent']]
+            pending_list = [trg for trg in st.session_state.wa_review_targets if not trg['is_sent']]
+            excluded_list = [trg for trg in st.session_state.wa_review_targets if trg['is_sent']]
             
             st.markdown("---")
             # 1. READY LIST (Items NOT checked)
@@ -420,7 +450,7 @@ def render_whatsapp_page():
                         st.rerun()
             
         # Consolidate Pending Targets for the rest of the application
-        final_targets = [t for t in st.session_state.wa_review_targets if not t['is_sent']]
+        final_targets = [trg for trg in st.session_state.wa_review_targets if not trg['is_sent']]
 
         
         # LTR for English messages
@@ -436,16 +466,23 @@ def render_whatsapp_page():
         
         default_msg = """Hello {Name},
 
-We hope you are well.
+I hope you are doing well.
 
-You previously contacted us regarding job opportunities, and we would appreciate it if you are still interested and available for work.
+As part of our ongoing workforce planning and talent acquisition process, our Human Resources team is currently reviewing a number of potential candidates for several open positions. Based on your previous interest, we would like to confirm your current availability and interest in proceeding with us.
 
-Please let us know if you are still interested in working.
+Kindly provide a quick response at your earliest convenience:
+YES – I am interested, please proceed with my application
+NO – I am not interested at this time
+
+If you are not currently seeking opportunities, we would highly appreciate it if you could share this message with a friend or colleague who may be looking for employment.
+
+To ensure you do not miss any suitable opportunities, please confirm your status shortly.
 
 Link to your profile: {CV}
 
-Sincerely,
-Abu Fahd"""
+Best regards,
+Abu Fahd
+Human Resources Department"""
         
         # Smart Message Toggle
         is_smart = st.checkbox(lbl['smart_msg'], value=st.session_state.get('wa_smart_mode', False), help=lbl['smart_msg_help'], key="wa_smart_mode")
@@ -458,9 +495,9 @@ Abu Fahd"""
         
         # Initialize first message if empty
         if not st.session_state.wa_messages[0]:
-            st.session_state.wa_messages[0] = generate_smart_message("{Name}", "{CV}", custom_job=custom_job)
+            st.session_state.wa_messages[0] = default_msg
         
-        # Render dynamic message fields
+        # --- ⌨️ Message Input Logic ---
         if not is_smart:
             for i in range(len(st.session_state.wa_messages)):
                 msg_col1, msg_col2 = st.columns([11, 1])
@@ -476,7 +513,6 @@ Abu Fahd"""
 
             # Add Message Button
             if st.button(lbl['add_msg'], key="add_msg_btn"):
-                # Generate a new smart variation for the added field
                 new_smart_msg = generate_smart_message("{Name}", "{CV}")
                 st.session_state.wa_messages.append(new_smart_msg)
                 st.rerun()
@@ -486,8 +522,62 @@ Abu Fahd"""
             preview_msg = generate_smart_message("{Name}", "{CV}", custom_job=st.session_state.get('wa_custom_job_val', ''))
             st.text_area("معاينة الرسالة الذكية (Smart Message Preview)", value=preview_msg, height=250, disabled=True)
             
-            # Ensure ready logic works in smart mode
-            has_valid_msg = True 
+        # --- 📁 Templates Library (Common to both or just manual?) ---
+        with st.expander(lbl['wa_templates_title']):
+            templates_data = load_templates()
+            custom_templates = templates_data.get("custom", {})
+            
+            # Use Template
+            if custom_templates:
+                template_to_use = st.selectbox(lbl['wa_use_template'], options=list(custom_templates.keys()))
+                if st.button(lbl['wa_use_template'], key="apply_template_btn"):
+                    st.session_state.wa_messages[0] = custom_templates[template_to_use]
+                    st.toast(f"✅ {template_to_use} applied!")
+                    st.rerun()
+            
+            # Save Current Message as Template
+            st.markdown("---")
+            new_template_name = st.text_input(lbl['wa_template_name'], key="new_tpl_name")
+            if st.button(lbl['wa_save_as_template']):
+                if new_template_name.strip():
+                    templates_data["custom"][new_template_name] = st.session_state.wa_messages[0]
+                    save_templates(templates_data)
+                    st.success(f"✅ {new_template_name} saved!")
+                    st.rerun()
+                else:
+                    st.error("Please enter a template name")
+
+            # Manage / Delete Templates
+            if custom_templates:
+                st.markdown("---")
+                st.markdown(lbl['wa_manage_templates'])
+                for t_name in list(custom_templates.keys()):
+                    m_col1, m_col2 = st.columns([4, 1])
+                    m_col1.text(t_name)
+                    if m_col2.button(lbl['wa_delete_template'], key=f"del_tpl_{t_name}"):
+                        del templates_data["custom"][t_name]
+                        save_templates(templates_data)
+                        st.rerun()
+            st.info(lbl['wa_placeholders_guide'])
+
+        # --- ⚙️ Smart Templates Components Editor ---
+        with st.expander("🛠️ " + ("تعديل مكونات الرسائل الذكية" if is_ar else "Edit Smart Message Components")):
+            templates_data = load_templates()
+            smart_parts = templates_data.get("smart", SMART_TEMPLATES)
+            changed_parts = False
+            for part_key, part_list in smart_parts.items():
+                st.markdown(f"**{part_key.replace('_', ' ').title()}**")
+                new_list_str = st.text_area(f"Options for {part_key}", value="\n".join(part_list), height=100, key=f"smart_part_{part_key}")
+                new_list = [line.strip() for line in new_list_str.split("\n") if line.strip()]
+                if new_list != part_list:
+                    smart_parts[part_key] = new_list
+                    changed_parts = True
+            if changed_parts:
+                if st.button("💾 " + ("حفظ جميع التغييرات" if is_ar else "Save All Changes"), key="save_smart_parts"):
+                    templates_data["smart"] = smart_parts
+                    save_templates(templates_data)
+                    st.toast("✅ Smart components updated!")
+                    st.rerun()
         
         # Attachment
         attachment = st.file_uploader(lbl['attach'], 
@@ -512,7 +602,7 @@ Abu Fahd"""
             msg_switch_threshold = st.number_input("تبديل الرسالة بعد" if is_ar else "Switch msg after", min_value=1, max_value=1000, value=1, disabled=st.session_state.wa_running)
 
         # Smart detect target changes
-        current_fp = ",".join([t['phone'] for t in final_targets]) if final_targets else ""
+        current_fp = ",".join([trg['phone'] for trg in final_targets]) if final_targets else ""
         if current_fp != st.session_state.get('wa_sent_fingerprint', ''):
             st.session_state.wa_done = False
 
@@ -660,8 +750,8 @@ Abu Fahd"""
                     if ok:
                         st.session_state.wa_history.add(p)
                         save_wa_history(st.session_state.wa_history)
-                        for t in st.session_state.wa_review_targets:
-                            if t['phone'] == p: t['is_sent'] = True
+                        for trg in st.session_state.wa_review_targets:
+                            if trg['phone'] == p: trg['is_sent'] = True
                             
                         # Update message rotation counters ONLY on successful send
                         st.session_state.wa_msg_sent_count += 1
