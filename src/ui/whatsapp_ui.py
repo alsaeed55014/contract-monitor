@@ -4,7 +4,7 @@ import json
 import os
 import time
 from datetime import datetime
-from src.services.whatsapp_service import WhatsAppService
+# WhatsAppService is imported lazily inside render_whatsapp_page() to avoid blocking app startup with selenium
 from src.utils.phone_utils import validate_numbers, format_phone_number, save_to_local_desktop, render_pasha_export_button
 from src.core.i18n import t
 from src.config import WA_HISTORY_FILE
@@ -86,6 +86,7 @@ def save_wa_history(history_set):
         pass
 
 def render_whatsapp_page():
+    from src.services.whatsapp_service import WhatsAppService
     lang = st.session_state.get('lang', 'ar')
     is_ar = lang == 'ar'
     is_cloud = "/mount/" in __file__

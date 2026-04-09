@@ -1,5 +1,7 @@
 import streamlit as st
+print(">>> DEBUG: Streamlit imported")
 import pandas as pd
+print(">>> DEBUG: Pandas imported")
 import os
 import sys
 import json
@@ -7,6 +9,7 @@ import hashlib
 import time
 from datetime import datetime, timedelta
 import pytz
+print(">>> DEBUG: Core libraries imported")
 import base64
 import re
 
@@ -30,17 +33,20 @@ SRC_DIR = os.path.join(BASE_DIR, 'src')
 if SRC_DIR not in sys.path:
     sys.path.insert(0, SRC_DIR)
 
+print(">>> DEBUG: Importing project modules...")
 try:
     from src.core.contracts import ContractManager
     from src.data.bengali_manager import BengaliDataManager
     from src.utils.phone_utils import create_pasha_whatsapp_excel, format_phone_number, save_to_local_desktop, render_pasha_export_button, is_local_windows_pc
     from src.core.matcher import CandidateMatcher, format_match_result, _find_city_region, _fuzzy_match, REGION_PROXIMITY, REGION_MAP
+    print(">>> DEBUG: Project modules (src.*) imported successfully")
 except ImportError:
     # Fallback for different environment path configurations
     from core.contracts import ContractManager
     from data.bengali_manager import BengaliDataManager
     from utils.phone_utils import create_pasha_whatsapp_excel, format_phone_number, save_to_local_desktop, render_pasha_export_button, is_local_windows_pc
     from core.matcher import CandidateMatcher, format_match_result, _find_city_region, _fuzzy_match, REGION_PROXIMITY, REGION_MAP
+    print(">>> DEBUG: Project modules (core.*) imported successfully via fallback")
 
 # 2. Local Auth Class to prevent Import/Sync Errors
 class AuthManager:

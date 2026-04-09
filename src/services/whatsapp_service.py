@@ -6,13 +6,8 @@ import base64
 import io
 import glob
 import random
-from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.chrome.service import Service
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.common.keys import Keys
+
+# Selenium imports are done lazily in methods to avoid blocking app startup
 
 class WhatsAppService:
     def __init__(self, session_id="wa_pasha_stable"):
@@ -150,6 +145,7 @@ class WhatsAppService:
 
 
     def get_status(self):
+        from selenium.webdriver.common.by import By
         if not self.driver: return "Disconnected"
         try:
             self.driver.find_element(By.XPATH, '//*[@id="side"]')
@@ -162,6 +158,9 @@ class WhatsAppService:
                 return "Loading..."
 
     def wait_for_connection(self, timeout=30):
+        from selenium.webdriver.common.by import By
+        from selenium.webdriver.support.ui import WebDriverWait
+        from selenium.webdriver.support import expected_conditions as EC
         if not self.driver: return False
         try:
             WebDriverWait(self.driver, timeout).until(
@@ -215,6 +214,10 @@ class WhatsAppService:
 
 
     def send_message(self, phone, message, attachment_path=None):
+        from selenium.webdriver.common.by import By
+        from selenium.webdriver.support.ui import WebDriverWait
+        from selenium.webdriver.support import expected_conditions as EC
+        from selenium.webdriver.common.keys import Keys
         if not self.driver: return False, "Engine Offline"
         try:
             from selenium.webdriver.common.action_chains import ActionChains
