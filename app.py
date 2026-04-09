@@ -599,6 +599,41 @@ def get_css(lang='ar'):
             text-align: center;
         }}
 
+        /* Bengali Supply Button with Pure CSS Flag */
+        #bengali-btn-wrapper button p {{
+            display: flex !important;
+            flex-direction: row-reverse !important;
+            align-items: center !important;
+            justify-content: center !important;
+            gap: 12px !important;
+        }}
+        #bengali-btn-wrapper button p::before {{
+            content: "" !important;
+            display: block !important;
+            width: 24px !important;
+            height: 16px !important;
+            background-color: #006a4e !important;
+            border-radius: 2px !important;
+            position: relative !important;
+            order: -1 !important;
+        }}
+        #bengali-btn-wrapper button p::after {{
+            content: "" !important;
+            position: absolute !important;
+            width: 10px !important;
+            height: 10px !important;
+            background-color: #f42a41 !important;
+            border-radius: 50% !important;
+            left: 12px !important;
+            top: 50% !important;
+            transform: translateY(-50%) !important;
+            order: -1 !important;
+        }}
+        
+        /* Emergency Transition Clears - Specifically target the login UI when authenticated */
+        body:has(.welcome-active) #login-container-wrapper {{ display: none !important; opacity: 0 !important; visibility: hidden !important; }}
+        #login-container-wrapper {{ pointer-events: auto; }} 
+
         /* Target the Streamlit Form - REMOVED GOLD BORDER */
         div[data-testid="stForm"] {{
             background: rgba(10, 10, 10, 0.4) !important;
@@ -1711,18 +1746,16 @@ st.set_page_config(
 
 # 5. Global Initialization Logic moved below for dynamic CSS
 
-# 6. Initialize Core (With Force Re-init for Updates)
-if 'auth' not in st.session_state or not hasattr(st.session_state.auth, 'v10_marker'):
+# 6. Initialize Core Components (Consolidated)
+if 'auth' not in st.session_state:
     st.session_state.auth = AuthManager(USERS_FILE)
     st.session_state.auth.v10_marker = True 
+if 'db' not in st.session_state or not hasattr(st.session_state.db, 'fetch_customer_requests'):
     st.session_state.db = DBClient() 
 
 # Report DB Load Errors to User
 if hasattr(st.session_state.auth, 'load_error'):
     st.error(f"⚠️ Error Loading User Database: {st.session_state.auth.load_error}")
-
-if 'db' not in st.session_state or not hasattr(st.session_state.db, 'fetch_customer_requests'):
-    st.session_state.db = DBClient()
 
 # Initialize TranslationManager if not already in session state
 if 'tm' not in st.session_state:
@@ -2704,13 +2737,7 @@ def dashboard():
     user = st.session_state.user
     lang = st.session_state.lang
 
-    # --- 1. Emergency Clean-up CSS (Ensure login-specific wrapper is hidden) ---
-    st.markdown("""
-        <style>
-        #login-container-wrapper { display: none !important; opacity: 0 !important; visibility: hidden !important; pointer-events: none !important; }
-        .luxury-main-title { display: none !important; }
-        </style>
-    """, unsafe_allow_html=True)
+    # --- 1. Ready for Welcome Animation ---
     
     # --- 2. Welcome Message ---
     if st.session_state.get('show_welcome'):
@@ -2924,43 +2951,8 @@ def dashboard():
         # Determine Bengali Supply Visibility
         user_perms = user.get("permissions", [])
         if "all" in user_perms or "bengali_supply" in user_perms:
-            # PURE CSS BANGLADESH FLAG (Zero Dependency/100% Reliable)
-            st.sidebar.markdown("""
-                <style>
-                #bengali-btn-wrapper button p {
-                    display: flex !important;
-                    flex-direction: row-reverse !important;
-                    align-items: center !important;
-                    justify-content: center !important;
-                    gap: 12px !important;
-                }
-                /* Pure CSS Bangladesh Flag */
-                #bengali-btn-wrapper button p::before {
-                    content: "" !important;
-                    display: block !important;
-                    width: 24px !important;
-                    height: 16px !important;
-                    background-color: #006a4e !important;
-                    border-radius: 2px !important;
-                    position: relative !important;
-                    order: -1 !important;
-                }
-                #bengali-btn-wrapper button p::after {
-                    content: "" !important;
-                    position: absolute !important;
-                    width: 9px !important;
-                    height: 9px !important;
-                    background-color: #f42a41 !important;
-                    border-radius: 50% !important;
-                    /* Move to the right side of the button text space where ::before is */
-                    right: 21px; /* Precision position over the green box */
-                    top: 50%;
-                    transform: translateY(-50%);
-                    z-index: 101 !important;
-                }
-                </style>
-                <div id="bengali-btn-wrapper">
-            """, unsafe_allow_html=True)
+            # PURE CSS BANGLADESH FLAG (Logic moved to global CSS)
+            st.markdown('<div id="bengali-btn-wrapper">', unsafe_allow_html=True)
             
             if st.button(t("bengali_supply_title", lang), key="btn_bengali_supply_main", use_container_width=True):
                 st.session_state.page = "bengali_supply"
