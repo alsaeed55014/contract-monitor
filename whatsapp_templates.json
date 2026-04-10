@@ -11,52 +11,41 @@
             "Trust you are doing well today."
         ],
         "body_start": [
-            "We are actively matching candidates with the latest job opportunities."
+            "We are actively matching candidates with the latest job opportunities.",
+            "Our HR team is currently identifying suitable candidates for recent job openings.",
+            "We are in the process of reviewing candidates for several new roles.",
+            "We are currently evaluating candidates for various job opportunities with us.",
+            "Our team is actively scouting for talent to fill our latest vacancies."
         ],
         "body_end": [
-            ", and we'd love to know if you are still looking for a position."
+            ", and we'd love to know if you are still looking for a position.",
+            ". Based on your background, we would like to confirm your current availability.",
+            ", and we are interested in checking if you are still seeking a new role.",
+            ". Since you expressed interest before, we wanted to touch base regarding your status.",
+            ", and we'd appreciate an update on whether you are still open to new opportunities."
         ],
         "closing": [
-            "Please reply with one of the following:",
-            "YES – I am interested and available",
-            "NO – I am not available at the moment",
-            "If you are not currently seeking opportunities, we would highly appreciate it if you could share this message with a friend or colleague who may be looking for employment.",
-            "Kindly respond with:",
-            "YES – Still interested and available",
-            "NO – Not available right now",
-            "If you are not currently seeking opportunities, we would highly appreciate it if you could share this message with a friend or colleague who may be looking for employment",
-            "Let us know your choice:",
-            "YES – I want to proceed",
-            "NO – Not interested at this time",
-            "If you are not currently seeking opportunities, we would highly appreciate it if you could share this message with a friend or colleague who may be looking for employment.",
-            "Please confirm by replying:",
-            "YES – I am ready",
-            "NO – I have another job",
-            "If you are not currently seeking opportunities, we would highly appreciate it if you could share this message with a friend or colleague who may be looking for employment",
-            "A quick reply would be great:",
-            "YES – Proceed with me",
-            "NO – Don't proceed",
-            "If you are not currently seeking opportunities, we would highly appreciate it if you could share this message with a friend or colleague who may be looking for employment."
+            "YES – Proceed with me\nNO – I am not available at the moment\n\nIf you are not currently seeking opportunities, we would highly appreciate it if you could share this message with a friend or colleague who may be looking for employment.\nPlease confirm by replying:",
+            "YES – Proceed with me\nNO – Not available right now\n\nIf you are not currently seeking opportunities, we would highly appreciate it if you could share this message with a friend or colleague who may be looking for employment\nPlease confirm by replying:",
+            "YES – Proceed with me\nNO – Not interested at this time\n\nIf you are not currently seeking opportunities, we would highly appreciate it if you could share this message with a friend or colleague who may be looking for employment.\nPlease confirm by replying:",
+            "YES – Proceed with me\nNO – I have another job\n\nIf you are not currently seeking opportunities, we would highly appreciate it if you could share this message with a friend or colleague who may be looking for employment\nPlease confirm by replying:",
+            "YES – Proceed with me\nNO – Don't proceed\n\nIf you are not currently seeking opportunities, we would highly appreciate it if you could share this message with a friend or colleague who may be looking for employment.\nPlease confirm by replying:"
         ],
         "final_call": [
             "We will be moving forward shortly, so your quick response is highly appreciated.",
-            "We look forward to hearing from you at your earliest convenience."
+            "We look forward to hearing from you at your earliest convenience.",
+            "The selection process is moving fast, so please get back to us as soon as possible.",
+            "To ensure you don't miss out, please let us know your status shortly.",
+            "We look forward to your prompt response."
         ],
         "signature": [
-            "Best regards,",
-            "Abu Fahd",
-            "HR Manager"
+            "Best regards,\nAbu Fahd\nHR Manager"
         ]
     },
     "custom": {
         "Default Template": {
             "body": "Hello {Name},\n\nI hope you are doing well.\n\nWe are actively matching candidates with the latest job opportunities., and we'd love to know if you are still looking for a position.\n\nKindly respond with:\nYES – I am interested and available\nNO – I am not available right now\n\nIf you are not currently seeking opportunities, we would highly appreciate it if you could share this message with a friend or colleague who may be looking for employment.\n\nBest regards,\nAbu Fahd\nHR Manager",
-            "is_smart": false,
-            "job_title": ""
-        },
-        "Message No. 1": {
-            "body": " Hello {Name},\n\nI hope you are doing well.\n\nAs part of our ongoing workforce planning and talent acquisition process, our Human Resources team is currently reviewing a number of potential candidates for several open positions with the latest job opportunities. Based on your previous interest, we would like to confirm your current availability and interest in proceeding with us.\n\nKindly provide a quick response at your earliest convenience:\nYES – I am interested, please proceed with my application\nNO – I am not interested at this time\n\nIf you are not currently seeking opportunities, we would highly appreciate it if you could share this message with a friend or colleague who may be looking for employment.\n\nTo ensure you do not miss any suitable opportunities, please confirm your status shortly.\n\nLink to your profile: {CV}\n\nBest regards,\nAbu Fahd\nHR MANGER",
-            "is_smart": false,
+            "is_smart": true,
             "job_title": ""
         }
     }
