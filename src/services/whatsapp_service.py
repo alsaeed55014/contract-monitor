@@ -1,20 +1,32 @@
 import os
 import time
 import shutil
-import tempfile
 import base64
 import io
-import glob
 import random
+import subprocess
+import re
 
 # Selenium imports are done lazily in methods to avoid blocking app startup
 
 class WhatsAppService:
     def __init__(self, session_id="wa_pasha_stable"):
-        self.session_path = os.path.join(tempfile.gettempdir(), session_id)
+        # 2026 Persistent Session: Store in project root instead of temp dir
+        self.base_session_dir = os.path.join(os.getcwd(), ".whatsapp_session")
+        self.session_path = os.path.join(self.base_session_dir, session_id)
         self.driver = None
         self.last_error = ""
 
+    def _get_chrome_version(self):
+        """Detect Chrome version from the system to ensure UC compatibility"""
+        try:
+            if os.name == 'nt':
+                output = subprocess.check_output(r'reg query "HKEY_CURRENT_USER\Software\Google\Chrome\BLBeacon" /v version', shell=True)
+                version = re.search(r'\d+', output.decode()).group()
+                return int(version)
+        except:
+            pass
+        return None
 
     def start_driver(self, headless=True, force_clean=False):
         if self.driver: 
@@ -24,32 +36,28 @@ class WhatsAppService:
             except: 
                 self.close()
 
+        # --- Clean Existing Locks ---
         if force_clean and os.path.exists(self.session_path):
             shutil.rmtree(self.session_path, ignore_errors=True)
         
         os.makedirs(self.session_path, exist_ok=True)
         
-        # Clean lock files
-        for lf in ["SingletonLock", "SingletonSocket", "SingletonCookie", "lockfile"]:
+        # Aggressive cleaning of lock files that cause UC to hang
+        for lf in ["SingletonLock", "SingletonSocket", "SingletonCookie", "lockfile", "DevToolsActivePort"]:
             p = os.path.join(self.session_path, lf)
             try:
                 if os.path.exists(p): os.remove(p)
             except: pass
         
-        # 2026 Advanced Stealth User Agents (Updated for 132+)
-        USER_AGENTS = [
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36",
-            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36",
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
-            "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36",
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36 Edg/132.0.0.0"
-        ]
-        ua = random.choice(USER_AGENTS)
+        # 2026 Advanced Stealth User Agent
+        ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36"
         
         def apply_stealth_args(o, is_uc=False):
             if headless:
+                # Optimized Headless for 2026/Chrome 146
                 o.add_argument("--headless=new")
                 o.add_argument("--disable-gpu")
+                o.add_argument("--window-size=1920,1080")
             
             o.add_argument("--no-sandbox")
             o.add_argument("--disable-dev-shm-usage")
@@ -59,89 +67,101 @@ class WhatsAppService:
             o.add_argument("--disable-blink-features=AutomationControlled")
             o.add_argument("--use-fake-ui-for-media-stream")
             o.add_argument("--disable-notifications")
-            o.add_argument("--remote-debugging-port=0") # Port 0 lets system choose
             o.add_argument("--disable-extensions")
             o.add_argument("--profile-directory=Default")
             o.add_argument("--disable-infobars")
-            o.add_argument("--allow-running-insecure-content")
             o.add_argument("--ignore-certificate-errors")
-            o.add_argument("--disable-crash-reporter") # Helps prevent hanging processes when crashe
 
-        # Find Chrome binary (Windows & Linux)
-        binary = None
-        if os.name == 'nt': # Windows
+        # Find Chrome binary
+        binary = self._find_chrome_binary()
+        ver = self._get_chrome_version()
+        
+        # --- Launch Logic with Crash Recovery ---
+        attempts = 2
+        for attempt in range(attempts):
+            try:
+                print(f"[{time.strftime('%H:%M:%S')}] Launching WhatsApp Engine (Attempt {attempt+1}/{attempts})...")
+                # Force taskkill of ghost processes on first attempt to ensure no locks
+                if attempt == 0:
+                    self._kill_zombies()
+
+                import undetected_chromedriver as uc
+                opts = uc.ChromeOptions()
+                apply_stealth_args(opts, is_uc=True)
+                
+                print(f"[{time.strftime('%H:%M:%S')}] Initializing UC (Ver: {ver}, Binary: {binary})...")
+                self.driver = uc.Chrome(
+                    options=opts, 
+                    browser_executable_path=binary,
+                    use_subprocess=False, # Changed to False for better stability in restricted environments
+                    headless=False, 
+                    version_main=ver
+                )
+                
+                print(f"[{time.strftime('%H:%M:%S')}] Navigating to WhatsApp Web...")
+                self.driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
+                self.driver.get("https://web.whatsapp.com")
+                print(f"[{time.strftime('%H:%M:%S')}] Ready!")
+                return True, "Ready (Powered by UC Multi-Session)"
+            except Exception as e:
+                err_msg = str(e).lower()
+                print(f"[{time.strftime('%H:%M:%S')}] Error: {str(e)[:150]}")
+                self.last_error = f"UC Error: {str(e)[:120]}"
+                
+                if attempt == 0:
+                    print(f"[{time.strftime('%H:%M:%S')}] Retrying with fresh session...")
+                    self._kill_zombies()
+                    try: shutil.rmtree(self.session_path, ignore_errors=True)
+                    except: pass
+                    time.sleep(2)
+                    continue 
+
+                # Final Fallback to standard Selenium with Stealth
+                try:
+                    print(f"[{time.strftime('%H:%M:%S')}] Final Fallback to Standard Selenium + Stealth...")
+                    from selenium import webdriver
+                    from selenium.webdriver.chrome.options import Options as StdOptions
+                    from selenium_stealth import stealth
+                    
+                    std_opts = StdOptions()
+                    apply_stealth_args(std_opts, is_uc=False)
+                    self.driver = webdriver.Chrome(options=std_opts)
+                    
+                    # Apply manual stealth for 2026
+                    stealth(self.driver,
+                        languages=["en-US", "en"],
+                        vendor="Google Inc.",
+                        platform="Win32",
+                        webgl_vendor="Intel Inc.",
+                        renderer="Intel Iris OpenGL Engine",
+                        fix_hairline=True,
+                    )
+                    
+                    self.driver.get("https://web.whatsapp.com")
+                    return True, "Ready (Safe Fallback + Stealth)"
+                except Exception as e2:
+                    print(f"[{time.strftime('%H:%M:%S')}] Critical Failure: {str(e2)[:100]}")
+                    self.last_error += f" | Final Error: {str(e2)[:60]}"
+                    return False, self.last_error
+
+    def _find_chrome_binary(self):
+        if os.name == 'nt':
             win_paths = [
                 os.environ.get("PROGRAMFILES", "C:\\Program Files") + "\\Google\\Chrome\\Application\\chrome.exe",
                 os.environ.get("PROGRAMFILES(X86)", "C:\\Program Files (x86)") + "\\Google\\Chrome\\Application\\chrome.exe",
                 os.environ.get("LOCALAPPDATA", "") + "\\Google\\Chrome\\Application\\chrome.exe"
             ]
             for b in win_paths:
-                if os.path.exists(b):
-                    binary = b
-                    break
-        else: # Linux
-            chrome_bins = [
-                "/usr/bin/chromium", "/usr/bin/chromium-browser", 
-                "/usr/bin/google-chrome", "/usr/bin/google-chrome-stable",
-                "/snap/bin/chromium"
-            ]
-            for b in chrome_bins:
-                if os.path.exists(b):
-                    binary = b
-                    break
-        
-        # --- Retry Logic: try to launch, if it crashes, nuke user dir and try again ---
-        attempts = 2
-        for attempt in range(attempts):
-            try:
-                import undetected_chromedriver as uc
-                opts = uc.ChromeOptions()
-                apply_stealth_args(opts, is_uc=True)
-                
-                self.driver = uc.Chrome(
-                    options=opts, 
-                    browser_executable_path=binary,
-                    headless=False, # We use --headless=new in opts, so we MUST tell UC false to avoid its broken legacy headless flag
-                    version_main=None # Let it figure it out
-                )
-                self.driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
-                self.driver.get("https://web.whatsapp.com")
-                self.driver.set_window_size(1920, 1080)
-                return True, "Ready (Powered by UC Stealth)"
-            except Exception as e:
-                err_msg = str(e).lower()
-                self.last_error = f"UC Error: {str(e)[:100]}"
-                
-                # If it's a crash or session not created, forcefully clean dir before next attempt
-                if attempt == 0 and ("crashed" in err_msg or "session not created" in err_msg):
-                    try:
-                        if os.name == 'nt':
-                            os.system('taskkill /F /IM chromedriver.exe /T >nul 2>&1')
-                            os.system('taskkill /F /IM chrome.exe /FI "WINDOWTITLE eq chrome*" >nul 2>&1') # Kill only headless/invisible chrome
-                        shutil.rmtree(self.session_path, ignore_errors=True)
-                        time.sleep(1)
-                        # Switch to a slightly modified path to bypass OS-level locks from unkillable processes
-                        self.session_path = self.session_path + "_retry"
-                        os.makedirs(self.session_path, exist_ok=True)
-                    except: pass
-                    continue # Retry
-                
-                # Final Fallback to standard if UC completely fails
-                try:
-                    from selenium import webdriver
-                    from selenium.webdriver.chrome.options import Options as StdOptions
-                    std_opts = StdOptions()
-                    apply_stealth_args(std_opts, is_uc=False)
-                    
-                    self.driver = webdriver.Chrome(options=std_opts)
-                    self.driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
-                    self.driver.get("https://web.whatsapp.com")
-                    self.driver.set_window_size(1920, 1080)
-                    return True, "Ready (Safe Fallback Mode)"
-                except Exception as e2:
-                    self.last_error += f" | Standard Error: {str(e2)[:60]}"
-                    if attempt == attempts - 1:
-                        return False, self.last_error
+                if os.path.exists(b): return b
+        return None
+
+    def _kill_zombies(self):
+        try:
+            if os.name == 'nt':
+                os.system('taskkill /F /IM chromedriver.exe /T >nul 2>&1')
+                # Kill only headless chromes that might be locking the profile
+                os.system('taskkill /F /IM chrome.exe /FI "WINDOWTITLE eq chrome*" /FI "MEMUSAGE gt 1" >nul 2>&1')
+        except: pass
 
 
     def get_status(self):
@@ -181,13 +201,19 @@ class WhatsAppService:
             header, b64data = data_url.split(",", 1)
             raw_bytes = base64.b64decode(b64data)
             img = Image.open(io.BytesIO(raw_bytes))
+            
+            # 2026 QR Enhancement: Higher contrast and sharper edges
+            from PIL import ImageOps
+            img = img.convert("L") # Greyscale
+            img = ImageOps.autocontrast(img, cutoff=2)
+            
             new_size = (img.width * 4, img.height * 4)
             img_big = img.resize(new_size, Image.NEAREST)
-            border = 40
+            border = 30
             final = Image.new("RGB", (img_big.width + border*2, img_big.height + border*2), "white")
             final.paste(img_big, (border, border))
             buf = io.BytesIO()
-            final.save(buf, format="PNG")
+            final.save(buf, format="PNG", optimize=True)
             buf.seek(0)
             return base64.b64encode(buf.read()).decode()
         except:

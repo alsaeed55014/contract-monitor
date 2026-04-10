@@ -224,7 +224,9 @@ def render_whatsapp_page():
         else:
             st.error(lbl['stopped'])
             if getattr(st.session_state.wa_service, 'last_error', ''):
-                st.code(st.session_state.wa_service.last_error, language=None)
+                with st.expander("🔍 تفاصيل الخطأ التقني | Error Details", expanded=True):
+                    st.code(st.session_state.wa_service.last_error, language=None)
+                    st.info("💡 نصيحة: تأكد من إغلاق أي متصفح كروم مفتوح في الخلفية وحاول مرة أخرى." if is_ar else "💡 Tip: Make sure to close any background Chrome processes and try again.")
     with c2:
         if st.button(lbl['start_engine'], type="primary", use_container_width=True):
             with st.spinner(lbl['starting']):
@@ -234,7 +236,8 @@ def render_whatsapp_page():
                 else: st.error(f"❌ {msg}")
                 st.rerun()
     with c3:
-        if st.button(lbl['full_reset'], use_container_width=True):
+        help_msg = "سيتم مسح بيانات تسجيل الدخول بالكامل. ستحتاج لمسح الباركود مرة أخرى." if is_ar else "This will clear all login data. You will need to scan the QR code again."
+        if st.button(lbl['full_reset'], use_container_width=True, help=help_msg):
             with st.spinner(lbl['resetting']):
                 st.session_state.wa_service.close()
                 ok, msg = st.session_state.wa_service.start_driver(headless=is_cloud, force_clean=True)
@@ -399,7 +402,7 @@ def render_whatsapp_page():
                         if trg['is_sent']: continue
                         r1, r2, r3, r4 = st.columns([1, 4, 3, 1])
                         # Checkbox to Exclude (becomes true)
-                        if r1.checkbox("", value=False, key=f"trg_pending_{i}_{trg['phone']}"):
+                        if r1.checkbox(" ", value=False, key=f"trg_pending_{i}_{trg['phone']}", label_visibility="collapsed"):
                             st.session_state.wa_review_targets[i]['is_sent'] = True
                             st.session_state.wa_history.add(trg['phone'])
                             save_wa_history(st.session_state.wa_history)
@@ -441,7 +444,7 @@ def render_whatsapp_page():
                         # Uncheck to move to pending (becomes false)
                         # We use cleaned phone here to ensure history sync works
                         clean_id = trg['phone']
-                        if not r1.checkbox("", value=True, key=f"trg_excl_{i}_{clean_id}"):
+                        if not r1.checkbox(" ", value=True, key=f"trg_excl_{i}_{clean_id}", label_visibility="collapsed"):
                             st.session_state.wa_review_targets[i]['is_sent'] = False
                             st.session_state.wa_history.discard(clean_id)
                             save_wa_history(st.session_state.wa_history)
