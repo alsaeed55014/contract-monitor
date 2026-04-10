@@ -17,9 +17,6 @@ APP_TITLE = "Contract Monitor System"
 
 # Colors (Dark Luxury Theme)
 COLORS = {
-    "bg_main": "#121212",       # Very Dark Grey
-    "bg_secondary": "#1E1E1E",  # Dark Grey (Cards/Sidebar)
-    "accent": "#D4AF37",        # Gold
     "text_main": "#E0E0E0",     # Light Grey
     "text_dim": "#A0A0A0",      # Dim Grey
     "success": "#2E7D32",       # Green

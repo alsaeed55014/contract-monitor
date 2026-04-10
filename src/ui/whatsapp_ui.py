@@ -20,32 +20,32 @@ SMART_TEMPLATES = {
         "Trust you are doing well today."
     ],
     "body_start": [
-        "We are currently proceeding with candidates for available job opportunities",
-        "We are moving forward with selecting candidates for open job opportunities",
-        "We are in the process of reviewing candidates for various job opportunities",
-        "Our team is currently evaluating candidates for several job opportunities",
-        "We are actively matching candidates with the latest job opportunities"
+        "We are actively matching candidates with the latest job opportunities.",
+        "Our HR team is currently identifying suitable candidates for recent job openings.",
+        "We are in the process of reviewing candidates for several new roles.",
+        "We are currently evaluating candidates for various job opportunities with us.",
+        "Our team is actively scouting for talent to fill our latest vacancies."
     ],
     "body_end": [
-        ", and since you previously showed interest, we would like to confirm your availability.",
-        ". Based on your previous interest, we want to check if you are still available.",
-        ", and we're checking in to see if you're still interested and ready to work.",
-        ". Since you expressed interest before, please let us know your current status.",
-        ", and we'd love to know if you are still looking for a position."
+        ", and we'd love to know if you are still looking for a position.",
+        ". Based on your background, we would like to confirm your current availability.",
+        ", and we are interested in checking if you are still seeking a new role.",
+        ". Since you expressed interest before, we wanted to touch base regarding your status.",
+        ", and we'd appreciate an update on whether you are still open to new opportunities."
     ],
     "closing": [
-        "Please reply with one of the following:\nYES – I am interested and available\nNO – I am not available at the moment",
-        "Kindly respond with:\nYES – Still interested and available\nNO – Not available right now",
-        "Let us know your choice:\nYES – I want to proceed\nNO – Not interested at this time",
-        "Please confirm by replying:\nYES – I am ready\nNO – I have another job",
-        "A quick reply would be great:\nYES – Proceed with me\nNO – Don't proceed"
+        "Please reply with one of the following:\nYES – I am interested and available\nNO – I am not available at the moment\n\nIf you are not currently seeking opportunities, we would highly appreciate it if you could share this message with a friend or colleague who may be looking for employment.",
+        "Kindly respond with:\nYES – Still interested and available\nNO – Not available right now\n\nIf you are not currently seeking opportunities, we would highly appreciate it if you could share this message with a friend or colleague who may be looking for employment",
+        "Let us know your choice:\nYES – I want to proceed\nNO – Not interested at this time\n\nIf you are not currently seeking opportunities, we would highly appreciate it if you could share this message with a friend or colleague who may be looking for employment.",
+        "Please confirm by replying:\nYES – I am ready\nNO – I have another job\n\nIf you are not currently seeking opportunities, we would highly appreciate it if you could share this message with a friend or colleague who may be looking for employment",
+        "A quick reply would be great:\nYES – Proceed with me\nNO – Don't proceed\n\nIf you are not currently seeking opportunities, we would highly appreciate it if you could share this message with a friend or colleague who may be looking for employment."
     ],
     "final_call": [
         "We will be moving forward shortly, so your quick response is highly appreciated.",
-        "We are finalizing our list soon, so please get back to us as soon as possible.",
-        "The selection process is moving fast, and we value your prompt reply.",
+        "We look forward to hearing from you at your earliest convenience.",
+        "The selection process is moving fast, so please get back to us as soon as possible.",
         "To ensure you don't miss out, please let us know your status shortly.",
-        "We look forward to hearing from you at your earliest convenience."
+        "We look forward to your prompt response."
     ]
 }
 
@@ -53,13 +53,23 @@ def load_templates():
     default_templates = {
         "smart": SMART_TEMPLATES,
         "custom": {
-            "Default Template": "Hello {Name},\n\nWe hope you are well.\n\nYou previously contacted us regarding job opportunities, and we would appreciate it if you are still interested and available for work.\n\nLink to your profile: {CV}\n\nSincerely,\nAbu Fahd"
+            "Default Template": {
+                "body": "Hello {Name},\n\nI hope you are doing well.\n\nWe are actively matching candidates with the latest job opportunities., and we'd love to know if you are still looking for a position.\n\nKindly respond with:\nYES – I am interested and available\nNO – I am not available right now\n\nIf you are not currently seeking opportunities, we would highly appreciate it if you could share this message with a friend or colleague who may be looking for employment.\n\nBest regards,\nAbu Fahd\nHR Manager",
+                "is_smart": True,
+                "job_title": ""
+            }
         }
     }
     if os.path.exists(WA_TEMPLATES_FILE):
         try:
             with open(WA_TEMPLATES_FILE, 'r', encoding='utf-8') as f:
-                return json.load(f)
+                data = json.load(f)
+                # Migration: Convert old string templates to dicts if necessary
+                if "custom" in data:
+                    for k, v in data["custom"].items():
+                        if isinstance(v, str):
+                            data["custom"][k] = {"body": v, "is_smart": False, "job_title": ""}
+                return data
         except:
             return default_templates
     return default_templates
@@ -89,7 +99,7 @@ def generate_smart_message(name, cv_link, custom_job=""):
     if cv_link and str(cv_link).lower() != 'nan' and str(cv_link).strip() != '':
         msg += f"Link to your profile: {cv_link}\n\n"
     
-    msg += "Best regards,\nAbu Fahd"
+    msg += "Best regards,\nAbu Fahd\nHR Manager"
     return msg
 
 def load_wa_history():
@@ -468,25 +478,35 @@ def render_whatsapp_page():
 
 I hope you are doing well.
 
-As part of our ongoing workforce planning and talent acquisition process, our Human Resources team is currently reviewing a number of potential candidates for several open positions. Based on your previous interest, we would like to confirm your current availability and interest in proceeding with us.
+We are actively matching candidates with the latest job opportunities., and we'd love to know if you are still looking for a position.
 
-Kindly provide a quick response at your earliest convenience:
-YES – I am interested, please proceed with my application
-NO – I am not interested at this time
+A quick reply would be great:
+YES – Proceed with me
+NO – Don't proceed
 
 If you are not currently seeking opportunities, we would highly appreciate it if you could share this message with a friend or colleague who may be looking for employment.
 
-To ensure you do not miss any suitable opportunities, please confirm your status shortly.
-
-Link to your profile: {CV}
-
 Best regards,
 Abu Fahd
+HR Manager
 Human Resources Department"""
         
         # Smart Message Toggle
         is_smart = st.checkbox(lbl['smart_msg'], value=st.session_state.get('wa_smart_mode', False), help=lbl['smart_msg_help'], key="wa_smart_mode")
         
+        # When Smart Mode is enabled, handle template logic
+        if is_smart:
+            sel_tpl_name = st.session_state.get('wa_selected_template_key')
+            if sel_tpl_name:
+                ct = load_templates().get("custom", {})
+                active_tpl = ct.get(sel_tpl_name)
+                if active_tpl and isinstance(active_tpl, dict) and active_tpl.get('is_smart'):
+                    # If the selected template IS a smart one, prioritize its settings
+                    if st.session_state.wa_messages[0] != active_tpl['body']:
+                         st.session_state.wa_messages[0] = active_tpl['body']
+                    if active_tpl.get('job_title') and not st.session_state.get('wa_custom_job'):
+                         st.session_state.wa_custom_job = active_tpl['job_title']
+
         # Custom Job Title Input for Smart Mode
         custom_job = ""
         if is_smart:
@@ -522,30 +542,70 @@ Human Resources Department"""
             preview_msg = generate_smart_message("{Name}", "{CV}", custom_job=st.session_state.get('wa_custom_job_val', ''))
             st.text_area("معاينة الرسالة الذكية (Smart Message Preview)", value=preview_msg, height=250, disabled=True)
             
-        # --- 📁 Templates Library (Common to both or just manual?) ---
+        # --- 📁 Templates Library Logic (Self-contained at start to avoid state conflicts) ---
+        templates_data = load_templates()
+        custom_templates = templates_data.get("custom", {})
+        
+        # Check if we should apply a template (button is triggered via rerun)
+        # We handle the 'Apply' logic early if the button was clicked in the previous run
+        # Note: Streamlit buttons return True ONLY in the run they were clicked.
+        # But we can use on_click to be safer.
+
+
+        # UI for Templates Library
         with st.expander(lbl['wa_templates_title']):
-            templates_data = load_templates()
-            custom_templates = templates_data.get("custom", {})
-            
-            # Use Template
             if custom_templates:
-                template_to_use = st.selectbox(lbl['wa_use_template'], options=list(custom_templates.keys()))
-                if st.button(lbl['wa_use_template'], key="apply_template_btn"):
-                    st.session_state.wa_messages[0] = custom_templates[template_to_use]
-                    st.toast(f"✅ {template_to_use} applied!")
-                    st.rerun()
+                template_to_use = st.selectbox(lbl['wa_use_template'], options=list(custom_templates.keys()), key="wa_selected_template_key")
+                
+                col_t1, col_t2 = st.columns(2)
+                with col_t1:
+                    # Define the callback to avoid state modification error
+                    def apply_template():
+                        sel = st.session_state.wa_selected_template_key
+                        tpl = custom_templates[sel]
+                        if isinstance(tpl, dict):
+                            st.session_state.wa_messages[0] = tpl['body']
+                            st.session_state.wa_smart_mode = tpl.get('is_smart', False)
+                            if tpl.get('job_title'):
+                                st.session_state.wa_custom_job = tpl['job_title']
+                                st.session_state.wa_custom_job_val = tpl['job_title']
+                        else:
+                            st.session_state.wa_messages[0] = tpl
+                            st.session_state.wa_smart_mode = False
+                        st.session_state.wa_msg_applied_toast = f"✅ {sel} applied!"
+
+                    st.button(lbl['wa_use_template'], key="apply_template_btn", on_click=apply_template)
+                
+                if st.session_state.get('wa_msg_applied_toast'):
+                    st.toast(st.session_state.wa_msg_applied_toast)
+                    del st.session_state.wa_msg_applied_toast
             
             # Save Current Message as Template
             st.markdown("---")
             new_template_name = st.text_input(lbl['wa_template_name'], key="new_tpl_name")
-            if st.button(lbl['wa_save_as_template']):
-                if new_template_name.strip():
-                    templates_data["custom"][new_template_name] = st.session_state.wa_messages[0]
+            
+            def save_current_as_template():
+                name = st.session_state.new_tpl_name
+                if name.strip():
+                    # Save as the new dict format
+                    templates_data["custom"][name] = {
+                        "body": st.session_state.wa_messages[0],
+                        "is_smart": st.session_state.wa_smart_mode,
+                        "job_title": st.session_state.get('wa_custom_job', '')
+                    }
                     save_templates(templates_data)
-                    st.success(f"✅ {new_template_name} saved!")
-                    st.rerun()
+                    st.session_state.wa_msg_save_success = f"✅ {name} saved!"
                 else:
-                    st.error("Please enter a template name")
+                    st.session_state.wa_msg_save_error = "Please enter a template name"
+
+            st.button(lbl['wa_save_as_template'], on_click=save_current_as_template)
+            
+            if st.session_state.get('wa_msg_save_success'):
+                st.success(st.session_state.wa_msg_save_success)
+                del st.session_state.wa_msg_save_success
+            if st.session_state.get('wa_msg_save_error'):
+                st.error(st.session_state.wa_msg_save_error)
+                del st.session_state.wa_msg_save_error
 
             # Manage / Delete Templates
             if custom_templates:
@@ -554,10 +614,12 @@ Human Resources Department"""
                 for t_name in list(custom_templates.keys()):
                     m_col1, m_col2 = st.columns([4, 1])
                     m_col1.text(t_name)
-                    if m_col2.button(lbl['wa_delete_template'], key=f"del_tpl_{t_name}"):
-                        del templates_data["custom"][t_name]
+                    
+                    def delete_tpl(name=t_name):
+                        del templates_data["custom"][name]
                         save_templates(templates_data)
-                        st.rerun()
+
+                    m_col2.button(lbl['wa_delete_template'], key=f"del_tpl_{t_name}", on_click=delete_tpl)
             st.info(lbl['wa_placeholders_guide'])
 
         # --- ⚙️ Smart Templates Components Editor ---
