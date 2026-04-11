@@ -279,13 +279,25 @@ class WhatsAppService:
         except: return None
 
     def _type_human_like(self, element, text):
-        """يحاكي الطباعة البشرية مع فواصل زمنية عشوائية لتجنب الحظر"""
+        """يحاكي الطباعة البشرية مع أخطاء مطبعية نادرة وفواصل زمنية عشوائية لتجنب الحظر"""
+        from selenium.webdriver.common.keys import Keys
         for char in text:
             element.send_keys(char)
+            # 1. Random mini pauses
             if random.random() > 0.85:
                 time.sleep(random.uniform(0.02, 0.15))
+            # 2. Random thinking pauses
             elif random.random() > 0.98:
                 time.sleep(random.uniform(0.5, 1.2))
+            
+            # 3. Simulate making a typo and correcting it (very rare, ~0.5% chance)
+            if random.random() > 0.995:
+                # Type a random letter
+                element.send_keys(random.choice("abcdefghijklmnopqrstuvwxyz"))
+                time.sleep(random.uniform(0.1, 0.4))
+                # Delete it
+                element.send_keys(Keys.BACKSPACE)
+                time.sleep(random.uniform(0.05, 0.2))
 
 
     def send_message(self, phone, message, attachment_path=None):
@@ -370,9 +382,15 @@ class WhatsAppService:
                     self._type_human_like(caption_input, message)
                     time.sleep(random.uniform(0.8, 1.5))
                 
-                # Natural pause before ENTER
+                # Natural pause before ENTER / Click
                 time.sleep(random.uniform(0.5, 1.2))
-                caption_input.send_keys(Keys.ENTER)
+                try:
+                    # 4. Click the Send Button instead of Keys.ENTER
+                    send_btn = self.driver.find_element(By.XPATH, '//span[@data-icon="send"]')
+                    actions = ActionChains(self.driver)
+                    actions.move_to_element(send_btn).pause(random.uniform(0.2, 0.5)).click().perform()
+                except:
+                    caption_input.send_keys(Keys.ENTER)
             else:
                 # Simple text message
                 if message:
@@ -382,7 +400,13 @@ class WhatsAppService:
                     time.sleep(random.uniform(1.2, 2.5))
                     # Natural pause before ENTER
                     time.sleep(random.uniform(0.5, 1.2))
-                    msg_input.send_keys(Keys.ENTER)
+                    try:
+                        # 4. Click the Send Button instead of Keys.ENTER
+                        send_btn = self.driver.find_element(By.XPATH, '//span[@data-icon="send"]')
+                        actions = ActionChains(self.driver)
+                        actions.move_to_element(send_btn).pause(random.uniform(0.2, 0.5)).click().perform()
+                    except:
+                        msg_input.send_keys(Keys.ENTER)
             
             time.sleep(random.uniform(2.0, 4.0)) # Wait for send
             return True, "Done"

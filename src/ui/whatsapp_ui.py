@@ -21,11 +21,11 @@ SMART_TEMPLATES = {
         "Trust you are doing well today."
     ],
     "body_start": [
-        "We are actively matching candidates with the latest job opportunities.",
-        "Our HR team is currently identifying suitable candidates for recent job openings.",
-        "We are in the process of reviewing candidates for several new roles.",
-        "We are currently evaluating candidates for various job opportunities with us.",
-        "Our team is actively scouting for talent to fill our latest vacancies."
+        "We are actively matching candidates with the latest job opportunities with us",
+        "Our HR team is currently evaluating candidates for various job opportunities with us",
+        "We are in the process of reviewing profiles for several job opportunities with us",
+        "We are currently evaluating candidates for various job opportunities with us",
+        "Our team is actively scouting for talent for new job opportunities with us"
     ],
     "body_end": [
         ", and we'd love to know if you are still looking for a position.",
@@ -55,7 +55,7 @@ def load_templates():
         "smart": SMART_TEMPLATES,
         "custom": {
             "Default Template": {
-                "body": "Hello {Name},\n\nI hope you are doing well.\n\nWe are actively matching candidates with the latest job opportunities., and we'd love to know if you are still looking for a position.\n\nKindly respond with:\nYES – I am interested and available\nNO – I am not available right now\n\nIf you are not currently seeking opportunities, we would highly appreciate it if you could share this message with a friend or colleague who may be looking for employment.\n\nBest regards,\nAbu Fahd\nHR Manager",
+                "body": "Hello {Name},\n\nI hope you are doing well.\n\nWe are currently evaluating candidates for various job opportunities with us, and we'd love to know if you are still looking for a position.\n\nKindly respond with:\nYES – I am interested and available\nNO – I am not available right now\n\nIf you are not currently seeking opportunities, we would highly appreciate it if you could share this message with a friend or colleague who may be looking for employment.\n\nBest regards,\nAbu Fahd\nHR Manager",
                 "is_smart": True,
                 "job_title": ""
             }
@@ -95,8 +95,8 @@ def generate_smart_message(name, cv_link, custom_job=""):
     closing = random.choice(templates.get("closing", [""]))
     final_call = random.choice(templates.get("final_call", [""]))
     
-    # Handle custom job title injection
-    job_part = f" in {custom_job}" if custom_job.strip() else ""
+    # Handle custom job title injection beautifully
+    job_part = f" - {custom_job}" if custom_job.strip() else ""
     full_body = f"{b_start}{job_part}{b_end}"
     
     # 🛡️ تبديل هيكلية الرسالة بشكل عشوائي (Shuffling sections)
@@ -115,9 +115,9 @@ def generate_smart_message(name, cv_link, custom_job=""):
     # 🛡️ تنويع التوقيع
     signatures = [
         "Best regards,\nAbu Fahd\nHR Manager",
-        "Kind regards,\nAbu Fahd - HR Manager",
-        "With respect,\nAbu Fahd\nHuman Resources Department",
-        "Thanks,\nHR Team"
+        "Kind regards,\nAbu Fahd\nHR Manager",
+        "With respect,\nAbu Fahd\nHR Manager",
+        "Sincerely,\nAbu Fahd\nHR Manager"
     ]
     msg += random.choice(signatures)
     
@@ -473,7 +473,7 @@ def render_whatsapp_page():
 
 I hope you are doing well.
 
-We are actively matching candidates with the latest job opportunities., and we'd love to know if you are still looking for a position.
+We are currently evaluating candidates for various job opportunities with us, and we'd love to know if you are still looking for a position.
 
 A quick reply would be great:
 YES – Proceed with me
@@ -483,8 +483,7 @@ If you are not currently seeking opportunities, we would highly appreciate it if
 
 Best regards,
 Abu Fahd
-HR Manager
-Human Resources Department"""
+HR Manager"""
         
         # Smart Message Toggle
         is_smart = st.checkbox(lbl['smart_msg'], value=st.session_state.get('wa_smart_mode', False), help=lbl['smart_msg_help'], key="wa_smart_mode")
