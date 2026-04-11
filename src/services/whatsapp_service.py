@@ -61,47 +61,27 @@ class WhatsAppService:
                 if os.path.exists(p): os.remove(p)
             except: pass
         
-        # 2026 Advanced Stealth User Agent
+        # --- Stealth & Environment Setup ---
+        is_cloud = "/mount/" in __file__.replace("\\", "/")
         ver = self._get_chrome_version()
         ua = self._get_random_ua(ver)
-        
-        def apply_stealth_args(o, is_uc=False):
-            if headless:
-                # Optimized Headless for 2026/Chrome 146
-                o.add_argument("--headless=new")
-                o.add_argument("--disable-gpu")
-                o.add_argument("--window-size=1920,1080")
-            
+
+        def apply_stealth_args(o):
+            o.add_argument("--headless=new")
             o.add_argument("--no-sandbox")
             o.add_argument("--disable-dev-shm-usage")
-            o.add_argument(f"--user-data-dir={self.session_path}")
+            o.add_argument("--disable-gpu")
             o.add_argument(f"--user-agent={ua}")
-            o.add_argument("--lang=ar,en-US,en;q=0.9") # Add Arabic to languages
+            o.add_argument("--lang=ar,en-US,en;q=0.9")
             o.add_argument("--disable-blink-features=AutomationControlled")
             o.add_argument("--use-fake-ui-for-media-stream")
             o.add_argument("--disable-notifications")
             o.add_argument("--disable-extensions")
-            o.add_argument("--profile-directory=Default")
             o.add_argument("--disable-infobars")
             o.add_argument("--ignore-certificate-errors")
             o.add_argument("--disable-browser-side-navigation")
             o.add_argument("--disable-features=IsolateOrigins,site-per-process")
             o.add_argument("--password-store=basic")
-
-        # Find Chrome binary
-        binary = self._find_chrome_binary()
-        ver = self._get_chrome_version()
-        
-        # --- Launch Logic with Crash Recovery ---
-        attempts = 2
-        for attempt in range(attempts):
-            try:
-                print(f"[{time.strftime('%H:%M:%S')}] Launching WhatsApp Engine (Attempt {attempt+1}/{attempts})...")
-                # Force taskkill of ghost processes on first attempt to ensure no locks
-                if attempt == 0:
-                    self._kill_zombies()
-
-                import undetected_chromedriver as uc
                 opts = uc.ChromeOptions()
                 apply_stealth_args(opts, is_uc=True)
                 
