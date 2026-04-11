@@ -446,7 +446,7 @@ class TranslationManager:
 
     def translate_full_text(self, text, target_lang='ar'):
         if not HAS_DEPS:
-            return "Error: Libraries (deep-translator) not installed."
+            return text # Graceful fallback to original text
         if not text:
             return ""
 

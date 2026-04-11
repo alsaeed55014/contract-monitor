@@ -9,3 +9,6 @@ requests
 Pillow
 gspread
 google-auth
+
+deep-translator
+pdfplumber

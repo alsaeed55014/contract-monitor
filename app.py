@@ -4944,10 +4944,10 @@ def render_order_processing_content():
             
             # Start Neon Frame and Header (Static CSS to avoid mobile lag)
             st.markdown(f"""
-<div style="border: 1.5px solid rgba(255, 255, 255, 0.4); border-radius: 18px; padding: 15px; margin: 15px 0; background: rgba(10, 14, 26, 0.6); box-shadow: 0 0 10px rgba(255, 255, 255, 0.2); direction: rtl;">
-    <div style="background: linear-gradient(90deg, rgba(255,255,255,0.1), transparent); 
-                padding: 12px 20px; border-radius: 12px; border-right: 5px solid #FFFFFF; margin: 0 0 15px 0;
-                box-shadow: 0 0 12px rgba(255,255,255,0.2);">
+<div style="border: 1.5px solid rgba(255, 255, 255, 0.35); border-radius: 20px; padding: 18px; margin: 18px 0; background: rgba(10, 14, 26, 0.7); box-shadow: 0 0 15px rgba(255, 255, 255, 0.15); direction: rtl;">
+    <div style="background: linear-gradient(90deg, rgba(255,255,255,0.08), transparent); 
+                padding: 14px 25px; border-radius: 12px; border-right: 6px solid #FFFFFF; margin: 0 0 18px 0;
+                box-shadow: 5px 0 15px rgba(255,255,255,0.3);">
         <h3 style="color: #FFFFFF; margin: 0; font-family: 'Tajawal', sans-serif; text-shadow: 0 0 8px rgba(255,255,255,0.5);">
             {display_title} <span style="font-size: 0.8rem; color: #888;">#{idx+1}</span>
         </h3>
