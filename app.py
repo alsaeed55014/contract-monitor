@@ -256,13 +256,13 @@ def get_css(lang='ar'):
 
 
         /* 1) Global Aesthetics & Scrollbar */
-        *, *::before, *::after {
+        *, *::before, *::after {{
             box-sizing: border-box !important;
-        }
+        }}
 
-        html, body, .stApp {
+        html, body, .stApp {{
             direction: {direction} !important;
-        }
+        }}
         
         .stApp {{
             background: radial-gradient(circle at top right, #001F3F, #000000) !important;
