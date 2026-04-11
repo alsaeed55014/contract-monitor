@@ -4852,18 +4852,10 @@ def render_order_processing_content():
             
             disp_val = " , ".join(new_segments)
 
-        return f"""
-        <div style="background: rgba(255,255,255,0.04); padding: 12px; border-radius: 12px; 
-                    border: 1px solid rgba(255,255,255,0.08); margin: 4px; 
-                    flex: 1 1 {min_width}; min-width: 120px; max-width: 100%; 
-                    min-height: 85px; display: flex; flex-direction: column; 
-                    justify-content: center; direction: {cell_direction}; text-align: {cell_align};
-                    box-shadow: inset 0 0 10px rgba(0,0,0,0.2); overflow: hidden;">
-            <span style="color: #999; font-size: 0.8rem; margin-bottom: 2px;">{label_text}</span>
-            <span style="color: {color}; font-size: 1.05rem; font-weight: 600; line-height: 1.3; word-break: break-word;">
-                {icon} {disp_val}
-            </span>
-        </div>"""
+        return f"""<div style="background: rgba(255,255,255,0.04); padding: 12px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.08); margin: 4px; flex: 1 1 {min_width}; min-width: 120px; max-width: 100%; min-height: 85px; display: flex; flex-direction: column; justify-content: center; direction: {cell_direction}; text-align: {cell_align}; box-shadow: inset 0 0 10px rgba(0,0,0,0.2); overflow: hidden;">
+<span style="color: #999; font-size: 0.8rem; margin-bottom: 2px;">{label_text}</span>
+<span style="color: {color}; font-size: 1.05rem; font-weight: 600; line-height: 1.3; word-break: break-word;">{icon} {disp_val}</span>
+</div>"""
 
 
     # --- Timestamp column lookup ---
