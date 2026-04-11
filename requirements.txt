@@ -1,10 +1,10 @@
 streamlit
 pandas
 pytz
-undetected-chromedriver>=3.5.0
-selenium>=4.9.0
+selenium
 selenium-stealth
 openpyxl
 python-dotenv
 requests
 Pillow
+undetected-chromedriver
