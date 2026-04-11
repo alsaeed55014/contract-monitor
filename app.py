@@ -256,9 +256,13 @@ def get_css(lang='ar'):
 
 
         /* 1) Global Aesthetics & Scrollbar */
-        html, body, .stApp {{
+        *, *::before, *::after {
+            box-sizing: border-box !important;
+        }
+
+        html, body, .stApp {
             direction: {direction} !important;
-        }}
+        }
         
         .stApp {{
             background: radial-gradient(circle at top right, #001F3F, #000000) !important;
@@ -4774,7 +4778,7 @@ def render_order_processing_content():
         return pd.DataFrame(rows), filtered_indices
 
 
-    def info_cell(icon, label_text, value, color="#F4F4F4", min_width="200px", force_ar=False):
+    def info_cell(icon, label_text, value, color="#F4F4F4", min_width="160px", force_ar=False):
         if not value or str(value).strip().lower() in ["nan", "none", ""]:
             return ""
         
@@ -4783,7 +4787,10 @@ def render_order_processing_content():
         
         # Detect if this is a phone/number field for LTR direction
         is_phone_field = any(kw in label_text.lower() for kw in ["phone", "mobile", "جوال", "هاتف", "موبايل"])
-        val_direction = 'direction:ltr; unicode-bidi:embed;' if is_phone_field else ''
+        
+        # Explicitly set text alignment and direction for stability across browsers
+        cell_direction = 'ltr' if is_phone_field else 'rtl'
+        cell_align = 'left' if is_phone_field else 'right'
         
         # Flag Injection: Look for nationality fields
         if any(kw in label_text.lower() for kw in ["nationality", "جنسية"]):
@@ -4832,9 +4839,9 @@ def render_order_processing_content():
                 
                 # Find the FIRST matching nationality in this segment
                 matched_code = None
-                for name, code in all_names.items():
-                    if name.lower() in seg_stripped.lower():
-                        matched_code = code
+                for n, c in all_names.items():
+                    if n.lower() in seg_stripped.lower():
+                        matched_code = c
                         break
                 
                 if matched_code:
@@ -4845,7 +4852,18 @@ def render_order_processing_content():
             
             disp_val = " , ".join(new_segments)
 
-        return f'<div style="background: rgba(255,255,255,0.04); padding: 12px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.06); margin: 5px; flex: 1 1 {min_width}; min-height: 80px; display: flex; flex-direction: column; justify-content: center;"><span style="color: #888; font-size: 0.8rem;">{label_text}</span><span style="color: {color}; font-size: 1.1rem; font-weight: 600; margin-top: 4px; {val_direction}">{icon} {disp_val}</span></div>'
+        return f"""
+        <div style="background: rgba(255,255,255,0.04); padding: 12px; border-radius: 12px; 
+                    border: 1px solid rgba(255,255,255,0.08); margin: 4px; 
+                    flex: 1 1 {min_width}; min-width: 120px; max-width: 100%; 
+                    min-height: 85px; display: flex; flex-direction: column; 
+                    justify-content: center; direction: {cell_direction}; text-align: {cell_align};
+                    box-shadow: inset 0 0 10px rgba(0,0,0,0.2); overflow: hidden;">
+            <span style="color: #999; font-size: 0.8rem; margin-bottom: 2px;">{label_text}</span>
+            <span style="color: {color}; font-size: 1.05rem; font-weight: 600; line-height: 1.3; word-break: break-word;">
+                {icon} {disp_val}
+            </span>
+        </div>"""
 
 
     # --- Timestamp column lookup ---
@@ -5038,9 +5056,9 @@ def render_order_processing_content():
 
                 # Segment Header Helper
                 def render_segment_header(label, count, color="#D4AF37", explainer=None):
-                    st.markdown(f"""<div style="color: {color}; font-weight: 700; margin: 15px 5px 5px 5px; font-family: 'Cairo', sans-serif;">{label} — {count}</div>""", unsafe_allow_html=True)
+                    st.markdown(f"""<div style="color: {color}; font-weight: 700; margin: 15px 5px 5px 5px; font-family: 'Cairo', sans-serif; direction: rtl; text-align: right;">{label} — {count}</div>""", unsafe_allow_html=True)
                     if explainer:
-                        st.markdown(f"""<div style="font-size: 0.85rem; color: #888; margin-top: -5px; margin-bottom: 10px; margin-left: 10px; font-family: 'Cairo', sans-serif;">{explainer}</div>""", unsafe_allow_html=True)
+                        st.markdown(f"""<div style="font-size: 0.85rem; color: #888; margin: -5px 5px 10px 5px; font-family: 'Cairo', sans-serif; direction: rtl; text-align: right;">{explainer}</div>""", unsafe_allow_html=True)
 
                 # Same City Table
                 if city_list:
