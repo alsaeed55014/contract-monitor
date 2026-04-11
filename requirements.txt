@@ -7,4 +7,3 @@ openpyxl
 python-dotenv
 requests
 Pillow
-undetected-chromedriver
