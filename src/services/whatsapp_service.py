@@ -83,6 +83,30 @@ class WhatsAppService:
             o.add_argument("--disable-features=IsolateOrigins,site-per-process")
             o.add_argument("--password-store=basic")
 
+        # --- STREAMLIT CLOUD PYTHON 3.12/3.13 DISTUTILS PATCH ---
+        import sys
+        try:
+            import distutils.version
+        except ImportError:
+            import types
+            distutils = types.ModuleType("distutils")
+            sys.modules["distutils"] = distutils
+            distutils_version = types.ModuleType("distutils.version")
+            distutils.version = distutils_version
+            sys.modules["distutils.version"] = distutils_version
+            
+            class MockLooseVersion:
+                def __init__(self, vstring):
+                    self.vstring = vstring or "0.0.0"
+                def __eq__(self, other):
+                    return str(self.vstring) == str(getattr(other, 'vstring', other))
+                def __lt__(self, other):
+                    return str(self.vstring) < str(getattr(other, 'vstring', other))
+                def __repr__(self):
+                    return f"LooseVersion('{self.vstring}')"
+                    
+            distutils_version.LooseVersion = MockLooseVersion
+
         import undetected_chromedriver as uc
         binary = self._find_chrome_binary()
 
