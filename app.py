@@ -4796,36 +4796,36 @@ def render_order_processing_content():
         if any(kw in label_text.lower() for kw in ["nationality", "جنسية"]):
             import re
             
-            # Comprehensive name-to-code mapping (both Arabic and English)
+            # Comprehensive name-to-emoji mapping (both Arabic and English) to optimize load time
             all_names = {
                 # Arabic names
-                "بنجلاديشي": "BD", "بنغالي": "BD", "بنجالي": "BD", "بنغلاديشي": "BD",
-                "نيبالي": "NP", "نيبال": "NP",
-                "فلبيني": "PH", "فلبينية": "PH", "الفلبين": "PH",
-                "هندي": "IN", "هندية": "IN", "الهند": "IN",
-                "مصري": "EG", "مصرية": "EG", "مصر": "EG",
-                "باكستاني": "PK", "باكستانية": "PK", "باكستان": "PK",
-                "سوداني": "SD", "سودانية": "SD", "السودان": "SD",
-                "كيني": "KE", "كينية": "KE", "كينيا": "KE",
-                "أوغندي": "UG", "أوغندية": "UG", "أوغندا": "UG",
-                "إثيوبي": "ET", "إثيوبية": "ET", "إثيوبيا": "ET",
-                "يمني": "YE", "يمنية": "YE", "اليمن": "YE",
-                "إندونيسي": "ID", "اندونيسي": "ID", "إندونيسية": "ID", "اندونيسية": "ID", "إندونيسيا": "ID",
-                "سريلانكي": "LK", "سريلانكية": "LK",
+                "بنجلاديشي": "🇧🇩", "بنغالي": "🇧🇩", "بنجالي": "🇧🇩", "بنغلاديشي": "🇧🇩",
+                "نيبالي": "🇳🇵", "نيبال": "🇳🇵",
+                "فلبيني": "🇵🇭", "فلبينية": "🇵🇭", "الفلبين": "🇵🇭",
+                "هندي": "🇮🇳", "هندية": "🇮🇳", "الهند": "🇮🇳",
+                "مصري": "🇪🇬", "مصرية": "🇪🇬", "مصر": "🇪🇬",
+                "باكستاني": "🇵🇰", "باكستانية": "🇵🇰", "باكستان": "🇵🇰",
+                "سوداني": "🇸🇩", "سودانية": "🇸🇩", "السودان": "🇸🇩",
+                "كيني": "🇰🇪", "كينية": "🇰🇪", "كينيا": "🇰🇪",
+                "أوغندي": "🇺🇬", "أوغندية": "🇺🇬", "أوغندا": "🇺🇬",
+                "إثيوبي": "🇪🇹", "إثيوبية": "🇪🇹", "إثيوبيا": "🇪🇹",
+                "يمني": "🇾🇪", "يمنية": "🇾🇪", "اليمن": "🇾🇪",
+                "إندونيسي": "🇮🇩", "اندونيسي": "🇮🇩", "إندونيسية": "🇮🇩", "اندونيسية": "🇮🇩", "إندونيسيا": "🇮🇩",
+                "سريلانكي": "🇱🇰", "سريلانكية": "🇱🇰",
                 # English names
-                "bangladeshi": "BD", "bengali": "BD", 
-                "nepali": "NP", "nepalese": "NP",
-                "filipino": "PH", "filipina": "PH", "philippines": "PH",
-                "indian": "IN",
-                "egyptian": "EG",
-                "pakistani": "PK",
-                "sudanese": "SD",
-                "kenyan": "KE",
-                "ugandan": "UG",
-                "ethiopian": "ET",
-                "yemeni": "YE",
-                "indonesian": "ID",
-                "sri lankan": "LK",
+                "bangladeshi": "🇧🇩", "bengali": "🇧🇩", 
+                "nepali": "🇳🇵", "nepalese": "🇳🇵",
+                "filipino": "🇵🇭", "filipina": "🇵🇭", "philippines": "🇵🇭",
+                "indian": "🇮🇳",
+                "egyptian": "🇪🇬",
+                "pakistani": "🇵🇰",
+                "sudanese": "🇸🇩",
+                "kenyan": "🇰🇪",
+                "ugandan": "🇺🇬",
+                "ethiopian": "🇪🇹",
+                "yemeni": "🇾🇪",
+                "indonesian": "🇮🇩",
+                "sri lankan": "🇱🇰",
             }
             
             # Split by comma only (each nationality = "عربي - English")
@@ -4845,8 +4845,7 @@ def render_order_processing_content():
                         break
                 
                 if matched_code:
-                    flag_img = f'<img src="https://flagsapi.com/{matched_code}/flat/24.png" style="height:16px; vertical-align:middle; margin:0 4px 2px 4px;">'
-                    new_segments.append(f"{seg_stripped} {flag_img}")
+                    new_segments.append(f"{seg_stripped} {matched_code}")
                 else:
                     new_segments.append(seg_stripped)
             
@@ -4894,8 +4893,14 @@ def render_order_processing_content():
         clean = re.sub(r'[\s\+\-\(\)]', '', str(q)).translate(arabic_to_western)
         return clean.isdigit() and len(clean) >= 5
 
-    # Loop over all customers
+    # ---------------- 🚀 PRE-FILTERING FOR PAGINATION ----------------
+    filtered_indices = []
+    
     for idx, customer_row in customers_df.iterrows():
+        client_key = f"client_{idx}"
+        if client_key in st.session_state.op_hidden_clients:
+            continue
+            
         company_val = str(customer_row.get(c_company, "")) if c_company else ""
         responsible_val = str(customer_row.get(c_responsible, "")) if c_responsible else ""
         mobile_val = str(customer_row.get(c_mobile, "")) if c_mobile else ""
@@ -4903,13 +4908,13 @@ def render_order_processing_content():
 
         if cust_search_q:
             if _is_phone_query_op(cust_search_q):
-                # Smart phone search: normalize both query and mobile value
+                # Smart phone search
                 q_phone = _normalize_phone_op(cust_search_q)
                 m_phone = _normalize_phone_op(mobile_val)
                 if not (q_phone and q_phone in m_phone):
                     continue
             else:
-                # Text search: name or location
+                # Text search
                 q_lower = cust_search_q.lower()
                 match = False
                 for val in [responsible_val, location_val, company_val]:
@@ -4918,16 +4923,63 @@ def render_order_processing_content():
                         break
                 if not match:
                     continue
+                    
+        filtered_indices.append(idx)
+        
+    # ---------------- 🚀 PAGINATION LOGIC ----------------
+    PAGE_SIZE = 15
+    total_items = len(filtered_indices)
+    total_pages = max(1, (total_items + PAGE_SIZE - 1) // PAGE_SIZE)
+    
+    if "op_page_number" not in st.session_state:
+        st.session_state.op_page_number = 1
+        
+    # Reset page to 1 if search query changes
+    if "op_last_search" not in st.session_state or st.session_state.op_last_search != cust_search_q:
+        st.session_state.op_page_number = 1
+        st.session_state.op_last_search = cust_search_q
+        
+    if st.session_state.op_page_number > total_pages:
+        st.session_state.op_page_number = total_pages
+    elif st.session_state.op_page_number < 1:
+        st.session_state.op_page_number = 1
+        
+    start_idx = (st.session_state.op_page_number - 1) * PAGE_SIZE
+    end_idx = start_idx + PAGE_SIZE
+    current_page_indices = filtered_indices[start_idx:end_idx]
+    
+    # Top Pagination Controls
+    if total_pages > 1:
+        st.markdown("<div style='margin-top: 15px;'></div>", unsafe_allow_html=True)
+        _, pc1, pc2, pc3, _ = st.columns([1, 1, 2, 1, 1])
+        with pc1:
+            if st.button("السابق ⬅️" if lang == 'ar' else "⬅️ Previous", disabled=(st.session_state.op_page_number == 1), key="prev_top", use_container_width=True):
+                st.session_state.op_page_number -= 1
+                st.rerun()
+        with pc2:
+            page_text = f"صفحة {st.session_state.op_page_number} من {total_pages}" if lang == 'ar' else f"Page {st.session_state.op_page_number} of {total_pages}"
+            st.markdown(f"<div style='text-align:center; padding-top:10px; color:#ddd;'>{page_text}</div>", unsafe_allow_html=True)
+        with pc3:
+            if st.button("➡️ التالي" if lang == 'ar' else "Next ➡️", disabled=(st.session_state.op_page_number == total_pages), key="next_top", use_container_width=True):
+                st.session_state.op_page_number += 1
+                st.rerun()
+                
+    st.markdown("<hr style='border-color: rgba(255,255,255,0.1); margin: 20px 0;'>", unsafe_allow_html=True)
 
+    # Loop over current page customers
+    for idx in current_page_indices:
+        customer_row = customers_df.loc[idx]
+        company_val = str(customer_row.get(c_company, "")) if c_company else ""
+        responsible_val = str(customer_row.get(c_responsible, "")) if c_responsible else ""
+        mobile_val = str(customer_row.get(c_mobile, "")) if c_mobile else ""
+        location_val = str(customer_row.get(c_location, "")) if c_location else ""
+        
         client_key = f"client_{idx}"
         
         # Display name
         display_name = f"{company_val} - {responsible_val}".strip(" -")
         if not display_name: display_name = f"طلب #{idx+1}" if lang == 'ar' else f"Request #{idx+1}"
         
-        if client_key in st.session_state.op_hidden_clients:
-            continue
-            
         # --- Single Customer Section ---
         with st.container():
             # Header with White Neon Glow Frame integrated
