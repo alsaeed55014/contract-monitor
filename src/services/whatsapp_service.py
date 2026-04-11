@@ -66,7 +66,7 @@ class WhatsAppService:
         ver = self._get_chrome_version()
         ua = self._get_random_ua(ver)
 
-        def apply_stealth_args(o):
+        def apply_stealth_args(o, is_uc=False):
             o.add_argument("--headless=new")
             o.add_argument("--no-sandbox")
             o.add_argument("--disable-dev-shm-usage")
@@ -82,6 +82,12 @@ class WhatsAppService:
             o.add_argument("--disable-browser-side-navigation")
             o.add_argument("--disable-features=IsolateOrigins,site-per-process")
             o.add_argument("--password-store=basic")
+
+        import undetected_chromedriver as uc
+        binary = self._find_chrome_binary()
+
+        for attempt in range(2):
+            try:
                 opts = uc.ChromeOptions()
                 apply_stealth_args(opts, is_uc=True)
                 
