@@ -6,6 +6,7 @@ import io
 import random
 import subprocess
 import re
+from datetime import datetime
 
 # Selenium imports are done lazily in methods to avoid blocking app startup
 
@@ -27,6 +28,17 @@ class WhatsAppService:
         except:
             pass
         return None
+
+    def _get_random_ua(self, version=None):
+        """توليد User-Agent عشوائي متوافق مع نسخة كروم الحالية"""
+        ver = version or self._get_chrome_version() or 146
+        common_uas = [
+            f"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/{ver}.0.0.0 Safari/537.36",
+            f"Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/{ver}.0.0.0 Safari/537.36",
+            f"Mozilla/5.0 (Windows NT 10.0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/{ver}.0.0.0 Safari/537.36",
+            f"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/{ver}.0.0.0 Safari/537.36"
+        ]
+        return random.choice(common_uas)
 
     def start_driver(self, headless=True, force_clean=False):
         if self.driver: 
@@ -50,7 +62,8 @@ class WhatsAppService:
             except: pass
         
         # 2026 Advanced Stealth User Agent
-        ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36"
+        ver = self._get_chrome_version()
+        ua = self._get_random_ua(ver)
         
         def apply_stealth_args(o, is_uc=False):
             if headless:
@@ -63,7 +76,7 @@ class WhatsAppService:
             o.add_argument("--disable-dev-shm-usage")
             o.add_argument(f"--user-data-dir={self.session_path}")
             o.add_argument(f"--user-agent={ua}")
-            o.add_argument("--lang=en-US,en;q=0.9")
+            o.add_argument("--lang=ar,en-US,en;q=0.9") # Add Arabic to languages
             o.add_argument("--disable-blink-features=AutomationControlled")
             o.add_argument("--use-fake-ui-for-media-stream")
             o.add_argument("--disable-notifications")
@@ -71,6 +84,9 @@ class WhatsAppService:
             o.add_argument("--profile-directory=Default")
             o.add_argument("--disable-infobars")
             o.add_argument("--ignore-certificate-errors")
+            o.add_argument("--disable-browser-side-navigation")
+            o.add_argument("--disable-features=IsolateOrigins,site-per-process")
+            o.add_argument("--password-store=basic")
 
         # Find Chrome binary
         binary = self._find_chrome_binary()
@@ -153,6 +169,25 @@ class WhatsAppService:
             ]
             for b in win_paths:
                 if os.path.exists(b): return b
+        else:
+            # Common Linux Paths (for Streamlit Cloud/GitHub)
+            linux_paths = [
+                "/usr/bin/google-chrome",
+                "/usr/bin/chromium",
+                "/usr/bin/chromium-browser",
+                "/usr/bin/google-chrome-stable"
+            ]
+            for b in linux_paths:
+                if os.path.exists(b): return b
+            
+            # Try to find from 'which' command
+            try:
+                import subprocess
+                for cmd in ['google-chrome', 'chromium', 'google-chrome-stable']:
+                    path = subprocess.check_output(['which', cmd]).decode().strip()
+                    if path: return path
+            except: pass
+            
         return None
 
     def _kill_zombies(self):
@@ -161,6 +196,10 @@ class WhatsAppService:
                 os.system('taskkill /F /IM chromedriver.exe /T >nul 2>&1')
                 # Kill only headless chromes that might be locking the profile
                 os.system('taskkill /F /IM chrome.exe /FI "WINDOWTITLE eq chrome*" /FI "MEMUSAGE gt 1" >nul 2>&1')
+            else:
+                # Portable Linux cleanup
+                os.system('pkill -f chromedriver > /dev/null 2>&1')
+                os.system('pkill -f chrome > /dev/null 2>&1')
         except: pass
 
 
@@ -255,9 +294,22 @@ class WhatsAppService:
                 return False, "رقم قصير جداً" 
             
             # Open the chat window with a brief random wait
-            time.sleep(random.uniform(1.0, 3.0))
+            # محاكاة التفكير قبل الفتح
+            time.sleep(random.uniform(2.0, 5.0))
             url = f"https://web.whatsapp.com/send?phone={clean_phone}"
             self.driver.get(url)
+            
+            # محاكاة حركة الماوس العشوائية والتمرير (Human Focus)
+            try:
+                actions = ActionChains(self.driver)
+                for _ in range(random.randint(2, 4)):
+                    actions.move_by_offset(random.randint(-50, 50), random.randint(-50, 50)).perform()
+                    time.sleep(random.uniform(0.1, 0.3))
+                # تمرير بسيط للأسفل والأعلى ليبدو كأن المستخدم يقرأ
+                self.driver.execute_script(f"window.scrollBy(0, {random.randint(100, 300)})")
+                time.sleep(random.uniform(0.5, 1.0))
+                self.driver.execute_script(f"window.scrollBy(0, -{random.randint(50, 150)})")
+            except: pass
             
             wait = WebDriverWait(self.driver, 45)
             
@@ -275,16 +327,25 @@ class WhatsAppService:
             time.sleep(random.uniform(1.5, 3.0)) # Human-like pause after loading
 
             if attachment_path and os.path.exists(attachment_path):
+                # 🛡️ تمويه اسم الملف: نسخ الملف لاسم عشوائي قبل الإرسال لتجنب البصمة المتكررة
+                temp_dir = os.path.join(self.session_path, "temp_uploads")
+                os.makedirs(temp_dir, exist_ok=True)
+                
+                original_ext = os.path.splitext(attachment_path)[1]
+                random_filename = f"DOC_{datetime.now().strftime('%H%M%S')}_{random.randint(1000, 9999)}{original_ext}"
+                obfuscated_path = os.path.join(temp_dir, random_filename)
+                shutil.copy2(attachment_path, obfuscated_path)
+
                 # Attach file
                 attach_btn = wait.until(EC.element_to_be_clickable(
                     (By.XPATH, '//div[@title="Attach"] | //span[@data-icon="plus"] | //span[@data-icon="attach-menu-plus"]')
                 ))
-                time.sleep(random.uniform(0.5, 1.2))
+                time.sleep(random.uniform(1.2, 2.5)) # تفكير قبل الضغط
                 attach_btn.click()
                 time.sleep(random.uniform(1.0, 2.0))
 
                 file_input = self.driver.find_element(By.XPATH, '//input[@type="file"]')
-                file_input.send_keys(attachment_path)
+                file_input.send_keys(obfuscated_path)
                 
                 caption_input = wait.until(EC.presence_of_element_located(
                     (By.XPATH, '//div[@contenteditable="true"][@data-tab="10"] | //div[@contenteditable="true" and contains(@class, "copyable-text")]')

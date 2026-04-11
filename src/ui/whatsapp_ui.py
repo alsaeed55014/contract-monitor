@@ -8,6 +8,7 @@ from datetime import datetime
 from src.utils.phone_utils import validate_numbers, format_phone_number, save_to_local_desktop, render_pasha_export_button
 from src.core.i18n import t
 from src.config import WA_HISTORY_FILE, WA_TEMPLATES_FILE
+from src.ui.styles import get_base64_image
 import random
 
 # --- Smart Message Templates (Updated 2026-03-20) ---
@@ -83,7 +84,12 @@ def save_templates(templates):
 
 def generate_smart_message(name, cv_link, custom_job=""):
     templates = load_templates().get("smart", SMART_TEMPLATES)
-    intro = random.choice(templates.get("intro", ["Hello"]))
+    
+    # 🛡️ تنويع التحية
+    greetings = ["Hello", "Hi", "Greetings", "Dear"]
+    greet = random.choice(greetings)
+    
+    intro = random.choice(templates.get("intro", [""]))
     b_start = random.choice(templates.get("body_start", [""]))
     b_end = random.choice(templates.get("body_end", [""]))
     closing = random.choice(templates.get("closing", [""]))
@@ -93,13 +99,32 @@ def generate_smart_message(name, cv_link, custom_job=""):
     job_part = f" in {custom_job}" if custom_job.strip() else ""
     full_body = f"{b_start}{job_part}{b_end}"
     
-    msg = f"Hello {name},\n\n{intro}\n\n{full_body}\n\n{closing}\n\n{final_call}\n\n"
+    # 🛡️ تبديل هيكلية الرسالة بشكل عشوائي (Shuffling sections)
+    sections = [intro, full_body, closing, final_call]
+    # random.shuffle(sections) # Not always good as it might break logical flow
+    
+    # Randomize line breaks (one or two)
+    lb = "\n" if random.random() > 0.5 else "\n\n"
+    
+    msg = f"{greet} {name},{lb}{intro}{lb}{full_body}{lb}{closing}{lb}{final_call}{lb}"
     
     # Logic: If CV exists, add CV link. If not, omit it.
     if cv_link and str(cv_link).lower() != 'nan' and str(cv_link).strip() != '':
         msg += f"Link to your profile: {cv_link}\n\n"
     
-    msg += "Best regards,\nAbu Fahd\nHR Manager"
+    # 🛡️ تنويع التوقيع
+    signatures = [
+        "Best regards,\nAbu Fahd\nHR Manager",
+        "Kind regards,\nAbu Fahd - HR Manager",
+        "With respect,\nAbu Fahd\nHuman Resources Department",
+        "Thanks,\nHR Team"
+    ]
+    msg += random.choice(signatures)
+    
+    # 🛡️ عشوائية المسافات والرموز التعبيرية
+    if random.random() > 0.7:
+        msg = msg.replace(".", " .").replace("!", " ! ")
+        
     return msg
 
 def load_wa_history():
@@ -272,195 +297,162 @@ def render_whatsapp_page():
     # 3. INPUT + BROADCAST
     if status == "Connected":
         st.markdown("---")
-        t_manual, t_xl = st.tabs([lbl['tab_manual'], lbl['tab_excel']])
         
-        rebuild_review = False
-        manual_list = []
-        with t_manual:
-            txt = st.text_area(lbl['paste_numbers'], height=100)
-            manual_list, _, _ = validate_numbers(txt)
-            if manual_list:
-                if st.session_state.get('wa_last_manual_count', 0) != len(manual_list) or txt != st.session_state.get('wa_last_txt', ''):
-                    rebuild_review = True
-                    st.session_state.wa_last_manual_count = len(manual_list)
-                    st.session_state.wa_last_txt = txt
+        # --- 🏗️ Linear Layout: Images Top, Main Middle, Review Bottom ---
+        top_branding = st.container()
+        main_col = st.container()
+        review_col = st.container()
 
-        with t_xl:
-            uploaded = st.file_uploader(lbl['upload_excel'], type=["xlsx"], key=st.session_state.get('wa_upload_key', 'xl_0'))
-            if uploaded:
-                df = pd.read_excel(uploaded)
-                if st.session_state.get('wa_last_uploaded_name') != uploaded.name:
-                    rebuild_review = True
-                    st.session_state.wa_last_uploaded_name = uploaded.name
-                    st.session_state.wa_data = df
-                
-                xl_col1, xl_col2 = st.columns([3, 1])
-                # Show unique count if targets are already processed, otherwise show raw count
-                display_count = len(st.session_state.wa_review_targets) if st.session_state.wa_review_targets else len(df)
-                with xl_col1: st.success(lbl['loaded_count'].format(display_count))
-                with xl_col2:
-                    if st.button(lbl['delete_file'], use_container_width=True, key="del_xl"):
-                        st.session_state.wa_data = None
-                        st.session_state.wa_review_targets = []
-                        st.session_state.wa_last_uploaded_name = None
-                        st.session_state.wa_upload_key = 'xl_1' if st.session_state.get('wa_upload_key') == 'xl_0' else 'xl_0'
-                        st.rerun()
-            elif st.session_state.wa_data is not None:
-                xl_col1, xl_col2 = st.columns([3, 1])
-                # Show unique count if available
-                display_count = len(st.session_state.wa_review_targets) if st.session_state.wa_review_targets else len(st.session_state.wa_data)
-                with xl_col1: st.info(lbl['loaded_count'].format(display_count))
-                with xl_col2:
-                    if st.button(lbl['delete_file'], use_container_width=True, key="del_xl2"):
-                        st.session_state.wa_data = None
-                        st.session_state.wa_review_targets = []
-                        st.session_state.wa_last_uploaded_name = None
-                        st.session_state.wa_upload_key = 'xl_1' if st.session_state.get('wa_upload_key') == 'xl_0' else 'xl_0'
-                        st.rerun()
+        # (Branding images removed from here as requested, keeping current layout container)
+        with top_branding:
+            pass
         
-        # Build review targets if data changed or list is empty but data exists
-        if rebuild_review or (not st.session_state.wa_review_targets and (manual_list or st.session_state.wa_data is not None)):
-            new_targets = []
-            seen_in_current_file = set()
-            dups_count = 0
-            
-            # Manual
-            if manual_list:
-                for n in manual_list:
-                    if n in seen_in_current_file:
-                        dups_count += 1
-                        continue 
+        with review_col:
+            if True:
+                # --- 📋 Review Contacts Table (Moved under Send Button) ---
+                if st.session_state.wa_review_targets:
+                    pending_list = [trg for trg in st.session_state.wa_review_targets if not trg['is_sent']]
+                    excluded_list = [trg for trg in st.session_state.wa_review_targets if trg['is_sent']]
                     
-                    new_targets.append({
-                        'phone': n, 'name': 'Client', 'cv': '', 
-                        'is_sent': (n in st.session_state.wa_history)
-                    })
-                    seen_in_current_file.add(n)
-            # Excel
-            if st.session_state.wa_data is not None:
-                df_curr = st.session_state.wa_data
-                def find_c(keys):
-                    for c in df_curr.columns:
-                        if any(k in str(c).lower() for k in keys): return c
-                    return None
-                c_name = find_c(["اسم", "name"])
-                c_phone = find_c(["واتساب", "رقم", "هاتف", "phone", "جوال"])
-                c_cv = find_c(["سيرة", "cv", "resume", "link"])
-                
-                for idx, row in df_curr.iterrows():
-                    raw_p = str(row[c_phone]).strip() if c_phone else ""
-                    phone = format_phone_number(raw_p)
-                    if not phone: phone = format_phone_number("".join(raw_p.split()))
+                    st.markdown("##### " + lbl['review_section'])
                     
-                    if phone:
-                        # 1. Check for duplicates within the current input
-                        if phone in seen_in_current_file:
-                            dups_count += 1
-                            continue # Totally remove duplicates as requested
+                    # 1. READY LIST (Items NOT checked)
+                    if pending_list:
+                        with st.expander(f"📥 {lbl['total_pending'].format(len(pending_list))}", expanded=True):
+                            to_delete = []
+                            with st.container(height=350):
+                                for i, trg in enumerate(st.session_state.wa_review_targets):
+                                    if trg['is_sent']: continue
+                                    r_c1, r_c2 = st.columns([4, 1])
+                                    # Use simplified display for sidebar
+                                    if r_c1.checkbox(f"{trg['name']} ({trg['phone'][-4:]})", value=False, key=f"trg_pending_{i}_{trg['phone']}"):
+                                        st.session_state.wa_review_targets[i]['is_sent'] = True
+                                        st.session_state.wa_history.add(trg['phone'])
+                                        save_wa_history(st.session_state.wa_history)
+                                        st.rerun()
+                                    if r_c2.button("🗑️", key=f"trg_del_p_{i}_{trg['phone']}"):
+                                        to_delete.append(i)
                             
-                        # 2. Build target data safely (Don't let Excel columns overwrite phone/name/cv)
-                        # Load all columns first
-                        target_data = {str(col): str(row[col]).strip() if pd.notna(row[col]) else "" for col in df_curr.columns}
-                        
-                        # Set essential keys (Overwriting the raw Excel values with cleaned/calculated ones)
-                        target_data['idx'] = idx
-                        target_data['phone'] = phone
-                        target_data['name'] = str(row[c_name]).strip() if c_name else target_data.get('الاسم', "عميل")
-                        target_data['cv'] = str(row[c_cv]).strip() if c_cv else target_data.get('السيرة', "")
-                        
-                        # 3. Check permanent history
-                        target_data['is_sent'] = (phone in st.session_state.wa_history)
-                        
-                        new_targets.append(target_data)
-                        seen_in_current_file.add(phone)
-            
-            if dups_count > 0:
-                st.toast(lbl['dups_removed'].format(dups_count), icon="✂️")
-            
-            if new_targets:
-                st.session_state.wa_review_targets = new_targets
-                st.session_state.wa_done = False
-                st.rerun()
+                            if to_delete:
+                                for idx in sorted(to_delete, reverse=True):
+                                    deleted_item = st.session_state.wa_review_targets.pop(idx)
+                                    if st.session_state.wa_data is not None and 'idx' in deleted_item:
+                                        st.session_state.wa_data = st.session_state.wa_data.drop(deleted_item['idx'])
+                                st.rerun()
 
-        # --- 📋 Review Contacts Table ---
-        if st.session_state.wa_review_targets:
-            pending_list = [trg for trg in st.session_state.wa_review_targets if not trg['is_sent']]
-            excluded_list = [trg for trg in st.session_state.wa_review_targets if trg['is_sent']]
+                    # 2. EXCLUDED LIST (Items Checked)
+                    if excluded_list:
+                        with st.expander(f"✅ {lbl['review_section']} ({len(excluded_list)})", expanded=False):
+                            if st.button(lbl['uncheck_all'], use_container_width=True, key="uncheck_all_side"):
+                                for i in range(len(st.session_state.wa_review_targets)):
+                                    st.session_state.wa_review_targets[i]['is_sent'] = False
+                                st.session_state.wa_history = set()
+                                save_wa_history(st.session_state.wa_history)
+                                st.rerun()
+
+                            with st.container(height=250):
+                                for i, trg in enumerate(st.session_state.wa_review_targets):
+                                    if not trg['is_sent']: continue
+                                    r_c3, r_c4 = st.columns([4, 1])
+                                    clean_id = trg['phone']
+                                    if not r_c3.checkbox(f"{trg['name']} ({trg['phone'][-4:]})", value=True, key=f"trg_excl_{i}_{clean_id}"):
+                                        st.session_state.wa_review_targets[i]['is_sent'] = False
+                                        st.session_state.wa_history.discard(clean_id)
+                                        save_wa_history(st.session_state.wa_history)
+                                        st.rerun()
+                                    if r_c4.button("🗑️", key=f"trg_del_e_{i}_{trg['phone']}"):
+                                        deleted_item = st.session_state.wa_review_targets.pop(i)
+                                        if st.session_state.wa_data is not None and 'idx' in deleted_item:
+                                            st.session_state.wa_data = st.session_state.wa_data.drop(deleted_item['idx'])
+                                        st.rerun()
+
+        with main_col:
+            t_manual, t_xl = st.tabs([lbl['tab_manual'], lbl['tab_excel']])
             
-            st.markdown("---")
-            # 1. READY LIST (Items NOT checked)
-            if pending_list:
-                with st.expander(f"📥 {lbl['total_pending'].format(len(pending_list))}", expanded=True):
-                    h1, h2, h3, h4 = st.columns([1, 4, 3, 1])
-                    h1.markdown(f"**{lbl['col_status']}**")
-                    h2.markdown(f"**{lbl['col_name']}**")
-                    h3.markdown(f"**{lbl['col_phone']}**")
-                    h4.markdown(f"**{lbl['col_action']}**")
+            rebuild_review = False
+            manual_list = []
+            with t_manual:
+                txt = st.text_area(lbl['paste_numbers'], height=100)
+                manual_list, _, _ = validate_numbers(txt)
+                if manual_list:
+                    if st.session_state.get('wa_last_manual_count', 0) != len(manual_list) or txt != st.session_state.get('wa_last_txt', ''):
+                        rebuild_review = True
+                        st.session_state.wa_last_manual_count = len(manual_list)
+                        st.session_state.wa_last_txt = txt
+
+            with t_xl:
+                uploaded = st.file_uploader(lbl['upload_excel'], type=["xlsx"], key=st.session_state.get('wa_upload_key', 'xl_0'))
+                if uploaded:
+                    df = pd.read_excel(uploaded)
+                    if st.session_state.get('wa_last_uploaded_name') != uploaded.name:
+                        rebuild_review = True
+                        st.session_state.wa_last_uploaded_name = uploaded.name
+                        st.session_state.wa_data = df
                     
-                    to_delete = []
-                    for i, trg in enumerate(st.session_state.wa_review_targets):
-                        if trg['is_sent']: continue
-                        r1, r2, r3, r4 = st.columns([1, 4, 3, 1])
-                        # Checkbox to Exclude (becomes true)
-                        if r1.checkbox(" ", value=False, key=f"trg_pending_{i}_{trg['phone']}", label_visibility="collapsed"):
-                            st.session_state.wa_review_targets[i]['is_sent'] = True
-                            st.session_state.wa_history.add(trg['phone'])
-                            save_wa_history(st.session_state.wa_history)
+                    xl_col1, xl_col2 = st.columns([3, 1])
+                    display_count = len(st.session_state.wa_review_targets) if st.session_state.wa_review_targets else len(df)
+                    with xl_col1: st.success(lbl['loaded_count'].format(display_count))
+                    with xl_col2:
+                        if st.button(lbl['delete_file'], use_container_width=True, key="del_xl"):
+                            st.session_state.wa_data = None
+                            st.session_state.wa_review_targets = []
+                            st.session_state.wa_last_uploaded_name = None
+                            st.session_state.wa_upload_key = 'xl_1' if st.session_state.get('wa_upload_key') == 'xl_0' else 'xl_0'
                             st.rerun()
-                        
-                        r2.text(trg['name'])
-                        r3.text(trg['phone'])
-                        if r4.button("🗑️", key=f"trg_del_p_{i}_{trg['phone']}"):
-                            to_delete.append(i)
-                    
-                    if to_delete:
-                        for idx in sorted(to_delete, reverse=True):
-                            deleted_item = st.session_state.wa_review_targets.pop(idx)
-                            if st.session_state.wa_data is not None and 'idx' in deleted_item:
-                                st.session_state.wa_data = st.session_state.wa_data.drop(deleted_item['idx'])
-                        st.rerun()
-
-            # 2. EXCLUDED LIST (Items Checked) - THIS IS THE LIST THE USER ASKED FOR
-            if excluded_list:
-                with st.expander(f"✅ {lbl['review_section']} (مرسلة أو مكررة: {len(excluded_list)})", expanded=True):
-                    if st.button(lbl['uncheck_all'], use_container_width=True):
-                        # Reset all is_sent in review list and history
-                        for i in range(len(st.session_state.wa_review_targets)):
-                            st.session_state.wa_review_targets[i]['is_sent'] = False
-                        st.session_state.wa_history = set() # Clear history as requested to return all
-                        save_wa_history(st.session_state.wa_history)
-                        st.rerun()
-
-                    h1, h2, h3, h4 = st.columns([1, 4, 3, 1])
-                    h1.markdown(f"**{lbl['col_status']}**")
-                    h2.markdown(f"**{lbl['col_name']}**")
-                    h3.markdown(f"**{lbl['col_phone']}**")
-                    h4.markdown(f"**{lbl['col_action']}**")
-                    
-                    to_delete_ex = []
-                    for i, trg in enumerate(st.session_state.wa_review_targets):
-                        if not trg['is_sent']: continue
-                        r1, r2, r3, r4 = st.columns([1, 4, 3, 1])
-                        # Uncheck to move to pending (becomes false)
-                        # We use cleaned phone here to ensure history sync works
-                        clean_id = trg['phone']
-                        if not r1.checkbox(" ", value=True, key=f"trg_excl_{i}_{clean_id}", label_visibility="collapsed"):
-                            st.session_state.wa_review_targets[i]['is_sent'] = False
-                            st.session_state.wa_history.discard(clean_id)
-                            save_wa_history(st.session_state.wa_history)
+                elif st.session_state.wa_data is not None:
+                    xl_col1, xl_col2 = st.columns([3, 1])
+                    display_count = len(st.session_state.wa_review_targets) if st.session_state.wa_review_targets else len(st.session_state.wa_data)
+                    with xl_col1: st.info(lbl['loaded_count'].format(display_count))
+                    with xl_col2:
+                        if st.button(lbl['delete_file'], use_container_width=True, key="del_xl2"):
+                            st.session_state.wa_data = None
+                            st.session_state.wa_review_targets = []
+                            st.session_state.wa_last_uploaded_name = None
+                            st.session_state.wa_upload_key = 'xl_1' if st.session_state.get('wa_upload_key') == 'xl_0' else 'xl_0'
                             st.rerun()
-                        
-                        r2.text(trg['name'])
-                        r3.text(trg['phone'])
-                        if r4.button("🗑️", key=f"trg_del_e_{i}_{trg['phone']}"):
-                            to_delete_ex.append(i)
+            
+            # Build review targets if data changed or list is empty but data exists
+            if rebuild_review or (not st.session_state.wa_review_targets and (manual_list or st.session_state.wa_data is not None)):
+                new_targets = []
+                seen_in_current_file = set()
+                dups_count = 0
+                
+                # Manual
+                if manual_list:
+                    for n in manual_list:
+                        if n in seen_in_current_file: dups_count += 1; continue 
+                        new_targets.append({'phone': n, 'name': 'Client', 'cv': '', 'is_sent': (n in st.session_state.wa_history)})
+                        seen_in_current_file.add(n)
+                # Excel
+                if st.session_state.wa_data is not None:
+                    df_curr = st.session_state.wa_data
+                    def find_c(keys):
+                        for c in df_curr.columns:
+                            if any(k in str(c).lower() for k in keys): return c
+                        return None
+                    c_name = find_c(["اسم", "name"])
+                    c_phone = find_c(["واتساب", "رقم", "هاتف", "phone", "جوال"])
+                    c_cv = find_c(["سيرة", "cv", "resume", "link"])
                     
-                    if to_delete_ex:
-                        for idx in sorted(to_delete_ex, reverse=True):
-                            deleted_item = st.session_state.wa_review_targets.pop(idx)
-                            if st.session_state.wa_data is not None and 'idx' in deleted_item:
-                                st.session_state.wa_data = st.session_state.wa_data.drop(deleted_item['idx'])
-                        st.rerun()
+                    for idx, row in df_curr.iterrows():
+                        raw_p = str(row[c_phone]).strip() if c_phone else ""
+                        phone = format_phone_number(raw_p)
+                        if not phone: phone = format_phone_number("".join(raw_p.split()))
+                        
+                        if phone:
+                            if phone in seen_in_current_file: dups_count += 1; continue
+                            target_data = {str(col): str(row[col]).strip() if pd.notna(row[col]) else "" for col in df_curr.columns}
+                            target_data.update({'idx': idx, 'phone': phone, 'is_sent': (phone in st.session_state.wa_history)})
+                            target_data['name'] = str(row[c_name]).strip() if (c_name and pd.notna(row[c_name])) else "عميل"
+                            target_data['cv'] = str(row[c_cv]).strip() if (c_cv and pd.notna(row[c_cv])) else ""
+                            new_targets.append(target_data)
+                            seen_in_current_file.add(phone)
+                
+                if dups_count > 0: st.toast(lbl['dups_removed'].format(dups_count), icon="✂️")
+                if new_targets:
+                    st.session_state.wa_review_targets = new_targets
+                    st.session_state.wa_done = False
+                    st.rerun()
             
         # Consolidate Pending Targets for the rest of the application
         final_targets = [trg for trg in st.session_state.wa_review_targets if not trg['is_sent']]
@@ -828,6 +820,11 @@ Human Resources Department"""
                         
                         # Anti-ban: Secondary random micro-rest
                         time.sleep(random.uniform(1.0, 3.0))
+                        
+                        # 🛡️ استراحة "تفكير" مفاجئة كل 3-6 رسائل لمحاكاة التعب البشري
+                        if st.session_state.wa_idx > 0 and st.session_state.wa_idx % random.randint(3, 6) == 0:
+                            st.toast("🛡️ " + ("استراحة تمويهية قصيرة..." if is_ar else "Short stealth break..."), icon="⏳")
+                            time.sleep(random.uniform(6.0, 15.0))
 
                     st.session_state.wa_idx += 1
                     
