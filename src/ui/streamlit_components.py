@@ -153,7 +153,7 @@ def render_table_translator(df, key_prefix="table"):
     
     with ct1:
         st.markdown('<div class="table-translator-btn">', unsafe_allow_html=True)
-        if st.button("🇸🇦 الترجمة للعربية", key=f"btn_ar_{key_prefix}", use_container_width=True):
+        if st.button("🇸🇦 الترجمة للعربية", key=f"btn_ar_{key_prefix}", width='stretch'):
             if st.session_state.get(t_state_key) == "ar":
                 st.session_state[t_state_key] = None
             else:
@@ -162,7 +162,7 @@ def render_table_translator(df, key_prefix="table"):
 
     with ct2:
         st.markdown('<div class="table-translator-btn">', unsafe_allow_html=True)
-        if st.button("🇵🇭 ISALIN SA TAGALOG", key=f"btn_tl_{key_prefix}", use_container_width=True):
+        if st.button("🇵🇭 ISALIN SA TAGALOG", key=f"btn_tl_{key_prefix}", width='stretch'):
             if st.session_state.get(t_state_key) == "tl":
                 st.session_state[t_state_key] = None
             else:
@@ -326,7 +326,7 @@ def render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search", 
 
     for idx, config in enumerate(translate_configs):
         with col_a if idx == 0 else col_b:
-            if st.button(config["label"], use_container_width=True, type="primary" if idx == 0 else "secondary", key=f"btn_trans_{key_prefix}_{worker_id}_{config['key_suffix']}"):
+            if st.button(config["label"], width='stretch', type="primary" if idx == 0 else "secondary", key=f"btn_trans_{key_prefix}_{worker_id}_{config['key_suffix']}"):
                 if cv_url and str(cv_url).startswith("http"):
                     trans_loader = show_loading_hourglass(t("extracting", lang))
                     try:
@@ -434,8 +434,8 @@ def login_screen(auth_manager, t, toggle_lang, load_saved_credentials, save_cred
             persist_txt = "هل تريد حفظ الدخول" if lang == 'ar' else "Do you want to stay logged in?"
             persist = st.checkbox(persist_txt, value=(True if saved else False))
             
-            submit = st.form_submit_button(t("login_btn", lang), use_container_width=True)
-            lang_toggle = st.form_submit_button("En" if lang == "ar" else "عربي", use_container_width=True)
+            submit = st.form_submit_button(t("login_btn", lang), width='stretch')
+            lang_toggle = st.form_submit_button("En" if lang == "ar" else "عربي", width='stretch')
 
             if submit:
                 if not u or not p:

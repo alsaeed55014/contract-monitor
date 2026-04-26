@@ -107,7 +107,7 @@ def render_dashboard_content():
         d_final = render_table_translator(d_final, key_prefix=f"dash_{tab_id}")
         styled_final = style_df(d_final)
         
-        event = st.dataframe(styled_final, use_container_width=True, column_config=__apply_pinned_columns(styled_final, final_cfg), on_select="rerun", selection_mode="single-row", hide_index=True, key=f"dash_table_{lang}_{tab_id}")
+        event = st.dataframe(styled_final, width='stretch', column_config=__apply_pinned_columns(styled_final, final_cfg), on_select="rerun", selection_mode="single-row", hide_index=True, key=f"dash_table_{lang}_{tab_id}")
         
         if event.selection and event.selection.get("rows"):
             sel_idx = event.selection["rows"][0]

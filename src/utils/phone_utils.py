@@ -145,7 +145,7 @@ def render_pasha_export_button(df, label, filename, base_save_name, key=None):
             if path:
                 st.toast(f"تم الحفظ في مجلد المرشحين", icon='📁')
         
-        if st.button(label, key=key, use_container_width=True, on_click=do_save):
+        if st.button(label, key=key, width='stretch', on_click=do_save):
             st.success("✅ " + ("تم الحفظ بنجاح" if st.session_state.get('lang') == 'ar' else "Saved Successfully"))
 
     else:
@@ -159,7 +159,7 @@ def render_pasha_export_button(df, label, filename, base_save_name, key=None):
             file_name=filename,
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             key=key,
-            use_container_width=True
+            width='stretch'
         )
     st.markdown('</div>', unsafe_allow_html=True)
 

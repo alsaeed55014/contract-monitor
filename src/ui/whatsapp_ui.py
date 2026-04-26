@@ -253,7 +253,7 @@ def render_whatsapp_page():
                     st.code(st.session_state.wa_service.last_error, language=None)
                     st.info("💡 نصيحة: تأكد من إغلاق أي متصفح كروم مفتوح في الخلفية وحاول مرة أخرى." if is_ar else "💡 Tip: Make sure to close any background Chrome processes and try again.")
     with c2:
-        if st.button(lbl['start_engine'], type="primary", use_container_width=True):
+        if st.button(lbl['start_engine'], type="primary", width='stretch'):
             with st.spinner(lbl['starting']):
                 st.session_state.wa_service.close()
                 ok, msg = st.session_state.wa_service.start_driver(headless=is_cloud, force_clean=False)
@@ -262,7 +262,7 @@ def render_whatsapp_page():
                 st.rerun()
     with c3:
         help_msg = "سيتم مسح بيانات تسجيل الدخول بالكامل. ستحتاج لمسح الباركود مرة أخرى." if is_ar else "This will clear all login data. You will need to scan the QR code again."
-        if st.button(lbl['full_reset'], use_container_width=True, help=help_msg):
+        if st.button(lbl['full_reset'], width='stretch', help=help_msg):
             with st.spinner(lbl['resetting']):
                 st.session_state.wa_service.close()
                 ok, msg = st.session_state.wa_service.start_driver(headless=is_cloud, force_clean=True)
@@ -281,10 +281,10 @@ def render_whatsapp_page():
         
         b1, b2 = st.columns(2)
         with b1:
-            if st.button(lbl['refresh_qr'], use_container_width=True):
+            if st.button(lbl['refresh_qr'], width='stretch'):
                 st.rerun()
         with b2:
-            if st.button(lbl['verify'], use_container_width=True, type="primary"):
+            if st.button(lbl['verify'], width='stretch', type="primary"):
                 with st.spinner(lbl['verifying']):
                     connected = st.session_state.wa_service.wait_for_connection(timeout=30)
                 if connected:
@@ -343,7 +343,7 @@ def render_whatsapp_page():
                     # 2. EXCLUDED LIST (Items Checked)
                     if excluded_list:
                         with st.expander(f"✅ {lbl['review_section']} ({len(excluded_list)})", expanded=False):
-                            if st.button(lbl['uncheck_all'], use_container_width=True, key="uncheck_all_side"):
+                            if st.button(lbl['uncheck_all'], width='stretch', key="uncheck_all_side"):
                                 for i in range(len(st.session_state.wa_review_targets)):
                                     st.session_state.wa_review_targets[i]['is_sent'] = False
                                 st.session_state.wa_history = set()
@@ -393,7 +393,7 @@ def render_whatsapp_page():
                     display_count = len(st.session_state.wa_review_targets) if st.session_state.wa_review_targets else len(df)
                     with xl_col1: st.success(lbl['loaded_count'].format(display_count))
                     with xl_col2:
-                        if st.button(lbl['delete_file'], use_container_width=True, key="del_xl"):
+                        if st.button(lbl['delete_file'], width='stretch', key="del_xl"):
                             st.session_state.wa_data = None
                             st.session_state.wa_review_targets = []
                             st.session_state.wa_last_uploaded_name = None
@@ -404,7 +404,7 @@ def render_whatsapp_page():
                     display_count = len(st.session_state.wa_review_targets) if st.session_state.wa_review_targets else len(st.session_state.wa_data)
                     with xl_col1: st.info(lbl['loaded_count'].format(display_count))
                     with xl_col2:
-                        if st.button(lbl['delete_file'], use_container_width=True, key="del_xl2"):
+                        if st.button(lbl['delete_file'], width='stretch', key="del_xl2"):
                             st.session_state.wa_data = None
                             st.session_state.wa_review_targets = []
                             st.session_state.wa_last_uploaded_name = None
@@ -666,16 +666,16 @@ HR Manager"""
         btn1, btn2, btn3 = st.columns([1, 1, 2])
         with btn1:
             if st.session_state.wa_running:
-                if st.button(lbl['stop'], type="primary", use_container_width=True):
+                if st.button(lbl['stop'], type="primary", width='stretch'):
                     st.session_state.wa_running = False; st.rerun()
             else:
                 # Check if at least one message is not empty
                 has_valid_msg = any(msg.strip() != "" for msg in st.session_state.wa_messages)
                 ready = len(final_targets) > 0 and has_valid_msg
                 if st.session_state.get('wa_done', False) and current_fp == st.session_state.get('wa_sent_fingerprint', ''):
-                    st.button(lbl['sent_done'], disabled=True, use_container_width=True)
+                    st.button(lbl['sent_done'], disabled=True, width='stretch')
                 else:
-                    if st.button(lbl['send'].format(len(final_targets)), disabled=not ready, use_container_width=True, type="primary"):
+                    if st.button(lbl['send'].format(len(final_targets)), disabled=not ready, width='stretch', type="primary"):
                         st.session_state.wa_running = True
                         st.session_state.wa_idx = 0
                         st.session_state.wa_done = False
@@ -848,7 +848,7 @@ HR Manager"""
             with st.expander(lbl['log_title'], expanded=True):
                 log_h, log_del = st.columns([3, 1])
                 with log_del:
-                    if st.button(lbl['delete_log'], use_container_width=True, key="clear_log_btn"):
+                    if st.button(lbl['delete_log'], width='stretch', key="clear_log_btn"):
                         st.session_state.wa_logs = []
                         st.session_state.wa_done = False
                         st.rerun()

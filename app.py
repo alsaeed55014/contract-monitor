@@ -1504,7 +1504,7 @@ def render_table_translator(df, key_prefix="table"):
     
     with ct1:
         st.markdown('<div class="table-translator-btn">', unsafe_allow_html=True)
-        if st.button("🇸🇦 الترجمة للعربية", key=f"btn_ar_{key_prefix}", use_container_width=True):
+        if st.button("🇸🇦 الترجمة للعربية", key=f"btn_ar_{key_prefix}", width='stretch'):
             if st.session_state.get(t_state_key) == "ar":
                 st.session_state[t_state_key] = None
             else:
@@ -1513,7 +1513,7 @@ def render_table_translator(df, key_prefix="table"):
 
     with ct2:
         st.markdown('<div class="table-translator-btn">', unsafe_allow_html=True)
-        if st.button("🇵🇭 ISALIN SA TAGALOG", key=f"btn_tl_{key_prefix}", use_container_width=True):
+        if st.button("🇵🇭 ISALIN SA TAGALOG", key=f"btn_tl_{key_prefix}", width='stretch'):
             if st.session_state.get(t_state_key) == "tl":
                 st.session_state[t_state_key] = None
             else:
@@ -2082,7 +2082,7 @@ def render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search", 
         st.code(summary, language="markdown")
         st.markdown("</div>", unsafe_allow_html=True)
         
-    if st.button("✨ " + ("إنشاء ملخص العامل" if lang == 'ar' else "Create Worker Summary"), use_container_width=True, key=f"btn_summary_mk_{key_prefix}_{worker_id}"):
+    if st.button("✨ " + ("إنشاء ملخص العامل" if lang == 'ar' else "Create Worker Summary"), width='stretch', key=f"btn_summary_mk_{key_prefix}_{worker_id}"):
         show_worker_summary_modal()
 
     translate_configs = [
@@ -2092,7 +2092,7 @@ def render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search", 
 
     for idx, config in enumerate(translate_configs):
         with col_a if idx == 0 else col_b:
-            if st.button(config["label"], use_container_width=True, type="primary" if idx == 0 else "secondary", key=f"btn_trans_{key_prefix}_{worker_id}_{config['key_suffix']}"):
+            if st.button(config["label"], width='stretch', type="primary" if idx == 0 else "secondary", key=f"btn_trans_{key_prefix}_{worker_id}_{config['key_suffix']}"):
                 if cv_url and str(cv_url).startswith("http"):
                     from src.core.file_translator import FileTranslator
                     
@@ -2172,7 +2172,7 @@ def render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search", 
         # For Order Processing: Replace Delete with Hide
         if worker_uid:
             if st.button("🚫 " + ("إخفاء هذا العامل" if lang == 'ar' else "Hide this worker"), 
-                         use_container_width=True, key=f"hide_worker_{key_prefix}_{worker_id}"):
+                         width='stretch', key=f"hide_worker_{key_prefix}_{worker_id}"):
                 st.session_state.op_hidden_workers.add(worker_uid)
                 st.rerun()
         else:
@@ -2180,9 +2180,9 @@ def render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search", 
     else:
         # Original Deletion Logic for Search/Contract Board
         if sheet_row:
-            with st.popover(f"🗑️ {t('delete_btn', lang)}", use_container_width=True):
+            with st.popover(f"🗑️ {t('delete_btn', lang)}", width='stretch'):
                 st.warning(t("confirm_delete_msg", lang))
-                if st.button(t("confirm_btn", lang), type="primary", use_container_width=True, key=f"del_confirm_{key_prefix}_{worker_id}"):
+                if st.button(t("confirm_btn", lang), type="primary", width='stretch', key=f"del_confirm_{key_prefix}_{worker_id}"):
                     with st.spinner("⏳ جارٍ الحذف النهائي..."):
                         success = st.session_state.db.delete_row(sheet_row)
                         if success == True:
@@ -2197,10 +2197,10 @@ def render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search", 
             st.error(f"⚠️ {t('delete_error', lang)} (ID Missing)")
             c1, c2 = st.columns(2)
             with c1:
-                if st.button(t("fix_ids", lang), key=f"fix_id_{key_prefix}_{worker_id}", use_container_width=True):
+                if st.button(t("fix_ids", lang), key=f"fix_id_{key_prefix}_{worker_id}", width='stretch'):
                     st.session_state.db.fetch_data(force=True); st.rerun()
             with c2:
-                if st.button(t("deep_reset", lang), key=f"reset_all_{key_prefix}_{worker_id}", use_container_width=True):
+                if st.button(t("deep_reset", lang), key=f"reset_all_{key_prefix}_{worker_id}", width='stretch'):
                     # Clear all tab data and cache
                     for k in list(st.session_state.keys()):
                         if k.startswith("dash_table_") or k.startswith("last_scroll_"): del st.session_state[k]
@@ -2228,7 +2228,7 @@ def render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search", 
                         data=t_data["output"],
                         file_name=t_data.get("out_filename", f"translated_{d_lang}"),
                         mime="application/octet-stream",
-                        use_container_width=True,
+                        width='stretch',
                         key=f"dl_trans_file_{key_prefix}_{worker_id}_{d_lang}"
                     )
     
@@ -2304,8 +2304,8 @@ if ('Notification' in window && Notification.permission === 'default') {
             persist_txt = "هل تريد حفظ الدخول" if lang == 'ar' else "Do you want to stay logged in?"
             st.checkbox(persist_txt, value=(True if saved else False), key=f"persist_{suffix}")
             
-            submit = st.form_submit_button(t("login_btn", lang), use_container_width=True)
-            lang_toggle = st.form_submit_button("En" if lang == "ar" else "عربي", use_container_width=True)
+            submit = st.form_submit_button(t("login_btn", lang), width='stretch')
+            lang_toggle = st.form_submit_button("En" if lang == "ar" else "عربي", width='stretch')
 
             if submit:
                 if not u or not p:
@@ -2690,7 +2690,7 @@ def render_top_banner():
 """, unsafe_allow_html=True)
             
             btn_clear = "🗑️ مسح الكل" if lang == 'ar' else "🗑️ Clear All"
-            if st.button(btn_clear, use_container_width=True, key="clear_all_notifs"):
+            if st.button(btn_clear, width='stretch', key="clear_all_notifs"):
                 # Mark all current notifications as seen for THIS user
                 user_id = st.session_state.user.get('username', 'guest')
                 USER_SEEN_FILE = os.path.join(BASE_DIR, f"notif_seen_{user_id}.json")
@@ -2905,7 +2905,7 @@ def dashboard():
         sc1, sc2, sc3 = st.columns([1, 2, 1])
         with sc2:
             if os.path.exists(IMG_PATH):
-                st.image(IMG_PATH, use_container_width=True)
+                st.image(IMG_PATH, width='stretch')
         
         # Credit text - Split into two lines for clarity (with language-specific font class)
         credit_class = "programmer-credit en" if lang == "en" else "programmer-credit"
@@ -2919,41 +2919,41 @@ def dashboard():
         # Language Toggle (Using Wrapper for CSS targeting)
         st.markdown('<div class="lang-toggle-wrapper">', unsafe_allow_html=True)
         btn_label = "En" if lang == "ar" else "عربي"
-        if st.button(btn_label, key="lang_btn_dashboard", use_container_width=True):
+        if st.button(btn_label, key="lang_btn_dashboard", width='stretch'):
             toggle_lang()
             st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
         
         st.markdown("<div style='margin-bottom: 30px;'></div>", unsafe_allow_html=True)
 
-        if st.button(t("dashboard", lang), use_container_width=True):
+        if st.button(t("dashboard", lang), width='stretch'):
             st.session_state.page = "dashboard"
             st.rerun()
-        if st.button(t("smart_search", lang), use_container_width=True):
+        if st.button(t("smart_search", lang), width='stretch'):
             # Reset the filter expander state to force open on entry
             for key in list(st.session_state.keys()):
                 if key.startswith("filter_expander_"):
                     del st.session_state[key]
             st.session_state.page = "search"
             st.rerun()
-        if st.button(t("cv_translator", lang), use_container_width=True):
+        if st.button(t("cv_translator", lang), width='stretch'):
             st.session_state.page = "translator"
             st.rerun()
         if user.get("role") != "viewer":
-            if st.button(t("customer_requests", lang), use_container_width=True):
+            if st.button(t("customer_requests", lang), width='stretch'):
                 st.session_state.page = "customer_requests"
                 st.rerun()
-        if st.button(t("order_processing", lang), use_container_width=True):
+        if st.button(t("order_processing", lang), width='stretch'):
             st.session_state.page = "order_processing"
             st.rerun()
         
         # WhatsApp Marketing 2026 Button
-        if st.button("📱 " + t("whatsapp_marketing", lang), use_container_width=True):
+        if st.button("📱 " + t("whatsapp_marketing", lang), width='stretch'):
             st.session_state.page = "whatsapp_marketing"
             st.rerun()
         
         # Duplicate Remover Button
-        if st.button("🗑️ " + t("duplicate_remover", lang), use_container_width=True):
+        if st.button("🗑️ " + t("duplicate_remover", lang), width='stretch'):
             st.session_state.page = "duplicate_remover"
             st.rerun()
         
@@ -2963,20 +2963,20 @@ def dashboard():
             # PURE CSS BANGLADESH FLAG (Logic moved to global CSS)
             st.markdown('<div id="bengali-btn-wrapper">', unsafe_allow_html=True)
             
-            if st.button(t("bengali_supply_title", lang), key="btn_bengali_supply_main", use_container_width=True):
+            if st.button(t("bengali_supply_title", lang), key="btn_bengali_supply_main", width='stretch'):
                 st.session_state.page = "bengali_supply"
                 st.rerun()
             
             st.sidebar.markdown("</div>", unsafe_allow_html=True)
 
         if user.get("role") == "admin":
-            if st.button(t("permissions", lang), use_container_width=True):
+            if st.button(t("permissions", lang), width='stretch'):
                 st.session_state.page = "permissions"
                 st.rerun()
             
             # Refresh Data button below Permissions for Admins
             refresh_notif = st.empty()
-            if st.button(t("refresh_data_btn", lang), key="force_refresh_db", use_container_width=True):
+            if st.button(t("refresh_data_btn", lang), key="force_refresh_db", width='stretch'):
                 refresh_loader = show_loading_hourglass()
                 st.session_state.db.fetch_data(force=True)
                 st.session_state.db.fetch_customer_requests(force=True)
@@ -2991,7 +2991,7 @@ def dashboard():
         
         st.markdown("<div style='margin: 15px 0;'></div>", unsafe_allow_html=True)
         
-        if st.button(t("logout", lang), type="primary", use_container_width=True):
+        if st.button(t("logout", lang), type="primary", width='stretch'):
             st.session_state.user = None
             st.rerun()
         
@@ -2999,7 +2999,7 @@ def dashboard():
         st.sidebar.divider()
         with st.sidebar.expander(t("deep_reset", lang)):
             st.caption(t("deep_reset_desc", lang))
-            if st.button(t("deep_reset", lang), key="sidebar_deep_reset", use_container_width=True):
+            if st.button(t("deep_reset", lang), key="sidebar_deep_reset", width='stretch'):
                 # Clear all navigation and table caches
                 for k in list(st.session_state.keys()):
                     if any(k.startswith(prefix) for prefix in ["dash_table_", "last_scroll_", "trans_", "search_results"]):
@@ -3271,7 +3271,7 @@ def render_dashboard_content():
             use_work_outside = st.checkbox(t("work_outside_city", lang), key="dash_use_work_outside")
 
     dash_query = st.text_input(t("smart_search", lang), placeholder=t("search_placeholder", lang), key="dash_search_query")
-    dash_search_clicked = st.button(t("search_btn", lang), key="dash_search_btn", use_container_width=True, type="primary")
+    dash_search_clicked = st.button(t("search_btn", lang), key="dash_search_btn", width='stretch', type="primary")
 
     dash_filters = {}
     if use_age: dash_filters['age_enabled'] = True; dash_filters['age_min'] = age_range[0]; dash_filters['age_max'] = age_range[1]
@@ -3367,7 +3367,7 @@ def render_dashboard_content():
         
         event = st.dataframe(
             styled_final, 
-            use_container_width=False, 
+            width='content', 
             column_config=__apply_pinned_columns(styled_final, final_cfg),
             on_select="rerun",
             selection_mode="single-row",
@@ -3501,7 +3501,7 @@ def render_search_content():
     query = st.text_input(t("smart_search", lang), placeholder=t("search_placeholder", lang), key="search_query_input")
     
     # Search Button - Robust Full-width / Centered
-    search_clicked = st.button(t("search_btn", lang), key="main_search_btn", use_container_width=True, type="primary")
+    search_clicked = st.button(t("search_btn", lang), key="main_search_btn", width='stretch', type="primary")
     
     # NEW: Detect search trigger (Button OR Enter) and increment session ID to reset table selection
     current_search_hash = f"{query}_{str(st.session_state.get('use_age_filter'))}_{str(st.session_state.get('use_contract_filter'))}"
@@ -3739,7 +3739,7 @@ def render_search_content():
             df_height = min((len(res_display) + 1) * 35 + 40, 600)
             event = st.dataframe(
                 style_df(res_display), 
-                use_container_width=False,
+                width='content',
                 on_select="rerun",
                 selection_mode="single-row",
                 hide_index=True,
@@ -3963,7 +3963,7 @@ def render_translator_content():
         with btn_col2:
             translate_clicked = st.button(
                 t("translate_now", lang),
-                use_container_width=True,
+                width='stretch',
                 type="primary",
                 key="btn_start_translation"
             )
@@ -4024,7 +4024,7 @@ def render_translator_content():
                             data=result["output_bytes"],
                             file_name=result.get("output_filename", "translated_file"),
                             mime=result.get("output_mime", "application/octet-stream"),
-                            use_container_width=True,
+                            width='stretch',
                             key="dl_translated_file"
                         )
                 with dl_col2:
@@ -4034,7 +4034,7 @@ def render_translator_content():
                             data=result["translated_text"],
                             file_name=f"translated_{uploaded.name.rsplit('.', 1)[0]}.txt",
                             mime="text/plain",
-                            use_container_width=True,
+                            width='stretch',
                             key="dl_translated_txt"
                         )
 
@@ -4255,7 +4255,7 @@ def render_permissions_content():
             with c1:
                 with st.popover("حذف المستخدم" if lang=='ar' else "Delete User"):
                     st.warning("هل أنت متأكد من حذف هذا المستخدم؟" if lang=='ar' else "Are you sure you want to delete this user?")
-                    if st.button("نعم، احذف المستخدم" if lang=='ar' else "Yes, Delete User", type="primary", use_container_width=True):
+                    if st.button("نعم، احذف المستخدم" if lang=='ar' else "Yes, Delete User", type="primary", width='stretch'):
                         res = st.session_state.auth.delete_user(selected_user)
                         
                         # Handle both old (bool) and new (tuple) return types safely
@@ -4280,7 +4280,7 @@ def render_permissions_content():
     
     # Stylized DataFrame
     df_users = pd.DataFrame(table_data)
-    st.dataframe(style_df(df_users), use_container_width=False, column_config=__apply_pinned_columns(style_df(df_users)))
+    st.dataframe(style_df(df_users), width='content', column_config=__apply_pinned_columns(style_df(df_users)))
 
 def render_order_processing_content():
     """Order Processing: Matches Customer Requests with available Workers."""
@@ -4952,14 +4952,14 @@ def render_order_processing_content():
         st.markdown("<div style='margin-top: 15px;'></div>", unsafe_allow_html=True)
         _, pc1, pc2, pc3, _ = st.columns([1, 1, 2, 1, 1])
         with pc1:
-            if st.button("السابق ⬅️" if lang == 'ar' else "⬅️ Previous", disabled=(st.session_state.op_page_number == 1), key="prev_top", use_container_width=True):
+            if st.button("السابق ⬅️" if lang == 'ar' else "⬅️ Previous", disabled=(st.session_state.op_page_number == 1), key="prev_top", width='stretch'):
                 st.session_state.op_page_number -= 1
                 st.rerun()
         with pc2:
             page_text = f"صفحة {st.session_state.op_page_number} من {total_pages}" if lang == 'ar' else f"Page {st.session_state.op_page_number} of {total_pages}"
             st.markdown(f"<div style='text-align:center; padding-top:10px; color:#ddd;'>{page_text}</div>", unsafe_allow_html=True)
         with pc3:
-            if st.button("➡️ التالي" if lang == 'ar' else "Next ➡️", disabled=(st.session_state.op_page_number == total_pages), key="next_top", use_container_width=True):
+            if st.button("➡️ التالي" if lang == 'ar' else "Next ➡️", disabled=(st.session_state.op_page_number == total_pages), key="next_top", width='stretch'):
                 st.session_state.op_page_number += 1
                 st.rerun()
                 
@@ -5060,7 +5060,7 @@ def render_order_processing_content():
                     if "can_delete" in user_perms or "all" in user_perms:
                         with st.popover("🗑️ حذف" if lang == 'ar' else "🗑️ Delete"):
                             st.warning("⚠️ هل أنت متأكد من حذف هذا الطلب نهائياً؟" if lang == 'ar' else "⚠️ Delete this request permanently?")
-                            if st.button("نعم، حذف" if lang == 'ar' else "Yes, Delete", key=f"del_cust_{idx}", type="primary", use_container_width=True):
+                            if st.button("نعم، حذف" if lang == 'ar' else "Yes, Delete", key=f"del_cust_{idx}", type="primary", width='stretch'):
                                 # Get sheet row from hidden __sheet_row column
                                 row_num = customer_row.get('__sheet_row')
                                 if row_num:
@@ -5136,7 +5136,7 @@ def render_order_processing_content():
                         df_city_height = min((len(city_df) + 1) * 35 + 40, 500)
                         event_city = st.dataframe(
                             city_styled,
-                            use_container_width=False, hide_index=True, on_select="rerun",
+                            width='content', hide_index=True, on_select="rerun",
                             selection_mode="single-row", column_config=__apply_pinned_columns(city_styled, col_cfg_city),
                             key=f"op_city_table_{idx}", height=df_city_height
                         )
@@ -5186,7 +5186,7 @@ def render_order_processing_content():
                         df_reg_h = min((len(reg_df) + 1) * 35 + 40, 400)
                         ev_reg = st.dataframe(
                             reg_styled,
-                            use_container_width=False, hide_index=True, on_select="rerun",
+                            width='content', hide_index=True, on_select="rerun",
                             selection_mode="single-row", column_config=__apply_pinned_columns(reg_styled, col_cfg_reg),
                             key=f"op_reg_table_{idx}", height=df_reg_h
                         )
@@ -5225,7 +5225,7 @@ def render_order_processing_content():
                         df_oth_h = min((len(other_df) + 1) * 35 + 40, 400)
                         ev_oth = st.dataframe(
                             other_styled, 
-                            use_container_width=False, hide_index=True, on_select="rerun",
+                            width='content', hide_index=True, on_select="rerun",
                             selection_mode="single-row", column_config=__apply_pinned_columns(other_styled, col_cfg_other),
                             key=f"op_other_table_{idx}", height=df_oth_h
                         )
@@ -5310,7 +5310,7 @@ def render_duplicate_remover_content():
                         value=True
                     )
             
-            if st.button("🚀 " + ("بدء المعالجة" if is_ar else "Start Processing"), type="primary", use_container_width=True):
+            if st.button("🚀 " + ("بدء المعالجة" if is_ar else "Start Processing"), type="primary", width='stretch'):
                 original_count = len(combined_df)
                 import re
                 
@@ -5433,7 +5433,7 @@ def render_bengali_supply_content():
                     s_name = st.text_input(t("supplier_name", lang))
                     s_phone = st.text_input(t("supplier_phone", lang))
                     s_notes = st.text_area(t("general_notes", lang), key="s_notes_input")
-                    if st.form_submit_button(t("add_supplier_btn", lang), use_container_width=True):
+                    if st.form_submit_button(t("add_supplier_btn", lang), width='stretch'):
                         if s_name:
                             bm.add_supplier({"name": s_name, "phone": s_phone, "notes": s_notes})
                             st.success("✅ " + ("تم إضافة المورد بنجاح" if lang == 'ar' else "Supplier added"))
@@ -5448,7 +5448,7 @@ def render_bengali_supply_content():
                     e_cafe = st.text_input(t("cafe_name", lang))
                     e_city = st.text_input(t("city", lang))
                     e_notes = st.text_area(t("general_notes", lang), key="e_notes_input")
-                    if st.form_submit_button(t("add_supplier_btn", lang), use_container_width=True):
+                    if st.form_submit_button(t("add_supplier_btn", lang), width='stretch'):
                         if e_name:
                             bm.add_employer({"name": e_name, "cafe": e_cafe, "mobile": e_mobile, "city": e_city, "notes": e_notes})
                             st.success("✅ " + ("تم إضافة صاحب العمل بنجاح" if lang == 'ar' else "Employer added"))
@@ -5495,7 +5495,7 @@ def render_bengali_supply_content():
 
                 notes = st.text_area(t("general_notes", lang))
                 
-                if st.form_submit_button(t("add_worker_btn", lang), use_container_width=True):
+                if st.form_submit_button(t("add_worker_btn", lang), width='stretch'):
                     bm.add_worker({
                         "name": w_name, "id": w_id, "supplier": sel_s, "employer": sel_e,
                         "general_notes": notes, "is_headcount": is_batch, "headcount": w_count,
@@ -5524,7 +5524,7 @@ def render_bengali_supply_content():
             def clear_master_search():
                 st.session_state.master_search_bengali = ""
             
-            st.button("🔄", use_container_width=True, help="تفريغ البحث", on_click=clear_master_search)
+            st.button("🔄", width='stretch', help="تفريغ البحث", on_click=clear_master_search)
 
         # 2. Filter All Data first for Counts
         if g_search:
@@ -5655,7 +5655,7 @@ def render_bengali_supply_content():
                             # Actions
                             ac1, ac2, ac3 = st.columns(3)
                             with ac1:
-                                with st.popover("✏️ " + t("edit_btn", lang), use_container_width=True):
+                                with st.popover("✏️ " + t("edit_btn", lang), width='stretch'):
                                     with st.form(f"edit_w_{w_uuid}"):
                                         new_name = st.text_input("Name", w.get('name'))
                                         new_id = st.text_input("ID", w.get('id'))
@@ -5667,24 +5667,24 @@ def render_bengali_supply_content():
                                 # Return Logic (Decrements headcount or deletes)
 
                                 if "headcount" in w:
-                                    with st.popover("🔄 " + t("return_btn", lang), use_container_width=True):
+                                    with st.popover("🔄 " + t("return_btn", lang), width='stretch'):
                                         st.write(f"Current Count: {w['headcount']}")
                                         ret_amt = st.number_input("Return Amount", min_value=1, max_value=int(w['headcount']), value=1, key=f"ret_amt_{w_uuid}")
-                                        if st.button("Confirm Return", key=f"conf_ret_{w_uuid}", use_container_width=True, type="primary"):
+                                        if st.button("Confirm Return", key=f"conf_ret_{w_uuid}", width='stretch', type="primary"):
                                             bm.return_worker(w_uuid, ret_amt)
                                             st.success("✅ Success")
                                             st.rerun()
                                 else:
-                                    if st.button("🔄 " + t("return_btn", lang), key=f"ret_indiv_{w_uuid}", use_container_width=True):
+                                    if st.button("🔄 " + t("return_btn", lang), key=f"ret_indiv_{w_uuid}", width='stretch'):
                                         bm.return_worker(w_uuid)
                                         st.rerun()
 
 
                             with ac3:
                                 if can_edit_delete:
-                                    with st.popover("🗑️ " + t("delete_btn_sm", lang), use_container_width=True):
+                                    with st.popover("🗑️ " + t("delete_btn_sm", lang), width='stretch'):
                                         st.write("هل أنت متأكد من الحذف؟" if lang == 'ar' else "Are you sure?")
-                                        if st.button("تأكيد الحذف 🗑️" if lang == 'ar' else "Confirm Delete 🗑️", key=f"del_w_{w_uuid}", use_container_width=True, type="primary"):
+                                        if st.button("تأكيد الحذف 🗑️" if lang == 'ar' else "Confirm Delete 🗑️", key=f"del_w_{w_uuid}", width='stretch', type="primary"):
                                             bm.delete_worker(w_uuid)
                                             st.rerun()
 
@@ -5709,7 +5709,7 @@ def render_bengali_supply_content():
                         st.write(f"📝 {s['notes']}")
                     
                     with sc3:
-                        with st.popover("⚙️", use_container_width=True):
+                        with st.popover("⚙️", width='stretch'):
                             with st.form(f"ed_sup_{s['id']}"):
                                 sn = st.text_input("Name", s['name'])
                                 sp = st.text_input("Phone", s['phone'])
@@ -5718,9 +5718,9 @@ def render_bengali_supply_content():
                                     bm.update_supplier(s['id'], {"name": sn, "phone": sp, "notes": snt})
                                     st.rerun()
                             if can_edit_delete:
-                                with st.popover("🗑️ " + ("حذف" if lang=='ar' else "Delete"), use_container_width=True):
+                                with st.popover("🗑️ " + ("حذف" if lang=='ar' else "Delete"), width='stretch'):
                                     st.write("هل أنت متأكد؟" if lang=='ar' else "Are you sure?")
-                                    if st.button("تأكيد 🗑️" if lang=='ar' else "Confirm 🗑️", key=f"del_s_b_{s['id']}", use_container_width=True, type="primary"):
+                                    if st.button("تأكيد 🗑️" if lang=='ar' else "Confirm 🗑️", key=f"del_s_b_{s['id']}", width='stretch', type="primary"):
                                         bm.delete_supplier(s['id'])
                                         st.rerun()
 
@@ -5746,7 +5746,7 @@ def render_bengali_supply_content():
                             st.write(f"Mobile: {e.get('mobile','')}")
                             if e.get('notes'):
                                 st.info(f"📝 {e['notes']}")
-                            with st.popover("✏️", use_container_width=True):
+                            with st.popover("✏️", width='stretch'):
                                 with st.form(f"ed_emp_{e['id']}"):
                                     en = st.text_input("Name", e['name'])
                                     ec = st.text_input("Cafe", e.get('cafe',''))
@@ -5757,9 +5757,9 @@ def render_bengali_supply_content():
                                         bm.update_employer(e['id'], {"name": en, "cafe": ec, "mobile": em, "city": ect, "notes": ent})
                                         st.rerun()
                             if can_edit_delete:
-                                with st.popover("🗑️ " + ("حذف" if lang=='ar' else "Delete"), use_container_width=True):
+                                with st.popover("🗑️ " + ("حذف" if lang=='ar' else "Delete"), width='stretch'):
                                     st.write("هل أنت متأكد؟" if lang=='ar' else "Are you sure?")
-                                    if st.button("تأكيد 🗑️" if lang=='ar' else "Confirm 🗑️", key=f"del_e_b_{e['id']}", use_container_width=True, type="primary"):
+                                    if st.button("تأكيد 🗑️" if lang=='ar' else "Confirm 🗑️", key=f"del_e_b_{e['id']}", width='stretch', type="primary"):
                                         bm.delete_employer(e['id'])
                                         st.rerun()
 
