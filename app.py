@@ -1838,7 +1838,7 @@ def render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search", 
     scroll_key = f"last_scroll_{key_prefix}"
     if scroll_key not in st.session_state or st.session_state[scroll_key] != worker_id:
         st.session_state[scroll_key] = worker_id
-        st.components.v1.html(
+        st.html(
             f"""
             <script>
                 setTimeout(function() {{
@@ -1846,8 +1846,7 @@ def render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search", 
                     if (el) el.scrollIntoView({{behavior: 'smooth'}});
                 }}, 300);
             </script>
-            """,
-            height=0
+            """
         )
 
     # --- PROFESSIONAL PROFILE CARD (2026 LUXURY) ---
@@ -2256,7 +2255,7 @@ def render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search", 
 
 def login_screen():
     # Request browser notification permission early
-    st.components.v1.html("""
+    st.html("""
 <script>
 // Request notification permission on page load
 if ('Notification' in window && Notification.permission === 'default') {
@@ -2265,7 +2264,7 @@ if ('Notification' in window && Notification.permission === 'default') {
     });
 }
 </script>
-""", height=0)
+""")
 
     lang = st.session_state.lang
     
@@ -2559,7 +2558,7 @@ def render_top_banner():
     # 1. Global Audio Alert + Browser Push Notification
     if st.session_state.get('notif_triggered'):
         notif_count = len([n for n in st.session_state.get('notifications', [])])
-        st.components.v1.html(f"""
+        st.html(f"""
 <script>
 (async function(){{
     // 1. Audio Alert
@@ -2595,12 +2594,12 @@ def render_top_banner():
     }}
 }})();
 </script>
-""", height=0, width=0)
+""")
         st.session_state.notif_triggered = False
 
     # 1.4 Sound Test Diagnostic (Triggered from settings)
     if st.session_state.get('test_sound'):
-        st.components.v1.html("""
+        st.html("""
 <script>
 (function(){
     try {
@@ -2617,7 +2616,7 @@ def render_top_banner():
     } catch(e) {}
 })();
 </script>
-""", height=0, width=0)
+""")
         st.session_state.test_sound = False
 
     # 2. Styling and Content

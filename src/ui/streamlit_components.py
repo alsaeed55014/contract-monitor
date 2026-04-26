@@ -196,7 +196,7 @@ def render_top_banner(user, lang, auth_manager):
     notif_count = len(notifs)
 
     if st.session_state.get('notif_triggered'):
-        st.components.v1.html("""
+        st.html("""
 <script>
 (async function(){
     try {
@@ -216,7 +216,7 @@ def render_top_banner(user, lang, auth_manager):
     } catch(e) {}
 })();
 </script>
-""", height=0, width=0)
+""")
         st.session_state.notif_triggered = False
 
     if lang == 'ar':
