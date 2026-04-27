@@ -2916,6 +2916,10 @@ def dashboard():
         # Spacing
         st.markdown("<div style='margin-bottom: 20px;'></div>", unsafe_allow_html=True)
         
+        # --- 🛡️ WhatsApp Sending Lock: Prevent navigation away while sending ---
+        _wa_is_sending = st.session_state.get('wa_running', False)
+        _wa_lock_nav = _wa_is_sending and st.session_state.get('page') == 'whatsapp_marketing'
+        
         # Language Toggle (Using Wrapper for CSS targeting)
         st.markdown('<div class="lang-toggle-wrapper">', unsafe_allow_html=True)
         btn_label = "En" if lang == "ar" else "عربي"
@@ -2926,10 +2930,6 @@ def dashboard():
         
         st.markdown("<div style='margin-bottom: 30px;'></div>", unsafe_allow_html=True)
 
-        # --- 🛡️ WhatsApp Sending Lock: Prevent navigation away while sending ---
-        _wa_is_sending = st.session_state.get('wa_running', False)
-        _wa_lock_nav = _wa_is_sending and st.session_state.get('page') == 'whatsapp_marketing'
-        
         if _wa_lock_nav:
             st.warning("⚠️ " + ("جاري الإرسال عبر الواتساب... لا يمكن مغادرة الصفحة الآن" if lang == 'ar' else "WhatsApp sending in progress... Cannot leave this page"))
             # Inject JS to prevent browser tab close/refresh during sending
