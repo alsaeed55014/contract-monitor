@@ -4869,7 +4869,7 @@ def render_order_processing_content():
     st.markdown("### 📋 " + t('customer_requests', lang))
     
     # NEW SEARCH INPUT
-    search_lbl = "🔍 بحث عن بطاقة طلب (رقم الجوال أو اسم المسؤول أو موقع العمل)" if lang == 'ar' else "🔍 Search Request (Mobile, Manager or Location)"
+    search_lbl = "🔍 بحث عن بطاقة طلب (رقم الجوال، المسؤول، الموقع، الجنسية، الفئة)" if lang == 'ar' else "🔍 Search Request (Mobile, Manager, Location, Nationality, Category)"
     cust_search_q = st.text_input(search_lbl, key="order_processing_cust_search").strip()
     
     # Smart phone normalizer (same logic as SmartSearchEngine)
@@ -4904,6 +4904,8 @@ def render_order_processing_content():
         responsible_val = str(customer_row.get(c_responsible, "")) if c_responsible else ""
         mobile_val = str(customer_row.get(c_mobile, "")) if c_mobile else ""
         location_val = str(customer_row.get(c_location, "")) if c_location else ""
+        nationality_val = str(customer_row.get(c_nationality, "")) if c_nationality else ""
+        category_val = str(customer_row.get(c_category, "")) if c_category else ""
 
         if cust_search_q:
             if _is_phone_query_op(cust_search_q):
@@ -4916,7 +4918,7 @@ def render_order_processing_content():
                 # Text search
                 q_lower = cust_search_q.lower()
                 match = False
-                for val in [responsible_val, location_val, company_val]:
+                for val in [responsible_val, location_val, company_val, nationality_val, category_val]:
                     if q_lower in val.lower().strip():
                         match = True
                         break
