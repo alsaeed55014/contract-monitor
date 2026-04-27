@@ -692,6 +692,21 @@ HR Manager"""
         if st.session_state.wa_running and st.session_state.get('wa_active_targets'):
             active_targets = st.session_state.wa_active_targets
             
+            # 🛡️ Prevent browser close/refresh while sending
+            st.markdown("""
+            <script>
+            window.__wa_sending_guard = function(e) {
+                e.preventDefault();
+                e.returnValue = 'WhatsApp sending is still in progress!';
+            };
+            window.removeEventListener('beforeunload', window.__wa_sending_guard);
+            window.addEventListener('beforeunload', window.__wa_sending_guard);
+            </script>
+            <div style="background: linear-gradient(90deg, rgba(255,0,0,0.15), rgba(255,165,0,0.1)); padding: 10px 15px; border-radius: 10px; border: 1px solid rgba(255,0,0,0.3); margin-bottom: 10px; text-align: center; direction: rtl;">
+                <span style="color: #FF6B6B; font-weight: 700; font-size: 0.95rem;">🔒 لا تغلق المتصفح أثناء الإرسال | Do not close the browser while sending</span>
+            </div>
+            """, unsafe_allow_html=True)
+            
             # Save attachment to temp file ONCE at the start of the batch
             if attachment and not st.session_state.get('wa_temp_path'):
                 import tempfile
@@ -834,13 +849,23 @@ HR Manager"""
                     
                     st.rerun()
             
-            # Clean up temp file ONLY when done or stopped
-            if not st.session_state.wa_running and st.session_state.get('wa_temp_path'):
-                tp = st.session_state.get('wa_temp_path')
-                if os.path.exists(tp):
-                    try: os.remove(tp)
-                    except: pass
-                st.session_state.wa_temp_path = None
+            # Clean up temp file and browser guard ONLY when done or stopped
+            if not st.session_state.wa_running:
+                # Remove JS Guard
+                st.markdown("""
+                <script>
+                if (window.__wa_sending_guard) {
+                    window.removeEventListener('beforeunload', window.__wa_sending_guard);
+                }
+                </script>
+                """, unsafe_allow_html=True)
+                
+                if st.session_state.get('wa_temp_path'):
+                    tp = st.session_state.get('wa_temp_path')
+                    if os.path.exists(tp):
+                        try: os.remove(tp)
+                        except: pass
+                    st.session_state.wa_temp_path = None
 
         # 📄 Professional 2026 Log Section
         if st.session_state.wa_logs:

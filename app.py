@@ -2919,31 +2919,47 @@ def dashboard():
         # Language Toggle (Using Wrapper for CSS targeting)
         st.markdown('<div class="lang-toggle-wrapper">', unsafe_allow_html=True)
         btn_label = "En" if lang == "ar" else "عربي"
-        if st.button(btn_label, key="lang_btn_dashboard", width='stretch'):
+        if st.button(btn_label, key="lang_btn_dashboard", width='stretch', disabled=_wa_lock_nav):
             toggle_lang()
             st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
         
         st.markdown("<div style='margin-bottom: 30px;'></div>", unsafe_allow_html=True)
 
-        if st.button(t("dashboard", lang), width='stretch'):
+        # --- 🛡️ WhatsApp Sending Lock: Prevent navigation away while sending ---
+        _wa_is_sending = st.session_state.get('wa_running', False)
+        _wa_lock_nav = _wa_is_sending and st.session_state.get('page') == 'whatsapp_marketing'
+        
+        if _wa_lock_nav:
+            st.warning("⚠️ " + ("جاري الإرسال عبر الواتساب... لا يمكن مغادرة الصفحة الآن" if lang == 'ar' else "WhatsApp sending in progress... Cannot leave this page"))
+            # Inject JS to prevent browser tab close/refresh during sending
+            st.markdown("""
+            <script>
+            window.addEventListener('beforeunload', function (e) {
+                e.preventDefault();
+                e.returnValue = 'WhatsApp sending is still in progress. Are you sure you want to leave?';
+            });
+            </script>
+            """, unsafe_allow_html=True)
+
+        if st.button(t("dashboard", lang), width='stretch', disabled=_wa_lock_nav):
             st.session_state.page = "dashboard"
             st.rerun()
-        if st.button(t("smart_search", lang), width='stretch'):
+        if st.button(t("smart_search", lang), width='stretch', disabled=_wa_lock_nav):
             # Reset the filter expander state to force open on entry
             for key in list(st.session_state.keys()):
                 if key.startswith("filter_expander_"):
                     del st.session_state[key]
             st.session_state.page = "search"
             st.rerun()
-        if st.button(t("cv_translator", lang), width='stretch'):
+        if st.button(t("cv_translator", lang), width='stretch', disabled=_wa_lock_nav):
             st.session_state.page = "translator"
             st.rerun()
         if user.get("role") != "viewer":
-            if st.button(t("customer_requests", lang), width='stretch'):
+            if st.button(t("customer_requests", lang), width='stretch', disabled=_wa_lock_nav):
                 st.session_state.page = "customer_requests"
                 st.rerun()
-        if st.button(t("order_processing", lang), width='stretch'):
+        if st.button(t("order_processing", lang), width='stretch', disabled=_wa_lock_nav):
             st.session_state.page = "order_processing"
             st.rerun()
         
@@ -2953,7 +2969,7 @@ def dashboard():
             st.rerun()
         
         # Duplicate Remover Button
-        if st.button("🗑️ " + t("duplicate_remover", lang), width='stretch'):
+        if st.button("🗑️ " + t("duplicate_remover", lang), width='stretch', disabled=_wa_lock_nav):
             st.session_state.page = "duplicate_remover"
             st.rerun()
         
@@ -2963,14 +2979,14 @@ def dashboard():
             # PURE CSS BANGLADESH FLAG (Logic moved to global CSS)
             st.markdown('<div id="bengali-btn-wrapper">', unsafe_allow_html=True)
             
-            if st.button(t("bengali_supply_title", lang), key="btn_bengali_supply_main", width='stretch'):
+            if st.button(t("bengali_supply_title", lang), key="btn_bengali_supply_main", width='stretch', disabled=_wa_lock_nav):
                 st.session_state.page = "bengali_supply"
                 st.rerun()
             
             st.sidebar.markdown("</div>", unsafe_allow_html=True)
 
         if user.get("role") == "admin":
-            if st.button(t("permissions", lang), width='stretch'):
+            if st.button(t("permissions", lang), width='stretch', disabled=_wa_lock_nav):
                 st.session_state.page = "permissions"
                 st.rerun()
             
