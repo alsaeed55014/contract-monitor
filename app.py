@@ -3282,9 +3282,11 @@ def render_dashboard_content():
             use_no_huroob = st.checkbox(t("no_huroob", lang), key="dash_use_no_huroob")
         
         st.markdown("<br>", unsafe_allow_html=True)
-        c3_1, c3_2 = st.columns(2)
+        c3_1, c3_2, c3_3 = st.columns(3)
         with c3_1:
             use_work_outside = st.checkbox(t("work_outside_city", lang), key="dash_use_work_outside")
+        with c3_2:
+            use_yes_huroob = st.checkbox("لديك بلاغ هروب (Yes)" if lang == 'ar' else "Has Huroob (Yes)", key="dash_use_yes_huroob")
 
     dash_query = st.text_input(t("smart_search", lang), placeholder=t("search_placeholder", lang), key="dash_search_query")
     dash_search_clicked = st.button(t("search_btn", lang), key="dash_search_btn", width='stretch', type="primary")
@@ -3295,6 +3297,7 @@ def render_dashboard_content():
     if use_reg and len(reg_range) == 2: dash_filters['date_enabled'] = True; dash_filters['date_start'] = reg_range[0]; dash_filters['date_end'] = reg_range[1]
     if use_not_working: dash_filters['not_working_only'] = True
     if use_no_huroob: dash_filters['no_huroob'] = True
+    if use_yes_huroob: dash_filters['yes_huroob'] = True
     if use_work_outside: dash_filters['work_outside_city'] = True
     if selected_transfer_key: dash_filters['transfer_count'] = selected_transfer_key
 
@@ -3506,10 +3509,12 @@ def render_search_content():
         
         # Row 3: Huroob & Outside City Filters
         st.markdown("<br>", unsafe_allow_html=True)
-        c3_1, c3_2 = st.columns(2)
+        c3_1, c3_2, c3_3 = st.columns(3)
         with c3_1:
             use_no_huroob = st.checkbox(t("no_huroob", lang), key="use_no_huroob_filter")
         with c3_2:
+            use_yes_huroob = st.checkbox("لديك بلاغ هروب (Yes)" if lang == 'ar' else "Has Huroob (Yes)", key="use_yes_huroob_filter")
+        with c3_3:
             use_work_outside = st.checkbox(t("work_outside_city", lang), key="use_work_outside_filter")
 
     # 2. Search Input & Button
@@ -3555,6 +3560,9 @@ def render_search_content():
 
     if use_no_huroob:
         filters['no_huroob'] = True
+
+    if use_yes_huroob:
+        filters['yes_huroob'] = True
 
     if use_work_outside:
         filters['work_outside_city'] = True
@@ -4378,7 +4386,7 @@ def render_order_processing_content():
         with tc2:
             work_outside = st.checkbox("يقبل العمل خارج مدينته (Yes)" if lang == 'ar' else "Work Outside City (Yes)", key="op_outside")
         with tc1:
-            pass # Reserved
+            yes_huroob = st.checkbox("لديك بلاغ هروب (Yes)" if lang == 'ar' else "Has Huroob (Yes)", key="op_yes_huroob")
 
         # Apply Filters using SmartSearchEngine
         filters = {
@@ -4394,6 +4402,7 @@ def render_order_processing_content():
             'expired_only': expired_only,
             'not_working_only': not_working_only,
             'no_huroob': no_huroob,
+            'yes_huroob': yes_huroob,
             'work_outside_city': work_outside,
             'transfer_count': trans_count if trans_count != "— الكل —" else None
         }

@@ -413,6 +413,15 @@ class SmartSearchEngine:
                         return v in ['no', 'لا', 'none', 'false', '0', 'n']
                     results = results[results[huroob_col].apply(is_no_huroob)]
 
+            # New: Filter by Huroob Status (Yes)
+            if filters.get('yes_huroob'):
+                huroob_col = find_col(["Do you have to report Huroob", "هل لديك بلاغ هروب؟", "بلاغ هروب"])
+                if huroob_col:
+                    def is_yes_huroob(val):
+                        v = str(val).strip().lower()
+                        return v in ['yes', 'نعم', 'true', '1', 'y', 'ok', 'yes ']
+                    results = results[results[huroob_col].apply(is_yes_huroob)]
+
             # New: Filter by Work Outside City (Yes)
             if filters.get('work_outside_city'):
                 outside_col = find_col(["Can you work outside your city", "هل يمكنك العمل خارج مدينتك؟", "خارج المدينة"])
