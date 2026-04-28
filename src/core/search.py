@@ -422,6 +422,15 @@ class SmartSearchEngine:
                         return v in ['yes', 'نعم', 'true', '1', 'y', 'ok', 'yes ']
                     results = results[results[huroob_col].apply(is_yes_huroob)]
 
+            # New: Filter by Sponsor Transfer (Yes)
+            if filters.get('sponsor_transfer'):
+                sponsor_col = find_col(["هل يقبل الكفيل النقل", "يقبل الكفيل النقل", "sponsor accept transfer", "هل يمانع الكفيل"])
+                if sponsor_col:
+                    def is_yes_sponsor(val):
+                        v = str(val).strip().lower()
+                        return v in ['yes', 'نعم', 'true', '1', 'y', 'ok', 'yes ']
+                    results = results[results[sponsor_col].apply(is_yes_sponsor)]
+
             # New: Filter by Work Outside City (Yes)
             if filters.get('work_outside_city'):
                 outside_col = find_col(["Can you work outside your city", "هل يمكنك العمل خارج مدينتك؟", "خارج المدينة"])
