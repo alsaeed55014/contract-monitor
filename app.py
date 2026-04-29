@@ -3300,17 +3300,23 @@ def render_dashboard_content():
 
         # 2. Row: Advanced Smart Filtering
         st.markdown(f'<div class="premium-filter-label">⚙️ {t("filter_advanced_group", lang)}</div>', unsafe_allow_html=True)
-        sc1, sc2, sc3, sc4 = st.columns(4)
-        with sc4:
-            use_expired = st.checkbox(t("expired_filter", lang), key="dash_use_expired")
+        # Using columns with empty ones at the ends to center the content
+        sc_pad_r, sc1, sc2, sc3, sc_pad_l = st.columns([0.2, 1, 1, 1.5, 0.2])
         with sc3:
-            use_not_working = st.checkbox(t("not_working_no", lang), key="dash_use_not_working")
+            use_expired = st.checkbox(t("expired_filter", lang), key="dash_use_expired")
         with sc2:
+            use_not_working = st.checkbox(t("not_working_no", lang), key="dash_use_not_working")
+        with sc1:
             transfer_options = {"": f"— {t('transfer_all', lang)} —", "First time": t("transfer_1", lang), "Second time": t("transfer_2", lang), "The third time": t("transfer_3", lang), "More than three": t("transfer_more", lang)}
-            st.markdown(f'<div style="font-size: 0.85rem; color: #888; margin-bottom: 5px;">{t("transfer_count_label", lang)}</div>', unsafe_allow_html=True)
-            selected_transfer_label = st.selectbox("", options=list(transfer_options.values()), key="dash_transfer_dropdown", label_visibility="collapsed")
+            # Inner columns to put label on the right of the dropdown
+            lc, ic = st.columns([1, 1.2])
+            with lc:
+                st.markdown(f'<div style="font-family: \'Cairo\', sans-serif; font-size: 0.95rem; font-weight: 500; color: #FFFFFF; text-align: right; margin-top: 8px;">{t("transfer_count_label", lang)}</div>', unsafe_allow_html=True)
+            with ic:
+                selected_transfer_label = st.selectbox("", options=list(transfer_options.values()), key="dash_transfer_dropdown", label_visibility="collapsed")
             selected_transfer_key = [k for k, v in transfer_options.items() if v == selected_transfer_label][0]
-        with sc1: st.empty()
+        with sc_pad_r: st.empty()
+        with sc_pad_l: st.empty()
         
         # 3. Row: Status Flags
         st.markdown("<div style='margin-bottom: 10px;'></div>", unsafe_allow_html=True)
@@ -3517,17 +3523,23 @@ def render_search_content():
 
         # Row 2: Status & Dropdown Filters
         st.markdown(f'<div class="premium-filter-label">⚙️ {t("filter_advanced_group", lang)}</div>', unsafe_allow_html=True)
-        sc1, sc2, sc3, sc4 = st.columns(4)
-        with sc4:
+        # Professional centering and alignment
+        sc_pad_r, sc1, sc2, sc3, sc_pad_l = st.columns([0.2, 1, 1, 1.5, 0.2])
+        with sc1:
             use_expired = st.checkbox(t("expired_filter", lang), key="use_expired_filter")
-        with sc3:
-            use_not_working = st.checkbox(t("not_working_no", lang), key="use_not_working_filter")
         with sc2:
+            use_not_working = st.checkbox(t("not_working_no", lang), key="use_not_working_filter")
+        with sc3:
             transfer_options = {"": f"— {t('transfer_all', lang)} —", "First time": t("transfer_1", lang), "Second time": t("transfer_2", lang), "The third time": t("transfer_3", lang), "More than three": t("transfer_more", lang)}
-            st.markdown(f'<div style="font-size: 0.85rem; color: #888; margin-bottom: 5px;">{t("transfer_count_label", lang)}</div>', unsafe_allow_html=True)
-            selected_transfer_label = st.selectbox("", options=list(transfer_options.values()), key="transfer_count_dropdown", label_visibility="collapsed")
+            # Inner columns for right-side label
+            lc, ic = st.columns([1, 1.2])
+            with lc:
+                st.markdown(f'<div style="font-family: \'Cairo\', sans-serif; font-size: 0.95rem; font-weight: 500; color: #FFFFFF; text-align: right; margin-top: 8px;">{t("transfer_count_label", lang)}</div>', unsafe_allow_html=True)
+            with ic:
+                selected_transfer_label = st.selectbox("", options=list(transfer_options.values()), key="transfer_count_dropdown", label_visibility="collapsed")
             selected_transfer_key = [k for k, v in transfer_options.items() if v == selected_transfer_label][0]
-        with sc1: st.empty()
+        with sc_pad_r: st.empty()
+        with sc_pad_l: st.empty()
         
         # Row 3: Huroob & Outside City Filters
         st.markdown("<div style='margin-bottom: 10px;'></div>", unsafe_allow_html=True)
@@ -4395,15 +4407,21 @@ def render_order_processing_content():
 
         # 2. Row: Advanced Smart Filtering
         st.markdown(f'<div class="premium-filter-label">⚙️ {t("filter_advanced_group", lang)}</div>', unsafe_allow_html=True)
-        sc1, sc2, sc3, sc4 = st.columns(4)
-        with sc4:
+        # Professional centering and alignment
+        sc_pad_r, sc1, sc2, sc3, sc_pad_l = st.columns([0.2, 1, 1, 1.5, 0.2])
+        with sc1:
             expired_only = st.checkbox(t("expired_filter", lang), key="op_expired")
-        with sc3:
-            not_working_only = st.checkbox(t("not_working_no", lang), key="op_not_working")
         with sc2:
-            st.markdown(f'<div style="font-size: 0.85rem; color: #888; margin-bottom: 5px;">{t("transfer_count_label", lang)}</div>', unsafe_allow_html=True)
-            trans_count = st.selectbox("", ["— الكل —", "1", "2", "3", "4+"], key="op_transfer", label_visibility="collapsed")
-        with sc1: st.empty()
+            not_working_only = st.checkbox(t("not_working_no", lang), key="op_not_working")
+        with sc3:
+            # Inner columns for right-side label
+            lc, ic = st.columns([1, 1.2])
+            with lc:
+                st.markdown(f'<div style="font-family: \'Cairo\', sans-serif; font-size: 0.95rem; font-weight: 500; color: #FFFFFF; text-align: right; margin-top: 8px;">{t("transfer_count_label", lang)}</div>', unsafe_allow_html=True)
+            with ic:
+                trans_count = st.selectbox("", ["— الكل —", "1", "2", "3", "4+"], key="op_transfer", label_visibility="collapsed")
+        with sc_pad_r: st.empty()
+        with sc_pad_l: st.empty()
 
         # 3. Row: Status Flags
         st.markdown("<div style='margin-bottom: 10px;'></div>", unsafe_allow_html=True)
