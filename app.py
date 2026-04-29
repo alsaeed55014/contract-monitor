@@ -2347,10 +2347,77 @@ def silent_notification_monitor():
     """
     MODERN BACKGROUND MONITOR:
     Runs every 20 seconds in a fragment context.
-    Immediately checks for notifications on Streamlit Cloud.
+    Immediately checks for notifications and triggers audio alerts.
     """
-    if st.session_state.get('user'):
-        check_notifications()
+    if not st.session_state.get('user'):
+        return
+
+    # 1. Run the check
+    check_notifications()
+    
+    # 2. Trigger Immediate Audio/Push if needed (Inside the fragment for zero-latency)
+    if st.session_state.get('notif_triggered'):
+        notifs = st.session_state.get('notifications', [])
+        notif_count = len(notifs)
+        st.html(f"""
+<script>
+(async function(){{
+    try {{
+        var AudioContext = window.AudioContext || window.webkitAudioContext;
+        var ctx = new AudioContext();
+        if (ctx.state === 'suspended') await ctx.resume();
+        
+        function playTone(freq, type, startTime, dur, vol) {{
+            var osc = ctx.createOscillator(); var gain = ctx.createGain();
+            osc.connect(gain); gain.connect(ctx.destination);
+            osc.type = type; osc.frequency.setValueAtTime(freq, ctx.currentTime + startTime);
+            gain.gain.setValueAtTime(vol, ctx.currentTime + startTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + startTime + dur);
+            osc.start(ctx.currentTime + startTime); osc.stop(ctx.currentTime + startTime + dur);
+        }}
+        // Premium Melody: C5, G5, C6 (Luxury Chord)
+        playTone(523.25, 'sine', 0.0, 1.0, 0.5); 
+        playTone(783.99, 'sine', 0.1, 0.8, 0.4); 
+        playTone(1046.50, 'sine', 0.2, 0.6, 0.3);
+    }} catch(e) {{}}
+    
+    if ('Notification' in window && Notification.permission === 'granted') {{
+        new Notification('نظام السعيد - إشعار جديد', {{
+            body: 'لديك {notif_count} إشعارات جديدة',
+            icon: '🔔',
+            tag: 'alsaeed-notif',
+            requireInteraction: true
+        }});
+    }}
+}})();
+</script>
+""")
+        st.session_state.notif_triggered = False
+
+    # 3. Sound Test Diagnostic
+    if st.session_state.get('test_sound'):
+        st.html("""
+<script>
+(async function(){
+    try {
+        var ctx = new (window.AudioContext || window.webkitAudioContext)();
+        if (ctx.state === 'suspended') await ctx.resume();
+        function playBell(f, s, d, v) {
+            var o = ctx.createOscillator(); var g = ctx.createGain();
+            o.connect(g); g.connect(ctx.destination);
+            o.type = 'sine'; o.frequency.setValueAtTime(f, ctx.currentTime + s);
+            g.gain.setValueAtTime(v, ctx.currentTime + s);
+            g.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + s + d);
+            o.start(ctx.currentTime + s); o.stop(ctx.currentTime + s + d);
+        }
+        // Luxury Bell Chime: A5, E6
+        playBell(880, 0, 1.2, 0.4); 
+        playBell(1318.51, 0.1, 1.0, 0.3);
+    } catch(e) {}
+})();
+</script>
+""")
+        st.session_state.test_sound = False
 
 def check_notifications():
     """Checks for new worker entries or customer requests directly from Google Sheets."""
@@ -2555,69 +2622,8 @@ def render_top_banner():
     notifs = st.session_state.get('notifications', [])
     notif_count = len(notifs)
 
-    # 1. Global Audio Alert + Browser Push Notification
-    if st.session_state.get('notif_triggered'):
-        notif_count = len([n for n in st.session_state.get('notifications', [])])
-        st.html(f"""
-<script>
-(async function(){{
-    // 1. Audio Alert
-    try {{
-        var AudioContext = window.AudioContext || window.webkitAudioContext;
-        var ctx = new AudioContext();
-        if (ctx.state === 'suspended') await ctx.resume();
-        
-        function playTone(freq, type, startTime, dur, vol) {{
-            var osc = ctx.createOscillator(); var gain = ctx.createGain();
-            osc.connect(gain); gain.connect(ctx.destination);
-            osc.type = type; osc.frequency.setValueAtTime(freq, ctx.currentTime + startTime);
-            gain.gain.setValueAtTime(vol, ctx.currentTime + startTime);
-            gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + startTime + dur);
-            osc.start(ctx.currentTime + startTime); osc.stop(ctx.currentTime + startTime + dur);
-        }}
-        playTone(523.25, 'sine', 0.0, 0.8, 0.6); 
-        playTone(1046.50, 'triangle', 0.1, 0.5, 0.4); 
-        playTone(1318.51, 'sine', 0.4, 0.3, 0.3);
-        playTone(1567.98, 'sine', 0.5, 0.3, 0.3);
-        playTone(2093.00, 'sine', 0.6, 0.4, 0.2);
-    }} catch(e) {{ console.error('Audio fail:', e); }}
-    
-    // 2. Browser Push Notification (works even when tab is in background)
-    if ('Notification' in window && Notification.permission === 'granted') {{
-        new Notification('نظام السعيد - إشعار جديد', {{
-            body: 'لديك {notif_count} إشعارات جديدة',
-            icon: '🔔',
-            badge: '🔔',
-            tag: 'alsaeed-notif',
-            requireInteraction: true
-        }});
-    }}
-}})();
-</script>
-""")
-        st.session_state.notif_triggered = False
-
-    # 1.4 Sound Test Diagnostic (Triggered from settings)
-    if st.session_state.get('test_sound'):
-        st.html("""
-<script>
-(function(){
-    try {
-        var ctx = new (window.AudioContext || window.webkitAudioContext)();
-        function playBell(f, s, d) {
-            var o = ctx.createOscillator(); var g = ctx.createGain();
-            o.connect(g); g.connect(ctx.destination);
-            o.type = 'sine'; o.frequency.setValueAtTime(f, ctx.currentTime + s);
-            g.gain.setValueAtTime(0.5, ctx.currentTime + s);
-            g.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + s + d);
-            o.start(ctx.currentTime + s); o.stop(ctx.currentTime + s + d);
-        }
-        playBell(880, 0, 0.5); playBell(1100, 0.2, 0.5);
-    } catch(e) {}
-})();
-</script>
-""")
-        st.session_state.test_sound = False
+    # 1. Global Audio/Push Notifications handled by background fragment for instant response.
+    # No longer needed here to avoid double-triggers.
 
     # 2. Styling and Content
     if lang == 'ar':
@@ -2717,10 +2723,31 @@ def render_top_banner():
                 st.rerun()
             
             # Audio Diagnostic Button
-            btn_test = "⚙️ تجربة صوت التنبيه" if lang == 'ar' else "⚙️ Test Notification Sound"
-            if st.checkbox(btn_test, key="cb_test_sound"):
-                st.session_state.test_sound = True
-                st.rerun()
+            # Audio Diagnostic & Permission Tools
+            cols_notif = st.columns([1, 1])
+            with cols_notif[0]:
+                if st.button(btn_test, key="btn_test_sound", width='stretch'):
+                    st.session_state.test_sound = True
+                    st.rerun()
+            
+            with cols_notif[1]:
+                btn_perm = "🔔 تفعيل إشعارات المتصفح" if lang == 'ar' else "🔔 Enable Browser Notifications"
+                if st.button(btn_perm, key="btn_req_notif", width='stretch'):
+                    st.html("""
+<script>
+if ('Notification' in window) {
+    Notification.requestPermission().then(permission => {
+        if (permission === 'granted') {
+            alert('تم تفعيل إشعارات المتصفح بنجاح! ✅');
+        } else {
+            alert('يرجى تفعيل الإشعارات من إعدادات المتصفح. ⚠️');
+        }
+    });
+} else {
+    alert('متصفحك لا يدعم الإشعارات. ❌');
+}
+</script>
+""")
 
         st.markdown(f"""
     <div class="persistent-top-banner">
