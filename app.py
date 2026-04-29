@@ -3275,10 +3275,11 @@ def render_dashboard_content():
     lbl_enable = "تفعيل" if lang == "ar" else "Activate"
 
     with st.expander(t("advanced_filters", lang) if t("advanced_filters", lang) != "advanced_filters" else "تصفية متقدمة", expanded=False):
-        # 1. Row: Scheduling & Dates
+        # 1. Row: Scheduling & Dates - Centered
         st.markdown(f'<div class="premium-filter-label">📅 {t("filter_dates_group", lang)}</div>', unsafe_allow_html=True)
-        rc1, rc2, rc3, rc4 = st.columns(4)
-        with rc4: # Rightmost (Arabic)
+        # Using 5 columns [Pad, Item, Item, Item, Pad] to center 3 items
+        r_pad1, rc3, rc2, rc1, r_pad2 = st.columns([0.5, 1, 1, 1, 0.5])
+        with rc3: # Age
             use_age = st.checkbox(t("age", lang) if lang == 'en' else f"تفعيل {t('age', lang)}", key="dash_use_age_filter")
             if use_age:
                 ac1, ac2 = st.columns(2)
@@ -3286,41 +3287,39 @@ def render_dashboard_content():
                 with ac2: a_max = st.number_input("إلى سن" if lang == 'ar' else "To", 1, 100, 35, key="dash_age_max")
                 age_range = (a_min, a_max)
             else: age_range = (16, 35)
-        with rc3:
+        with rc2: # Contract
             use_contract = st.checkbox(t("contract_end", lang) if lang == 'en' else f"تفعيل {t('contract_end', lang)}", key="dash_use_contract_filter")
             if use_contract:
                 contract_range = st.date_input("Contract Range", (datetime.now().date(), datetime.now().date() + timedelta(days=30)), label_visibility="collapsed", key="dash_contract_range")
             else: contract_range = []
-        with rc2:
+        with rc1: # Registration
             use_reg = st.checkbox(t("registration_date", lang) if lang == 'en' else f"تفعيل {t('registration_date', lang)}", key="dash_use_reg_filter")
             if use_reg:
                 reg_range = st.date_input("Registration Range", (datetime.now().date().replace(day=1), datetime.now().date()), label_visibility="collapsed", key="dash_reg_range")
             else: reg_range = []
-        with rc1: st.empty()
 
-        # 2. Row: Advanced Smart Filtering
+        # 2. Row: Advanced Smart Filtering - Centered
         st.markdown(f'<div class="premium-filter-label">⚙️ {t("filter_advanced_group", lang)}</div>', unsafe_allow_html=True)
-        # Using columns with empty ones at the ends to center the content
-        sc_pad_r, sc1, sc2, sc3, sc_pad_l = st.columns([0.2, 1, 1, 1.5, 0.2])
-        with sc3:
+        # Using 5 columns [Pad, Expired, NotWorking, Dropdown, Pad]
+        s_pad1, sc1, sc2, sc3, s_pad2 = st.columns([0.4, 1, 1, 1.8, 0.4])
+        with sc1:
             use_expired = st.checkbox(t("expired_filter", lang), key="dash_use_expired")
         with sc2:
             use_not_working = st.checkbox(t("not_working_no", lang), key="dash_use_not_working")
-        with sc1:
+        with sc3:
             transfer_options = {"": f"— {t('transfer_all', lang)} —", "First time": t("transfer_1", lang), "Second time": t("transfer_2", lang), "The third time": t("transfer_3", lang), "More than three": t("transfer_more", lang)}
-            # Inner columns to put label on the right of the dropdown
-            lc, ic = st.columns([1, 1.2])
-            with lc:
-                st.markdown(f'<div style="font-family: \'Cairo\', sans-serif; font-size: 0.95rem; font-weight: 500; color: #FFFFFF; text-align: right; margin-top: 8px;">{t("transfer_count_label", lang)}</div>', unsafe_allow_html=True)
+            # Inner columns: Dropdown on Right (Col1), Label on Left (Col2)
+            ic, lc = st.columns([1.2, 1])
             with ic:
                 selected_transfer_label = st.selectbox("", options=list(transfer_options.values()), key="dash_transfer_dropdown", label_visibility="collapsed")
+            with lc:
+                st.markdown(f'<div style="font-family: \'Cairo\', sans-serif; font-size: 0.95rem; font-weight: 500; color: #FFFFFF; text-align: left; margin-top: 8px;">{t("transfer_count_label", lang)}</div>', unsafe_allow_html=True)
             selected_transfer_key = [k for k, v in transfer_options.items() if v == selected_transfer_label][0]
-        with sc_pad_r: st.empty()
-        with sc_pad_l: st.empty()
         
-        # 3. Row: Status Flags
+        # 3. Row: Status Flags - Centered
         st.markdown("<div style='margin-bottom: 10px;'></div>", unsafe_allow_html=True)
-        tc1, tc2, tc3, tc4 = st.columns(4)
+        # Using 6 columns [Pad, 4 items, Pad] to center 4 items
+        t_pad1, tc4, tc3, tc2, tc1, t_pad2 = st.columns([0.3, 1, 1, 1, 1, 0.3])
         with tc4:
             use_no_huroob = st.checkbox(t("no_huroob", lang), key="dash_use_no_huroob")
         with tc3:
@@ -3521,29 +3520,28 @@ def render_search_content():
                 reg_range = st.date_input("Registration Range", (datetime.now().date().replace(day=1), datetime.now().date()), label_visibility="collapsed", key="reg_range")
             else: reg_range = []
 
-        # Row 2: Status & Dropdown Filters
+        # Row 2: Status & Dropdown Filters - Centered
         st.markdown(f'<div class="premium-filter-label">⚙️ {t("filter_advanced_group", lang)}</div>', unsafe_allow_html=True)
-        # Professional centering and alignment
-        sc_pad_r, sc1, sc2, sc3, sc_pad_l = st.columns([0.2, 1, 1, 1.5, 0.2])
+        # Using 5 columns [Pad, Expired, NotWorking, Dropdown, Pad]
+        s_pad1, sc1, sc2, sc3, s_pad2 = st.columns([0.4, 1, 1, 1.8, 0.4])
         with sc1:
             use_expired = st.checkbox(t("expired_filter", lang), key="use_expired_filter")
         with sc2:
             use_not_working = st.checkbox(t("not_working_no", lang), key="use_not_working_filter")
         with sc3:
             transfer_options = {"": f"— {t('transfer_all', lang)} —", "First time": t("transfer_1", lang), "Second time": t("transfer_2", lang), "The third time": t("transfer_3", lang), "More than three": t("transfer_more", lang)}
-            # Inner columns for right-side label
-            lc, ic = st.columns([1, 1.2])
-            with lc:
-                st.markdown(f'<div style="font-family: \'Cairo\', sans-serif; font-size: 0.95rem; font-weight: 500; color: #FFFFFF; text-align: right; margin-top: 8px;">{t("transfer_count_label", lang)}</div>', unsafe_allow_html=True)
+            # Inner columns: Dropdown on Right (Col1), Label on Left (Col2)
+            ic, lc = st.columns([1.2, 1])
             with ic:
                 selected_transfer_label = st.selectbox("", options=list(transfer_options.values()), key="transfer_count_dropdown", label_visibility="collapsed")
+            with lc:
+                st.markdown(f'<div style="font-family: \'Cairo\', sans-serif; font-size: 0.95rem; font-weight: 500; color: #FFFFFF; text-align: left; margin-top: 8px;">{t("transfer_count_label", lang)}</div>', unsafe_allow_html=True)
             selected_transfer_key = [k for k, v in transfer_options.items() if v == selected_transfer_label][0]
-        with sc_pad_r: st.empty()
-        with sc_pad_l: st.empty()
         
-        # Row 3: Huroob & Outside City Filters
+        # Row 3: Huroob & Outside City Filters - Centered
         st.markdown("<div style='margin-bottom: 10px;'></div>", unsafe_allow_html=True)
-        tc1, tc2, tc3, tc4 = st.columns(4)
+        # Using 6 columns [Pad, 4 items, Pad]
+        t_pad1, tc4, tc3, tc2, tc1, t_pad2 = st.columns([0.3, 1, 1, 1, 1, 0.3])
         with tc4:
             use_no_huroob = st.checkbox(t("no_huroob", lang), key="use_no_huroob_filter")
         with tc3:
@@ -4382,10 +4380,11 @@ def render_order_processing_content():
     st.markdown(f'<div class="mobile-neon-text" style="color: #D4AF37; font-weight: 600; margin-bottom: 5px; font-family: \'Cairo\', sans-serif;">{ai_title}</div>', unsafe_allow_html=True)
     
     with st.expander("🔍 " + ("تصفية متقدمة" if lang == 'ar' else "Advanced Filtering"), expanded=False):
-        # 1. Row: Scheduling & Dates
+        # 1. Row: Scheduling & Dates - Centered
         st.markdown(f'<div class="premium-filter-label">📅 {t("filter_dates_group", lang)}</div>', unsafe_allow_html=True)
-        rc1, rc2, rc3, rc4 = st.columns(4)
-        with rc4: # Rightmost (Arabic)
+        # Using 5 columns [Pad, Item, Item, Item, Pad]
+        r_pad1, rc3, rc2, rc1, r_pad2 = st.columns([0.5, 1, 1, 1, 0.5])
+        with rc3: # Rightmost (Arabic)
             age_enabled = st.checkbox(t("age", lang) if lang == 'en' else f"تفعيل {t('age', lang)}", key="op_age_en")
             if age_enabled:
                 ac1, ac2 = st.columns(2)
@@ -4393,39 +4392,37 @@ def render_order_processing_content():
                 with ac2: a_max = st.number_input("إلى سن" if lang == 'ar' else "To", 1, 100, 35, key="op_age_max")
                 age_range = (a_min, a_max)
             else: age_range = (16, 35)
-        with rc3:
+        with rc2:
             contract_enabled = st.checkbox(t("contract_end", lang) if lang == 'en' else f"تفعيل {t('contract_end', lang)}", key="op_cont_en")
             if contract_enabled:
                 c_start = st.date_input("من", value=datetime.today(), key="op_cont_start")
                 c_end = st.date_input("إلى", value=datetime.today() + timedelta(days=365), key="op_cont_end")
-        with rc2:
+        with rc1:
             date_enabled = st.checkbox(t("registration_date", lang) if lang == 'en' else f"تفعيل {t('registration_date', lang)}", key="op_date_en")
             if date_enabled:
                 d_start = st.date_input("من", value=datetime.today() - timedelta(days=30), key="op_date_start")
                 d_end = st.date_input("إلى", value=datetime.today(), key="op_date_end")
-        with rc1: st.empty()
 
-        # 2. Row: Advanced Smart Filtering
+        # 2. Row: Advanced Smart Filtering - Centered
         st.markdown(f'<div class="premium-filter-label">⚙️ {t("filter_advanced_group", lang)}</div>', unsafe_allow_html=True)
-        # Professional centering and alignment
-        sc_pad_r, sc1, sc2, sc3, sc_pad_l = st.columns([0.2, 1, 1, 1.5, 0.2])
+        # Using 5 columns [Pad, Expired, NotWorking, Dropdown, Pad]
+        s_pad1, sc1, sc2, sc3, s_pad2 = st.columns([0.4, 1, 1, 1.8, 0.4])
         with sc1:
             expired_only = st.checkbox(t("expired_filter", lang), key="op_expired")
         with sc2:
             not_working_only = st.checkbox(t("not_working_no", lang), key="op_not_working")
         with sc3:
-            # Inner columns for right-side label
-            lc, ic = st.columns([1, 1.2])
-            with lc:
-                st.markdown(f'<div style="font-family: \'Cairo\', sans-serif; font-size: 0.95rem; font-weight: 500; color: #FFFFFF; text-align: right; margin-top: 8px;">{t("transfer_count_label", lang)}</div>', unsafe_allow_html=True)
+            # Inner columns: Dropdown on Right (Col1), Label on Left (Col2)
+            ic, lc = st.columns([1.2, 1])
             with ic:
                 trans_count = st.selectbox("", ["— الكل —", "1", "2", "3", "4+"], key="op_transfer", label_visibility="collapsed")
-        with sc_pad_r: st.empty()
-        with sc_pad_l: st.empty()
-
-        # 3. Row: Status Flags
+            with lc:
+                st.markdown(f'<div style="font-family: \'Cairo\', sans-serif; font-size: 0.95rem; font-weight: 500; color: #FFFFFF; text-align: left; margin-top: 8px;">{t("transfer_count_label", lang)}</div>', unsafe_allow_html=True)
+        
+        # 3. Row: Status Flags - Centered
         st.markdown("<div style='margin-bottom: 10px;'></div>", unsafe_allow_html=True)
-        tc1, tc2, tc3, tc4 = st.columns(4)
+        # Using 6 columns [Pad, 4 items, Pad]
+        t_pad1, tc4, tc3, tc2, tc1, t_pad2 = st.columns([0.3, 1, 1, 1, 1, 0.3])
         with tc4:
             no_huroob = st.checkbox(t("no_huroob", lang), key="op_no_huroob")
         with tc3:
