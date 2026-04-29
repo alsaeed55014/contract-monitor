@@ -172,6 +172,19 @@ def get_css(lang='ar'):
             box-shadow: 0 10px 30px rgba(0,0,0,0.5);
         }}
 
+        .premium-filter-label {{
+            font-family: 'Cairo', sans-serif;
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: #FFFFFF;
+            border-right: 4px solid #FFFFFF;
+            padding-right: 15px;
+            margin: 20px 0 15px 0;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }}
+
         /* Notification Bell Styling */
         div[data-testid="column"]:nth-of-type({bell_col_idx}) button[key*="bell_trig"] {{
             background-color: transparent !important;

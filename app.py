@@ -3275,47 +3275,52 @@ def render_dashboard_content():
     lbl_enable = "تفعيل" if lang == "ar" else "Activate"
 
     with st.expander(t("advanced_filters", lang) if t("advanced_filters", lang) != "advanced_filters" else "تصفية متقدمة", expanded=False):
+        # 1. Row: Scheduling & Dates
         st.markdown(f'<div class="premium-filter-label">📅 {t("filter_dates_group", lang)}</div>', unsafe_allow_html=True)
-        c1, c2, c3 = st.columns(3)
-        with c1:
-            use_age = st.checkbox(f" {lbl_enable} {lbl_age}", key="dash_use_age_filter")
+        rc1, rc2, rc3 = st.columns(3)
+        with rc3: # Rightmost (Arabic)
+            use_age = st.checkbox(t("age", lang) if lang == 'en' else f"تفعيل {t('age', lang)}", key="dash_use_age_filter")
             if use_age:
                 ac1, ac2 = st.columns(2)
                 with ac1: a_min = st.number_input("من سن" if lang == 'ar' else "From", 1, 100, 16, key="dash_age_min")
                 with ac2: a_max = st.number_input("إلى سن" if lang == 'ar' else "To", 1, 100, 35, key="dash_age_max")
                 age_range = (a_min, a_max)
             else: age_range = (16, 35)
-        with c2:
-            use_contract = st.checkbox(f" {lbl_enable} {lbl_contract}", key="dash_use_contract_filter")
+        with rc2:
+            use_contract = st.checkbox(t("contract_end", lang) if lang == 'en' else f"تفعيل {t('contract_end', lang)}", key="dash_use_contract_filter")
             if use_contract:
                 contract_range = st.date_input("Contract Range", (datetime.now().date(), datetime.now().date() + timedelta(days=30)), label_visibility="collapsed", key="dash_contract_range")
             else: contract_range = []
-        with c3:
-            use_reg = st.checkbox(f" {lbl_enable} {lbl_reg}", key="dash_use_reg_filter")
+        with rc1:
+            use_reg = st.checkbox(t("registration_date", lang) if lang == 'en' else f"تفعيل {t('registration_date', lang)}", key="dash_use_reg_filter")
             if use_reg:
                 reg_range = st.date_input("Registration Range", (datetime.now().date().replace(day=1), datetime.now().date()), label_visibility="collapsed", key="dash_reg_range")
             else: reg_range = []
 
-        st.markdown("<br>", unsafe_allow_html=True)
+        # 2. Row: Advanced Smart Filtering
         st.markdown(f'<div class="premium-filter-label">⚙️ {t("filter_advanced_group", lang)}</div>', unsafe_allow_html=True)
-        c2_1, c2_2, c2_3 = st.columns(3)
-        with c2_1:
-            use_not_working = st.checkbox("No (هل يعمل حالياً؟)" if lang == "ar" else "Not Working (No)", key="dash_use_not_working")
-        with c2_2:
+        sc1, sc2, sc3 = st.columns(3)
+        with sc3:
+            use_expired = st.checkbox(t("expired_filter", lang), key="dash_use_expired")
+        with sc2:
+            use_not_working = st.checkbox(t("not_working_no", lang), key="dash_use_not_working")
+        with sc1:
             transfer_options = {"": f"— {t('transfer_all', lang)} —", "First time": t("transfer_1", lang), "Second time": t("transfer_2", lang), "The third time": t("transfer_3", lang), "More than three": t("transfer_more", lang)}
-            selected_transfer_label = st.selectbox(t("transfer_count_label", lang), options=list(transfer_options.values()), key="dash_transfer_dropdown")
+            st.markdown(f'<div style="font-size: 0.85rem; color: #888; margin-bottom: 5px;">{t("transfer_count_label", lang)}</div>', unsafe_allow_html=True)
+            selected_transfer_label = st.selectbox("", options=list(transfer_options.values()), key="dash_transfer_dropdown", label_visibility="collapsed")
             selected_transfer_key = [k for k, v in transfer_options.items() if v == selected_transfer_label][0]
-        with c2_3:
-            use_no_huroob = st.checkbox(t("no_huroob", lang), key="dash_use_no_huroob")
         
-        st.markdown("<br>", unsafe_allow_html=True)
-        c3_1, c3_2, c3_3, c3_4 = st.columns(4)
-        with c3_1:
+        # 3. Row: Status Flags
+        st.markdown("<div style='margin-bottom: 10px;'></div>", unsafe_allow_html=True)
+        tc1, tc2, tc3, tc4 = st.columns(4)
+        with tc4:
+            use_no_huroob = st.checkbox(t("no_huroob", lang), key="dash_use_no_huroob")
+        with tc3:
+            use_yes_huroob = st.checkbox(t("yes_huroob_label", lang), key="dash_use_yes_huroob")
+        with tc2:
+            use_sponsor_transfer = st.checkbox(t("sponsor_transfer_yes", lang), key="dash_use_sponsor_transfer")
+        with tc1:
             use_work_outside = st.checkbox(t("work_outside_city", lang), key="dash_use_work_outside")
-        with c3_2:
-            use_yes_huroob = st.checkbox("لديك بلاغ هروب (Yes)" if lang == 'ar' else "Has Huroob (Yes)", key="dash_use_yes_huroob")
-        with c3_3:
-            use_sponsor_transfer = st.checkbox("يقبل الكفيل النقل (Yes)" if lang == 'ar' else "Sponsor Accepts Transfer", key="dash_use_sponsor_transfer")
 
     dash_query = st.text_input(t("smart_search", lang), placeholder=t("search_placeholder", lang), key="dash_search_query")
     dash_search_clicked = st.button(t("search_btn", lang), key="dash_search_btn", width='stretch', type="primary")
@@ -3325,6 +3330,7 @@ def render_dashboard_content():
     if use_contract and len(contract_range) == 2: dash_filters['contract_enabled'] = True; dash_filters['contract_end_start'] = contract_range[0]; dash_filters['contract_end_end'] = contract_range[1]
     if use_reg and len(reg_range) == 2: dash_filters['date_enabled'] = True; dash_filters['date_start'] = reg_range[0]; dash_filters['date_end'] = reg_range[1]
     if use_not_working: dash_filters['not_working_only'] = True
+    if use_expired: dash_filters['expired_only'] = True
     if use_no_huroob: dash_filters['no_huroob'] = True
     if use_yes_huroob: dash_filters['yes_huroob'] = True
     if use_sponsor_transfer: dash_filters['sponsor_transfer'] = True
@@ -3507,46 +3513,29 @@ def render_search_content():
                 reg_range = st.date_input("Registration Range", (datetime.now().date().replace(day=1), datetime.now().date()), label_visibility="collapsed", key="reg_range")
             else: reg_range = []
 
-        st.markdown("<br>", unsafe_allow_html=True)
-        st.markdown(f'<div class="premium-filter-label">⚙️ {t("filter_advanced_group", lang)}</div>', unsafe_allow_html=True)
-        
         # Row 2: Status & Dropdown Filters
-        c2_1, c2_2, c2_3 = st.columns(3)
-        
-        with c2_1:
-            use_expired = st.checkbox(t("expired", lang), key="use_expired_filter")
-            if use_expired:
-                st.caption("⚠️ " + ("ترتيب من الأقدم" if lang == "ar" else "Sorting Oldest first"))
-        
-        with c2_2:
-            use_not_working = st.checkbox("No (هل يعمل حالياً؟)" if lang == "ar" else "Not Working (No)", key="use_not_working_filter")
-            
-        with c2_3:
-            transfer_options = {
-                "": f"— {t('transfer_all', lang)} —",
-                "First time": t("transfer_1", lang),
-                "Second time": t("transfer_2", lang),
-                "The third time": t("transfer_3", lang),
-                "More than three": t("transfer_more", lang)
-            }
-            selected_transfer_label = st.selectbox(
-                t("transfer_count_label", lang),
-                options=list(transfer_options.values()),
-                key="transfer_count_dropdown"
-            )
-            # Find the key (English value) from the selected label
+        st.markdown(f'<div class="premium-filter-label">⚙️ {t("filter_advanced_group", lang)}</div>', unsafe_allow_html=True)
+        sc1, sc2, sc3 = st.columns(3)
+        with sc3:
+            use_expired = st.checkbox(t("expired_filter", lang), key="use_expired_filter")
+        with sc2:
+            use_not_working = st.checkbox(t("not_working_no", lang), key="use_not_working_filter")
+        with sc1:
+            transfer_options = {"": f"— {t('transfer_all', lang)} —", "First time": t("transfer_1", lang), "Second time": t("transfer_2", lang), "The third time": t("transfer_3", lang), "More than three": t("transfer_more", lang)}
+            st.markdown(f'<div style="font-size: 0.85rem; color: #888; margin-bottom: 5px;">{t("transfer_count_label", lang)}</div>', unsafe_allow_html=True)
+            selected_transfer_label = st.selectbox("", options=list(transfer_options.values()), key="transfer_count_dropdown", label_visibility="collapsed")
             selected_transfer_key = [k for k, v in transfer_options.items() if v == selected_transfer_label][0]
         
         # Row 3: Huroob & Outside City Filters
-        st.markdown("<br>", unsafe_allow_html=True)
-        c3_1, c3_2, c3_3, c3_4 = st.columns(4)
-        with c3_1:
+        st.markdown("<div style='margin-bottom: 10px;'></div>", unsafe_allow_html=True)
+        tc1, tc2, tc3, tc4 = st.columns(4)
+        with tc4:
             use_no_huroob = st.checkbox(t("no_huroob", lang), key="use_no_huroob_filter")
-        with c3_2:
-            use_yes_huroob = st.checkbox("لديك بلاغ هروب (Yes)" if lang == 'ar' else "Has Huroob (Yes)", key="use_yes_huroob_filter")
-        with c3_3:
-            use_sponsor_transfer = st.checkbox("يقبل الكفيل النقل (Yes)" if lang == 'ar' else "Sponsor Accepts Transfer", key="use_sponsor_transfer_filter")
-        with c3_4:
+        with tc3:
+            use_yes_huroob = st.checkbox(t("yes_huroob_label", lang), key="use_yes_huroob_filter")
+        with tc2:
+            use_sponsor_transfer = st.checkbox(t("sponsor_transfer_yes", lang), key="use_sponsor_transfer_filter")
+        with tc1:
             use_work_outside = st.checkbox(t("work_outside_city", lang), key="use_work_outside_filter")
 
     # 2. Search Input & Button
@@ -4379,51 +4368,49 @@ def render_order_processing_content():
     
     with st.expander("🔍 " + ("تصفية متقدمة" if lang == 'ar' else "Advanced Filtering"), expanded=False):
         # 1. Row: Scheduling & Dates
-        st.markdown(f'<div class="mobile-neon-text" style="color: #888; margin-bottom: 10px;">{"📅 جدولة وتواريخ" if lang == "ar" else "📅 Scheduling & Dates"}</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="premium-filter-label">📅 {t("filter_dates_group", lang)}</div>', unsafe_allow_html=True)
         rc1, rc2, rc3 = st.columns(3)
         with rc3: # Rightmost (Arabic)
-            age_enabled = st.checkbox("تفعيل العمر" if lang == 'ar' else "Enable Age", key="op_age_en")
+            age_enabled = st.checkbox(t("age", lang) if lang == 'en' else f"تفعيل {t('age', lang)}", key="op_age_en")
             if age_enabled:
                 ac1, ac2 = st.columns(2)
-                with ac1:
-                    a_min = st.number_input("من سن" if lang == 'ar' else "From", 1, 100, 16, key="op_age_min")
-                with ac2:
-                    a_max = st.number_input("إلى سن" if lang == 'ar' else "To", 1, 100, 35, key="op_age_max")
+                with ac1: a_min = st.number_input("من سن" if lang == 'ar' else "From", 1, 100, 16, key="op_age_min")
+                with ac2: a_max = st.number_input("إلى سن" if lang == 'ar' else "To", 1, 100, 35, key="op_age_max")
                 age_range = (a_min, a_max)
-            else:
-                age_range = (16, 35)
+            else: age_range = (16, 35)
         with rc2:
-            contract_enabled = st.checkbox("تفعيل تاريخ انتهاء العقد" if lang == 'ar' else "Enable Contract End Date", key="op_cont_en")
+            contract_enabled = st.checkbox(t("contract_end", lang) if lang == 'en' else f"تفعيل {t('contract_end', lang)}", key="op_cont_en")
             if contract_enabled:
                 c_start = st.date_input("من", value=datetime.today(), key="op_cont_start")
                 c_end = st.date_input("إلى", value=datetime.today() + timedelta(days=365), key="op_cont_end")
         with rc1:
-            date_enabled = st.checkbox("تفعيل تاريخ التسجيل" if lang == 'ar' else "Enable Reg. Date", key="op_date_en")
+            date_enabled = st.checkbox(t("registration_date", lang) if lang == 'en' else f"تفعيل {t('registration_date', lang)}", key="op_date_en")
             if date_enabled:
                 d_start = st.date_input("من", value=datetime.today() - timedelta(days=30), key="op_date_start")
                 d_end = st.date_input("إلى", value=datetime.today(), key="op_date_end")
 
         # 2. Row: Advanced Smart Filtering
-        st.markdown(f'<div class="mobile-neon-text" style="color: #888; margin-top: 15px; margin-bottom: 10px;">{"⚙️ تصفية ذكية متقدمة" if lang == "ar" else "⚙️ Advanced Smart Filtering"}</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="premium-filter-label">⚙️ {t("filter_advanced_group", lang)}</div>', unsafe_allow_html=True)
         sc1, sc2, sc3 = st.columns(3)
         with sc3:
-            expired_only = st.checkbox("العقود المنتهية" if lang == 'ar' else "Expired Contracts", key="op_expired")
+            expired_only = st.checkbox(t("expired_filter", lang), key="op_expired")
         with sc2:
-            not_working_only = st.checkbox("No (هل يعمل حالياً؟)" if lang == 'ar' else "No (Working Now?)", key="op_not_working")
+            not_working_only = st.checkbox(t("not_working_no", lang), key="op_not_working")
         with sc1:
-            st.markdown(f'<div class="mobile-neon-text" style="font-size: 0.8rem; color: #888;">{"عدد نقل الكفالة" if lang == "ar" else "Transfer Count"}</div>', unsafe_allow_html=True)
+            st.markdown(f'<div style="font-size: 0.85rem; color: #888; margin-bottom: 5px;">{t("transfer_count_label", lang)}</div>', unsafe_allow_html=True)
             trans_count = st.selectbox("", ["— الكل —", "1", "2", "3", "4+"], key="op_transfer", label_visibility="collapsed")
 
         # 3. Row: Status Flags
+        st.markdown("<div style='margin-bottom: 10px;'></div>", unsafe_allow_html=True)
         tc1, tc2, tc3, tc4 = st.columns(4)
         with tc4:
-            no_huroob = st.checkbox("بدون بلاغ هروب (No)" if lang == 'ar' else "No Huroob (No)", key="op_no_huroob")
+            no_huroob = st.checkbox(t("no_huroob", lang), key="op_no_huroob")
         with tc3:
-            yes_huroob = st.checkbox("لديك بلاغ هروب (Yes)" if lang == 'ar' else "Has Huroob (Yes)", key="op_yes_huroob")
+            yes_huroob = st.checkbox(t("yes_huroob_label", lang), key="op_yes_huroob")
         with tc2:
-            sponsor_transfer = st.checkbox("يقبل الكفيل النقل (Yes)" if lang == 'ar' else "Sponsor Accepts Transfer", key="op_sponsor_transfer")
+            sponsor_transfer = st.checkbox(t("sponsor_transfer_yes", lang), key="op_sponsor_transfer")
         with tc1:
-            work_outside = st.checkbox("يقبل العمل خارج مدينته (Yes)" if lang == 'ar' else "Work Outside City (Yes)", key="op_outside")
+            work_outside = st.checkbox(t("work_outside_city", lang), key="op_outside")
 
         # Apply Filters using SmartSearchEngine
         filters = {

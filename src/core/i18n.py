@@ -164,8 +164,12 @@ TRANSLATIONS = {
     "age": {"ar": "العمر", "en": "age"},
     "contract_end": {"ar": "تاريخ انتهاء العقد", "en": "contract expiry date"},
     "registration_date": {"ar": "تاريخ التسجيل", "en": "registration date"},
-    "no_huroob": {"ar": "بدون بلاغ هروب (No)", "en": "No Huroob"},
-    "work_outside_city": {"ar": "يقبل العمل خارج مدينته (Yes)", "en": "Can work outside city"},
+    "no_huroob": {"ar": "بدون بلاغ هروب (No)", "en": "No Huroob (No)"},
+    "yes_huroob_label": {"ar": "لديك بلاغ هروب (Yes)", "en": "Has Huroob (Yes)"},
+    "not_working_no": {"ar": "No (هل يعمل حالياً؟)", "en": "No (Working Now?)"},
+    "sponsor_transfer_yes": {"ar": "يقبل الكفيل النقل (Yes)", "en": "Sponsor Accepts Transfer (Yes)"},
+    "expired_filter": {"ar": "العقود المنتهية", "en": "Expired Contracts"},
+    "work_outside_city": {"ar": "يقبل العمل خارج مدينته (Yes)", "en": "Can work outside city (Yes)"},
     "country_label": {"ar": "دولة", "en": "country"},
     
     # Bengali Supply Module
