@@ -2352,6 +2352,20 @@ def silent_notification_monitor():
     if not st.session_state.get('user'):
         return
 
+    # Prime audio engine on first run
+    if not st.session_state.get('audio_primed'):
+        st.components.v1.html("""
+<script>
+document.addEventListener('click', function() {
+    var AudioContext = window.AudioContext || window.webkitAudioContext;
+    if (!window._audioCtx) window._audioCtx = new AudioContext();
+    if (window._audioCtx.state === 'suspended') window._audioCtx.resume();
+    console.log('Audio Context Primed');
+}, { once: true });
+</script>
+""", height=0)
+        st.session_state.audio_primed = True
+
     # 1. Run the check
     check_notifications()
     
@@ -2359,7 +2373,7 @@ def silent_notification_monitor():
     if st.session_state.get('notif_triggered'):
         notifs = st.session_state.get('notifications', [])
         notif_count = len(notifs)
-        st.html(f"""
+        st.components.v1.html(f"""
 <script>
 (async function(){{
     try {{
@@ -2376,7 +2390,6 @@ def silent_notification_monitor():
             gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + startTime + dur);
             osc.start(ctx.currentTime + startTime); osc.stop(ctx.currentTime + startTime + dur);
         }}
-        // Premium Melody: C5, G5, C6 (Luxury Chord)
         playTone(523.25, 'sine', 0.0, 1.0, 0.5); 
         playTone(783.99, 'sine', 0.1, 0.8, 0.4); 
         playTone(1046.50, 'sine', 0.2, 0.6, 0.3);
@@ -2392,12 +2405,13 @@ def silent_notification_monitor():
     }}
 }})();
 </script>
-""")
+""", height=0)
         st.session_state.notif_triggered = False
 
     # 3. Sound Test Diagnostic
     if st.session_state.get('test_sound'):
-        st.html("""
+        st.toast("🔔 Testing Notification Sound...")
+        st.components.v1.html("""
 <script>
 (async function(){
     try {
@@ -2413,13 +2427,12 @@ def silent_notification_monitor():
             g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + s + d);
             o.start(ctx.currentTime + s); o.stop(ctx.currentTime + s + d);
         }
-        // Luxury Bell Chime: A5, E6
         playBell(880, 0, 1.2, 0.4); 
         playBell(1318.51, 0.1, 1.0, 0.3);
     } catch(e) { console.error('Test audio failed:', e); }
 })();
 </script>
-""")
+""", height=0)
         st.session_state.test_sound = False
 
 def check_notifications():
