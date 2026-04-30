@@ -2726,6 +2726,7 @@ def render_top_banner():
             # Audio Diagnostic & Permission Tools
             cols_notif = st.columns([1, 1])
             with cols_notif[0]:
+                btn_test = "⚙️ تجربة صوت التنبيه" if lang == 'ar' else "⚙️ Test Notification Sound"
                 if st.button(btn_test, key="btn_test_sound", width='stretch'):
                     st.session_state.test_sound = True
                     st.rerun()
