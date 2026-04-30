@@ -5419,7 +5419,6 @@ def render_bengali_supply_content():
                                     if s_match.get('notes'): st.markdown(f"> 📝 {s_match['notes']}")
                                 else:
                                     st.write(w.get('supplier', '-'))
-                                    
                             with det2:
                                 st.markdown("**(🏢) " + ("بيانات صاحب العمل الكاملة" if lang == 'ar' else "Full Employer Details") + "**")
                                 if e_match:
@@ -5433,7 +5432,6 @@ def render_bengali_supply_content():
                             if w.get('general_notes'):
                                 st.info(f"📝 {w['general_notes']}")
                             
-
                             # Actions
                             ac1, ac2, ac3 = st.columns(3)
                             with ac1:
@@ -5446,8 +5444,6 @@ def render_bengali_supply_content():
                                             bm.save_data()
                                             st.rerun()
                             with ac2:
-                                # Return Logic (Decrements headcount or deletes)
-
                                 if "headcount" in w:
                                     with st.popover("🔄 " + t("return_btn", lang), use_container_width=True):
                                         st.write(f"Current Count: {w['headcount']}")
@@ -5460,8 +5456,6 @@ def render_bengali_supply_content():
                                     if st.button("🔄 " + t("return_btn", lang), key=f"ret_indiv_{w_uuid}", use_container_width=True):
                                         bm.return_worker(w_uuid)
                                         st.rerun()
-
-
                             with ac3:
                                 if can_edit_delete:
                                     with st.popover("🗑️ " + t("delete_btn_sm", lang), use_container_width=True):
@@ -5470,83 +5464,53 @@ def render_bengali_supply_content():
                                             bm.delete_worker(w_uuid)
                                             st.rerun()
 
-
         with m_t2:
             st.markdown(f"#### 📦 {t('suppliers_tab', lang)}")
-            
             if not filtered_s:
                 st.info("⚠️ " + t("no_results", lang))
-            
             for s in filtered_s:
                 with st.container(border=True):
                     sc1, sc2, sc3 = st.columns([2, 2, 1])
                     sc1.markdown(f"**📦 {s.get('name')}**")
                     sc2.markdown(f"📞 {s.get('phone')}")
-                    
                     s_w_count = sum(int(w.get('headcount', 1)) if 'headcount' in w else 1 for w in all_workers if w.get('supplier', '').startswith(s.get('name', '')))
                     lbl = "إجمالي العمال المرتبطين" if lang == 'ar' else "Total Workers Associated"
                     st.info(f"👥 **{lbl}: {s_w_count}**")
-                    
-                    if s.get('notes'):
-                        st.write(f"📝 {s['notes']}")
-                    
+                    if s.get('notes'): st.write(f"📝 {s['notes']}")
                     with sc3:
                         with st.popover("⚙️", use_container_width=True):
                             with st.form(f"ed_sup_{s['id']}"):
-                                sn = st.text_input("Name", s['name'])
-                                sp = st.text_input("Phone", s['phone'])
-                                snt = st.text_area("Notes", s.get('notes', ''))
-                                if st.form_submit_button("💾"):
-                                    bm.update_supplier(s['id'], {"name": sn, "phone": sp, "notes": snt})
-                                    st.rerun()
+                                sn = st.text_input("Name", s['name']); sp = st.text_input("Phone", s['phone']); snt = st.text_area("Notes", s.get('notes', ''))
+                                if st.form_submit_button("💾"): bm.update_supplier(s['id'], {"name": sn, "phone": sp, "notes": snt}); st.rerun()
                             if can_edit_delete:
                                 with st.popover("🗑️ " + ("حذف" if lang=='ar' else "Delete"), use_container_width=True):
-                                    st.write("هل أنت متأكد؟" if lang=='ar' else "Are you sure?")
                                     if st.button("تأكيد 🗑️" if lang=='ar' else "Confirm 🗑️", key=f"del_s_b_{s['id']}", use_container_width=True, type="primary"):
-                                        bm.delete_supplier(s['id'])
-                                        st.rerun()
+                                        bm.delete_supplier(s['id']); st.rerun()
 
         with m_t3:
             st.markdown(f"#### 🏢 {t('employers_tab', lang)}")
-            
             if not filtered_e:
                 st.info("⚠️ " + t("no_results", lang))
-
             for e in filtered_e:
                 with st.container(border=True):
                     ec1, ec2, ec3 = st.columns([2, 1, 1])
                     ec1.markdown(f"**🏢 {e.get('name')}**")
                     ec2.markdown(f"☕ {e.get('cafe','')}")
-                    
                     e_w_count = sum(int(w.get('headcount', 1)) if 'headcount' in w else 1 for w in all_workers if w.get('employer', '').startswith(e.get('name', '')))
                     lbl = "إجمالي العمال المرتبطين" if lang == 'ar' else "Total Workers Associated"
                     st.info(f"👥 **{lbl}: {e_w_count}**")
-                    
                     with ec3:
                         with st.expander("📍"):
-                            st.write(f"City: {e.get('city','')}")
-                            st.write(f"Mobile: {e.get('mobile','')}")
-                            if e.get('notes'):
-                                st.info(f"📝 {e['notes']}")
+                            st.write(f"City: {e.get('city','')}"); st.write(f"Mobile: {e.get('mobile','')}")
+                            if e.get('notes'): st.info(f"📝 {e['notes']}")
                             with st.popover("✏️", use_container_width=True):
                                 with st.form(f"ed_emp_{e['id']}"):
-                                    en = st.text_input("Name", e['name'])
-                                    ec = st.text_input("Cafe", e.get('cafe',''))
-                                    em = st.text_input("Mobile", e.get('mobile',''))
-                                    ect = st.text_input("City", e.get('city',''))
-                                    ent = st.text_area("Notes", e.get('notes', ''))
-                                    if st.form_submit_button("💾"):
-                                        bm.update_employer(e['id'], {"name": en, "cafe": ec, "mobile": em, "city": ect, "notes": ent})
-                                        st.rerun()
+                                    en = st.text_input("Name", e['name']); ecf = st.text_input("Cafe", e.get('cafe','')); em = st.text_input("Mobile", e.get('mobile','')); ect = st.text_input("City", e.get('city','')); ent = st.text_area("Notes", e.get('notes', ''))
+                                    if st.form_submit_button("💾"): bm.update_employer(e['id'], {"name": en, "cafe": ecf, "mobile": em, "city": ect, "notes": ent}); st.rerun()
                             if can_edit_delete:
                                 with st.popover("🗑️ " + ("حذف" if lang=='ar' else "Delete"), use_container_width=True):
-                                    st.write("هل أنت متأكد؟" if lang=='ar' else "Are you sure?")
                                     if st.button("تأكيد 🗑️" if lang=='ar' else "Confirm 🗑️", key=f"del_e_b_{e['id']}", use_container_width=True, type="primary"):
-                                        bm.delete_employer(e['id'])
-                                        st.rerun()
-
-
-
+                                        bm.delete_employer(e['id']); st.rerun()
 
 # 11. Main Entry
 placeholder = st.empty()
@@ -5557,159 +5521,3 @@ else:
     dashboard()
     silent_notification_monitor()
 
-
-    with tab2:
-        st.markdown(f'### 👷 {t("form_worker_details", lang)}')
-        suppliers = bm.get_suppliers()
-        employers = bm.get_employers()
-        
-        s_options = [f"{s['name']} ({s['phone']})" for s in suppliers]
-        e_options = [f"{e['name']} - {e['cafe']} ({e['city']})" for e in employers]
-        
-        with st.form("worker_entry_form", clear_on_submit=True):
-            c1, c2 = st.columns(2)
-            with c1:
-                st.markdown(f"**Name - الاسم**")
-                w_name = st.text_input(t("worker_name", lang), label_visibility="collapsed", key="w_name_in")
-                st.markdown(f"**Mobile - الجوال**")
-                w_mobile = st.text_input(t("worker_phone", lang), label_visibility="collapsed", key="w_mob_in")
-            with c2:
-                st.markdown(f"**ID/Passport - الهوية أو الجواز**")
-                w_id = st.text_input(t("worker_passport_iqama", lang), label_visibility="collapsed", key="w_id_in")
-            
-            st.markdown(f"**Select Supplier - المورد**")
-            sel_s = st.selectbox(t("select_supplier", lang), options=s_options, label_visibility="collapsed", key="w_s_sel")
-            
-            st.markdown(f"**Select Employer - صاحب العمل**")
-            sel_e = st.selectbox(t("select_employer", lang), options=e_options, label_visibility="collapsed", key="w_e_sel")
-            
-            st.markdown(f"**Attachments - المرفقات**")
-            uploaded_files = st.file_uploader(t("upload_multiple_imgs", lang), accept_multiple_files=True, type=['png', 'jpg', 'jpeg', 'pdf'], label_visibility="collapsed", key="w_files")
-            
-            st.markdown(f"**Files Notes - ملاحظات المرفقات**")
-            f_notes = st.text_area(t("notes_files", lang), label_visibility="collapsed", key="w_f_notes")
-            
-            st.markdown(f"**General Notes - ملاحظات عامة**")
-            g_notes = st.text_area(t("general_notes", lang), label_visibility="collapsed", key="w_g_notes")
-            
-            if st.form_submit_button(t("add_worker_btn", lang), use_container_width=True):
-                if w_name and (sel_s if s_options else True) and (sel_e if e_options else True):
-                    worker_data = {
-                        "name": w_name,
-                        "mobile": w_mobile,
-                        "id": w_id,
-                        "supplier": sel_s if s_options else "",
-                        "employer": sel_e if e_options else "",
-                        "file_notes": f_notes,
-                        "general_notes": g_notes,
-                        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                    }
-                    bm.add_worker(worker_data)
-                    st.session_state.bengali_msg = ("success", t("save_success", lang))
-                    st.rerun()
-                else:
-                    show_toast("يرجى إكمال بيانات العامل واختيار المورد وصاحب العمل", "error")
-
-    with tab3:
-        st.markdown(f"### {t('search_manage_title', lang)}")
-        
-        # Debug info for the user
-        workers_all = bm.get_workers()
-        suppliers_all = bm.get_suppliers()
-        employers_all = bm.get_employers()
-        
-        col_stats1, col_stats2, col_stats3 = st.columns(3)
-        col_stats1.metric("👷 Workers - العمال", len(workers_all))
-        col_stats2.metric("📦 Suppliers - الموردين", len(suppliers_all))
-        col_stats3.metric("🏢 Employers - العملاء", len(employers_all))
-        
-        # Added a hint to press Enter for search
-        st.caption("⌨️ اكتب للبحث واضغط Enter (يتم البحث في جميع البيانات: عمال، عملاء، موردين)")
-        search_q = st.text_input(t("search_manage_title", lang), placeholder=t("search_placeholder_bengali", lang), label_visibility="collapsed", key="bengali_search_q")
-        
-        def normalize_ar(text):
-            if not text: return ""
-            t = str(text).lower().strip()
-            # Basic Arabic Normalization
-            t = t.replace("أ", "ا").replace("إ", "ا").replace("آ", "ا")
-            t = t.replace("ة", "ه").replace("ى", "ي")
-            t = t.replace("ئ", "ي").replace("ؤ", "و").replace("ء", "")
-            return t
-
-        workers = workers_all
-        if search_q:
-            q = normalize_ar(search_q)
-            workers = [w for w in workers if 
-                       q in normalize_ar(w.get("name", "")) or 
-                       q in normalize_ar(w.get("supplier", "")) or 
-                       q in normalize_ar(w.get("employer", "")) or 
-                       q in normalize_ar(w.get("mobile", "")) or 
-                       q in normalize_ar(w.get("id", ""))]
-        
-        if not workers:
-            if not workers_all:
-                st.warning("⚠️ لا توجد سجلات مضافة حتى الآن. يرجى إضافة بيانات في القسم الأول والثاني.")
-            else:
-                st.info(t("no_records_found", lang))
-        else:
-            st.success(f"🔍 Found {len(workers)} records - تم العثور على {len(workers)} سجلات")
-            
-            # --- Table View with Scrolling ---
-            df_data = []
-            for w in sorted(workers, key=lambda x: x.get("timestamp", ""), reverse=True):
-                df_data.append({
-                    "العامل": w.get("name", "N/A"),
-                    "صاحب العمل": w.get("employer", "N/A"),
-                    "المورد": w.get("supplier", "N/A"),
-                    "الجوال": w.get("mobile", "N/A"),
-                    "الهوية/الجواز": w.get("id", "N/A"),
-                    "التاريخ": w.get("timestamp", "N/A")
-                })
-            
-            # Set height to enable vertical scroll, explicitly allowing it to overflow horizontally
-            st.dataframe(pd.DataFrame(df_data), height=400, hide_index=True)
-            
-            st.markdown("---")
-            st.markdown("### 📄 تفاصيل السجلات (للحذف)")
-            
-            for w in sorted(workers, key=lambda x: x.get("timestamp", ""), reverse=True):
-                with st.container(border=True):
-                    # Header with Worker Name and Delete button
-                    h1, h2 = st.columns([0.85, 0.15])
-                    with h1:
-                        st.markdown(f"### 👷 {w.get('name', 'N/A')}")
-                    with h2:
-                        user_perms = st.session_state.user.get('permissions', [])
-                        if "can_delete" in user_perms or "all" in user_perms:
-                            if st.button("🗑️", key=f"del_{w['worker_uuid']}", help=t("delete_btn", lang)):
-                                if bm.delete_worker(w['worker_uuid']):
-                                    show_toast("تم حذف السجل بنجاح", "success")
-                                    time.sleep(0.5)
-                                    st.rerun()
-                        else:
-                            st.button("🔒", key=f"lock_{w['worker_uuid']}", disabled=True, help="لا تملك صلاحية الحذف")
-
-                    # Full Details in Columns
-                    d1, d2, d3 = st.columns(3)
-                    with d1:
-                        st.markdown(f"**👤 Worker - العامل**")
-                        st.write(f"📞 {w.get('mobile', 'N/A')}")
-                        st.write(f"🆔 {w.get('id', 'N/A')}")
-                        st.caption(f"📅 {w.get('timestamp', 'N/A')}")
-                    with d2:
-                        st.markdown(f"**🏢 Employer - صاحب العمل**")
-                        st.info(w.get('employer', 'N/A'))
-                    with d3:
-                        st.markdown(f"**📦 Supplier - المورد**")
-                        st.warning(w.get('supplier', 'N/A'))
-                    
-                    if w.get('file_notes') or w.get('general_notes'):
-                        with st.expander("📝 Notes - ملاحظات"):
-                            if w.get('file_notes'): st.write(f"**Files:** {w['file_notes']}")
-                            if w.get('general_notes'): st.write(f"**General:** {w['general_notes']}")
-
-# 11. Main Entry
-if not st.session_state.user:
-    login_screen()
-else:
-    dashboard()
