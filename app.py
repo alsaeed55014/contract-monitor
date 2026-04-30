@@ -2364,7 +2364,8 @@ def silent_notification_monitor():
 (async function(){{
     try {{
         var AudioContext = window.AudioContext || window.webkitAudioContext;
-        var ctx = new AudioContext();
+        if (!window._audioCtx) window._audioCtx = new AudioContext();
+        var ctx = window._audioCtx;
         if (ctx.state === 'suspended') await ctx.resume();
         
         function playTone(freq, type, startTime, dur, vol) {{
@@ -2379,7 +2380,7 @@ def silent_notification_monitor():
         playTone(523.25, 'sine', 0.0, 1.0, 0.5); 
         playTone(783.99, 'sine', 0.1, 0.8, 0.4); 
         playTone(1046.50, 'sine', 0.2, 0.6, 0.3);
-    }} catch(e) {{}}
+    }} catch(e) {{ console.error('Notif audio failed:', e); }}
     
     if ('Notification' in window && Notification.permission === 'granted') {{
         new Notification('نظام السعيد - إشعار جديد', {{
@@ -2400,20 +2401,22 @@ def silent_notification_monitor():
 <script>
 (async function(){
     try {
-        var ctx = new (window.AudioContext || window.webkitAudioContext)();
+        var AudioContext = window.AudioContext || window.webkitAudioContext;
+        if (!window._audioCtx) window._audioCtx = new AudioContext();
+        var ctx = window._audioCtx;
         if (ctx.state === 'suspended') await ctx.resume();
         function playBell(f, s, d, v) {
             var o = ctx.createOscillator(); var g = ctx.createGain();
             o.connect(g); g.connect(ctx.destination);
             o.type = 'sine'; o.frequency.setValueAtTime(f, ctx.currentTime + s);
             g.gain.setValueAtTime(v, ctx.currentTime + s);
-            g.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + s + d);
+            g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + s + d);
             o.start(ctx.currentTime + s); o.stop(ctx.currentTime + s + d);
         }
         // Luxury Bell Chime: A5, E6
         playBell(880, 0, 1.2, 0.4); 
         playBell(1318.51, 0.1, 1.0, 0.3);
-    } catch(e) {}
+    } catch(e) { console.error('Test audio failed:', e); }
 })();
 </script>
 """)
@@ -5852,3 +5855,4 @@ if not st.session_state.user:
 else:
     with main_container.container():
         dashboard()
+    silent_notification_monitor()
