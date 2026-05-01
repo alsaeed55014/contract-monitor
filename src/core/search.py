@@ -457,6 +457,21 @@ class SmartSearchEngine:
                     # Use substring match to be robust against varying data formats
                     results = results[results[trans_col].astype(str).str.contains(search_term, case=False, na=False)]
 
+            # New: Filter by Domestic Worker (Iqama Profession)
+            if filters.get('domestic_worker'):
+                prof_col = find_col(["What is the occupation listed on your Iqama", "المهنة في الإقامة", "Iqama Profession", "Occupation"])
+                if prof_col:
+                    # Keywords provided by user for Domestic Workers
+                    keywords = [
+                        "house maid", "domestichelper", "domestic helper", "domestic workers", "dh", 
+                        "housemaid", "domestic worker", "home cleaner", "household worker", "maid", 
+                        "housekeeper", "home attendant", "home helper", "residential cleaner", 
+                        "private cleaner", "household assistant", "cleaning worker", "babysitter", 
+                        "personal maid", "dw", "hm"
+                    ]
+                    pattern = "|".join([re.escape(k) for k in keywords])
+                    results = results[results[prof_col].astype(str).str.contains(pattern, case=False, na=False, regex=True)]
+
             # Filter by Timestamp (Registration Date)
             if filters.get('date_enabled') and 'date_start' in filters and 'date_end' in filters:
                 ts_col = find_col(["طابع زمني", "وقت التسجيل", "تاريخ التسجيل", "Timestamp"])

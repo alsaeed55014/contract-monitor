@@ -3335,8 +3335,10 @@ def render_dashboard_content():
         
         # 3. Row: Status Flags - Centered
         st.markdown("<div style='margin-bottom: 10px;'></div>", unsafe_allow_html=True)
-        # Using 6 columns [Pad, 4 items, Pad] to center 4 items
-        t_pad1, tc4, tc3, tc2, tc1, t_pad2 = st.columns([0.3, 1, 1, 1, 1, 0.3])
+        # Using 7 columns [Pad, 5 items, Pad] to center 5 items
+        t_pad1, tc5, tc4, tc3, tc2, tc1, t_pad2 = st.columns([0.2, 1, 1, 1, 1, 1, 0.2])
+        with tc5:
+            use_domestic_worker = st.checkbox(t("domestic_worker_filter", lang), key="dash_use_domestic_worker")
         with tc4:
             use_no_huroob = st.checkbox(t("no_huroob", lang), key="dash_use_no_huroob")
         with tc3:
@@ -3359,6 +3361,7 @@ def render_dashboard_content():
     if use_yes_huroob: dash_filters['yes_huroob'] = True
     if use_sponsor_transfer: dash_filters['sponsor_transfer'] = True
     if use_work_outside: dash_filters['work_outside_city'] = True
+    if use_domestic_worker: dash_filters['domestic_worker'] = True
     if selected_transfer_key: dash_filters['transfer_count'] = selected_transfer_key
 
     st.markdown("---")
@@ -3557,8 +3560,10 @@ def render_search_content():
         
         # Row 3: Huroob & Outside City Filters - Centered
         st.markdown("<div style='margin-bottom: 10px;'></div>", unsafe_allow_html=True)
-        # Using 6 columns [Pad, 4 items, Pad]
-        t_pad1, tc4, tc3, tc2, tc1, t_pad2 = st.columns([0.3, 1, 1, 1, 1, 0.3])
+        # Using 7 columns [Pad, 5 items, Pad]
+        t_pad1, tc5, tc4, tc3, tc2, tc1, t_pad2 = st.columns([0.2, 1, 1, 1, 1, 1, 0.2])
+        with tc5:
+            use_domestic_worker = st.checkbox(t("domestic_worker_filter", lang), key="use_domestic_worker_filter")
         with tc4:
             use_no_huroob = st.checkbox(t("no_huroob", lang), key="use_no_huroob_filter")
         with tc3:
@@ -3621,6 +3626,9 @@ def render_search_content():
     if use_work_outside:
         filters['work_outside_city'] = True
         
+    if use_domestic_worker:
+        filters['domestic_worker'] = True
+        
     if selected_transfer_key:
         filters['transfer_count'] = selected_transfer_key
     
@@ -3641,6 +3649,7 @@ def render_search_content():
             if filters.get('not_working_only'): active_filter_names.append("غير موظف" if lang == 'ar' else "Not Working")
             if filters.get('no_huroob'): active_filter_names.append(t("no_huroob", lang))
             if filters.get('work_outside_city'): active_filter_names.append(t("work_outside_city", lang))
+            if filters.get('domestic_worker'): active_filter_names.append(t("domestic_worker_filter", lang))
             if filters.get('transfer_count'): active_filter_names.append("عدد مرات النقل" if lang == 'ar' else "Transfer Count")
             
             if active_filter_names:
@@ -4440,8 +4449,10 @@ def render_order_processing_content():
         
         # 3. Row: Status Flags - Centered
         st.markdown("<div style='margin-bottom: 10px;'></div>", unsafe_allow_html=True)
-        # Using 6 columns [Pad, 4 items, Pad]
-        t_pad1, tc4, tc3, tc2, tc1, t_pad2 = st.columns([0.3, 1, 1, 1, 1, 0.3])
+        # Using 7 columns [Pad, 5 items, Pad]
+        t_pad1, tc5, tc4, tc3, tc2, tc1, t_pad2 = st.columns([0.2, 1, 1, 1, 1, 1, 0.2])
+        with tc5:
+            domestic_worker = st.checkbox(t("domestic_worker_filter", lang), key="op_domestic_worker")
         with tc4:
             no_huroob = st.checkbox(t("no_huroob", lang), key="op_no_huroob")
         with tc3:
@@ -4468,6 +4479,7 @@ def render_order_processing_content():
             'yes_huroob': yes_huroob,
             'sponsor_transfer': sponsor_transfer,
             'work_outside_city': work_outside,
+            'domestic_worker': domestic_worker,
             'transfer_count': trans_count if trans_count != "" else None
         }
         

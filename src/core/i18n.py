@@ -170,6 +170,7 @@ TRANSLATIONS = {
     "sponsor_transfer_yes": {"ar": "يقبل الكفيل النقل (Yes)", "en": "Sponsor Accepts Transfer (Yes)"},
     "expired_filter": {"ar": "العقود المنتهية", "en": "Expired Contracts"},
     "work_outside_city": {"ar": "يقبل العمل خارج مدينته (Yes)", "en": "Can work outside city (Yes)"},
+    "domestic_worker_filter": {"ar": "عاملة منزلية", "en": "Domestic Worker"},
     "country_label": {"ar": "دولة", "en": "country"},
     
     # Bengali Supply Module
