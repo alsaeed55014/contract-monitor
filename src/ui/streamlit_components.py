@@ -6,6 +6,7 @@ from datetime import datetime
 from src.core.i18n import t
 from src.ui.styles import get_base64_image
 import pandas as pd
+import re
 
 def show_toast(message, typ="success", duration=5, container=None):
     is_contextual = container is not None
@@ -173,8 +174,16 @@ def render_table_translator(df, key_prefix="table"):
         stat_items = []
         for val, c in counts.items():
             if not val or pd.isna(val): continue
-            val_clean = str(val).lower().strip()
+            # Robust cleaning: remove emojis and non-alphanumeric chars for matching
+            val_clean = re.sub(r'[^\w\s]', ' ', str(val)).lower().strip()
+            # Try matching parts if full string doesn't match
             code = nat_map.get(val_clean)
+            if not code:
+                for word in val_clean.split():
+                    if word in nat_map:
+                        code = nat_map[word]
+                        break
+            
             if code:
                 flag_url = f"https://flagcdn.com/w40/{code}.png"
                 stat_items.append(f"""
