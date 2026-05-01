@@ -4431,10 +4431,12 @@ def render_order_processing_content():
         with sc3:
             # Inner columns: Dropdown on Right (Col1), Label on Left (Col2)
             ic, lc = st.columns([1.2, 1])
+            transfer_options = {"": f"— {t('transfer_all', lang)} —", "First time": t("transfer_1", lang), "Second time": t("transfer_2", lang), "The third time": t("transfer_3", lang), "More than three": t("transfer_more", lang)}
             with ic:
-                trans_count = st.selectbox("", ["— الكل —", "1", "2", "3", "4+"], key="op_transfer", label_visibility="collapsed")
+                selected_transfer_label = st.selectbox("", options=list(transfer_options.values()), key="op_transfer", label_visibility="collapsed")
             with lc:
                 st.markdown(f'<div style="font-family: \'Cairo\', sans-serif; font-size: 0.95rem; font-weight: 500; color: #FFFFFF; text-align: left; margin-top: 8px;">{t("transfer_count_label", lang)}</div>', unsafe_allow_html=True)
+            trans_count = [k for k, v in transfer_options.items() if v == selected_transfer_label][0]
         
         # 3. Row: Status Flags - Centered
         st.markdown("<div style='margin-bottom: 10px;'></div>", unsafe_allow_html=True)
@@ -4466,7 +4468,7 @@ def render_order_processing_content():
             'yes_huroob': yes_huroob,
             'sponsor_transfer': sponsor_transfer,
             'work_outside_city': work_outside,
-            'transfer_count': trans_count if trans_count != "— الكل —" else None
+            'transfer_count': trans_count if trans_count != "" else None
         }
         
         # Execute global filter on worker dataset

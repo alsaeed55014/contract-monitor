@@ -445,8 +445,17 @@ class SmartSearchEngine:
                 trans_col = find_col(["How many times did you transfer your sponsorship", "عدد مرات نقل الكفالة", "Transfer Count"])
                 if trans_col:
                     target_val = filters['transfer_count']
-                    # Use substring or exact match depending on data quality
-                    results = results[results[trans_col].astype(str).str.contains(target_val, case=False, na=False)]
+                    # Mapping numeric choices (from UI) to descriptive labels (in data)
+                    mapping = {
+                        "1": "First time",
+                        "2": "Second time",
+                        "3": "The third time",
+                        "4+": "More than three",
+                        "+4": "More than three"
+                    }
+                    search_term = mapping.get(target_val, target_val)
+                    # Use substring match to be robust against varying data formats
+                    results = results[results[trans_col].astype(str).str.contains(search_term, case=False, na=False)]
 
             # Filter by Timestamp (Registration Date)
             if filters.get('date_enabled') and 'date_start' in filters and 'date_end' in filters:
