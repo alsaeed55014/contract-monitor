@@ -5,6 +5,7 @@ import base64
 from datetime import datetime
 from src.core.i18n import t
 from src.ui.styles import get_base64_image
+import pandas as pd
 
 def show_toast(message, typ="success", duration=5, container=None):
     is_contextual = container is not None
@@ -135,14 +136,67 @@ def render_table_translator(df, key_prefix="table"):
     from src.core.translation import TranslationManager
     tm = TranslationManager()
 
-    # --- ADDED: Record Count Header ---
+    # --- Record Count Header & Nationality Stats ---
     count = len(df)
-    count_label = "عدد السجلات" if st.session_state.get('lang', 'ar') == 'ar' else "Total Records"
+    lang = st.session_state.get('lang', 'ar')
+    count_label = "عدد العمال" if lang == 'ar' else "Total Workers"
+    
+    # Calculate Nationality Stats
+    nat_stats_html = ""
+    # Try to find nationality column
+    nat_col = None
+    for c in df.columns:
+        c_str = str(c).lower()
+        if "nationality" in c_str or "الجنسية" in c_str or "جنسية" in c_str:
+            nat_col = c
+            break
+            
+    if nat_col is not None and not df.empty:
+        counts = df[nat_col].value_counts()
+        nat_map = {
+            "filipino": "ph", "philippines": "ph", "philippine": "ph", "فلبيني": "ph", "الفلبين": "ph", "فلبينية": "ph",
+            "indian": "in", "india": "in", "هندي": "in", "الهند": "in", "هندية": "in",
+            "pakistani": "pk", "pakistan": "pk", "باكستاني": "pk", "باكستان": "pk", "باكستانية": "pk",
+            "egyptian": "eg", "egypt": "eg", "مصري": "eg", "مصر": "eg", "مصرية": "eg",
+            "bangladeshi": "bd", "bangladesh": "bd", "بنغلاديشي": "bd", "بنغلاديش": "bd", "بنغالي": "bd",
+            "sri lankan": "lk", "sri lanka": "lk", "سريلانكي": "lk", "سريلانكا": "lk",
+            "kenyan": "ke", "kenya": "ke", "كيني": "ke", "كينيا": "ke",
+            "ugandan": "ug", "uganda": "ug", "أوغندي": "ug", "أوغندا": "ug",
+            "ethiopian": "et", "ethiopia": "et", "إثيوبي": "et", "إثيوبيا": "et", "اثيوبي": "et",
+            "nepali": "np", "nepal": "np", "نيبالي": "np", "نيبال": "np",
+            "indonesian": "id", "indonesia": "id", "إندونيسي": "id", "إندونيسيا": "id", "اندونيسي": "id",
+            "sudanese": "sd", "sudan": "sd", "سوداني": "sd", "السودان": "sd",
+            "yemeni": "ye", "yemen": "ye", "يمني": "ye", "اليمن": "ye",
+            "saudi": "sa", "saudi arabia": "sa", "سعودي": "sa", "السعودية": "sa"
+        }
+        
+        stat_items = []
+        for val, c in counts.items():
+            if not val or pd.isna(val): continue
+            val_clean = str(val).lower().strip()
+            code = nat_map.get(val_clean)
+            if code:
+                flag_url = f"https://flagcdn.com/w40/{code}.png"
+                stat_items.append(f"""
+                    <div style="display: flex; align-items: center; gap: 6px; background: rgba(255,255,255,0.08); padding: 4px 10px; border-radius: 12px; border: 1px solid rgba(212,175,55,0.25); box-shadow: 0 2px 5px rgba(0,0,0,0.2);">
+                        <img src="{flag_url}" style="width: 22px; border-radius: 3px; box-shadow: 0 0 4px rgba(0,0,0,0.3);">
+                        <span style="color: #FFF; font-weight: 800; font-size: 0.95rem; font-family: 'Inter', sans-serif;">{c}</span>
+                    </div>
+                """)
+        if stat_items:
+            nat_stats_html = f'<div style="display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; justify-content: center;">{" ".join(stat_items)}</div>'
+
     st.markdown(f"""
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; padding: 10px; background: rgba(212, 175, 55, 0.1); border-radius: 10px; border: 1px solid rgba(212, 175, 55, 0.2);">
-            <div style="color: #D4AF37; font-weight: bold; font-family: 'Cairo', sans-serif;">
-                ✨ {count_label}: <span style="font-size: 1.2rem; color: #FFF;">{count}</span>
+        <div style="margin-bottom: 20px; padding: 15px; background: linear-gradient(135deg, rgba(20, 20, 20, 0.95) 0%, rgba(30, 30, 30, 0.8) 100%); border-radius: 20px; border: 1.5px solid rgba(212, 175, 55, 0.3); box-shadow: 0 8px 25px rgba(0,0,0,0.5); text-align: center;">
+            <div style="display: flex; justify-content: center; align-items: center; gap: 15px;">
+                <div style="color: #D4AF37; font-weight: 800; font-family: 'Cairo', sans-serif; font-size: 1.2rem; display: flex; align-items: center; gap: 10px;">
+                    ✦ {count_label}
+                </div>
+                <div style="background: linear-gradient(135deg, #D4AF37, #8B7520); color: #000; width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 1.2rem; box-shadow: 0 0 15px rgba(212,175,55,0.6);">
+                    {count}
+                </div>
             </div>
+            {nat_stats_html}
         </div>
     """, unsafe_allow_html=True)
 
