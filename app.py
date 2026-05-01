@@ -1570,28 +1570,24 @@ def render_table_translator(df, key_prefix="table"):
             
             if code:
                 flag_url = f"https://flagcdn.com/w40/{code}.png"
-                stat_items.append(f"""
-                    <div style="display: flex; align-items: center; gap: 6px; background: rgba(255,255,255,0.08); padding: 4px 10px; border-radius: 12px; border: 1px solid rgba(212,175,55,0.25); box-shadow: 0 2px 5px rgba(0,0,0,0.2);">
-                        <img src="{flag_url}" style="width: 22px; border-radius: 3px; box-shadow: 0 0 4px rgba(0,0,0,0.3);">
-                        <span style="color: #FFF; font-weight: 800; font-size: 0.95rem; font-family: 'Inter', sans-serif;">{c}</span>
-                    </div>
-                """)
+                stat_items.append(f"""<div style="display: flex; align-items: center; gap: 6px; background: rgba(255,255,255,0.08); padding: 4px 10px; border-radius: 12px; border: 1px solid rgba(212,175,55,0.25); box-shadow: 0 2px 5px rgba(0,0,0,0.2);">
+    <img src="{flag_url}" style="width: 22px; border-radius: 3px; box-shadow: 0 0 4px rgba(0,0,0,0.3);">
+    <span style="color: #FFF; font-weight: 800; font-size: 0.95rem; font-family: 'Inter', sans-serif;">{c}</span>
+</div>""")
         if stat_items:
             nat_stats_html = f'<div style="display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; justify-content: center;">{" ".join(stat_items)}</div>'
 
-    st.markdown(f"""
-        <div style="margin-bottom: 20px; padding: 15px; background: linear-gradient(135deg, rgba(20, 20, 20, 0.95) 0%, rgba(30, 30, 30, 0.8) 100%); border-radius: 20px; border: 1.5px solid rgba(212, 175, 55, 0.3); box-shadow: 0 8px 25px rgba(0,0,0,0.5); text-align: center;">
-            <div style="display: flex; justify-content: center; align-items: center; gap: 15px;">
-                <div style="color: #D4AF37; font-weight: 800; font-family: 'Cairo', sans-serif; font-size: 1.2rem; display: flex; align-items: center; gap: 10px;">
-                    ✦ {count_label}
-                </div>
-                <div style="background: linear-gradient(135deg, #D4AF37, #8B7520); color: #000; width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 1.2rem; box-shadow: 0 0 15px rgba(212,175,55,0.6);">
-                    {count}
-                </div>
-            </div>
-            {nat_stats_html}
+    st.markdown(f"""<div style="margin-bottom: 20px; padding: 15px; background: linear-gradient(135deg, rgba(20, 20, 20, 0.95) 0%, rgba(30, 30, 30, 0.8) 100%); border-radius: 20px; border: 1.5px solid rgba(212, 175, 55, 0.3); box-shadow: 0 8px 25px rgba(0,0,0,0.5); text-align: center;">
+    <div style="display: flex; justify-content: center; align-items: center; gap: 15px;">
+        <div style="color: #D4AF37; font-weight: 800; font-family: 'Cairo', sans-serif; font-size: 1.2rem; display: flex; align-items: center; gap: 10px;">
+            ✦ {count_label}
         </div>
-    """, unsafe_allow_html=True)
+        <div style="background: linear-gradient(135deg, #D4AF37, #8B7520); color: #000; width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 1.2rem; box-shadow: 0 0 15px rgba(212,175,55,0.6);">
+            {count}
+        </div>
+    </div>
+    {nat_stats_html}
+</div>""", unsafe_allow_html=True)
     
     target_lang = st.session_state.get(t_state_key)
     if target_lang in ['ar', 'tl']:
