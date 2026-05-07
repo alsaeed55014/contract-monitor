@@ -3426,17 +3426,10 @@ def render_dashboard_content():
     
     t1, t2, t3 = st.tabs([t("tabs_urgent", lang), t("tabs_expired", lang), t("tabs_active", lang)])
     
-    def show(data, tab_id):
-        if not data: st.info(t("no_data", lang)); return
-        d = pd.DataFrame(data)
-
-        # Apply Smart Search if active
-        if dash_query or dash_filters:
-            eng = SmartSearchEngine(d)
-            d = eng.search(dash_query, filters=dash_filters)
-            if d.empty:
-                st.info(t("no_results", lang) if t("no_results", lang) != "no_results" else "لا توجد نتائج تطابق بحثك في هذا التبويب")
-                return
+    def show(d, tab_id):
+        if d is None or d.empty: 
+            st.info(t("no_data", lang))
+            return
 
         # Sort Logic:
         # For Expired: sort by absolute days (smallest number of days ago first)
@@ -3515,33 +3508,60 @@ def render_dashboard_content():
             render_cv_detail_panel(worker_row, sel_idx, lang, key_prefix=f"dash_{tab_id}")
 
     with t1: 
+        # 1. Filter Data for this tab first
+        d_urgent = pd.DataFrame(stats['urgent'])
+        if not d_urgent.empty and (dash_query or dash_filters):
+            eng_u = SmartSearchEngine(d_urgent)
+            d_urgent = eng_u.search(dash_query, filters=dash_filters)
+
         c_exp_1, c_exp_2 = st.columns([4, 1])
         with c_exp_2:
-            xl_data = create_pasha_whatsapp_excel(pd.DataFrame(stats['urgent']), lang=lang)
+            # 2. Use the filtered data for Export
+            xl_data = create_pasha_whatsapp_excel(d_urgent, lang=lang)
             if xl_data:
                 xl_buf, xl_df = xl_data
                 btn_text = "📤 " + ("تصدير للواتساب" if lang == 'ar' else "Export to WhatsApp")
                 render_pasha_export_button(xl_df, btn_text, "Urgent_WhatsApp.xlsx", "المرشحين_العاجل", key="btn_exp_urgent")
-        show(stats['urgent'], "urgent")
+        
+        # 3. Show the filtered data
+        show(d_urgent, "urgent")
         
     with t2: 
+        # 1. Filter Data for this tab first
+        d_expired = pd.DataFrame(stats['expired'])
+        if not d_expired.empty and (dash_query or dash_filters):
+            eng_e = SmartSearchEngine(d_expired)
+            d_expired = eng_e.search(dash_query, filters=dash_filters)
+
         c_exp_1, c_exp_2 = st.columns([4, 1])
         with c_exp_2:
-            xl_data = create_pasha_whatsapp_excel(pd.DataFrame(stats['expired']), lang=lang)
+            # 2. Use the filtered data for Export
+            xl_data = create_pasha_whatsapp_excel(d_expired, lang=lang)
             if xl_data:
                 xl_buf, xl_df = xl_data
                 btn_text = "📤 " + ("تصدير للواتساب" if lang == 'ar' else "Export to WhatsApp")
                 render_pasha_export_button(xl_df, btn_text, "Expired_WhatsApp.xlsx", "المرشحين_المنتهية", key="btn_exp_expired")
-        show(stats['expired'], "expired")
+        
+        # 3. Show the filtered data
+        show(d_expired, "expired")
         
     with t3: 
+        # 1. Filter Data for this tab first
+        d_active = pd.DataFrame(stats['active'])
+        if not d_active.empty and (dash_query or dash_filters):
+            eng_a = SmartSearchEngine(d_active)
+            d_active = eng_a.search(dash_query, filters=dash_filters)
+
         c_exp_1, c_exp_2 = st.columns([4, 1])
         with c_exp_2:
-            xl_data = create_pasha_whatsapp_excel(pd.DataFrame(stats['active']), lang=lang)
+            # 2. Use the filtered data for Export
+            xl_data = create_pasha_whatsapp_excel(d_active, lang=lang)
             if xl_data:
                 xl_buf, xl_df = xl_data
                 render_pasha_export_button(xl_df, "📤 تصدير للواتساب", "Active_WhatsApp.xlsx", "المرشحين_الفواعل", key="btn_exp_active")
-        show(stats['active'], "active")
+        
+        # 3. Show the filtered data
+        show(d_active, "active")
 
 def render_search_content():
     lang = st.session_state.lang
