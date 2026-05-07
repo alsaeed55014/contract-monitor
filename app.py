@@ -3802,10 +3802,25 @@ def render_search_content():
             st.code(traceback.format_exc())
             return
         else:
+            # --- 1. PREPARE EXPORT DATA FIRST (Using clean, non-renamed 'res') ---
+            c_s_1, c_s_2 = st.columns([4, 1])
+            with c_s_2:
+                # IMPORTANT: We use 'res' here BEFORE any renaming or column dropping for display
+                # This ensures create_pasha_whatsapp_excel finds the original column names
+                xl_result_search = create_pasha_whatsapp_excel(res, lang=lang)
+                if xl_result_search:
+                    xl_buf_search, xl_df_search = xl_result_search
+                    btn_text = "📤 " + ("تصدير للواتساب" if lang == 'ar' else "Export to WhatsApp")
+                    render_pasha_export_button(xl_df_search, btn_text, f"Search_WhatsApp_{datetime.now().strftime('%M%S')}.xlsx", "البحث_الذكي_واتساب", key="btn_exp_search")
+
+            # --- 2. PREPARE DISPLAY DATAFRAME (Copy and Transform) ---
+            # Create a separate display dataframe to avoid modifying the logic dataframe 'res'
+            res_display = res.copy()
+
             # Rename columns before showing (Safe Rename)
             new_names = {}
             used_names = set()
-            for c in res.columns:
+            for c in res_display.columns:
                 if str(c).startswith('__'): continue
                 new_name = t_col(c, lang)
                 original_new_name = new_name
@@ -3816,21 +3831,18 @@ def render_search_content():
                 used_names.add(new_name)
                 new_names[c] = new_name
                 
-            res.rename(columns=new_names, inplace=True)
+            res_display.rename(columns=new_names, inplace=True)
             
             # FINAL POLISH: Format all visible dates to be clean (No Time)
-            res = clean_date_display(res)
-            
-            # Recalculate Column Config Key
+            res_display = clean_date_display(res_display)
             
             # Reorder columns for Search Table (Status first)
             status_key = 'حالة العقد' if lang == 'ar' else 'Contract Status'
-            if status_key in res.columns:
-                other_cols = [c for c in res.columns if c != status_key]
-                res = res[[status_key] + other_cols]
+            if status_key in res_display.columns:
+                other_cols = [c for c in res_display.columns if c != status_key]
+                res_display = res_display[[status_key] + other_cols]
 
-            # Hide internal sheet row from display but keep in original 'res' for logic
-            res_display = res.copy()
+            # Hide internal columns from display
             for int_col in ["__sheet_row", "__sheet_row_backup"]:
                 if int_col in res_display.columns:
                     res_display = res_display.drop(columns=[int_col])
@@ -3862,15 +3874,6 @@ def render_search_content():
 
 
 
-            # --- EXPORT BUTTON FOR SEARCH ---
-            c_s_1, c_s_2 = st.columns([4, 1])
-            with c_s_2:
-                xl_result_search = create_pasha_whatsapp_excel(res, lang=lang)
-                if xl_result_search:
-                    xl_buf_search, xl_df_search = xl_result_search
-                    btn_text = "📤 " + ("تصدير للواتساب" if lang == 'ar' else "Export to WhatsApp")
-                    render_pasha_export_button(xl_df_search, btn_text, f"Search_WhatsApp_{datetime.now().strftime('%M%S')}.xlsx", "البحث_الذكي_واتساب", key="btn_exp_search")
-            
             # Smart Translator Button
             res_display = render_table_translator(res_display, key_prefix="search_res")
             
