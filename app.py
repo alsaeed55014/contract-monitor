@@ -5127,6 +5127,21 @@ def render_order_processing_content():
     # --- Export Button for Customers ---
     with c_search_2:
         if filtered_indices:
+            # WhatsApp Message Customization Expander
+            with st.expander("⚙️ " + ("إعدادات الرسالة" if lang == 'ar' else "Message Settings")):
+                msg_template = st.text_area(
+                    "نص الرسالة" if lang == 'ar' else "Message Text",
+                    value="Good evening, which city are you in now and how old are you {job}, and what is your experience, what are the things you are good at doing",
+                    help="استخدم {job} لإدراج المسمى الوظيفي" if lang == 'ar' else "Use {job} to insert job title",
+                    key="op_msg_template"
+                )
+                gender_opt = st.radio(
+                    "نوع العامل" if lang == 'ar' else "Worker Type",
+                    options=["عامل", "عاملة"] if lang == 'ar' else ["Male", "Female"],
+                    horizontal=True,
+                    key="op_gender_toggle"
+                )
+
             from src.utils.phone_utils import format_phone_number, render_pasha_export_button
             export_cust_list = []
             for f_idx in filtered_indices:
@@ -5137,16 +5152,30 @@ def render_order_processing_content():
                 raw_phone = str(crow.get(c_mobile, "")).strip()
                 clean_phone = format_phone_number(raw_phone)
                 
+                # Get Job/Nature of work for the message
+                job_val = str(crow.get(c_work_nature, "")).strip()
+                # Apply gender replacement if needed
+                if lang == 'ar':
+                    if gender_opt == "عاملة":
+                        job_val = job_val.replace("عامل", "عاملة")
+                    else:
+                        job_val = job_val.replace("عاملة", "عامل")
+                
+                # Prepare personalized message
+                personalized_msg = msg_template.replace("{job}", job_val)
+                
                 if clean_phone:
                     export_cust_list.append({
                         "Name": full_name,
-                        "Phone": clean_phone
+                        "Phone": clean_phone,
+                        "Message": personalized_msg
                     })
             
             if export_cust_list:
                 cust_export_df = pd.DataFrame(export_cust_list)
-                btn_label = "📤 " + ("تصدير العملاء" if lang == 'ar' else "Export Clients")
-                render_pasha_export_button(cust_export_df, btn_label, f"Clients_WhatsApp_{datetime.now().strftime('%M%S')}.xlsx", "عملاء_المعالجة", key="btn_exp_cust_op")
+                btn_label = "📤 " + ("تصدير للواتساب" if lang == 'ar' else "WhatsApp Export")
+                # Format file name for WhatsApp Marketing software compatibility
+                render_pasha_export_button(cust_export_df, btn_label, f"WhatsApp_Marketing_{datetime.now().strftime('%M%S')}.xlsx", "عملاء_الواتساب", key="btn_exp_cust_op")
         
     # ---------------- 🚀 PAGINATION LOGIC ----------------
     PAGE_SIZE = 15
