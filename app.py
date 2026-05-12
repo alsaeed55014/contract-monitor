@@ -5048,16 +5048,7 @@ def render_order_processing_content():
     search_lbl = "🔍 بحث عن بطاقة طلب (الجوال، المسؤول، الموقع، الجنسية، المهنة، الملاحظات)" if lang == 'ar' else "🔍 Search Request (Mobile, Manager, Location, Nationality, Job, Notes)"
     cust_search_q = st.text_input(search_lbl, key="order_processing_cust_search").strip()
     
-    # Pre-analyze search query for smart bilingual matching
-    tm_op = st.session_state.get('tm')
-    search_bundles = []
-    is_phone_search = False
-    if cust_search_q:
-        is_phone_search = _is_phone_query_op(cust_search_q)
-        if not is_phone_search:
-            search_bundles = tm_op.analyze_query(cust_search_q) if tm_op else [[cust_search_q.lower()]]
-
-    # Smart phone normalizer (same logic as SmartSearchEngine)
+    # --- Search Helper Functions (Defined before usage to avoid UnboundLocalError) ---
     def _normalize_phone_op(text):
         arabic_to_western = str.maketrans('٠١٢٣٤٥٦٧٨٩', '0123456789')
         s = str(text).translate(arabic_to_western)
@@ -5077,15 +5068,17 @@ def render_order_processing_content():
         clean = re.sub(r'[\s\+\-\(\)]', '', str(q)).translate(arabic_to_western)
         return clean.isdigit() and len(clean) >= 5
 
+    # Pre-analyze search query for smart bilingual matching
+    tm_op = st.session_state.get('tm')
+    query_bundles = []
+    is_phone_search = False
+    if cust_search_q:
+        is_phone_search = _is_phone_query_op(cust_search_q)
+        if not is_phone_search:
+            query_bundles = tm_op.analyze_query(cust_search_q) if tm_op else [[cust_search_q.lower()]]
+
     # ---------------- 🚀 PRE-FILTERING FOR PAGINATION ----------------
     filtered_indices = []
-    
-    # Pre-analyze search query for bilingual support
-    query_bundles = []
-    if cust_search_q and not _is_phone_query_op(cust_search_q):
-        tm = st.session_state.get('tm')
-        if tm:
-            query_bundles = tm.analyze_query(cust_search_q)
     
     for idx, customer_row in customers_df.iterrows():
         client_key = f"client_{idx}"
