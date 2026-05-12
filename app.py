@@ -5131,7 +5131,7 @@ def render_order_processing_content():
             with st.expander("⚙️ " + ("إعدادات الرسالة" if lang == 'ar' else "Message Settings")):
                 msg_template = st.text_area(
                     "نص الرسالة" if lang == 'ar' else "Message Text",
-                    value="Good evening, which city are you in now and how old are you {job}, and what is your experience, what are the things you are good at doing",
+                    value="You have contacted us regarding {job}, and the worker has been provided and his work is attached. Please review and let us know whether you approve the worker or not.",
                     help="استخدم {job} لإدراج المسمى الوظيفي" if lang == 'ar' else "Use {job} to insert job title",
                     key="op_msg_template"
                 )
