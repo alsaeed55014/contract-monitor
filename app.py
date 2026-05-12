@@ -5129,18 +5129,43 @@ def render_order_processing_content():
         if filtered_indices:
             # WhatsApp Message Customization Expander
             with st.expander("⚙️ " + ("إعدادات الرسالة" if lang == 'ar' else "Message Settings")):
+                # Message Template Selection
+                msg_presets = {
+                    "نموذج العمالة (جديد)": "Mr/Ms {name}, You have contacted us regarding {job}, and the worker has been provided and his work is attached. Please review and let us know whether you approve the worker or not.",
+                    "نموذج التعارف (قديم)": "Good evening Mr/Ms {name}, which city are you in now and how old are you {job}, and what is your experience, what are the things you are good at doing"
+                } if lang == 'ar' else {
+                    "Worker Request (New)": "Mr/Ms {name}, You have contacted us regarding {job}, and the worker has been provided and his work is attached. Please review and let us know whether you approve the worker or not.",
+                    "Intro Model (Old)": "Good evening Mr/Ms {name}, which city are you in now and how old are you {job}, and what is your experience, what are the things you are good at doing"
+                }
+                
+                selected_preset = st.selectbox(
+                    "اختر النموذج" if lang == 'ar' else "Select Template",
+                    options=list(msg_presets.keys()),
+                    key="op_msg_preset_select"
+                )
+
                 msg_template = st.text_area(
-                    "نص الرسالة" if lang == 'ar' else "Message Text",
-                    value="You have contacted us regarding {job}, and the worker has been provided and his work is attached. Please review and let us know whether you approve the worker or not.",
-                    help="استخدم {job} لإدراج المسمى الوظيفي" if lang == 'ar' else "Use {job} to insert job title",
+                    "تعديل نص الرسالة" if lang == 'ar' else "Edit Message Text",
+                    value=msg_presets[selected_preset],
+                    help="استخدم {job} للمهنة و {name} لاسم المسؤول" if lang == 'ar' else "Use {job} for job and {name} for manager name",
                     key="op_msg_template"
                 )
-                gender_opt = st.radio(
-                    "نوع العامل" if lang == 'ar' else "Worker Type",
-                    options=["عامل", "عاملة"] if lang == 'ar' else ["Male", "Female"],
-                    horizontal=True,
-                    key="op_gender_toggle"
-                )
+                
+                col_cfg1, col_cfg2 = st.columns(2)
+                with col_cfg1:
+                    gender_opt = st.radio(
+                        "نوع العامل" if lang == 'ar' else "Worker Type",
+                        options=["عامل", "عاملة"] if lang == 'ar' else ["Male", "Female"],
+                        horizontal=True,
+                        key="op_gender_toggle"
+                    )
+                with col_cfg2:
+                    salutation_opt = st.radio(
+                        "لقب العميل" if lang == 'ar' else "Client Salutation",
+                        options=["السيد", "السيدة"] if lang == 'ar' else ["Mr", "Ms"],
+                        horizontal=True,
+                        key="op_salutation_toggle"
+                    )
 
             from src.utils.phone_utils import format_phone_number, render_pasha_export_button
             export_cust_list = []
@@ -5154,21 +5179,27 @@ def render_order_processing_content():
                 
                 # Get Job/Nature of work for the message
                 job_val = str(crow.get(c_work_nature, "")).strip()
-                # Apply gender replacement if needed
+                # Apply gender replacement for worker type if needed
                 if lang == 'ar':
                     if gender_opt == "عاملة":
                         job_val = job_val.replace("عامل", "عاملة")
                     else:
                         job_val = job_val.replace("عاملة", "عامل")
                 
+                # Prepare salutation
+                salutation = salutation_opt
+                
                 # Prepare personalized message
-                personalized_msg = msg_template.replace("{job}", job_val)
+                # 1. Replace {name} with Salutation + Manager Name
+                final_msg = msg_template.replace("{name}", f"{salutation} {r_name}")
+                # 2. Replace {job}
+                final_msg = final_msg.replace("{job}", job_val)
                 
                 if clean_phone:
                     export_cust_list.append({
                         "Name": full_name,
                         "Phone": clean_phone,
-                        "Message": personalized_msg
+                        "Message": final_msg
                     })
             
             if export_cust_list:
