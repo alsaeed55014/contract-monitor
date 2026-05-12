@@ -5045,9 +5045,18 @@ def render_order_processing_content():
     st.markdown("### 📋 " + t('customer_requests', lang))
     
     # NEW SEARCH INPUT
-    search_lbl = "🔍 بحث عن بطاقة طلب (رقم الجوال، المسؤول، الموقع، الجنسية، الفئة)" if lang == 'ar' else "🔍 Search Request (Mobile, Manager, Location, Nationality, Category)"
+    search_lbl = "🔍 بحث عن بطاقة طلب (الجوال، المسؤول، الموقع، الجنسية، المهنة، الملاحظات)" if lang == 'ar' else "🔍 Search Request (Mobile, Manager, Location, Nationality, Job, Notes)"
     cust_search_q = st.text_input(search_lbl, key="order_processing_cust_search").strip()
     
+    # Pre-analyze search query for smart bilingual matching
+    tm_op = st.session_state.get('tm')
+    search_bundles = []
+    is_phone_search = False
+    if cust_search_q:
+        is_phone_search = _is_phone_query_op(cust_search_q)
+        if not is_phone_search:
+            search_bundles = tm_op.analyze_query(cust_search_q) if tm_op else [[cust_search_q.lower()]]
+
     # Smart phone normalizer (same logic as SmartSearchEngine)
     def _normalize_phone_op(text):
         arabic_to_western = str.maketrans('٠١٢٣٤٥٦٧٨٩', '0123456789')
@@ -5071,6 +5080,13 @@ def render_order_processing_content():
     # ---------------- 🚀 PRE-FILTERING FOR PAGINATION ----------------
     filtered_indices = []
     
+    # Pre-analyze search query for bilingual support
+    query_bundles = []
+    if cust_search_q and not _is_phone_query_op(cust_search_q):
+        tm = st.session_state.get('tm')
+        if tm:
+            query_bundles = tm.analyze_query(cust_search_q)
+    
     for idx, customer_row in customers_df.iterrows():
         client_key = f"client_{idx}"
         if client_key in st.session_state.op_hidden_clients:
@@ -5082,6 +5098,8 @@ def render_order_processing_content():
         location_val = str(customer_row.get(c_location, "")) if c_location else ""
         nationality_val = str(customer_row.get(c_nationality, "")) if c_nationality else ""
         category_val = str(customer_row.get(c_category, "")) if c_category else ""
+        nature_val = str(customer_row.get(c_work_nature, "")) if c_work_nature else ""
+        notes_val = str(customer_row.get(c_notes, "")) if c_notes else ""
 
         if cust_search_q:
             if _is_phone_query_op(cust_search_q):
@@ -5091,15 +5109,27 @@ def render_order_processing_content():
                 if not (q_phone and q_phone in m_phone):
                     continue
             else:
-                # Text search
-                q_lower = cust_search_q.lower()
-                match = False
-                for val in [responsible_val, location_val, company_val, nationality_val, category_val]:
-                    if q_lower in val.lower().strip():
-                        match = True
-                        break
-                if not match:
-                    continue
+                # Advanced Bilingual Text Search
+                search_text = " ".join([responsible_val, location_val, company_val, nationality_val, category_val, nature_val, notes_val]).lower()
+                
+                if query_bundles:
+                    # Match if ALL bundles have at least one synonym found in search_text (AND logic between words)
+                    match_all_words = True
+                    for bundle in query_bundles:
+                        found_synonym = False
+                        for syn in bundle:
+                            if syn.lower() in search_text:
+                                found_synonym = True
+                                break
+                        if not found_synonym:
+                            match_all_words = False
+                            break
+                    if not match_all_words:
+                        continue
+                else:
+                    # Fallback to simple lower-case match if TM not available
+                    if cust_search_q.lower() not in search_text:
+                        continue
                     
         filtered_indices.append(idx)
         
