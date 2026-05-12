@@ -5046,21 +5046,21 @@ def render_order_processing_content():
     
     # NEW SEARCH INPUT
     search_lbl = "🔍 بحث عن بطاقة طلب (الجوال، المسؤول، الموقع، الجنسية، المهنة، الملاحظات)" if lang == 'ar' else "🔍 Search Request (Mobile, Manager, Location, Nationality, Job, Notes)"
-    cust_search_q = st.text_input(search_lbl, key="order_processing_cust_search").strip()
     
-    # --- Search Helper Functions (Defined before usage to avoid UnboundLocalError) ---
+    # --- Search & Export Row ---
+    c_search_1, c_search_2 = st.columns([4, 1])
+    with c_search_1:
+        cust_search_q = st.text_input(search_lbl, key="order_processing_cust_search", label_visibility="collapsed", placeholder=search_lbl).strip()
+    
+    # --- Search Helper Functions (Defined before usage) ---
     def _normalize_phone_op(text):
         arabic_to_western = str.maketrans('٠١٢٣٤٥٦٧٨٩', '0123456789')
         s = str(text).translate(arabic_to_western)
         digits = re.sub(r'\D', '', s)
-        if not digits:
-            return ""
-        if digits.startswith('00'):
-            digits = digits[2:]
-        if digits.startswith('966'):
-            digits = digits[3:]
-        while digits.startswith('0'):
-            digits = digits[1:]
+        if not digits: return ""
+        if digits.startswith('00'): digits = digits[2:]
+        if digits.startswith('966'): digits = digits[3:]
+        while digits.startswith('0'): digits = digits[1:]
         return digits
 
     def _is_phone_query_op(q):
@@ -5095,7 +5095,7 @@ def render_order_processing_content():
         notes_val = str(customer_row.get(c_notes, "")) if c_notes else ""
 
         if cust_search_q:
-            if _is_phone_query_op(cust_search_q):
+            if is_phone_search:
                 # Smart phone search
                 q_phone = _normalize_phone_op(cust_search_q)
                 m_phone = _normalize_phone_op(mobile_val)
@@ -5106,7 +5106,6 @@ def render_order_processing_content():
                 search_text = " ".join([responsible_val, location_val, company_val, nationality_val, category_val, nature_val, notes_val]).lower()
                 
                 if query_bundles:
-                    # Match if ALL bundles have at least one synonym found in search_text (AND logic between words)
                     match_all_words = True
                     for bundle in query_bundles:
                         found_synonym = False
@@ -5120,11 +5119,34 @@ def render_order_processing_content():
                     if not match_all_words:
                         continue
                 else:
-                    # Fallback to simple lower-case match if TM not available
                     if cust_search_q.lower() not in search_text:
                         continue
                     
         filtered_indices.append(idx)
+
+    # --- Export Button for Customers ---
+    with c_search_2:
+        if filtered_indices:
+            from src.utils.phone_utils import format_phone_number, render_pasha_export_button
+            export_cust_list = []
+            for f_idx in filtered_indices:
+                crow = customers_df.loc[f_idx]
+                r_name = str(crow.get(c_responsible, "")).strip()
+                r_comp = str(crow.get(c_company, "")).strip()
+                full_name = f"{r_name} ({r_comp})" if r_comp else r_name
+                raw_phone = str(crow.get(c_mobile, "")).strip()
+                clean_phone = format_phone_number(raw_phone)
+                
+                if clean_phone:
+                    export_cust_list.append({
+                        "Name": full_name,
+                        "Phone": clean_phone
+                    })
+            
+            if export_cust_list:
+                cust_export_df = pd.DataFrame(export_cust_list)
+                btn_label = "📤 " + ("تصدير العملاء" if lang == 'ar' else "Export Clients")
+                render_pasha_export_button(cust_export_df, btn_label, f"Clients_WhatsApp_{datetime.now().strftime('%M%S')}.xlsx", "عملاء_المعالجة", key="btn_exp_cust_op")
         
     # ---------------- 🚀 PAGINATION LOGIC ----------------
     PAGE_SIZE = 15
