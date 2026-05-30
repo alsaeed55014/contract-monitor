@@ -1394,6 +1394,17 @@ def _get_nationality_code(val):
     return None
 
 
+def _country_code_to_emoji(code):
+    """Converts 2-letter country code to Unicode flag emoji."""
+    if not code:
+        return "🏁"
+    code = code.strip().upper()
+    if len(code) != 2:
+        return "🏁"
+    # Convert ASCII letters to regional indicator symbols
+    return chr(ord(code[0]) + 0x1F1E6 - 0x41) + chr(ord(code[1]) + 0x1F1E6 - 0x41)
+
+
 def style_df(df):
     """
     Applies custom styling to DataFrames (Optimized for 2026 Speed).
@@ -1553,14 +1564,11 @@ def render_table_translator(df, key_prefix="table"):
             active_code = st.session_state.get(f"selected_nat_{key_prefix}")
             has_clear   = bool(active_code)
 
-            # ---- Base CSS (applies to all badge buttons) ----
+            # ---- CSS for Emoji Flag Badges ----
             base_css = """
 <style>
 .nat-flag-badge button {
     background-color: rgba(255,255,255,0.08) !important;
-    background-repeat: no-repeat !important;
-    background-position: 8px center !important;
-    background-size: 28px 20px !important;
     color: #FFF !important;
     font-weight: 800 !important;
     font-size: 0.9rem !important;
@@ -1570,13 +1578,15 @@ def render_table_translator(df, key_prefix="table"):
     height: 38px !important;
     min-height: 38px !important;
     width: 100% !important;
-    padding-left: 42px !important;
+    padding-left: 10px !important;
     padding-right: 10px !important;
     cursor: pointer !important;
     transition: all 0.2s ease !important;
     white-space: nowrap !important;
     display: flex !important;
     align-items: center !important;
+    justify-content: center !important;
+    gap: 8px !important;
 }
 .nat-flag-badge button:hover {
     border-color: #D4AF37 !important;
@@ -1606,24 +1616,9 @@ def render_table_translator(df, key_prefix="table"):
     background: rgba(255,75,75,0.22) !important;
     box-shadow: 0 0 10px rgba(255,75,75,0.35) !important;
 }
+</style>
 """
-            # Per-flag CSS: set background-image for each button
-            per_flag_css = ""
-            for code, cnt in valid_items:
-                flag_url = "https://flagcdn.com/w40/" + code + ".png"
-                is_sel = (active_code == code)
-                extra_sel = (
-                    "background-color:rgba(212,175,55,0.22)!important;"
-                    "border:2px solid #D4AF37!important;"
-                    "box-shadow:0 0 14px rgba(212,175,55,0.55)!important;"
-                ) if is_sel else ""
-                per_flag_css += (
-                    ".nbadge-" + key_prefix + "-" + code + " button {"
-                    "background-image: url('" + flag_url + "') !important;"
-                    + extra_sel + "}"
-                )
-
-            st.markdown(base_css + per_flag_css + "</style>", unsafe_allow_html=True)
+            st.markdown(base_css, unsafe_allow_html=True)
 
             # ---- Single row: one column per badge ----
             n_cols = len(valid_items) + (1 if has_clear else 0)
@@ -1635,9 +1630,10 @@ def render_table_translator(df, key_prefix="table"):
                     base_cls = "nat-flag-badge"
                     if is_sel:
                         base_cls += " nat-flag-badge-active"
-                    div_cls = base_cls + " nbadge-" + key_prefix + "-" + code
-                    st.markdown('<div class="' + div_cls + '">', unsafe_allow_html=True)
-                    if st.button(str(cnt), key="nbadge_" + key_prefix + "_" + code):
+                    st.markdown('<div class="' + base_cls + '">', unsafe_allow_html=True)
+                    flag_emoji = _country_code_to_emoji(code)
+                    btn_label = f"{flag_emoji} {cnt}"
+                    if st.button(btn_label, key="nbadge_" + key_prefix + "_" + code):
                         st.session_state["selected_nat_" + key_prefix] = None if is_sel else code
                         st.rerun()
                     st.markdown('</div>', unsafe_allow_html=True)

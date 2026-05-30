@@ -186,6 +186,18 @@ def _get_nationality_code(val):
                 return code.lower()
     return None
 
+
+def _country_code_to_emoji(code):
+    """Converts 2-letter country code to Unicode flag emoji."""
+    if not code:
+        return "🏁"
+    code = code.strip().upper()
+    if len(code) != 2:
+        return "🏁"
+    # Convert ASCII letters to regional indicator symbols
+    return chr(ord(code[0]) + 0x1F1E6 - 0x41) + chr(ord(code[1]) + 0x1F1E6 - 0x41)
+
+
 def render_table_translator(df, key_prefix="table"):
     """
     Renders side-by-side translation buttons (Arabic and Tagalog) above tables.
@@ -257,7 +269,9 @@ def render_table_translator(df, key_prefix="table"):
             transition: all 0.3s ease !important;
             padding-top: 0 !important;
             padding-bottom: 0 !important;
+            padding-left: 12px !important;
             padding-right: 12px !important;
+            gap: 8px !important;
         }
         .nat-btn button:hover {
             border-color: #D4AF37 !important;
@@ -303,21 +317,6 @@ def render_table_translator(df, key_prefix="table"):
         # Calculate nationality codes on the UNFILTERED data
         df_nat_codes = df[nat_col].apply(_get_nationality_code)
         code_counts = df_nat_codes.value_counts()
-        
-        css_rules = []
-        for code in code_counts.index:
-            if code:
-                css_rules.append(f"""
-                .nat-btn-{code} button {{
-                    background-image: url('https://flagcdn.com/w40/{code}.png') !important;
-                    background-size: 22px !important;
-                    background-repeat: no-repeat !important;
-                    background-position: left 10px center !important;
-                    padding-left: 38px !important;
-                }}
-                """)
-        if css_rules:
-            st.markdown(f"<style>{chr(10).join(css_rules)}</style>", unsafe_allow_html=True)
 
         badge_container = st.container()
         with badge_container:
@@ -325,11 +324,12 @@ def render_table_translator(df, key_prefix="table"):
             for code, c in code_counts.items():
                 if not code: continue
                 is_selected = (active_code == code)
-                btn_class = f"nat-btn nat-btn-{code}"
+                btn_class = "nat-btn"
                 if is_selected:
                     btn_class += " nat-btn-selected"
                 st.markdown(f'<div class="{btn_class}">', unsafe_allow_html=True)
-                if st.button(f"{c}", key=f"btn_nat_{key_prefix}_{code}"):
+                flag_emoji = _country_code_to_emoji(code)
+                if st.button(f"{flag_emoji} {c}", key=f"btn_nat_{key_prefix}_{code}"):
                     if is_selected:
                         st.session_state[f"selected_nat_{key_prefix}"] = None
                     else:
