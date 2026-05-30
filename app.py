@@ -1425,30 +1425,10 @@ def style_df(df):
                 if styled_df[col].dtype == 'object':
                     styled_df[col] = styled_df[col].apply(lambda x: auto_translate(x, target_lang='en'))
 
-    # 1. Flag Image Injection (Optimized) - Insert BEFORE nationality column
+    # 1. Cleanup - remove emoji flags from text (Safe conversion for Arrow) WITHOUT adding flag columns
     nat_cols = [c for c in styled_df.columns if any(kw in str(c).lower() for kw in ["nationality", "الجنسية"])]
+    import re
     for col in nat_cols:
-        flag_col = f"🚩_{col}"
-        if flag_col not in styled_df.columns:
-            # Get current index of nationality column
-            idx = list(styled_df.columns).index(col)
-            # Insert flag column at the same position (shifts nationality to right)
-            styled_df.insert(idx, flag_col, styled_df[col].apply(_get_flag_url_cached))
-        else:
-            # Ensure it's in the correct position if it already exists
-            cols = list(styled_df.columns)
-            flag_idx = cols.index(flag_col)
-            nat_idx = cols.index(col)
-            if flag_idx != nat_idx - 1:
-                cols.remove(flag_col)
-                # Re-calculate index after removal
-                new_nat_idx = cols.index(col)
-                cols.insert(new_nat_idx, flag_col)
-                styled_df = styled_df[cols]
-        
-
-        # Fast cleanup - remove emoji flags from text (Safe conversion for Arrow)
-        import re
         styled_df[col] = styled_df[col].astype(str).apply(lambda x: re.sub(r'[\U0001F1E6-\U0001F1FF]{2}\s*', '', x))
 
 
@@ -1564,29 +1544,30 @@ def render_table_translator(df, key_prefix="table"):
             active_code = st.session_state.get(f"selected_nat_{key_prefix}")
             has_clear   = bool(active_code)
 
-            # ---- CSS for Emoji Flag Badges ----
+            # ---- Base CSS (applies to all badge buttons) ----
             base_css = """
 <style>
 .nat-flag-badge button {
     background-color: rgba(255,255,255,0.08) !important;
+    background-repeat: no-repeat !important;
+    background-position: 8px center !important;
+    background-size: 28px 20px !important;
     color: #FFF !important;
     font-weight: 800 !important;
-    font-size: 1rem !important;
+    font-size: 0.9rem !important;
     font-family: 'Inter', sans-serif !important;
-    border-radius: 12px !important;
+    border-radius: 10px !important;
     border: 1px solid rgba(212,175,55,0.25) !important;
-    height: 40px !important;
-    min-height: 40px !important;
-    width: auto !important;
-    padding-left: 12px !important;
-    padding-right: 12px !important;
+    height: 38px !important;
+    min-height: 38px !important;
+    width: 100% !important;
+    padding-left: 42px !important;
+    padding-right: 10px !important;
     cursor: pointer !important;
     transition: all 0.2s ease !important;
     white-space: nowrap !important;
     display: flex !important;
     align-items: center !important;
-    justify-content: center !important;
-    gap: 8px !important;
 }
 .nat-flag-badge button:hover {
     border-color: #D4AF37 !important;
@@ -1604,11 +1585,11 @@ def render_table_translator(df, key_prefix="table"):
     color: #FF4B4B !important;
     font-weight: 700 !important;
     font-family: 'Inter', sans-serif !important;
-    border-radius: 12px !important;
+    border-radius: 10px !important;
     border: 1px solid rgba(255,75,75,0.35) !important;
-    height: 40px !important;
-    min-height: 40px !important;
-    width: auto !important;
+    height: 38px !important;
+    min-height: 38px !important;
+    width: 100% !important;
     cursor: pointer !important;
     transition: all 0.2s ease !important;
 }
@@ -1616,13 +1597,24 @@ def render_table_translator(df, key_prefix="table"):
     background: rgba(255,75,75,0.22) !important;
     box-shadow: 0 0 10px rgba(255,75,75,0.35) !important;
 }
-.flex-badge-container [data-testid="column"] {
-    width: auto !important;
-    flex: 0 0 auto !important;
-}
-</style>
 """
-            st.markdown(base_css, unsafe_allow_html=True)
+            # Per-flag CSS: set background-image for each button
+            per_flag_css = ""
+            for code, cnt in valid_items:
+                flag_url = "https://flagcdn.com/w40/" + code + ".png"
+                is_sel = (active_code == code)
+                extra_sel = (
+                    "background-color:rgba(212,175,55,0.22)!important;"
+                    "border:2px solid #D4AF37!important;"
+                    "box-shadow:0 0 14px rgba(212,175,55,0.55)!important;"
+                ) if is_sel else ""
+                per_flag_css += (
+                    ".nbadge-" + key_prefix + "-" + code + " button {"
+                    "background-image: url('" + flag_url + "') !important;"
+                    + extra_sel + "}"
+                )
+
+            st.markdown(base_css + per_flag_css + "</style>", unsafe_allow_html=True)
 
             # ---- Single row: one column per badge ----
             n_cols = len(valid_items) + (1 if has_clear else 0)
@@ -1634,10 +1626,9 @@ def render_table_translator(df, key_prefix="table"):
                     base_cls = "nat-flag-badge"
                     if is_sel:
                         base_cls += " nat-flag-badge-active"
-                    st.markdown('<div class="' + base_cls + '">', unsafe_allow_html=True)
-                    flag_emoji = _country_code_to_emoji(code)
-                    btn_label = f"{cnt} {flag_emoji}"  # Number first, then flag like in the example
-                    if st.button(btn_label, key="nbadge_" + key_prefix + "_" + code):
+                    div_cls = base_cls + " nbadge-" + key_prefix + "-" + code
+                    st.markdown('<div class="' + div_cls + '">', unsafe_allow_html=True)
+                    if st.button(str(cnt), key="nbadge_" + key_prefix + "_" + code):
                         st.session_state["selected_nat_" + key_prefix] = None if is_sel else code
                         st.rerun()
                     st.markdown('</div>', unsafe_allow_html=True)
@@ -3529,8 +3520,131 @@ def render_dashboard_content():
     
     t1, t2, t3 = st.tabs([t("tabs_urgent", lang), t("tabs_expired", lang), t("tabs_active", lang)])
     
+    # Custom badge renderer specifically for the dashboard to avoid issues with column renaming
+    def render_dashboard_badges(d, key_prefix):
+        if d is None or d.empty:
+            return d
+        
+        nat_col = None
+        for c in d.columns:
+            c_str = str(c).lower()
+            if "nationality" in c_str or "الجنسية" in c_str or "جنسية" in c_str:
+                nat_col = c
+                break
+        
+        if nat_col is None:
+            return d
+            
+        active_code = st.session_state.get(f"selected_nat_{key_prefix}")
+        
+        try:
+            # Calculate nationality codes on the UNFILTERED data first!
+            df_nat_codes = d[nat_col].apply(_get_nationality_code)
+            code_counts = df_nat_codes.value_counts()
+            valid_items = [(code, int(cnt)) for code, cnt in code_counts.items() if code]
+            
+            if valid_items:
+                # --- CSS for Emoji Flag Badges ---
+                base_css = """
+                <style>
+                .nat-flag-badge button {
+                    background: rgba(255,255,255,0.08) !important;
+                    color: #FFF !important;
+                    font-weight: 800 !important;
+                    font-size: 1rem !important;
+                    font-family: 'Inter', sans-serif !important;
+                    border-radius: 12px !important;
+                    border: 1px solid rgba(212,175,55,0.25) !important;
+                    height: 40px !important;
+                    min-height: 40px !important;
+                    width: auto !important;
+                    padding-left: 12px !important;
+                    padding-right: 12px !important;
+                    cursor: pointer !important;
+                    transition: all 0.2s ease !important;
+                    white-space: nowrap !important;
+                    display: flex !important;
+                    align-items: center !important;
+                    justify-content: center !important;
+                    gap: 8px !important;
+                }
+                .nat-flag-badge button:hover {
+                    border-color: #D4AF37 !important;
+                    background: rgba(255,255,255,0.15) !important;
+                    box-shadow: 0 0 10px rgba(212,175,55,0.35) !important;
+                    transform: translateY(-1px) !important;
+                }
+                .nat-flag-badge-active button {
+                    background: rgba(212,175,55,0.22) !important;
+                    border: 2px solid #D4AF37 !important;
+                    box-shadow: 0 0 14px rgba(212,175,55,0.55) !important;
+                }
+                .nat-clear-badge button {
+                    background: rgba(255,75,75,0.12) !important;
+                    color: #FF4B4B !important;
+                    font-weight: 700 !important;
+                    font-family: 'Inter', sans-serif !important;
+                    border-radius: 12px !important;
+                    border: 1px solid rgba(255,75,75,0.35) !important;
+                    height: 40px !important;
+                    min-height: 40px !important;
+                    width: auto !important;
+                    cursor: pointer !important;
+                    transition: all 0.2s ease !important;
+                }
+                .nat-clear-badge button:hover {
+                    background: rgba(255,75,75,0.22) !important;
+                    box-shadow: 0 0 10px rgba(255,75,75,0.35) !important;
+                }
+                </style>
+                """
+                st.markdown(base_css, unsafe_allow_html=True)
+                
+                # Use container + columns to display badges properly with flexible width
+                n_cols = len(valid_items) + (1 if active_code else 0)
+                cols = st.columns(n_cols)
+                
+                for i, (code, cnt) in enumerate(valid_items):
+                    with cols[i]:
+                        is_sel = (active_code == code)
+                        btn_cls = "nat-flag-badge"
+                        if is_sel:
+                            btn_cls += " nat-flag-badge-active"
+                        st.markdown(f'<div class="{btn_cls}">', unsafe_allow_html=True)
+                        flag_emoji = _country_code_to_emoji(code)
+                        btn_label = f"{cnt} {flag_emoji}"
+                        if st.button(btn_label, key=f"dash_badge_{key_prefix}_{code}"):
+                            st.session_state[f"selected_nat_{key_prefix}"] = None if is_sel else code
+                            st.rerun()
+                        st.markdown('</div>', unsafe_allow_html=True)
+                
+                if active_code:
+                    with cols[-1]:
+                        st.markdown('<div class="nat-clear-badge">', unsafe_allow_html=True)
+                        clear_lbl = "❌ الكل" if lang == 'ar' else "❌ All"
+                        if st.button(clear_lbl, key=f"dash_badge_clear_{key_prefix}"):
+                            st.session_state[f"selected_nat_{key_prefix}"] = None
+                            st.rerun()
+                        st.markdown('</div>', unsafe_allow_html=True)
+            
+            # Apply filtering if needed
+            if active_code:
+                d = d[df_nat_codes == active_code]
+        
+        except Exception as e:
+            pass
+            
+        return d
+    
     def show(d, tab_id):
         if d is None or d.empty: 
+            st.info(t("no_data", lang))
+            return
+            
+        # Render badges FIRST before any filtering or column renaming!
+        d = render_dashboard_badges(d, key_prefix=f"dash_{tab_id}")
+        
+        if d is None or d.empty:
             st.info(t("no_data", lang))
             return
 
@@ -3583,17 +3697,66 @@ def render_dashboard_content():
             format="%d يوم" if lang == 'ar' else "%d Days"
         )
         
-        # Flag Image Configuration
-        for col in d_final.columns:
-            if any(kw in str(col).lower() for kw in ["nationality", "الجنسية"]):
-                final_cfg[f"🚩_{col}"] = st.column_config.ImageColumn(t("country_label", lang), width="small", pinned=True)
-        
-        
-        # Smart Translator Button
-        d_final = render_table_translator(d_final, key_prefix=f"dash_{tab_id}")
-
         # Apply Green Text Styling
         styled_final = style_df(d_final)
+        
+        # Render table translator without badge rendering (we already handled badges)
+        # We'll render translation buttons only
+        t_state_key = f"table_trans_dash_{tab_id}"
+        
+        count_label = "عدد العمال" if lang == 'ar' else "Total Workers"
+        count = len(d_final)
+        st.markdown(f"""<div style="margin-bottom: 20px; padding: 15px; background: linear-gradient(135deg, rgba(20, 20, 20, 0.95) 0%, rgba(30, 30, 30, 0.8) 100%); border-radius: 20px; border: 1.5px solid rgba(212, 175, 55, 0.3); box-shadow: 0 8px 25px rgba(0,0,0,0.5); text-align: center;">
+            <div style="display: flex; justify-content: center; align-items: center; gap: 15px;">
+                <div style="color: #D4AF37; font-weight: 800; font-family: 'Cairo', sans-serif; font-size: 1.2rem; display: flex; align-items: center; gap: 10px;">
+                    ✦ {count_label}
+                </div>
+                <div style="background: linear-gradient(135deg, #D4AF37, #8B7520); color: #000; width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 1.2rem; box-shadow: 0 0 15px rgba(212,175,55,0.6);">
+                    {count}
+                </div>
+            </div>
+        </div>""", unsafe_allow_html=True)
+        
+        st.markdown('<div class="table-translator-container">', unsafe_allow_html=True)
+        ct1, ct2 = st.columns(2)
+        with ct1:
+            st.markdown('<div class="table-translator-btn">', unsafe_allow_html=True)
+            if st.button("🇸🇦 الترجمة للعربية", key=f"btn_ar_dash_{tab_id}", width='stretch'):
+                if st.session_state.get(t_state_key) == "ar":
+                    st.session_state[t_state_key] = None
+                else:
+                    st.session_state[t_state_key] = "ar"
+            st.markdown('</div>', unsafe_allow_html=True)
+        
+        with ct2:
+            st.markdown('<div class="table-translator-btn">', unsafe_allow_html=True)
+            if st.button("🇵🇭 ISALIN SA TAGALOG", key=f"btn_tl_dash_{tab_id}", width='stretch'):
+                if st.session_state.get(t_state_key) == "tl":
+                    st.session_state[t_state_key] = None
+                else:
+                    st.session_state[t_state_key] = "tl"
+            st.markdown('</div>', unsafe_allow_html=True)
+        st.markdown('</div>', unsafe_allow_html=True)
+        
+        target_lang = st.session_state.get(t_state_key)
+        if target_lang in ['ar', 'tl']:
+            from src.core.translation import TranslationManager
+            tm = TranslationManager()
+            spinner_msg = "جارِ الترجمة..." if target_lang == 'ar' else "Isinasalin sa Tagalog..."
+            with st.spinner(spinner_msg):
+                # Find columns to translate
+                target_keywords = ["وظيفة", "الوظيفة", "مهنة", "المهنة", "مهارة", "مهارات", "خبرة", "الخبرة", "جنسية", "الجنسية", "جنس", "الجنس", "حالة", "الحالة", "جاهز", "هروب", "job", "profession", "skill", "experience", "occupation", "nationality", "gender", "status", "requested", "ready", "escape", "abscond"]
+                cols_to_translate = [c for c in d_final.columns if any(kw.lower() in str(c).lower() for kw in target_keywords)]
+                for col in cols_to_translate:
+                    unique_vals = [v for v in d_final[col].unique() if v and isinstance(v, str) and len(str(v).strip()) > 0]
+                    if unique_vals:
+                        translations = {val: tm.translate_full_text(val, target_lang=target_lang) for val in unique_vals}
+                        d_final[col] = d_final[col].map(translations).fillna(d_final[col])
+                
+                if 'last_trans_msg' not in st.session_state or st.session_state.last_trans_msg != f"dash_{tab_id}_{target_lang}":
+                    msg = "✅ تمت الترجمة!" if target_lang == 'ar' else "✅ Tapos na ang pagsasalin!"
+                    st.toast(msg)
+                    st.session_state.last_trans_msg = f"dash_{tab_id}_{target_lang}"
         
         event = st.dataframe(
             styled_final, 
@@ -3992,10 +4155,7 @@ def render_search_content():
                 format="%d يوم" if lang == 'ar' else "%d Days"
             )
 
-            # Flag Image Configuration
-            for col in res_display.columns:
-                if any(kw in str(col).lower() for kw in ["nationality", "الجنسية"]):
-                    column_config[f"🚩_{col}"] = st.column_config.ImageColumn(t("country_label", lang), width="small", pinned=True)
+            # No flag image columns - we use emoji badges instead
 
 
 
