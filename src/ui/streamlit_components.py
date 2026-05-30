@@ -226,91 +226,6 @@ def render_table_translator(df, key_prefix="table"):
     lang = st.session_state.get('lang', 'ar')
     active_code = st.session_state.get(f"selected_nat_{key_prefix}")
 
-    # Inject global CSS for interactive badges
-    st.markdown("""
-        <style>
-        div[data-testid="stVerticalBlock"]:has(.nat-badge-marker),
-        div[class*="stVerticalBlock"]:has(.nat-badge-marker) {
-            display: flex !important;
-            flex-direction: row !important;
-            flex-wrap: nowrap !important; /* Don't wrap to new line */
-            overflow-x: auto !important; /* Add horizontal scroll if needed */
-            gap: 10px !important;
-            justify-content: flex-start !important; /* Align to start */
-            align-items: center !important;
-            margin-top: 10px !important;
-            margin-bottom: 20px !important;
-            padding: 5px 0 !important; /* Some padding for scroll */
-            direction: ltr !important; /* Force LTR for the badge container */
-        }
-        .nat-badge-marker {
-            display: none !important;
-        }
-        .nat-btn, .nat-btn-clear {
-            display: inline-block !important;
-            direction: ltr !important;
-        }
-        .nat-btn div[data-testid="stButton"], .nat-btn-clear div[data-testid="stButton"] {
-            margin: 0 !important;
-            padding: 0 !important;
-        }
-        .nat-btn button {
-            display: flex !important;
-            align-items: center !important;
-            justify-content: center !important;
-            background: rgba(255, 255, 255, 0.08) !important;
-            color: #FFF !important;
-            font-weight: 800 !important;
-            font-size: 1rem !important;
-            font-family: 'Inter', sans-serif !important;
-            border-radius: 12px !important;
-            border: 1px solid rgba(212, 175, 55, 0.25) !important;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.2) !important;
-            height: 40px !important;
-            min-height: 40px !important;
-            line-height: 1 !important;
-            cursor: pointer !important;
-            transition: all 0.3s ease !important;
-            padding-top: 0 !important;
-            padding-bottom: 0 !important;
-            padding-left: 12px !important;
-            padding-right: 12px !important;
-            gap: 8px !important;
-            width: auto !important;
-        }
-        .nat-btn button:hover {
-            border-color: #D4AF37 !important;
-            background: rgba(255, 255, 255, 0.15) !important;
-            box-shadow: 0 0 10px rgba(212, 175, 55, 0.3) !important;
-            transform: translateY(-1px) !important;
-        }
-        .nat-btn-selected button {
-            background: rgba(212, 175, 55, 0.2) !important;
-            border-color: #D4AF37 !important;
-            box-shadow: 0 0 15px rgba(212, 175, 55, 0.5) !important;
-        }
-        .nat-btn-clear button {
-            background: rgba(255, 75, 75, 0.1) !important;
-            color: #FF4B4B !important;
-            border: 1px solid rgba(255, 75, 75, 0.3) !important;
-            border-radius: 12px !important;
-            font-weight: 700 !important;
-            font-size: 0.9rem !important;
-            height: 40px !important;
-            min-height: 40px !important;
-            cursor: pointer !important;
-            transition: all 0.3s ease !important;
-            padding: 0 12px !important;
-            width: auto !important;
-        }
-        .nat-btn-clear button:hover {
-            background: rgba(255, 75, 75, 0.2) !important;
-            border-color: #FF4B4B !important;
-            box-shadow: 0 0 10px rgba(255, 75, 75, 0.3) !important;
-        }
-        </style>
-    """, unsafe_allow_html=True)
-
     # Try to find nationality column
     nat_col = None
     for c in df.columns:
@@ -323,37 +238,31 @@ def render_table_translator(df, key_prefix="table"):
         # Calculate nationality codes on the UNFILTERED data
         df_nat_codes = df[nat_col].apply(_get_nationality_code)
         code_counts = df_nat_codes.value_counts()
-
-        badge_container = st.container()
-        with badge_container:
-            st.markdown('<div class="nat-badge-marker"></div>', unsafe_allow_html=True)
-            for code, c in code_counts.items():
-                if not code: continue
-                is_selected = (active_code == code)
-                btn_class = "nat-btn"
-                if is_selected:
-                    btn_class += " nat-btn-selected"
-                st.markdown(f'<div class="{btn_class}">', unsafe_allow_html=True)
-                flag_emoji = _country_code_to_emoji(code)
-                if st.button(f"{c} {flag_emoji}", key=f"btn_nat_{key_prefix}_{code}"):
-                    if is_selected:
-                        st.session_state[f"selected_nat_{key_prefix}"] = None
-                    else:
-                        st.session_state[f"selected_nat_{key_prefix}"] = code
-                    st.rerun()
-                st.markdown('</div>', unsafe_allow_html=True)
+        valid_items = [(code, int(cnt)) for code, cnt in code_counts.items() if code]
+        
+        if valid_items:
+            # Render all buttons in a single row using simple columns
+            total_cols = len(valid_items) + (1 if active_code else 0)
+            cols = st.columns(total_cols)
+            
+            for i, (code, cnt) in enumerate(valid_items):
+                with cols[i]:
+                    flag_emoji = _country_code_to_emoji(code)
+                    btn_label = f"{cnt} {flag_emoji}"
+                    if st.button(btn_label, key=f"btn_nat_{key_prefix}_{code}"):
+                        st.session_state[f"selected_nat_{key_prefix}"] = None if (active_code == code) else code
+                        st.rerun()
             
             if active_code:
-                st.markdown('<div class="nat-btn-clear">', unsafe_allow_html=True)
-                clear_lbl = "❌ الكل" if lang == 'ar' else "❌ All"
-                if st.button(clear_lbl, key=f"btn_nat_clear_{key_prefix}"):
-                    st.session_state[f"selected_nat_{key_prefix}"] = None
-                    st.rerun()
-                st.markdown('</div>', unsafe_allow_html=True)
-
-        # Apply filtering to the dataframe
-        if active_code:
-            df = df[df_nat_codes == active_code]
+                with cols[-1]:
+                    clear_lbl = "❌ الكل" if lang == 'ar' else "❌ All"
+                    if st.button(clear_lbl, key=f"btn_nat_clear_{key_prefix}"):
+                        st.session_state[f"selected_nat_{key_prefix}"] = None
+                        st.rerun()
+            
+            # Apply filtering to the dataframe
+            if active_code:
+                df = df[df_nat_codes == active_code]
 
     # Render total count banner
     count = len(df)
