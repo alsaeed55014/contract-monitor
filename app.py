@@ -3559,12 +3559,14 @@ def render_dashboard_content():
                     margin-top: 10px !important;
                     margin-bottom: 20px !important;
                     padding: 5px 0 !important; /* Some padding for scroll */
+                    direction: ltr !important; /* Force LTR for the badge container */
                 }
                 .nat-badge-marker {
                     display: none !important;
                 }
                 .nat-flag-badge, .nat-clear-badge {
                     display: inline-block !important;
+                    direction: ltr !important;
                 }
                 .nat-flag-badge div[data-testid="stButton"], .nat-clear-badge div[data-testid="stButton"] {
                     margin: 0 !important;

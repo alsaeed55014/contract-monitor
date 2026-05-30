@@ -241,12 +241,14 @@ def render_table_translator(df, key_prefix="table"):
             margin-top: 10px !important;
             margin-bottom: 20px !important;
             padding: 5px 0 !important; /* Some padding for scroll */
+            direction: ltr !important; /* Force LTR for the badge container */
         }
         .nat-badge-marker {
             display: none !important;
         }
         .nat-btn, .nat-btn-clear {
             display: inline-block !important;
+            direction: ltr !important;
         }
         .nat-btn div[data-testid="stButton"], .nat-btn-clear div[data-testid="stButton"] {
             margin: 0 !important;
