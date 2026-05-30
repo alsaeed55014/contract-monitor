@@ -257,13 +257,13 @@ def render_table_translator(df, key_prefix="table"):
             background: rgba(255, 255, 255, 0.08) !important;
             color: #FFF !important;
             font-weight: 800 !important;
-            font-size: 0.95rem !important;
+            font-size: 1rem !important;
             font-family: 'Inter', sans-serif !important;
             border-radius: 12px !important;
             border: 1px solid rgba(212, 175, 55, 0.25) !important;
             box-shadow: 0 2px 5px rgba(0,0,0,0.2) !important;
-            height: 32px !important;
-            min-height: 32px !important;
+            height: 40px !important;
+            min-height: 40px !important;
             line-height: 1 !important;
             cursor: pointer !important;
             transition: all 0.3s ease !important;
@@ -272,6 +272,7 @@ def render_table_translator(df, key_prefix="table"):
             padding-left: 12px !important;
             padding-right: 12px !important;
             gap: 8px !important;
+            width: auto !important;
         }
         .nat-btn button:hover {
             border-color: #D4AF37 !important;
@@ -291,11 +292,12 @@ def render_table_translator(df, key_prefix="table"):
             border-radius: 12px !important;
             font-weight: 700 !important;
             font-size: 0.9rem !important;
-            height: 32px !important;
-            min-height: 32px !important;
+            height: 40px !important;
+            min-height: 40px !important;
             cursor: pointer !important;
             transition: all 0.3s ease !important;
             padding: 0 12px !important;
+            width: auto !important;
         }
         .nat-btn-clear button:hover {
             background: rgba(255, 75, 75, 0.2) !important;
@@ -329,7 +331,7 @@ def render_table_translator(df, key_prefix="table"):
                     btn_class += " nat-btn-selected"
                 st.markdown(f'<div class="{btn_class}">', unsafe_allow_html=True)
                 flag_emoji = _country_code_to_emoji(code)
-                if st.button(f"{flag_emoji} {c}", key=f"btn_nat_{key_prefix}_{code}"):
+                if st.button(f"{c} {flag_emoji}", key=f"btn_nat_{key_prefix}_{code}"):
                     if is_selected:
                         st.session_state[f"selected_nat_{key_prefix}"] = None
                     else:

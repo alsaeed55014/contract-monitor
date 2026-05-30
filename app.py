@@ -1571,15 +1571,15 @@ def render_table_translator(df, key_prefix="table"):
     background-color: rgba(255,255,255,0.08) !important;
     color: #FFF !important;
     font-weight: 800 !important;
-    font-size: 0.9rem !important;
+    font-size: 1rem !important;
     font-family: 'Inter', sans-serif !important;
-    border-radius: 10px !important;
+    border-radius: 12px !important;
     border: 1px solid rgba(212,175,55,0.25) !important;
-    height: 38px !important;
-    min-height: 38px !important;
-    width: 100% !important;
-    padding-left: 10px !important;
-    padding-right: 10px !important;
+    height: 40px !important;
+    min-height: 40px !important;
+    width: auto !important;
+    padding-left: 12px !important;
+    padding-right: 12px !important;
     cursor: pointer !important;
     transition: all 0.2s ease !important;
     white-space: nowrap !important;
@@ -1604,17 +1604,21 @@ def render_table_translator(df, key_prefix="table"):
     color: #FF4B4B !important;
     font-weight: 700 !important;
     font-family: 'Inter', sans-serif !important;
-    border-radius: 10px !important;
+    border-radius: 12px !important;
     border: 1px solid rgba(255,75,75,0.35) !important;
-    height: 38px !important;
-    min-height: 38px !important;
-    width: 100% !important;
+    height: 40px !important;
+    min-height: 40px !important;
+    width: auto !important;
     cursor: pointer !important;
     transition: all 0.2s ease !important;
 }
 .nat-clear-badge button:hover {
     background: rgba(255,75,75,0.22) !important;
     box-shadow: 0 0 10px rgba(255,75,75,0.35) !important;
+}
+.flex-badge-container [data-testid="column"] {
+    width: auto !important;
+    flex: 0 0 auto !important;
 }
 </style>
 """
@@ -1632,7 +1636,7 @@ def render_table_translator(df, key_prefix="table"):
                         base_cls += " nat-flag-badge-active"
                     st.markdown('<div class="' + base_cls + '">', unsafe_allow_html=True)
                     flag_emoji = _country_code_to_emoji(code)
-                    btn_label = f"{flag_emoji} {cnt}"
+                    btn_label = f"{cnt} {flag_emoji}"  # Number first, then flag like in the example
                     if st.button(btn_label, key="nbadge_" + key_prefix + "_" + code):
                         st.session_state["selected_nat_" + key_prefix] = None if is_sel else code
                         st.rerun()
