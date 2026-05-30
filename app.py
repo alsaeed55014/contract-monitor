@@ -1551,82 +1551,102 @@ def render_table_translator(df, key_prefix="table"):
 
         if valid_items:
             active_code = st.session_state.get(f"selected_nat_{key_prefix}")
-            n_flags   = len(valid_items)
-            has_clear = bool(active_code)
+            has_clear   = bool(active_code)
 
-            # ---- CSS for badge buttons ----
+            # ---- Base CSS (applies to all badge buttons) ----
             base_css = """
 <style>
-.nat-badge-col button {
-    background:rgba(255,255,255,0.08)!important;
-    color:#FFF!important; font-weight:800!important;
-    font-size:0.85rem!important; font-family:'Inter',sans-serif!important;
-    border-radius:10px!important;
-    border:1px solid rgba(212,175,55,0.25)!important;
-    height:36px!important; min-height:36px!important;
-    width:100%!important; cursor:pointer!important;
-    transition:all 0.2s ease!important;
+.nat-flag-badge button {
+    background-color: rgba(255,255,255,0.08) !important;
+    background-repeat: no-repeat !important;
+    background-position: 8px center !important;
+    background-size: 28px 20px !important;
+    color: #FFF !important;
+    font-weight: 800 !important;
+    font-size: 0.9rem !important;
+    font-family: 'Inter', sans-serif !important;
+    border-radius: 10px !important;
+    border: 1px solid rgba(212,175,55,0.25) !important;
+    height: 38px !important;
+    min-height: 38px !important;
+    width: 100% !important;
+    padding-left: 42px !important;
+    padding-right: 10px !important;
+    cursor: pointer !important;
+    transition: all 0.2s ease !important;
+    white-space: nowrap !important;
+    display: flex !important;
+    align-items: center !important;
 }
-.nat-badge-col button:hover {
-    border-color:#D4AF37!important;
-    background:rgba(255,255,255,0.15)!important;
-    transform:translateY(-1px)!important;
+.nat-flag-badge button:hover {
+    border-color: #D4AF37 !important;
+    background-color: rgba(255,255,255,0.15) !important;
+    box-shadow: 0 0 10px rgba(212,175,55,0.35) !important;
+    transform: translateY(-1px) !important;
 }
-.nat-clear-col button {
-    background:rgba(255,75,75,0.12)!important;
-    color:#FF4B4B!important; font-weight:700!important;
-    font-family:'Inter',sans-serif!important;
-    border-radius:10px!important;
-    border:1px solid rgba(255,75,75,0.35)!important;
-    height:36px!important; width:100%!important; cursor:pointer!important;
+.nat-flag-badge-active button {
+    background-color: rgba(212,175,55,0.22) !important;
+    border: 2px solid #D4AF37 !important;
+    box-shadow: 0 0 14px rgba(212,175,55,0.55) !important;
+}
+.nat-clear-badge button {
+    background: rgba(255,75,75,0.12) !important;
+    color: #FF4B4B !important;
+    font-weight: 700 !important;
+    font-family: 'Inter', sans-serif !important;
+    border-radius: 10px !important;
+    border: 1px solid rgba(255,75,75,0.35) !important;
+    height: 38px !important;
+    min-height: 38px !important;
+    width: 100% !important;
+    cursor: pointer !important;
+    transition: all 0.2s ease !important;
+}
+.nat-clear-badge button:hover {
+    background: rgba(255,75,75,0.22) !important;
+    box-shadow: 0 0 10px rgba(255,75,75,0.35) !important;
 }
 """
+            # Per-flag CSS: set background-image for each button
             per_flag_css = ""
             for code, cnt in valid_items:
                 flag_url = "https://flagcdn.com/w40/" + code + ".png"
                 is_sel = (active_code == code)
-                extra = (
+                extra_sel = (
+                    "background-color:rgba(212,175,55,0.22)!important;"
                     "border:2px solid #D4AF37!important;"
-                    "background-color:rgba(212,175,55,0.2)!important;"
-                    "box-shadow:0 0 12px rgba(212,175,55,0.5)!important;"
+                    "box-shadow:0 0 14px rgba(212,175,55,0.55)!important;"
                 ) if is_sel else ""
                 per_flag_css += (
-                    ".nbtn-" + key_prefix + "-" + code + " button{"
-                    "background-image:url('" + flag_url + "')!important;"
-                    "background-size:22px!important;background-repeat:no-repeat!important;"
-                    "background-position:5px center!important;padding-left:32px!important;" + extra + "}"
+                    ".nbadge-" + key_prefix + "-" + code + " button {"
+                    "background-image: url('" + flag_url + "') !important;"
+                    + extra_sel + "}"
                 )
+
             st.markdown(base_css + per_flag_css + "</style>", unsafe_allow_html=True)
 
-            # ---- Row 1: flag images ----
-            n_cols = n_flags + (1 if has_clear else 0)
-            flag_row = st.columns(n_cols)
-            for i, (code, cnt) in enumerate(valid_items):
-                with flag_row[i]:
-                    furl = "https://flagcdn.com/w40/" + code + ".png"
-                    st.markdown(
-                        '<div style="text-align:center;margin-bottom:2px;">'
-                        '<img src="' + furl + '" style="height:22px;border-radius:3px;'
-                        'box-shadow:0 1px 4px rgba(0,0,0,0.5);" /></div>',
-                        unsafe_allow_html=True)
+            # ---- Single row: one column per badge ----
+            n_cols = len(valid_items) + (1 if has_clear else 0)
+            cols = st.columns(n_cols)
 
-            # ---- Row 2: count buttons ----
-            btn_row = st.columns(n_cols)
             for i, (code, cnt) in enumerate(valid_items):
-                with btn_row[i]:
-                    is_sel = (active_code == code)
-                    div_cls = "nat-badge-col nbtn-" + key_prefix + "-" + code
+                with cols[i]:
+                    is_sel  = (active_code == code)
+                    base_cls = "nat-flag-badge"
+                    if is_sel:
+                        base_cls += " nat-flag-badge-active"
+                    div_cls = base_cls + " nbadge-" + key_prefix + "-" + code
                     st.markdown('<div class="' + div_cls + '">', unsafe_allow_html=True)
-                    if st.button(str(cnt), key="nbtn_" + key_prefix + "_" + code):
+                    if st.button(str(cnt), key="nbadge_" + key_prefix + "_" + code):
                         st.session_state["selected_nat_" + key_prefix] = None if is_sel else code
                         st.rerun()
                     st.markdown('</div>', unsafe_allow_html=True)
 
             if has_clear:
-                with btn_row[-1]:
+                with cols[-1]:
                     clear_lbl = "❌ الكل" if lang == 'ar' else "❌ All"
-                    st.markdown('<div class="nat-clear-col">', unsafe_allow_html=True)
-                    if st.button(clear_lbl, key="nbtn_" + key_prefix + "___clear__"):
+                    st.markdown('<div class="nat-clear-badge">', unsafe_allow_html=True)
+                    if st.button(clear_lbl, key="nbadge_" + key_prefix + "___clear__"):
                         st.session_state["selected_nat_" + key_prefix] = None
                         st.rerun()
                     st.markdown('</div>', unsafe_allow_html=True)
