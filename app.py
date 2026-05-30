@@ -1536,136 +1536,100 @@ def render_table_translator(df, key_prefix="table"):
     lang = st.session_state.get('lang', 'ar')
     active_code = st.session_state.get(f"selected_nat_{key_prefix}")
 
-    # Inject global CSS for interactive badges
-    st.markdown("""
-        <style>
-        div[data-testid="stVerticalBlock"]:has(.nat-badge-marker),
-        div[class*="stVerticalBlock"]:has(.nat-badge-marker) {
-            display: flex !important;
-            flex-direction: row !important;
-            flex-wrap: wrap !important;
-            gap: 10px !important;
-            justify-content: center !important;
-            align-items: center !important;
-            margin-top: 10px !important;
-            margin-bottom: 20px !important;
-        }
-        .nat-badge-marker {
-            display: none !important;
-        }
-        .nat-btn, .nat-btn-clear {
-            display: inline-block !important;
-        }
-        .nat-btn div[data-testid="stButton"], .nat-btn-clear div[data-testid="stButton"] {
-            margin: 0 !important;
-            padding: 0 !important;
-        }
-        .nat-btn button {
-            display: flex !important;
-            align-items: center !important;
-            justify-content: center !important;
-            background: rgba(255, 255, 255, 0.08) !important;
-            color: #FFF !important;
-            font-weight: 800 !important;
-            font-size: 0.95rem !important;
-            font-family: 'Inter', sans-serif !important;
-            border-radius: 12px !important;
-            border: 1px solid rgba(212, 175, 55, 0.25) !important;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.2) !important;
-            height: 32px !important;
-            min-height: 32px !important;
-            line-height: 1 !important;
-            cursor: pointer !important;
-            transition: all 0.3s ease !important;
-            padding-top: 0 !important;
-            padding-bottom: 0 !important;
-            padding-right: 12px !important;
-        }
-        .nat-btn button:hover {
-            border-color: #D4AF37 !important;
-            background: rgba(255, 255, 255, 0.15) !important;
-            box-shadow: 0 0 10px rgba(212, 175, 55, 0.3) !important;
-            transform: translateY(-1px) !important;
-        }
-        .nat-btn-selected button {
-            background: rgba(212, 175, 55, 0.2) !important;
-            border-color: #D4AF37 !important;
-            box-shadow: 0 0 15px rgba(212, 175, 55, 0.5) !important;
-        }
-        .nat-btn-clear button {
-            background: rgba(255, 75, 75, 0.1) !important;
-            color: #FF4B4B !important;
-            border: 1px solid rgba(255, 75, 75, 0.3) !important;
-            border-radius: 12px !important;
-            font-weight: 700 !important;
-            font-size: 0.9rem !important;
-            height: 32px !important;
-            min-height: 32px !important;
-            cursor: pointer !important;
-            transition: all 0.3s ease !important;
-            padding: 0 12px !important;
-        }
-        .nat-btn-clear button:hover {
-            background: rgba(255, 75, 75, 0.2) !important;
-            border-color: #FF4B4B !important;
-            box-shadow: 0 0 10px rgba(255, 75, 75, 0.3) !important;
-        }
-        </style>
-    """, unsafe_allow_html=True)
-
-    # Try to find nationality column
+    # --- Nationality Filter Badges ---
     nat_col = None
     for c in df.columns:
         c_str = str(c).lower()
         if "nationality" in c_str or "الجنسية" in c_str or "جنسية" in c_str:
             nat_col = c
             break
-            
-    if nat_col is not None and not df.empty:
-        # Calculate nationality codes on the UNFILTERED data
-        df_nat_codes = df[nat_col].apply(_get_nationality_code)
-        code_counts = df_nat_codes.value_counts()
-        
-        css_rules = []
-        for code in code_counts.index:
-            if code:
-                css_rules.append(f"""
-                .nat-btn-{code} button {{
-                    background-image: url('https://flagcdn.com/w40/{code}.png') !important;
-                    background-size: 22px !important;
-                    background-repeat: no-repeat !important;
-                    background-position: left 10px center !important;
-                    padding-left: 38px !important;
-                }}
-                """)
-        if css_rules:
-            st.markdown(f"<style>{chr(10).join(css_rules)}</style>", unsafe_allow_html=True)
 
-        badge_container = st.container()
-        with badge_container:
-            st.markdown('<div class="nat-badge-marker"></div>', unsafe_allow_html=True)
-            for code, c in code_counts.items():
-                if not code: continue
-                is_selected = (active_code == code)
-                btn_class = f"nat-btn nat-btn-{code}"
-                if is_selected:
-                    btn_class += " nat-btn-selected"
-                st.markdown(f'<div class="{btn_class}">', unsafe_allow_html=True)
-                if st.button(f"{c}", key=f"btn_nat_{key_prefix}_{code}"):
-                    if is_selected:
-                        st.session_state[f"selected_nat_{key_prefix}"] = None
-                    else:
-                        st.session_state[f"selected_nat_{key_prefix}"] = code
-                    st.rerun()
-                st.markdown('</div>', unsafe_allow_html=True)
-            
-            if active_code:
-                st.markdown('<div class="nat-btn-clear">', unsafe_allow_html=True)
-                clear_lbl = "❌ الكل" if lang == 'ar' else "❌ All"
-                if st.button(clear_lbl, key=f"btn_nat_clear_{key_prefix}"):
-                    st.session_state[f"selected_nat_{key_prefix}"] = None
-                    st.rerun()
-                st.markdown('</div>', unsafe_allow_html=True)
+    if nat_col is not None and not df.empty:
+        df_nat_codes = df[nat_col].apply(_get_nationality_code)
+        code_counts  = df_nat_codes.value_counts()
+        valid_items  = [(code, int(cnt)) for code, cnt in code_counts.items() if code]
+
+        if valid_items:
+            active_code = st.session_state.get(f"selected_nat_{key_prefix}")
+            n_flags   = len(valid_items)
+            has_clear = bool(active_code)
+
+            # ---- CSS for badge buttons ----
+            base_css = """
+<style>
+.nat-badge-col button {
+    background:rgba(255,255,255,0.08)!important;
+    color:#FFF!important; font-weight:800!important;
+    font-size:0.85rem!important; font-family:'Inter',sans-serif!important;
+    border-radius:10px!important;
+    border:1px solid rgba(212,175,55,0.25)!important;
+    height:36px!important; min-height:36px!important;
+    width:100%!important; cursor:pointer!important;
+    transition:all 0.2s ease!important;
+}
+.nat-badge-col button:hover {
+    border-color:#D4AF37!important;
+    background:rgba(255,255,255,0.15)!important;
+    transform:translateY(-1px)!important;
+}
+.nat-clear-col button {
+    background:rgba(255,75,75,0.12)!important;
+    color:#FF4B4B!important; font-weight:700!important;
+    font-family:'Inter',sans-serif!important;
+    border-radius:10px!important;
+    border:1px solid rgba(255,75,75,0.35)!important;
+    height:36px!important; width:100%!important; cursor:pointer!important;
+}
+"""
+            per_flag_css = ""
+            for code, cnt in valid_items:
+                flag_url = "https://flagcdn.com/w40/" + code + ".png"
+                is_sel = (active_code == code)
+                extra = (
+                    "border:2px solid #D4AF37!important;"
+                    "background-color:rgba(212,175,55,0.2)!important;"
+                    "box-shadow:0 0 12px rgba(212,175,55,0.5)!important;"
+                ) if is_sel else ""
+                per_flag_css += (
+                    ".nbtn-" + key_prefix + "-" + code + " button{"
+                    "background-image:url('" + flag_url + "')!important;"
+                    "background-size:22px!important;background-repeat:no-repeat!important;"
+                    "background-position:5px center!important;padding-left:32px!important;" + extra + "}"
+                )
+            st.markdown(base_css + per_flag_css + "</style>", unsafe_allow_html=True)
+
+            # ---- Row 1: flag images ----
+            n_cols = n_flags + (1 if has_clear else 0)
+            flag_row = st.columns(n_cols)
+            for i, (code, cnt) in enumerate(valid_items):
+                with flag_row[i]:
+                    furl = "https://flagcdn.com/w40/" + code + ".png"
+                    st.markdown(
+                        '<div style="text-align:center;margin-bottom:2px;">'
+                        '<img src="' + furl + '" style="height:22px;border-radius:3px;'
+                        'box-shadow:0 1px 4px rgba(0,0,0,0.5);" /></div>',
+                        unsafe_allow_html=True)
+
+            # ---- Row 2: count buttons ----
+            btn_row = st.columns(n_cols)
+            for i, (code, cnt) in enumerate(valid_items):
+                with btn_row[i]:
+                    is_sel = (active_code == code)
+                    div_cls = "nat-badge-col nbtn-" + key_prefix + "-" + code
+                    st.markdown('<div class="' + div_cls + '">', unsafe_allow_html=True)
+                    if st.button(str(cnt), key="nbtn_" + key_prefix + "_" + code):
+                        st.session_state["selected_nat_" + key_prefix] = None if is_sel else code
+                        st.rerun()
+                    st.markdown('</div>', unsafe_allow_html=True)
+
+            if has_clear:
+                with btn_row[-1]:
+                    clear_lbl = "❌ الكل" if lang == 'ar' else "❌ All"
+                    st.markdown('<div class="nat-clear-col">', unsafe_allow_html=True)
+                    if st.button(clear_lbl, key="nbtn_" + key_prefix + "___clear__"):
+                        st.session_state["selected_nat_" + key_prefix] = None
+                        st.rerun()
+                    st.markdown('</div>', unsafe_allow_html=True)
 
         # Apply filtering to the dataframe
         if active_code:
