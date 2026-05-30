@@ -1,13 +1,15 @@
 import streamlit as st
+print(">>> DEBUG: Streamlit imported")
 import pandas as pd
+print(">>> DEBUG: Pandas imported")
 import os
 import sys
 import json
 import hashlib
 import time
 from datetime import datetime, timedelta
-<<<<<<< HEAD
 import pytz
+print(">>> DEBUG: Core libraries imported")
 import base64
 import re
 
@@ -23,16 +25,6 @@ def get_saudi_time():
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 ROOT_DIR = BASE_DIR
 PERSIST_FILE = os.path.join(BASE_DIR, 'src', '.persist_login.json')
-=======
-import base64
-
-# 1. Ensure project root is in path (Robust Injection)
-import os
-import sys
-
-# Get the absolute path of the directory containing app.py
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
->>>>>>> 947f1af (update)
 if BASE_DIR not in sys.path:
     sys.path.insert(0, BASE_DIR)
 
@@ -41,25 +33,20 @@ SRC_DIR = os.path.join(BASE_DIR, 'src')
 if SRC_DIR not in sys.path:
     sys.path.insert(0, SRC_DIR)
 
+print(">>> DEBUG: Importing project modules...")
 try:
     from src.core.contracts import ContractManager
     from src.data.bengali_manager import BengaliDataManager
-<<<<<<< HEAD
     from src.utils.phone_utils import create_pasha_whatsapp_excel, format_phone_number, save_to_local_desktop, render_pasha_export_button, is_local_windows_pc
     from src.core.matcher import CandidateMatcher, format_match_result, _find_city_region, _fuzzy_match, REGION_PROXIMITY, REGION_MAP
-=======
-    from src.utils.phone_utils import create_pasha_whatsapp_excel, format_phone_number
->>>>>>> 947f1af (update)
+    print(">>> DEBUG: Project modules (src.*) imported successfully")
 except ImportError:
     # Fallback for different environment path configurations
     from core.contracts import ContractManager
     from data.bengali_manager import BengaliDataManager
-<<<<<<< HEAD
     from utils.phone_utils import create_pasha_whatsapp_excel, format_phone_number, save_to_local_desktop, render_pasha_export_button, is_local_windows_pc
     from core.matcher import CandidateMatcher, format_match_result, _find_city_region, _fuzzy_match, REGION_PROXIMITY, REGION_MAP
-=======
-    from utils.phone_utils import create_pasha_whatsapp_excel, format_phone_number
->>>>>>> 947f1af (update)
+    print(">>> DEBUG: Project modules (core.*) imported successfully via fallback")
 
 # 2. Local Auth Class to prevent Import/Sync Errors
 class AuthManager:
@@ -212,7 +199,6 @@ class AuthManager:
         target = str(username).lower().strip()
         return self.users.get(target, {}).get("avatar", None)
 
-<<<<<<< HEAD
 def load_saved_credentials():
     if os.path.exists(PERSIST_FILE):
         try:
@@ -238,13 +224,10 @@ def clear_credentials():
             pass
 
 @st.cache_data(ttl=3600, show_spinner=False)
-=======
->>>>>>> 947f1af (update)
 def get_base64_image(image_path):
     with open(image_path, "rb") as img_file:
         return base64.b64encode(img_file.read()).decode()
 
-<<<<<<< HEAD
 @st.cache_data(ttl=600, show_spinner=False)
 def get_css(lang='ar'):
     direction = 'rtl' if lang == 'ar' else 'ltr'
@@ -256,19 +239,11 @@ def get_css(lang='ar'):
     bell_col_idx = 4 if lang == 'ar' else 1
     
     return f"""
-=======
-def get_css():
-    return """
->>>>>>> 947f1af (update)
     <style>
         /* Modern 2026 Luxury Executive Design System */
         @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700&family=Inter:wght@300;400;500;600;700&family=Cinzel:wght@500;700&family=Alex+Brush&family=Cairo:wght@400;600;700&family=My+Soul&display=swap');
         
-<<<<<<< HEAD
         :root {{
-=======
-        :root {
->>>>>>> 947f1af (update)
             --luxury-gold: #D4AF37;
             --deep-gold: #B8860B;
             --glass-bg: rgba(26, 26, 26, 0.7);
@@ -276,12 +251,15 @@ def get_css():
             --accent-green: #00FF41;
             --text-main: #F4F4F4;
             --border-glow: rgba(212, 175, 55, 0.3);
-<<<<<<< HEAD
         }}
 
 
 
         /* 1) Global Aesthetics & Scrollbar */
+        *, *::before, *::after {{
+            box-sizing: border-box !important;
+        }}
+
         html, body, .stApp {{
             direction: {direction} !important;
         }}
@@ -300,27 +278,10 @@ def get_css():
         div[data-testid="stCheckbox"] label {{
             display: flex !important;
             flex-direction: row !important;
-=======
-        }
-
-        /* 1) Global Aesthetics & Scrollbar */
-        .stApp {
-            background: radial-gradient(circle at top right, #001F3F, #000000) !important;
-            color: var(--text-main);
-            font-family: 'Inter', 'Cairo', 'Tajawal', sans-serif;
-            direction: rtl; /* Force RTL */
-        }
-
-        /* Fix Checkbox Spacing for RTL - Icon on Right, Text on Left */
-        div[data-testid="stCheckbox"] label {
-            display: flex !important;
-            flex-direction: row !important; /* Standard Row + RTL direction = Icon on Right */
->>>>>>> 947f1af (update)
             align-items: center !important;
             gap: 15px !important;
             width: 100% !important;
             justify-content: flex-start !important;
-<<<<<<< HEAD
         }}
 
         div[data-testid="stCheckbox"] label div:first-child {{
@@ -361,49 +322,6 @@ def get_css():
 
         /* 3) Luxury Typography & Large Title */
         .luxury-main-title {{
-=======
-        }
-
-        /* Ensure the checkbox square is always the first element (right side in RTL) */
-        div[data-testid="stCheckbox"] label div:first-child {
-            order: 1 !important;
-        }
-        
-        div[data-testid="stCheckbox"] label div[data-testid="stMarkdownContainer"] {
-            order: 2 !important;
-            flex-grow: 1 !important;
-            text-align: right !important;
-        }
-
-        div[data-testid="stCheckbox"] label div[data-testid="stMarkdownContainer"] p {
-            margin: 0 !important;
-            font-family: 'Cairo', sans-serif !important;
-            font-size: 0.95rem !important;
-        }
-
-        /* Custom Premium Scrollbar */
-        ::-webkit-scrollbar { width: 8px; height: 8px; }
-        ::-webkit-scrollbar-track { background: #000; }
-        ::-webkit-scrollbar-thumb { 
-            background: linear-gradient(180deg, #111, #D4AF37); 
-            border-radius: 10px; 
-        }
-
-        /* 2) Layout & Spacing - CRITICAL FIX FOR TOP SPACE */
-        .main .block-container {
-            padding-top: 0rem !important;
-            padding-bottom: 2rem !important;
-            max-width: 1200px !important;
-        }
-
-        header[data-testid="stHeader"] {
-            background: transparent !important;
-            height: 0 !important;
-        }
-
-        /* 3) Luxury Typography & Large Title */
-        .luxury-main-title {
->>>>>>> 947f1af (update)
             font-family: 'Fv Free soul', 'My Soul', 'Cairo', sans-serif !important;
             font-size: 20px !important; /* Specific size requested by user */
             font-weight: 700 !important;
@@ -415,7 +333,6 @@ def get_css():
             margin: -10px 0 5px 0 !important; /* Raised even higher */
             padding: 0 !important; 
             letter-spacing: 1px !important;
-<<<<<<< HEAD
         }}
 
         .flag-icon {{
@@ -426,25 +343,12 @@ def get_css():
 
         /* 4) Premium Form & Vertical Alignment */
         div[data-testid="stForm"] {{
-=======
-        }
-
-        .flag-icon {
-            font-size: 20px;
-            vertical-align: middle;
-            margin: 0 5px;
-        }
-
-        /* 4) Premium Form & Vertical Alignment */
-        div[data-testid="stForm"] {
->>>>>>> 947f1af (update)
             background: rgba(10, 10, 10, 0.5) !important;
             backdrop-filter: blur(15px) !important;
             border: 1px solid rgba(212, 175, 55, 0.2) !important;
             border-radius: 20px !important;
             padding: 1.5rem !important;
             box-shadow: 0 20px 40px rgba(0, 0, 0, 0.8) !important;
-<<<<<<< HEAD
         }}
 
         /* Profile Image Alignment Wrapper */
@@ -458,38 +362,16 @@ def get_css():
         }}
 
         .profile-img-circular {{
-=======
-        }
-
-        /* Profile Image Alignment Wrapper */
-        .profile-row-container {
-            display: flex;
-            align-items: center;
-            justify-content: flex-end;
-            gap: 15px;
-            width: 100%;
-            margin-bottom: 10px;
-        }
-
-        .profile-img-circular {
->>>>>>> 947f1af (update)
             width: 70px;
             height: 70px;
             border-radius: 50%;
             border: 2px solid var(--luxury-gold);
             box-shadow: 0 0 15px rgba(212, 175, 55, 0.3);
             object-fit: cover;
-<<<<<<< HEAD
         }}
 
         /* Generic Inputs Styling */
         .stTextInput input, .stTextArea textarea, div[data-baseweb="select"] {{
-=======
-        }
-
-        /* Generic Inputs Styling */
-        .stTextInput input, .stTextArea textarea, div[data-baseweb="select"] {
->>>>>>> 947f1af (update)
             background-color: rgba(40, 40, 40, 0.6) !important;
             border: 1px solid rgba(255, 255, 255, 0.1) !important;
             border-radius: 12px !important;
@@ -497,7 +379,6 @@ def get_css():
             padding: 8px 12px !important; /* Reduced padding for smaller fields */
             transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
             box-shadow: inset 0 2px 4px 0 rgba(0, 0, 0, 0.06) !important;
-<<<<<<< HEAD
         }}
 
         .stTextInput input:focus, div[data-baseweb="select"]:focus-within {{
@@ -517,27 +398,6 @@ def get_css():
 
         /* 5) Universal Luxury Button Style */
         .stButton button, div[data-testid="stFormSubmitButton"] button {{
-=======
-        }
-
-        .stTextInput input:focus, div[data-baseweb="select"]:focus-within {
-            border-color: var(--luxury-gold) !important;
-            box-shadow: 0 0 0 3px rgba(212, 175, 55, 0.2) !important;
-            background-color: rgba(50, 50, 50, 0.8) !important;
-        }
-
-        /* Slider Styling */
-        div[data-testid="stSlider"] [data-testid="stThumb"] {
-            background-color: var(--luxury-gold) !important;
-            border: 2px solid #FFFFFF !important;
-        }
-        div[data-testid="stSlider"] [data-testid="stTrack"] > div {
-            background: linear-gradient(90deg, #333, #D4AF37) !important;
-        }
-
-        /* 5) Universal Luxury Button Style */
-        .stButton button, div[data-testid="stFormSubmitButton"] button {
->>>>>>> 947f1af (update)
             background: linear-gradient(135deg, #1A1A1A 0%, #262626 100%) !important;
             color: var(--luxury-gold) !important;
             border: 1px solid var(--border-glow) !important;
@@ -548,7 +408,6 @@ def get_css():
             text-transform: uppercase !important;
             transition: all 0.4s cubic-bezier(0.165, 0.84, 0.44, 1) !important;
             box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5) !important;
-<<<<<<< HEAD
             width: 100% !important; /* Default to full width for better mobile behavior */
         }}
 
@@ -562,17 +421,11 @@ def get_css():
         }}
 
         .stButton button:hover, div[data-testid="stFormSubmitButton"] button:hover {{
-=======
-        }
-
-        .stButton button:hover, div[data-testid="stFormSubmitButton"] button:hover {
->>>>>>> 947f1af (update)
             background: var(--luxury-gold) !important;
             color: #000 !important;
             border-color: var(--luxury-gold) !important;
             box-shadow: 0 0 25px rgba(212, 175, 55, 0.5) !important;
             transform: translateY(-3px) scale(1.02) !important;
-<<<<<<< HEAD
         }}
 
         /* Primary Search Variation */
@@ -649,35 +502,6 @@ def get_css():
         }}
 
         .programmer-credit {{
-=======
-        }
-
-        /* Primary Search Variation */
-        button[kind="primary"] {
-            background: linear-gradient(135deg, #111, #222) !important;
-            border: 1px solid var(--luxury-gold) !important;
-        }
-
-        /* 6) Table & Data Presentation */
-        [data-testid="stDataFrame"] {
-            background: rgba(20, 20, 20, 0.5) !important;
-            border: 1px solid rgba(212, 175, 55, 0.1) !important;
-            margin: 10px 0 !important;
-        }
-
-        /* Status Column Glows */
-        .glow-green { color: var(--accent-green) !important; text-shadow: 0 0 10px var(--accent-green); }
-        .glow-red { color: #FF3131 !important; text-shadow: 0 0 10px #FF3131; }
-        .glow-orange { color: #FF9100 !important; text-shadow: 0 0 10px #FF9100; }
-
-        /* 7) Sidebar Professionalism */
-        section[data-testid="stSidebar"] {
-            background-color: #080808 !important;
-            border-right: 1px solid rgba(212, 175, 55, 0.15) !important;
-        }
-
-        .programmer-credit {
->>>>>>> 947f1af (update)
             color: #FFFFFF !important;
             text-shadow: 0 0 10px rgba(255, 255, 255, 0.8), 
                          0 0 20px rgba(212, 175, 55, 0.4) !important;
@@ -688,7 +512,6 @@ def get_css():
             margin-top: 10px;
             line-height: 1.2;
             white-space: nowrap !important;
-<<<<<<< HEAD
         }}
         
         /* English version specific font */
@@ -756,34 +579,6 @@ def get_css():
 
         /* Signature Neon (Standardized White-Gold) */
         .programmer-signature-neon, .red-neon-signature {{
-=======
-        }
-        
-        /* English version specific font */
-        .programmer-credit.en {
-            font-family: 'Cinzel', serif !important;
-            font-size: 1.1rem;
-            letter-spacing: 1px;
-        }
-
-        /* 8) Expander Luxury (Filters) */
-        .streamlit-expanderHeader {
-            background-color: rgba(255, 255, 255, 0.03) !important;
-            border: 1px solid rgba(212, 175, 55, 0.1) !important;
-            border-radius: 16px !important;
-            padding: 1rem !important;
-            font-weight: 600 !important;
-            color: var(--luxury-gold) !important;
-            transition: all 0.3s ease;
-        }
-        .streamlit-expanderHeader:hover {
-            border-color: var(--luxury-gold) !important;
-            background-color: rgba(255, 255, 255, 0.05) !important;
-        }
-
-        /* Signature Neon (Standardized White-Gold) */
-        .programmer-signature-neon, .red-neon-signature {
->>>>>>> 947f1af (update)
             font-family: 'Alex Brush', cursive !important;
             color: #FFFFFF !important;
             text-shadow: 0 0 10px rgba(255, 255, 255, 0.8), 
@@ -795,17 +590,10 @@ def get_css():
             margin: 0 auto 10px auto !important;
             letter-spacing: 1px !important;
             white-space: nowrap !important; /* Prevent vertical wrapping on mobile */
-<<<<<<< HEAD
         }}
 
         /* Signature Under Image */
         .signature-under-img {{
-=======
-        }
-
-        /* Signature Under Image */
-        .signature-under-img {
->>>>>>> 947f1af (update)
             font-family: 'Alex Brush', cursive !important;
             color: #EEE !important; /* Slightly brighter for better visibility */
             font-size: 0.9rem !important;
@@ -813,7 +601,6 @@ def get_css():
             text-align: center;
             letter-spacing: 1px;
             white-space: nowrap !important;
-<<<<<<< HEAD
         }}
 
         /* Login Screen Special Centering - FIXED HANGING VERSION */
@@ -821,6 +608,41 @@ def get_css():
             margin-top: 20px !important;
             text-align: center;
         }}
+
+        /* Bengali Supply Button with Pure CSS Flag */
+        #bengali-btn-wrapper button p {{
+            display: flex !important;
+            flex-direction: row-reverse !important;
+            align-items: center !important;
+            justify-content: center !important;
+            gap: 12px !important;
+        }}
+        #bengali-btn-wrapper button p::before {{
+            content: "" !important;
+            display: block !important;
+            width: 24px !important;
+            height: 16px !important;
+            background-color: #006a4e !important;
+            border-radius: 2px !important;
+            position: relative !important;
+            order: -1 !important;
+        }}
+        #bengali-btn-wrapper button p::after {{
+            content: "" !important;
+            position: absolute !important;
+            width: 10px !important;
+            height: 10px !important;
+            background-color: #f42a41 !important;
+            border-radius: 50% !important;
+            left: 12px !important;
+            top: 50% !important;
+            transform: translateY(-50%) !important;
+            order: -1 !important;
+        }}
+        
+        /* Emergency Transition Clears - Specifically target the login UI when authenticated */
+        body:has(.welcome-active) #login-container-wrapper {{ display: none !important; opacity: 0 !important; visibility: hidden !important; }}
+        #login-container-wrapper {{ pointer-events: auto; }} 
 
         /* Target the Streamlit Form - REMOVED GOLD BORDER */
         div[data-testid="stForm"] {{
@@ -945,28 +767,6 @@ def get_css():
 
         /* 9) Modern 2026 Premium Loader */
         .loader-wrapper {{
-=======
-        }
-
-        /* Login Screen Special Centering */
-        .login-screen-wrapper {
-            margin-top: 0vh !important;
-            text-align: center;
-        }
-        
-        /* Metric Styling */
-        .metric-container {
-            background: rgba(255, 255, 255, 0.02) !important;
-            border-radius: 20px !important;
-            border: 1px solid rgba(212, 175, 55, 0.05) !important;
-            padding: 1.5rem !important;
-            transition: transform 0.3s ease !important;
-        }
-        .metric-container:hover { transform: scale(1.05); }
-
-        /* 9) Modern 2026 Premium Loader */
-        .loader-wrapper {
->>>>>>> 947f1af (update)
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -980,7 +780,19 @@ def get_css():
             margin: 40px auto;
             width: fit-content;
             animation: loader-entrance 0.8s ease-out;
-<<<<<<< HEAD
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 50px;
+            background: rgba(10, 10, 10, 0.4);
+            backdrop-filter: blur(15px);
+            border-radius: 40px;
+            border: 1px solid rgba(212, 175, 55, 0.15);
+            box-shadow: 0 20px 40px rgba(0,0,0,0.6), inset 0 0 20px rgba(212, 175, 55, 0.05);
+            margin: 40px auto;
+            width: fit-content;
+            animation: loader-entrance 0.8s ease-out;
         }}
 
         @keyframes loader-entrance {{
@@ -989,21 +801,10 @@ def get_css():
         }}
 
         .modern-hourglass-svg {{
-=======
-        }
-
-        @keyframes loader-entrance {
-            from { opacity: 0; transform: scale(0.9) translateY(20px); }
-            to { opacity: 1; transform: scale(1) translateY(0); }
-        }
-
-        .modern-hourglass-svg {
->>>>>>> 947f1af (update)
             width: 100px;
             height: 100px;
             filter: drop-shadow(0 0 15px rgba(212, 175, 55, 0.6));
             animation: hourglass-rotate 2.5s linear infinite;
-<<<<<<< HEAD
         }}
 
         @keyframes hourglass-rotate {{
@@ -1012,21 +813,10 @@ def get_css():
         }}
 
         .modern-hourglass-svg .glass {{
-=======
-        }
-
-        @keyframes hourglass-rotate {
-            from { transform: rotate(0deg); }
-            to { transform: rotate(360deg); }
-        }
-
-        .modern-hourglass-svg .glass {
->>>>>>> 947f1af (update)
             fill: none;
             stroke: var(--luxury-gold);
             stroke-width: 2.5;
             stroke-linejoin: round;
-<<<<<<< HEAD
         }}
 
         .modern-hourglass-svg .sand {{
@@ -1069,50 +859,6 @@ def get_css():
         }}
 
         .loading-text-glow {{
-=======
-        }
-
-        .modern-hourglass-svg .sand {
-            fill: var(--luxury-gold);
-            opacity: 0.9;
-        }
-
-        .modern-hourglass-svg .sand-top {
-            animation: sand-sink 2.5s linear infinite;
-        }
-
-        .modern-hourglass-svg .sand-bottom {
-            animation: sand-fill 2.5s linear infinite;
-        }
-
-        .modern-hourglass-svg .sand-drip {
-            fill: var(--luxury-gold);
-            animation: sand-drip 2.5s linear infinite;
-        }
-
-        @keyframes hourglass-flip {
-            0%, 85% { transform: rotate(0deg); }
-            95%, 100% { transform: rotate(180deg); }
-        }
-
-        @keyframes sand-sink {
-            0% { clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%); }
-            85%, 100% { clip-path: polygon(0 100%, 100% 100%, 100% 100%, 0 100%); }
-        }
-
-        @keyframes sand-fill {
-            0% { clip-path: polygon(0 100%, 100% 100%, 100% 100%, 0 100%); }
-            85%, 100% { clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%); }
-        }
-
-        @keyframes sand-drip {
-            0%, 5% { opacity: 0; height: 0; }
-            10%, 80% { opacity: 1; height: 30px; }
-            85%, 100% { opacity: 0; height: 0; }
-        }
-
-        .loading-text-glow {
->>>>>>> 947f1af (update)
             margin-top: 30px;
             font-family: 'Cinzel', serif !important;
             color: var(--luxury-gold) !important;
@@ -1121,7 +867,6 @@ def get_css():
             text-transform: uppercase !important;
             text-align: center;
             animation: text-pulse-glow 2s ease-in-out infinite alternate;
-<<<<<<< HEAD
         }}
 
         @keyframes text-pulse-glow {{
@@ -1131,17 +876,6 @@ def get_css():
 
         /* 10) Persistent Top Banner */
         .persistent-top-banner {{
-=======
-        }
-
-        @keyframes text-pulse-glow {
-            from { opacity: 0.6; text-shadow: 0 0 10px rgba(212, 175, 55, 0.2); }
-            to { opacity: 1; text-shadow: 0 0 25px rgba(212, 175, 55, 0.8), 0 0 15px rgba(212, 175, 55, 0.4); }
-        }
-
-        /* 10) Persistent Top Banner */
-        .persistent-top-banner {
->>>>>>> 947f1af (update)
             position: sticky;
             top: 0;
             z-index: 1000;
@@ -1156,7 +890,6 @@ def get_css():
             justify-content: space-between;
             box-shadow: 0 10px 30px rgba(0,0,0,0.5);
             animation: banner-slide-down 0.8s cubic-bezier(0.4, 0, 0.2, 1);
-<<<<<<< HEAD
         }}
 
         .notif-bell-container {{
@@ -1216,29 +949,13 @@ def get_css():
         }}
 
         .banner-user-info {{
-=======
-        }
-
-        @keyframes banner-slide-down {
-            from { transform: translateY(-100%); opacity: 0; }
-            to { transform: translateY(0); opacity: 1; }
-        }
-
-        .banner-user-info {
->>>>>>> 947f1af (update)
             display: flex;
             flex-direction: column;
             align-items: center;
             gap: 5px;
-<<<<<<< HEAD
         }}
 
         .banner-avatar {{
-=======
-        }
-
-        .banner-avatar {
->>>>>>> 947f1af (update)
             width: 60px;
             height: 60px;
             border-radius: 50%;
@@ -1246,7 +963,6 @@ def get_css():
             object-fit: cover;
             box-shadow: 0 0 15px rgba(212, 175, 55, 0.4);
             transition: transform 0.3s ease;
-<<<<<<< HEAD
         }}
 
         .banner-avatar:hover {{
@@ -1254,22 +970,12 @@ def get_css():
         }}
 
         .banner-welcome-msg {{
-=======
-        }
-
-        .banner-avatar:hover {
-            transform: scale(1.1) rotate(5deg);
-        }
-
-        .banner-welcome-msg {
->>>>>>> 947f1af (update)
             font-family: 'Cairo', 'Tajawal', sans-serif;
             color: #FFFFFF;
             font-size: 1.1rem;
             font-weight: 600;
             text-shadow: 0 2px 4px rgba(0,0,0,0.5);
             margin: 0;
-<<<<<<< HEAD
         }}
 
         .banner-subtext {{
@@ -1286,30 +992,11 @@ def get_css():
             }}
 
             .persistent-top-banner {{
-=======
-        }
-
-        .banner-subtext {
-            font-size: 0.8rem;
-            color: rgba(212, 175, 55, 0.8);
-            margin-top: -5px;
-        }
-
-        /* 11) Mobile Responsive Overrides */
-        @media (max-width: 768px) {
-            .main .block-container {
-                padding: 1rem !important;
-                padding-top: 5rem !important; /* Space for the floating banner on mobile */
-            }
-
-            .persistent-top-banner {
->>>>>>> 947f1af (update)
                 margin: 0 !important;
                 padding: 0.8rem 1rem !important;
                 position: fixed !important; /* Fixed at top for mobile */
                 width: 100%;
                 left: 0;
-<<<<<<< HEAD
             }}
 
             .banner-welcome-msg {{ font-size: 0.95rem; }}
@@ -1318,21 +1005,10 @@ def get_css():
 
             /* Fix Sidebar Appearance on Mobile - Clean edge when closed */
             section[data-testid="stSidebar"] {{
-=======
-            }
-
-            .banner-welcome-msg { font-size: 0.95rem; }
-            .banner-subtext { font-size: 0.7rem; }
-            .banner-avatar { width: 45px; height: 45px; }
-
-            /* Fix Sidebar Appearance on Mobile - Clean edge when closed */
-            section[data-testid="stSidebar"] {
->>>>>>> 947f1af (update)
                 background-color: #080808 !important;
                 background-image: none !important;
                 z-index: 10 !important;
                 box-shadow: none !important;
-<<<<<<< HEAD
             }}
 
             /* FORCE HIDE sidebar when closed on mobile to prevent layout competition */
@@ -1357,37 +1033,10 @@ def get_css():
             button[data-testid="stSidebarCollapse"],
             button[aria-label*="sidebar"],
             .st-emotion-cache-not-found button[kind="headerNoPadding"] {{
-=======
-            }
-
-            /* FORCE HIDE sidebar when closed on mobile to prevent layout competition */
-            section[data-testid="stSidebar"][aria-expanded="false"] {
-                display: none !important;
-                visibility: hidden !important;
-                width: 0 !important;
-            }
-
-            /* Streamlit Mobile Sidebar User Content Fix */
-            div[data-testid="stSidebarUserContent"] {
-                background-color: #080808 !important;
-            }
-
-            /* 12) GLOBAL UI CLEANUP: Hide standard header junk */
-            .stAppDeployButton, #MainMenu, header[data-testid="stHeader"] a {
-                display: none !important;
-            }
-
-            /* 13) STYLED NEON WHITE SIDEBAR TOGGLE */
-            /* This target works for BOTH "Open" and "Close" states */
-            button[data-testid="stSidebarCollapse"],
-            button[aria-label*="sidebar"],
-            .st-emotion-cache-not-found button[kind="headerNoPadding"] {
->>>>>>> 947f1af (update)
                 display: flex !important;
                 visibility: visible !important;
                 position: fixed !important;
                 top: 10px !important;
-<<<<<<< HEAD
                 {toggle_side}: 15px !important;
                 {toggle_opposite}: auto !important;
                 z-index: 9999999 !important;
@@ -1411,14 +1060,18 @@ def get_css():
                 stroke-width: 0.5px;
             }}
 
-            /* Pulse animation for Neon Red effect */
+            /* Pulse animation for Neon White effect */
+            button[aria-label*="sidebar"],
+            button[data-testid="stSidebarCollapseButton"],
             button[data-testid="stSidebarCollapse"] {{
-                animation: neon-red-pulse 2s infinite alternate;
+                animation: neon-white-pulse 2s infinite alternate !important;
+                background: rgba(255, 255, 255, 0.1) !important;
+                border: 1px solid #FFFFFF !important;
             }}
 
-            @keyframes neon-red-pulse {{
-                0% {{ box-shadow: 0 0 10px #FF0000, 0 0 20px rgba(255, 0, 0, 0.4); }}
-                100% {{ box-shadow: 0 0 20px #FF0000, 0 0 40px rgba(255, 0, 0, 0.8); }}
+            @keyframes neon-white-pulse {{
+                0% {{ box-shadow: 0 0 8px #FFFFFF, 0 0 15px rgba(255, 255, 255, 0.3); }}
+                100% {{ box-shadow: 0 0 15px #FFFFFF, 0 0 30px rgba(255, 255, 255, 0.6); }}
             }}
 
             /* 14) Log Message Cards */
@@ -1533,6 +1186,15 @@ def get_css():
                 box-shadow: 0 0 15px rgba(255, 0, 0, 0.4) !important;
             }}
 
+            /* === MOBILE NEON WHITE TEXT === */
+            /* Advanced Filtering Checkboxes */
+            div[data-testid="stExpander"] div[data-testid="stCheckbox"] label p,
+            .mobile-neon-text {{
+                color: #FFFFFF !important;
+                text-shadow: 0 0 8px #ffffff, 0 0 15px #ffffff, 0 0 25px #ffffff !important;
+                font-weight: bold !important;
+            }}
+
             /* Login Input Fields Mobile Overrides (Black text on Light background) */
             div[data-testid="stForm"] div[data-baseweb="input"] {{
                 background: rgba(255, 255, 255, 0.95) !important;
@@ -1563,29 +1225,83 @@ def get_css():
             transform: scale(1.05) !important;
             box-shadow: 0 0 25px rgba(255, 255, 255, 0.6) !important;
         }}
+
+        /* 15) Worker Count 3D Badge */
+        .worker-count-container {{
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin: 15px 0;
+            gap: 12px;
+            direction: {direction};
+        }}
+        .worker-count-badge {{
+            background: linear-gradient(145deg, #1a1a1a, #0d0d0d);
+            border: 1px solid rgba(212, 175, 55, 0.3);
+            border-radius: 50px;
+            padding: 8px 18px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            box-shadow: 5px 5px 15px rgba(0,0,0,0.5), 
+                        inset 2px 2px 5px rgba(255,255,255,0.05);
+            transition: all 0.3s ease;
+        }}
+        .worker-count-badge:hover {{
+            border-color: #D4AF37;
+            box-shadow: 0 0 20px rgba(212, 175, 55, 0.3);
+            transform: translateY(-2px);
+        }}
+        .worker-count-circle {{
+            width: 38px;
+            height: 38px;
+            background: linear-gradient(135deg, #FFD700 0%, #D4AF37 100%);
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: #000;
+            font-weight: 800;
+            font-size: 1rem;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.4), 
+                        inset 0 2px 4px rgba(255,255,255,0.4);
+            border: 1px solid #B8860B;
+            text-shadow: 0 1px 1px rgba(255,255,255,0.3);
+        }}
+        .worker-count-label {{
+            color: #D4AF37;
+            font-weight: 700;
+            font-family: 'Cairo', sans-serif;
+            font-size: 0.95rem;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+        }}
     </style>
     """
 
 # --- Icon Mappings ---
 FLAG_MAP = {
     # Arabic
-    "هندي": "in", "هندية": "in", "الهند": "in",
-    "فلبيني": "ph", "فلبينية": "ph", "الفلبين": "ph",
-    "نيبالي": "np", "نيبالية": "np", "نيبال": "np",
-    "بنجلاديشي": "bd", "بنجالية": "bd", "بنجلاديش": "bd", "بنقالي": "bd",
-    "باكستاني": "pk", "باكستانية": "pk", "باكستان": "pk",
-    "مصري": "eg", "مصرية": "eg", "مصر": "eg",
-    "سوداني": "sd", "سودانية": "sd", "السودان": "sd",
-    "سيريلانكي": "lk", "سيريلانكية": "lk", "سيريلانكا": "lk",
-    "كيني": "ke", "كينية": "ke", "كينيا": "ke",
-    "اوغندي": "ug", "اوغندية": "ug", "اوغندا": "ug",
-    "اثيوبي": "et", "اثيوبية": "et", "اثيوبيا": "et",
-    "مغربي": "ma", "مغربية": "ma", "المغرب": "ma",
-    "يمني": "ye", "يمنية": "ye", "اليمن": "ye",
-    "اندونيسي": "id", "اندونيسية": "id", "اندونيسيا": "id", "اندونيسا": "id",
-    "رواندي": "rw", "رواندية": "rw", "رواندا": "rw", "روندا": "rw", "روندي": "rw", "روندية": "rw",
-    "افغاني": "af", "افغانية": "af", "افغانستان": "af", "افغان": "af",
-    "نيجيري": "ng", "نيجيرية": "ng", "نيجيريا": "ng", "نيجريا": "ng", "نيجري": "ng", "نيجرية": "ng",
+    "هندي": "in", "هنديه": "in", "الهند": "in", "هند": "in",
+    "فلبيني": "ph", "فلبينيه": "ph", "الفلبين": "ph", "فلبين": "ph",
+    "نيبالي": "np", "نيباليه": "np", "نيبال": "np",
+    "بنجلاديشي": "bd", "بنجاليه": "bd", "بنجلاديش": "bd", "بنقالي": "bd", "بنغالي": "bd", "بنغاليه": "bd",
+    "باكستاني": "pk", "باكستانيه": "pk", "باكستان": "pk",
+    "مصري": "eg", "مصريه": "eg", "مصر": "eg",
+    "سوداني": "sd", "سودانيه": "sd", "السودان": "sd",
+    "سيريلانكي": "lk", "سيريلانكيه": "lk", "سيريلانكا": "lk", "سيرلانكي": "lk", "سيرلانكيه": "lk",
+    "كيني": "ke", "كينيه": "ke", "كينيا": "ke",
+    "اوغندي": "ug", "اوغنديه": "ug", "اوغندا": "ug",
+    "اثيوبي": "et", "اثيوبيه": "et", "اثيوبيا": "et",
+    "مغربي": "ma", "مغربيه": "ma", "المغرب": "ma",
+    "يمني": "ye", "يمنيه": "ye", "اليمن": "ye",
+    "اندونيسي": "id", "اندونيسيه": "id", "اندونيسيا": "id", "اندونيسا": "id",
+    "رواندي": "rw", "روانديه": "rw", "رواندا": "rw", "روندا": "rw", "روندي": "rw", "رونديه": "rw",
+    "افغاني": "af", "افغانيه": "af", "افغانستان": "af", "افغان": "af",
+    "نيجيري": "ng", "نيجيريه": "ng", "نيجيريا": "ng", "نيجريا": "ng", "نيجري": "ng", "نيجرية": "ng",
+    "غاني": "gh", "غانيه": "gh", "غانا": "gh",
+    "فيتنام": "vn", "فيتنامي": "vn", "فيتناميه": "vn",
+    "سيراليون": "sl",
+    "بوروندي": "bi",
     # English
     "indian": "in", "filipino": "ph", "nepi": "np", "nepali": "np", "nepal": "np",
     "bangla": "bd", "bangladeshi": "bd", "pakistan": "pk", "pakistani": "pk",
@@ -1604,21 +1320,79 @@ GENDER_MAP = {
 @st.cache_data(ttl=600, show_spinner=False)
 def _get_flag_url_cached(val):
     if not val: return None
+    
+    # 1. Basic Cleaning
     s_val = str(val).strip().lower()
-    # Pre-sort keys by length descending for best match (done once at module level)
-    # For now, just use the global FLAG_MAP
+    
+    # 2. Arabic Normalization (Removal of AL and Hamzas)
+    # Remove definite article "ال"
+    if s_val.startswith("ال") and len(s_val) > 4:
+        s_val = s_val[2:]
+        
+    # Standardize Arabic characters
+    s_val = (s_val.replace("أ", "ا")
+                  .replace("إ", "ا")
+                  .replace("آ", "ا")
+                  .replace("ة", "ه")
+                  .replace("ى", "ي"))
+    
+    # 3. Match against FLAG_MAP
     for key, code in FLAG_MAP_SORTED:
-        if len(key) <= 3:
-            pattern = rf'(?:^|[\s,:;.\-/]){re.escape(key)}(?:[\s,:;.\-/]|$)'
+        # Normalize the key too for safety
+        norm_key = (key.replace("أ", "ا")
+                       .replace("إ", "ا")
+                       .replace("آ", "ا")
+                       .replace("ة", "ه")
+                       .replace("ى", "ي"))
+                       
+        if len(norm_key) <= 3:
+            # Short keys (like ISO codes if any) need strict word matching
+            pattern = rf'(?:^|[\s,:;.\-/]){re.escape(norm_key)}(?:[\s,:;.\-/]|$)'
             if re.search(pattern, s_val):
                 return f"https://flagsapi.com/{code.upper()}/flat/64.png"
         else:
-            if key in s_val:
+            # Longer names can be matched as substrings
+            if norm_key in s_val:
                 return f"https://flagsapi.com/{code.upper()}/flat/64.png"
+                
     return None
 
 # Pre-sort FLAG_MAP keys once at startup
 FLAG_MAP_SORTED = sorted(FLAG_MAP.items(), key=lambda x: len(x[0]), reverse=True)
+
+def _get_nationality_code(val):
+    if not val or pd.isna(val): return None
+    s_val = str(val).strip().lower()
+    
+    # Remove emoji flags
+    s_val = re.sub(r'[\U0001F1E6-\U0001F1FF]{2}\s*', '', s_val)
+    # Remove extra non-word chars
+    s_val = re.sub(r'[^\w\s]', ' ', s_val).strip()
+    
+    if s_val.startswith("ال") and len(s_val) > 4:
+        s_val = s_val[2:]
+        
+    s_val = (s_val.replace("أ", "ا")
+                  .replace("إ", "ا")
+                  .replace("آ", "ا")
+                  .replace("ة", "ه")
+                  .replace("ى", "ي"))
+                  
+    for key, code in FLAG_MAP_SORTED:
+        norm_key = (key.replace("أ", "ا")
+                       .replace("إ", "ا")
+                       .replace("آ", "ا")
+                       .replace("ة", "ه")
+                       .replace("ى", "ي"))
+        if len(norm_key) <= 3:
+            pattern = rf'(?:^|[\s,:;.\-/]){re.escape(norm_key)}(?:[\s,:;.\-/]|$)'
+            if re.search(pattern, s_val):
+                return code.lower()
+        else:
+            if norm_key in s_val:
+                return code.lower()
+    return None
+
 
 def style_df(df):
     """
@@ -1677,13 +1451,20 @@ def style_df(df):
     # 3. Apply Dynamic Styling (Optimized Styler)
     def apply_colors(val):
         s_val = str(val).lower()
-        if '🚹' in s_val or 'ذكر' in s_val or 'male' in s_val:
-            return "color: #3498db; font-weight: bold;" 
         if '🚺' in s_val or 'أنثى' in s_val or 'female' in s_val:
             return "color: #e91e63; font-weight: bold;"
+        if '🚹' in s_val or 'ذكر' in s_val or 'male' in s_val:
+            return "color: #3498db; font-weight: bold;" 
         return "color: #4CAF50;"
 
-    return styled_df.style.map(
+    # 4. Final Styling and Numeric Formatting
+    # This ensures large numbers (IDs/Phones) don't use scientific notation (1.2E+10)
+    return styled_df.style.format(
+        precision=2, 
+        thousands="", 
+        na_rep="",
+        subset=[c for c in styled_df.columns if styled_df[c].dtype in ['float64', 'int64']]
+    ).map(
         apply_colors, 
         subset=[c for c in styled_df.columns if not str(c).startswith("🚩_")]
     )
@@ -1713,97 +1494,14 @@ def _parse_to_date_str_cached(val):
 def clean_date_display(df):
     """
     Finds date-like columns and formats them (Cached & Optimized).
-=======
-                left: 15px !important;
-                z-index: 9999999 !important;
-                background-color: #FFFFFF !important; /* Neon White */
-                border: 2px solid #D4AF37 !important;
-                border-radius: 50% !important;
-                box-shadow: 0 0 15px #FFFFFF, 0 0 30px rgba(212, 175, 55, 0.6) !important;
-                width: 44px !important;
-                height: 44px !important;
-                opacity: 1 !important;
-            }
-
-            /* Ensure the icon inside is Gold/Black and clearly visible */
-            button[aria-label*="sidebar"] svg,
-            button[data-testid="stSidebarCollapse"] svg {
-                fill: #1A1A1A !important;
-                color: #1A1A1A !important;
-                width: 26px !important;
-                height: 26px !important;
-                stroke: #D4AF37 !important;
-                stroke-width: 0.5px;
-            }
-
-            /* Pulse animation for Neon effect */
-            button[data-testid="stSidebarCollapse"] {
-                animation: neon-white-pulse 2s infinite alternate;
-            }
-
-            @keyframes neon-white-pulse {
-                0% { box-shadow: 0 0 10px #FFF, 0 0 20px rgba(212, 175, 55, 0.4); }
-                100% { box-shadow: 0 0 20px #FFF, 0 0 40px rgba(212, 175, 55, 0.8); }
-            }
-
-            /* 12) Hide Streamlit Form Captions (Press Enter to submit) */
-            [data-testid="stFormSubmitButton"] + div {
-                display: none !important;
-            }
-        }
-    </style>
-    """
-
-def style_df(df):
-    """
-    Applies custom styling to DataFrames.
-    - Text Color: Green (#4CAF50)
-    - Background: Transparent/Dark
-    """
-    if isinstance(df, pd.DataFrame):
-        return df.style.map(lambda _: "color: #4CAF50;")
-    return df
-
-def clean_date_display(df):
-    """
-    Finds date-like columns, parses them, and formats them to DATE ONLY (no time).
-    Ensures they are sorted if a primary date column is found.
->>>>>>> 947f1af (update)
     """
     if not isinstance(df, pd.DataFrame) or df.empty:
         return df
         
-<<<<<<< HEAD
-=======
-    import re
-    from dateutil import parser as dateutil_parser
-    
-    def _parse_to_date_str(val):
-        if val is None or str(val).strip() == '': return ""
-        try:
-            val_str = str(val).strip()
-            # Arabic to Western Numerals
-            a_to_w = str.maketrans('٠١٢٣٤٥٦٧٨٩', '0123456789')
-            val_str = val_str.translate(a_to_w)
-            # Remove Arabic AM/PM
-            clean_s = re.sub(r'[صم]', '', val_str).strip()
-            dt = dateutil_parser.parse(clean_s, dayfirst=False)
-            return dt.strftime('%Y-%m-%d')
-        except:
-            # Fallback to pandas
-            try:
-                dt = pd.to_datetime(val, errors='coerce')
-                if pd.isna(dt): return str(val)
-                return dt.strftime('%Y-%m-%d')
-            except:
-                return str(val)
-
->>>>>>> 947f1af (update)
     date_keywords = ["date", "time", "تاريخ", "طابع", "التسجيل", "expiry", "end", "متى"]
     for col in df.columns:
         col_lower = str(col).lower()
         if any(kw in col_lower for kw in date_keywords):
-<<<<<<< HEAD
             df[col] = df[col].apply(_parse_to_date_str_cached)
             
     return df
@@ -1814,18 +1512,17 @@ def render_table_translator(df, key_prefix="table"):
     """
     Renders side-by-side translation buttons (Arabic and Tagalog) above tables.
     Translates Requested Job, Other Skills, and Iqama Profession columns.
+    Also shows interactive nationality flag badges to filter the table.
     """
     if df is None or df.empty:
         return df
 
-    # Search for target columns (Arabic, Original Sheet names, and English translations)
+    # Expanded Keywords to catch all relevant columns in any language
     target_keywords = [
-        "الوظيفة المطلوبة", "Requested Job", "Job Requested", "Which job are you looking for",
-        "مهارات أخرى", "Other Skills", "What other jobs can you do",
-        "المهنة في الإقامة", "Iqama Profession", "What is the occupation listed on your Iqama",
-        "Iqama Job", "occupation listed on your Iqama",
-        "الخبرة في هذا المجال", "Experience in this field",
-        "الخبرة (أخرى)", "Experience (Other)"
+        "وظيفة", "الوظيفة", "مهنة", "المهنة", "مهارة", "مهارات", "خبرة", "الخبرة",
+        "جنسية", "الجنسية", "جنس", "الجنس", "حالة", "الحالة", "جاهز", "هروب",
+        "job", "profession", "skill", "experience", "occupation",
+        "nationality", "gender", "status", "requested", "ready", "escape", "abscond"
     ]
     cols_to_translate = [c for c in df.columns if any(kw.lower() in str(c).lower() for kw in target_keywords)]
 
@@ -1835,33 +1532,161 @@ def render_table_translator(df, key_prefix="table"):
     from src.core.translation import TranslationManager
     tm = TranslationManager()
 
+    # --- Record Count Header & Nationality Stats ---
+    lang = st.session_state.get('lang', 'ar')
+    active_code = st.session_state.get(f"selected_nat_{key_prefix}")
+
+    # --- Nationality Filter Badges ---
+    nat_col = None
+    for c in df.columns:
+        c_str = str(c).lower()
+        if "nationality" in c_str or "الجنسية" in c_str or "جنسية" in c_str:
+            nat_col = c
+            break
+
+    if nat_col is not None and not df.empty:
+        df_nat_codes = df[nat_col].apply(_get_nationality_code)
+        code_counts  = df_nat_codes.value_counts()
+        valid_items  = [(code, int(cnt)) for code, cnt in code_counts.items() if code]
+
+        if valid_items:
+            active_code = st.session_state.get(f"selected_nat_{key_prefix}")
+            n_flags   = len(valid_items)
+            has_clear = bool(active_code)
+
+            # ---- CSS for badge buttons ----
+            base_css = """
+<style>
+.nat-badge-col button {
+    background:rgba(255,255,255,0.08)!important;
+    color:#FFF!important; font-weight:800!important;
+    font-size:0.85rem!important; font-family:'Inter',sans-serif!important;
+    border-radius:10px!important;
+    border:1px solid rgba(212,175,55,0.25)!important;
+    height:36px!important; min-height:36px!important;
+    width:100%!important; cursor:pointer!important;
+    transition:all 0.2s ease!important;
+}
+.nat-badge-col button:hover {
+    border-color:#D4AF37!important;
+    background:rgba(255,255,255,0.15)!important;
+    transform:translateY(-1px)!important;
+}
+.nat-clear-col button {
+    background:rgba(255,75,75,0.12)!important;
+    color:#FF4B4B!important; font-weight:700!important;
+    font-family:'Inter',sans-serif!important;
+    border-radius:10px!important;
+    border:1px solid rgba(255,75,75,0.35)!important;
+    height:36px!important; width:100%!important; cursor:pointer!important;
+}
+"""
+            per_flag_css = ""
+            for code, cnt in valid_items:
+                flag_url = "https://flagcdn.com/w40/" + code + ".png"
+                is_sel = (active_code == code)
+                extra = (
+                    "border:2px solid #D4AF37!important;"
+                    "background-color:rgba(212,175,55,0.2)!important;"
+                    "box-shadow:0 0 12px rgba(212,175,55,0.5)!important;"
+                ) if is_sel else ""
+                per_flag_css += (
+                    ".nbtn-" + key_prefix + "-" + code + " button{"
+                    "background-image:url('" + flag_url + "')!important;"
+                    "background-size:22px!important;background-repeat:no-repeat!important;"
+                    "background-position:5px center!important;padding-left:32px!important;" + extra + "}"
+                )
+            st.markdown(base_css + per_flag_css + "</style>", unsafe_allow_html=True)
+
+            # ---- Row 1: flag images ----
+            n_cols = n_flags + (1 if has_clear else 0)
+            flag_row = st.columns(n_cols)
+            for i, (code, cnt) in enumerate(valid_items):
+                with flag_row[i]:
+                    furl = "https://flagcdn.com/w40/" + code + ".png"
+                    st.markdown(
+                        '<div style="text-align:center;margin-bottom:2px;">'
+                        '<img src="' + furl + '" style="height:22px;border-radius:3px;'
+                        'box-shadow:0 1px 4px rgba(0,0,0,0.5);" /></div>',
+                        unsafe_allow_html=True)
+
+            # ---- Row 2: count buttons ----
+            btn_row = st.columns(n_cols)
+            for i, (code, cnt) in enumerate(valid_items):
+                with btn_row[i]:
+                    is_sel = (active_code == code)
+                    div_cls = "nat-badge-col nbtn-" + key_prefix + "-" + code
+                    st.markdown('<div class="' + div_cls + '">', unsafe_allow_html=True)
+                    if st.button(str(cnt), key="nbtn_" + key_prefix + "_" + code):
+                        st.session_state["selected_nat_" + key_prefix] = None if is_sel else code
+                        st.rerun()
+                    st.markdown('</div>', unsafe_allow_html=True)
+
+            if has_clear:
+                with btn_row[-1]:
+                    clear_lbl = "❌ الكل" if lang == 'ar' else "❌ All"
+                    st.markdown('<div class="nat-clear-col">', unsafe_allow_html=True)
+                    if st.button(clear_lbl, key="nbtn_" + key_prefix + "___clear__"):
+                        st.session_state["selected_nat_" + key_prefix] = None
+                        st.rerun()
+                    st.markdown('</div>', unsafe_allow_html=True)
+
+        # Apply filtering to the dataframe
+        if active_code:
+            df = df[df_nat_codes == active_code]
+
+    # Render total count banner
+    count = len(df)
+    count_label = "عدد العمال" if lang == 'ar' else "Total Workers"
+    st.markdown(f"""<div style="margin-bottom: 20px; padding: 15px; background: linear-gradient(135deg, rgba(20, 20, 20, 0.95) 0%, rgba(30, 30, 30, 0.8) 100%); border-radius: 20px; border: 1.5px solid rgba(212, 175, 55, 0.3); box-shadow: 0 8px 25px rgba(0,0,0,0.5); text-align: center;">
+    <div style="display: flex; justify-content: center; align-items: center; gap: 15px;">
+        <div style="color: #D4AF37; font-weight: 800; font-family: 'Cairo', sans-serif; font-size: 1.2rem; display: flex; align-items: center; gap: 10px;">
+            ✦ {count_label}
+        </div>
+        <div style="background: linear-gradient(135deg, #D4AF37, #8B7520); color: #000; width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 1.2rem; box-shadow: 0 0 15px rgba(212,175,55,0.6);">
+            {count}
+        </div>
+    </div>
+</div>""", unsafe_allow_html=True)
+
     st.markdown('<div class="table-translator-container">', unsafe_allow_html=True)
     ct1, ct2 = st.columns(2)
+    t_state_key = f"table_trans_{key_prefix}"
     
     with ct1:
         st.markdown('<div class="table-translator-btn">', unsafe_allow_html=True)
-        if st.button("🇸🇦 الترجمة للعربية", key=f"btn_ar_{key_prefix}", use_container_width=True):
-            with st.spinner("جارِ الترجمة للعربية..."):
-                for col in cols_to_translate:
-                    unique_vals = [v for v in df[col].unique() if v and isinstance(v, str)]
-                    if unique_vals:
-                        translations = {val: tm.translate_full_text(val, target_lang='ar') for val in unique_vals}
-                        df[col] = df[col].map(translations).fillna(df[col])
-                st.success("✅ تم")
+        if st.button("🇸🇦 الترجمة للعربية", key=f"btn_ar_{key_prefix}", width='stretch'):
+            if st.session_state.get(t_state_key) == "ar":
+                st.session_state[t_state_key] = None
+            else:
+                st.session_state[t_state_key] = "ar"
         st.markdown('</div>', unsafe_allow_html=True)
 
     with ct2:
         st.markdown('<div class="table-translator-btn">', unsafe_allow_html=True)
-        if st.button("🇵🇭 Isalin sa Tagalog", key=f"btn_tl_{key_prefix}", use_container_width=True):
-            with st.spinner("Isinasalin sa Tagalog..."):
-                for col in cols_to_translate:
-                    unique_vals = [v for v in df[col].unique() if v and isinstance(v, str)]
-                    if unique_vals:
-                        translations = {val: tm.translate_full_text(val, target_lang='tl') for val in unique_vals}
-                        df[col] = df[col].map(translations).fillna(df[col])
-                st.success("✅ Tapos na")
+        if st.button("🇵🇭 ISALIN SA TAGALOG", key=f"btn_tl_{key_prefix}", width='stretch'):
+            if st.session_state.get(t_state_key) == "tl":
+                st.session_state[t_state_key] = None
+            else:
+                st.session_state[t_state_key] = "tl"
         st.markdown('</div>', unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)
+    
+    target_lang = st.session_state.get(t_state_key)
+    if target_lang in ['ar', 'tl']:
+        spinner_msg = "جارِ الترجمة..." if target_lang == 'ar' else "Isinasalin sa Tagalog..."
+        with st.spinner(spinner_msg):
+            for col in cols_to_translate:
+                unique_vals = [v for v in df[col].unique() if v and isinstance(v, str) and len(str(v).strip()) > 0]
+                if unique_vals:
+                    translations = {val: tm.translate_full_text(val, target_lang=target_lang) for val in unique_vals}
+                    df[col] = df[col].map(translations).fillna(df[col])
+            
+            # Show toast only upon completion to confirm it worked
+            if 'last_trans_msg' not in st.session_state or st.session_state.last_trans_msg != f"{key_prefix}_{target_lang}":
+                msg = "✅ تمت الترجمة!" if target_lang == 'ar' else "✅ Tapos na ang pagsasalin!"
+                st.toast(msg)
+                st.session_state.last_trans_msg = f"{key_prefix}_{target_lang}"
     
     return df
 
@@ -1987,64 +1812,6 @@ def show_toast(message, typ="success", duration=5, container=None):
     else:
         st.markdown(toast_html, unsafe_allow_html=True)
 
-=======
-            df[col] = df[col].apply(_parse_to_date_str)
-            
-    return df
-
-# 2.4 Global Toast / Overlay Notification Helper
-def show_toast(message, typ="success", duration=4):
-    """
-    Shows a floating, fixed-position toast notification overlay.
-    typ: 'success', 'error', 'info', 'warning'
-    """
-    colors = {
-        "success": {"bg": "rgba(0,120,60,0.92)", "border": "#00e676", "icon": "✅"},
-        "error":   {"bg": "rgba(140,0,0,0.92)",  "border": "#ff1744", "icon": "❌"},
-        "warning": {"bg": "rgba(140,90,0,0.92)", "border": "#D4AF37", "icon": "⚠️"},
-        "info":    {"bg": "rgba(0,60,120,0.92)", "border": "#40c4ff", "icon": "ℹ️"},
-    }
-    c = colors.get(typ, colors["info"])
-    toast_html = f"""
-    <style>
-    @keyframes toastIn {{
-        0%  {{ opacity:0; transform: translateY(-30px) scale(0.95); }}
-        15% {{ opacity:1; transform: translateY(0)    scale(1);    }}
-        85% {{ opacity:1; transform: translateY(0)    scale(1);    }}
-        100%{{ opacity:0; transform: translateY(-20px) scale(0.95); }}
-    }}
-    #toast-overlay-msg {{
-        position: fixed;
-        top: 28px;
-        left: 50%;
-        transform: translateX(-50%);
-        z-index: 99999999;
-        background: {c["bg"]};
-        border: 1.5px solid {c["border"]};
-        border-radius: 14px;
-        padding: 16px 36px;
-        font-family: 'Cairo', sans-serif;
-        font-size: 17px;
-        color: #fff;
-        box-shadow: 0 8px 40px rgba(0,0,0,0.55), 0 0 20px {c["border"]}44;
-        backdrop-filter: blur(8px);
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        pointer-events: none;
-        animation: toastIn {duration}s ease forwards;
-        min-width: 220px;
-        text-align: center;
-        justify-content: center;
-    }}
-    </style>
-    <div id="toast-overlay-msg">
-        <span style="font-size:22px">{c["icon"]}</span>
-        <span>{message}</span>
-    </div>
-    """
-    st.markdown(toast_html, unsafe_allow_html=True)
->>>>>>> 947f1af (update)
 
 # 2.5 Hourglass Loader Helper
 def show_loading_hourglass(text=None, container=None):
@@ -2067,11 +1834,7 @@ def show_loading_hourglass(text=None, container=None):
                 flex-direction: column;
                 align-items: center;
                 justify-content: center;
-<<<<<<< HEAD
                 pointer-events: none;
-=======
-                pointer-events: all;
->>>>>>> 947f1af (update)
             ">
                 <svg class="modern-hourglass-svg" viewBox="0 0 100 100" style="
                     width: 100px; height: 100px;
@@ -2126,35 +1889,18 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-<<<<<<< HEAD
 # 5. Global Initialization Logic moved below for dynamic CSS
 
-# 6. Initialize Core (With Force Re-init for Updates)
-if 'auth' not in st.session_state or not hasattr(st.session_state.auth, 'v10_marker'):
+# 6. Initialize Core Components (Consolidated)
+if 'auth' not in st.session_state:
     st.session_state.auth = AuthManager(USERS_FILE)
     st.session_state.auth.v10_marker = True 
+if 'db' not in st.session_state or not hasattr(st.session_state.db, 'fetch_customer_requests'):
     st.session_state.db = DBClient() 
-=======
-# 5. Apply Styles
-st.markdown(get_css(), unsafe_allow_html=True)
-
-# 6. Initialize Core (With Force Re-init for Updates)
-if 'auth' not in st.session_state or not hasattr(st.session_state.auth, 'v10_marker'):
-    # Show a brief initial loader for a premium feel
-    loading = show_loading_hourglass()
-    time.sleep(0.4)
-    st.session_state.auth = AuthManager(USERS_FILE)
-    st.session_state.auth.v10_marker = True # Marker with get_avatar/update_avatar support
-    st.session_state.db = DBClient() # Force DB re-init as well
-    loading.empty()
->>>>>>> 947f1af (update)
 
 # Report DB Load Errors to User
 if hasattr(st.session_state.auth, 'load_error'):
     st.error(f"⚠️ Error Loading User Database: {st.session_state.auth.load_error}")
-
-if 'db' not in st.session_state or not hasattr(st.session_state.db, 'fetch_customer_requests'):
-    st.session_state.db = DBClient()
 
 # Initialize TranslationManager if not already in session state
 if 'tm' not in st.session_state:
@@ -2169,7 +1915,6 @@ if 'tm' not in st.session_state:
 if 'user' not in st.session_state:
     st.session_state.user = None
 if 'lang' not in st.session_state:
-<<<<<<< HEAD
     st.session_state.lang = 'ar'
 if 'last_login_time' not in st.session_state:
     st.session_state.last_login_time = 0
@@ -2178,9 +1923,6 @@ if 'notifications' not in st.session_state:
 
 # 5. Apply Dynamic Styles Based on Language
 st.markdown(get_css(st.session_state.lang), unsafe_allow_html=True)
-=======
-    st.session_state.lang = 'ar' 
->>>>>>> 947f1af (update)
 
 # 8. Constants
 IMG_PATH = os.path.join(ASSETS_DIR, "alsaeed.jpg")
@@ -2207,7 +1949,6 @@ def render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search", 
             worker_name = worker_row[nk]
             break
             
-<<<<<<< HEAD
     # NEW: Calculate a unique ID for this worker to isolate translation state
     worker_id = worker_uid
     if not worker_id:
@@ -2219,8 +1960,6 @@ def render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search", 
             w_name_fallback = str(worker_row.get("Full Name:", worker_row.get("الاسم الكامل", worker_name)))
             worker_id = hashlib.md5(w_name_fallback.encode()).hexdigest()[:10]
 
-=======
->>>>>>> 947f1af (update)
     # Dynamically find CV column
     cv_col = None
     for c in worker_row.index:
@@ -2232,14 +1971,9 @@ def render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search", 
     
     # --- AUTO SCROLL LOGIC ---
     scroll_key = f"last_scroll_{key_prefix}"
-<<<<<<< HEAD
     if scroll_key not in st.session_state or st.session_state[scroll_key] != worker_id:
         st.session_state[scroll_key] = worker_id
-=======
-    if scroll_key not in st.session_state or st.session_state[scroll_key] != selected_idx:
-        st.session_state[scroll_key] = selected_idx
->>>>>>> 947f1af (update)
-        st.components.v1.html(
+        st.html(
             f"""
             <script>
                 setTimeout(function() {{
@@ -2247,8 +1981,7 @@ def render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search", 
                     if (el) el.scrollIntoView({{behavior: 'smooth'}});
                 }}, 300);
             </script>
-            """,
-            height=0
+            """
         )
 
     # --- PROFESSIONAL PROFILE CARD (2026 LUXURY) ---
@@ -2268,17 +2001,12 @@ def render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search", 
                    letter-spacing: 2px;
                    text-transform: uppercase;
                    font-size: 1.8rem;">
-<<<<<<< HEAD
             👤 {worker_name}
-=======
-            \U0001F464 {worker_name}
->>>>>>> 947f1af (update)
         </h2>
     </div>
     """, unsafe_allow_html=True)
     
     col_a, col_b = st.columns([1, 1])
-<<<<<<< HEAD
     
     # === Professional Summary Modal & Button === #
     @st.dialog("الملخص الاحترافي للعامل" if lang == "ar" else "Professional Worker Summary")
@@ -2489,7 +2217,7 @@ def render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search", 
         st.code(summary, language="markdown")
         st.markdown("</div>", unsafe_allow_html=True)
         
-    if st.button("✨ " + ("إنشاء ملخص العامل" if lang == 'ar' else "Create Worker Summary"), use_container_width=True, key=f"btn_summary_mk_{key_prefix}_{worker_id}"):
+    if st.button("✨ " + ("إنشاء ملخص العامل" if lang == 'ar' else "Create Worker Summary"), width='stretch', key=f"btn_summary_mk_{key_prefix}_{worker_id}"):
         show_worker_summary_modal()
 
     translate_configs = [
@@ -2499,7 +2227,7 @@ def render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search", 
 
     for idx, config in enumerate(translate_configs):
         with col_a if idx == 0 else col_b:
-            if st.button(config["label"], use_container_width=True, type="primary" if idx == 0 else "secondary", key=f"btn_trans_{key_prefix}_{worker_id}_{config['key_suffix']}"):
+            if st.button(config["label"], width='stretch', type="primary" if idx == 0 else "secondary", key=f"btn_trans_{key_prefix}_{worker_id}_{config['key_suffix']}"):
                 if cv_url and str(cv_url).startswith("http"):
                     from src.core.file_translator import FileTranslator
                     
@@ -2560,89 +2288,6 @@ def render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search", 
                     except Exception as e: st.error(f"Error: {str(e)}")
                     finally: trans_loader.empty()
                 else: st.warning("رابط السيرة الذاتية غير موجود أو غير صالح.")
-=======
-    with col_a:
-        if st.button(f"✨ {t('translate_cv_btn', lang)}", use_container_width=True, type="primary", key=f"btn_trans_{key_prefix}_{selected_idx}"):
-            if cv_url and str(cv_url).startswith("http"):
-                from src.core.file_translator import FileTranslator
-                
-                trans_loader = show_loading_hourglass(t("extracting", lang))
-                try:
-                    import requests
-                    file_id = None
-                    if "drive.google.com" in cv_url:
-                        if "id=" in cv_url: file_id = cv_url.split("id=")[1].split("&")[0]
-                        elif "/d/" in cv_url: file_id = cv_url.split("/d/")[1].split("/")[0]
-
-                    # 1. Download full content
-                    session = requests.Session()
-                    session.headers.update({"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"})
-                    
-                    if file_id:
-                        dl_url = f"https://docs.google.com/uc?export=download&id={file_id}"
-                        resp = session.get(dl_url, stream=True, timeout=15)
-                        
-                        # Handle Drive Virus Warning
-                        token = None
-                        for k, v in resp.cookies.items():
-                            if k.startswith('download_warning'): token = v; break
-                        if token:
-                            dl_url = f"https://docs.google.com/uc?export=download&confirm={token}&id={file_id}"
-                            resp = session.get(dl_url, stream=True, timeout=15)
-                        
-                        if resp.status_code >= 500:
-                            resp = requests.get(cv_url, timeout=15)
-                    else:
-                        resp = requests.get(cv_url, timeout=15)
-                    
-                    if resp.status_code == 200:
-                        content = resp.content
-                        
-                        # 2. Determine file type from content or header
-                        # Try to get extension from 'Content-Disposition' or original text
-                        content_type = resp.headers.get('Content-Type', '').lower()
-                        filename_from_header = ""
-                        cd = resp.headers.get('Content-Disposition', '')
-                        if 'filename=' in cd:
-                            filename_from_header = cd.split('filename=')[1].strip('"')
-                        
-                        # Fallback extension detection
-                        ext = ".pdf" # Default
-                        if "word" in content_type or filename_from_header.endswith(".docx"): ext = ".docx"
-                        elif "image" in content_type: 
-                            if "png" in content_type: ext = ".png"
-                            else: ext = ".jpg"
-                        elif filename_from_header.endswith(".bdf"): ext = ".bdf"
-                        elif content.startswith(b"%PDF"): ext = ".pdf"
-                        elif content.startswith(b"PK\x03\x04"): ext = ".docx" # Zip/Docx signature
-                        
-                        # 3. Translate using the new Engine
-                        ft = FileTranslator(source_lang="auto", target_lang="ar")
-                        
-                        # Mock a filename if not found
-                        virtual_filename = filename_from_header if filename_from_header else f"file{ext}"
-                        
-                        result = ft.translate(content, virtual_filename)
-                        
-                        if result.get("success"):
-                            st.session_state[f"trans_{key_prefix}_{selected_idx}"] = {
-                                "orig": result.get("original_text", ""), 
-                                "trans": result.get("translated_text", ""),
-                                "output": result.get("output_bytes"),
-                                "out_filename": result.get("output_filename")
-                            }
-                            st.rerun()
-                        else:
-                            st.error(f"❌ {result.get('error', 'Unknown Error')}")
-                    else:
-                        st.error(f"خطأ في الوصول للملف: (HTTP {resp.status_code}). جرب فتح الرابط يدوياً.")
-                except Exception as e: 
-                    st.error(f"Error Processing File: {str(e)}")
-                finally:
-                    trans_loader.empty()
-            else: 
-                st.warning("رابط السيرة الذاتية غير موجود أو غير صالح.")
->>>>>>> 947f1af (update)
 
     # Permanent Deletion with Confirmation
     sheet_row = worker_row.get('__sheet_row')
@@ -2662,11 +2307,7 @@ def render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search", 
         # For Order Processing: Replace Delete with Hide
         if worker_uid:
             if st.button("🚫 " + ("إخفاء هذا العامل" if lang == 'ar' else "Hide this worker"), 
-<<<<<<< HEAD
-                         use_container_width=True, key=f"hide_worker_{key_prefix}_{worker_id}"):
-=======
-                         use_container_width=True, key=f"hide_worker_{key_prefix}_{selected_idx}"):
->>>>>>> 947f1af (update)
+                         width='stretch', key=f"hide_worker_{key_prefix}_{worker_id}"):
                 st.session_state.op_hidden_workers.add(worker_uid)
                 st.rerun()
         else:
@@ -2674,13 +2315,9 @@ def render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search", 
     else:
         # Original Deletion Logic for Search/Contract Board
         if sheet_row:
-            with st.popover(f"🗑️ {t('delete_btn', lang)}", use_container_width=True):
+            with st.popover(f"🗑️ {t('delete_btn', lang)}", width='stretch'):
                 st.warning(t("confirm_delete_msg", lang))
-<<<<<<< HEAD
-                if st.button(t("confirm_btn", lang), type="primary", use_container_width=True, key=f"del_confirm_{key_prefix}_{worker_id}"):
-=======
-                if st.button(t("confirm_btn", lang), type="primary", use_container_width=True, key=f"del_confirm_{key_prefix}_{selected_idx}"):
->>>>>>> 947f1af (update)
+                if st.button(t("confirm_btn", lang), type="primary", width='stretch', key=f"del_confirm_{key_prefix}_{worker_id}"):
                     with st.spinner("⏳ جارٍ الحذف النهائي..."):
                         success = st.session_state.db.delete_row(sheet_row)
                         if success == True:
@@ -2695,23 +2332,15 @@ def render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search", 
             st.error(f"⚠️ {t('delete_error', lang)} (ID Missing)")
             c1, c2 = st.columns(2)
             with c1:
-<<<<<<< HEAD
-                if st.button(t("fix_ids", lang), key=f"fix_id_{key_prefix}_{worker_id}", use_container_width=True):
+                if st.button(t("fix_ids", lang), key=f"fix_id_{key_prefix}_{worker_id}", width='stretch'):
                     st.session_state.db.fetch_data(force=True); st.rerun()
             with c2:
-                if st.button(t("deep_reset", lang), key=f"reset_all_{key_prefix}_{worker_id}", use_container_width=True):
-=======
-                if st.button(t("fix_ids", lang), key=f"fix_id_{key_prefix}_{selected_idx}", use_container_width=True):
-                    st.session_state.db.fetch_data(force=True); st.rerun()
-            with c2:
-                if st.button(t("deep_reset", lang), key=f"reset_all_{key_prefix}_{selected_idx}", use_container_width=True):
->>>>>>> 947f1af (update)
+                if st.button(t("deep_reset", lang), key=f"reset_all_{key_prefix}_{worker_id}", width='stretch'):
                     # Clear all tab data and cache
                     for k in list(st.session_state.keys()):
                         if k.startswith("dash_table_") or k.startswith("last_scroll_"): del st.session_state[k]
                     st.session_state.db.fetch_data(force=True); st.rerun()
 
-<<<<<<< HEAD
     display_langs = ["ar", "tl"]
     for d_lang in display_langs:
         trans_key = f"trans_{key_prefix}_{worker_id}_{d_lang}"
@@ -2734,7 +2363,7 @@ def render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search", 
                         data=t_data["output"],
                         file_name=t_data.get("out_filename", f"translated_{d_lang}"),
                         mime="application/octet-stream",
-                        use_container_width=True,
+                        width='stretch',
                         key=f"dl_trans_file_{key_prefix}_{worker_id}_{d_lang}"
                     )
     
@@ -2761,7 +2390,7 @@ def render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search", 
 
 def login_screen():
     # Request browser notification permission early
-    st.components.v1.html("""
+    st.html("""
 <script>
 // Request notification permission on page load
 if ('Notification' in window && Notification.permission === 'default') {
@@ -2770,7 +2399,7 @@ if ('Notification' in window && Notification.permission === 'default') {
     });
 }
 </script>
-""", height=0)
+""")
 
     lang = st.session_state.lang
     
@@ -2778,58 +2407,13 @@ if ('Notification' in window && Notification.permission === 'default') {
     sa_icon = '<img src="https://flagcdn.com/w40/sa.png" style="width:24px; vertical-align:middle; border-radius:3px; margin:0 4px; box-shadow:0 0 8px rgba(0,0,0,0.4);">'
     ph_icon = '<img src="https://flagcdn.com/w40/ph.png" style="width:24px; vertical-align:middle; border-radius:3px; margin:0 4px; box-shadow:0 0 8px rgba(0,0,0,0.4);">'
     
-=======
-    trans_key = f"trans_{key_prefix}_{selected_idx}"
-    if trans_key in st.session_state:
-        t_data = st.session_state[trans_key]
-        c1, c2 = st.columns(2)
-        with c1:
-            st.caption("English (Original)")
-            st.text_area("Orig", t_data["orig"], height=300, key=f"orig_area_{key_prefix}_{selected_idx}")
-        with c2:
-            st.caption("العربية (المترجمة)")
-            st.text_area("Trans", t_data["trans"], height=300, key=f"trans_area_{key_prefix}_{selected_idx}")
-        
-        # Download Button for the Translated File itself
-        if t_data.get("output"):
-            st.download_button(
-                f"⬇️ {t('download_trans', lang)}",
-                data=t_data["output"],
-                file_name=t_data.get("out_filename", "translated_file"),
-                mime="application/octet-stream",
-                use_container_width=True,
-                key=f"dl_trans_file_{key_prefix}_{selected_idx}"
-            )
-    
-    st.markdown(f"#### 🔎 {t('preview_cv', lang)}")
-    if cv_url and str(cv_url).startswith("http"):
-        preview_url = cv_url
-        if "drive.google.com" in cv_url:
-            f_id = None
-            if "id=" in cv_url: f_id = cv_url.split("id=")[1].split("&")[0]
-            elif "/d/" in cv_url: f_id = cv_url.split("/d/")[1].split("/")[0]
-            if f_id: preview_url = f"https://drive.google.com/file/d/{f_id}/preview"
-        st.components.v1.iframe(preview_url, height=600, scrolling=True)
-    else: st.info("لا يتوفر رابط معاينة لهذا العامل.")
-
-# 11. Logic Functions
-def login_screen():
-    lang = st.session_state.lang
-    
-    # 2026 Luxury Flag Icons (Ensures consistent rendering on Windows)
-    sa_icon = '<img src="https://flagcdn.com/w40/sa.png" style="width:24px; vertical-align:middle; border-radius:3px; margin:0 4px; box-shadow:0 0 8px rgba(0,0,0,0.4);">'
-    ph_icon = '<img src="https://flagcdn.com/w40/ph.png" style="width:24px; vertical-align:middle; border-radius:3px; margin:0 4px; box-shadow:0 0 8px rgba(0,0,0,0.4);">'
-    
-    # Define Bilingual Titles with Flag Icons
->>>>>>> 947f1af (update)
     if lang == "ar":
         title_text = f'برنامج توريد العمالة الفلبينية {ph_icon} {sa_icon}'
     else:
         title_text = f'Philippines Recruitment Program {ph_icon} {sa_icon}'
     
-<<<<<<< HEAD
     # Absolute Top Main Title
-    st.markdown(f'<div class="luxury-main-title">{title_text}</div>', unsafe_allow_html=True)
+    st.markdown(f'<div id="login-container-wrapper"><div class="luxury-main-title">{title_text}</div>', unsafe_allow_html=True)
     
     def render_login_box(suffix):
         saved = load_saved_credentials()
@@ -2855,46 +2439,10 @@ def login_screen():
             persist_txt = "هل تريد حفظ الدخول" if lang == 'ar' else "Do you want to stay logged in?"
             st.checkbox(persist_txt, value=(True if saved else False), key=f"persist_{suffix}")
             
-=======
-    col1, col2, col3 = st.columns([1.5, 2.2, 1.5]) 
-    with col2:
-        # 1. Giant Luxury Title at Absolute Top
-        st.markdown(f'<div class="luxury-main-title">{title_text}</div>', unsafe_allow_html=True)
-        
-        st.markdown('<div class="login-screen-wrapper" style="margin-top: -20px !important;">', unsafe_allow_html=True)
-        
-        with st.form("login"):
-            # 2. Horizontal Profile + Welcome Message Row
-            ic1, ic2 = st.columns([1.2, 3]) # Adjust alignment for better proportion
-            
-            with ic1: # The Branding Column (Image -> EN/AR Name)
-                if os.path.exists(IMG_PATH):
-                    b64 = get_base64_image(IMG_PATH)
-                    st.markdown(f'<img src="data:image/jpeg;base64,{b64}" class="profile-img-circular">', unsafe_allow_html=True)
-                
-                st.markdown('<div style="margin-top: 10px;"></div>', unsafe_allow_html=True)
-                if lang == "ar":
-                    st.markdown('<div class="signature-under-img">Alsaeed Alwazzan</div>', unsafe_allow_html=True)
-                    st.markdown('<div class="signature-under-img" style="font-family:\'Cairo\', sans-serif; font-size: 0.8rem; margin-top: 2px;">برمجة السعيد الوزان</div>', unsafe_allow_html=True)
-                else:
-                    st.markdown('<div class="signature-under-img">Alsaeed Alwazzan</div>', unsafe_allow_html=True)
-                    st.markdown('<div class="signature-under-img" style="font-size: 0.75rem; color:#888;">Lead Programmer</div>', unsafe_allow_html=True)
-
-            with ic2: # The Welcome text & Username Field
-                welcome_text = t('welcome_back', lang)
-                st.markdown(f"<h3 style='margin:5px 0 10px 0; font-family:\"Cairo\", sans-serif; font-size: 1.1rem; text-align:right; color:#D4AF37;'>{welcome_text}</h3>", unsafe_allow_html=True)
-                u = st.text_input(t("username", lang), label_visibility="collapsed", placeholder=t("username", lang))
-
-            # 3. Password Field
-            p = st.text_input(t("password", lang), type="password", label_visibility="collapsed", placeholder=t("password", lang))
-            
-            # 4. Buttons (Login and Language)
->>>>>>> 947f1af (update)
-            submit = st.form_submit_button(t("login_btn", lang), use_container_width=True)
-            lang_toggle = st.form_submit_button("En" if lang == "ar" else "عربي", use_container_width=True)
+            submit = st.form_submit_button(t("login_btn", lang), width='stretch')
+            lang_toggle = st.form_submit_button("En" if lang == "ar" else "عربي", width='stretch')
 
             if submit:
-<<<<<<< HEAD
                 if not u or not p:
                     st.error(t("invalid_creds", lang))
                 else:
@@ -2917,31 +2465,16 @@ def login_screen():
                         st.rerun()
                     else:
                         st.error(t("invalid_creds", lang))
-=======
-                login_loader = show_loading_hourglass()
-                p_norm = p.strip()
-                user = st.session_state.auth.authenticate(u, p_norm)
-                login_loader.empty()
-                if user:
-                    # Save the CANONICAL lowercase username to session state
-                    # This prevents case-sensitivity bugs on mobile avatar sync
-                    user['username'] = u.lower().strip()
-                    st.session_state.user = user
-                    st.session_state.show_welcome = True
-                    st.rerun()
-                else:
-                    st.error(t("invalid_creds", lang))
->>>>>>> 947f1af (update)
 
             if lang_toggle:
                 toggle_lang()
                 st.rerun()
-<<<<<<< HEAD
 
     # Layout with columns to center the single form
     col1, col2, col3 = st.columns([0.5, 2, 0.5]) 
     with col2:
         render_login_box("main")
+    st.markdown('</div>', unsafe_allow_html=True)
         
 
 @st.fragment(run_every="20s")
@@ -2949,10 +2482,93 @@ def silent_notification_monitor():
     """
     MODERN BACKGROUND MONITOR:
     Runs every 20 seconds in a fragment context.
-    Immediately checks for notifications on Streamlit Cloud.
+    Immediately checks for notifications and triggers audio alerts.
     """
-    if st.session_state.get('user'):
-        check_notifications()
+    if not st.session_state.get('user'):
+        return
+
+    # Prime audio engine on first run
+    if not st.session_state.get('audio_primed'):
+        st.components.v1.html("""
+<script>
+document.addEventListener('click', function() {
+    var AudioContext = window.AudioContext || window.webkitAudioContext;
+    if (!window._audioCtx) window._audioCtx = new AudioContext();
+    if (window._audioCtx.state === 'suspended') window._audioCtx.resume();
+    console.log('Audio Context Primed');
+}, { once: true });
+</script>
+""", height=0)
+        st.session_state.audio_primed = True
+
+    # 1. Run the check
+    check_notifications()
+    
+    # 2. Trigger Immediate Audio/Push if needed (Inside the fragment for zero-latency)
+    if st.session_state.get('notif_triggered'):
+        notifs = st.session_state.get('notifications', [])
+        notif_count = len(notifs)
+        st.components.v1.html(f"""
+<script>
+(async function(){{
+    try {{
+        var AudioContext = window.AudioContext || window.webkitAudioContext;
+        if (!window._audioCtx) window._audioCtx = new AudioContext();
+        var ctx = window._audioCtx;
+        if (ctx.state === 'suspended') await ctx.resume();
+        
+        function playTone(freq, type, startTime, dur, vol) {{
+            var osc = ctx.createOscillator(); var gain = ctx.createGain();
+            osc.connect(gain); gain.connect(ctx.destination);
+            osc.type = type; osc.frequency.setValueAtTime(freq, ctx.currentTime + startTime);
+            gain.gain.setValueAtTime(vol, ctx.currentTime + startTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + startTime + dur);
+            osc.start(ctx.currentTime + startTime); osc.stop(ctx.currentTime + startTime + dur);
+        }}
+        playTone(523.25, 'sine', 0.0, 1.0, 0.5); 
+        playTone(783.99, 'sine', 0.1, 0.8, 0.4); 
+        playTone(1046.50, 'sine', 0.2, 0.6, 0.3);
+    }} catch(e) {{ console.error('Notif audio failed:', e); }}
+    
+    if ('Notification' in window && Notification.permission === 'granted') {{
+        new Notification('نظام السعيد - إشعار جديد', {{
+            body: 'لديك {notif_count} إشعارات جديدة',
+            icon: '🔔',
+            tag: 'alsaeed-notif',
+            requireInteraction: true
+        }});
+    }}
+}})();
+</script>
+""", height=0)
+        st.session_state.notif_triggered = False
+
+    # 3. Sound Test Diagnostic
+    if st.session_state.get('test_sound'):
+        st.toast("🔔 Testing Notification Sound...")
+        st.components.v1.html("""
+<script>
+(async function(){
+    try {
+        var AudioContext = window.AudioContext || window.webkitAudioContext;
+        if (!window._audioCtx) window._audioCtx = new AudioContext();
+        var ctx = window._audioCtx;
+        if (ctx.state === 'suspended') await ctx.resume();
+        function playBell(f, s, d, v) {
+            var o = ctx.createOscillator(); var g = ctx.createGain();
+            o.connect(g); g.connect(ctx.destination);
+            o.type = 'sine'; o.frequency.setValueAtTime(f, ctx.currentTime + s);
+            g.gain.setValueAtTime(v, ctx.currentTime + s);
+            g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + s + d);
+            o.start(ctx.currentTime + s); o.stop(ctx.currentTime + s + d);
+        }
+        playBell(880, 0, 1.2, 0.4); 
+        playBell(1318.51, 0.1, 1.0, 0.3);
+    } catch(e) { console.error('Test audio failed:', e); }
+})();
+</script>
+""", height=0)
+        st.session_state.test_sound = False
 
 def check_notifications():
     """Checks for new worker entries or customer requests directly from Google Sheets."""
@@ -3149,82 +2765,16 @@ def check_notifications():
 
     except Exception as e:
         print(f"[ERROR] Notification check failed: {e}")
-=======
-        
-        st.markdown('</div>', unsafe_allow_html=True)
->>>>>>> 947f1af (update)
 
 def render_top_banner():
     """renders a persistent top banner with user image and welcome message."""
     user = st.session_state.user
     lang = st.session_state.lang
-<<<<<<< HEAD
     notifs = st.session_state.get('notifications', [])
     notif_count = len(notifs)
 
-    # 1. Global Audio Alert + Browser Push Notification
-    if st.session_state.get('notif_triggered'):
-        notif_count = len([n for n in st.session_state.get('notifications', [])])
-        st.components.v1.html(f"""
-<script>
-(async function(){{
-    // 1. Audio Alert
-    try {{
-        var AudioContext = window.AudioContext || window.webkitAudioContext;
-        var ctx = new AudioContext();
-        if (ctx.state === 'suspended') await ctx.resume();
-        
-        function playTone(freq, type, startTime, dur, vol) {{
-            var osc = ctx.createOscillator(); var gain = ctx.createGain();
-            osc.connect(gain); gain.connect(ctx.destination);
-            osc.type = type; osc.frequency.setValueAtTime(freq, ctx.currentTime + startTime);
-            gain.gain.setValueAtTime(vol, ctx.currentTime + startTime);
-            gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + startTime + dur);
-            osc.start(ctx.currentTime + startTime); osc.stop(ctx.currentTime + startTime + dur);
-        }}
-        playTone(523.25, 'sine', 0.0, 0.8, 0.6); 
-        playTone(1046.50, 'triangle', 0.1, 0.5, 0.4); 
-        playTone(1318.51, 'sine', 0.4, 0.3, 0.3);
-        playTone(1567.98, 'sine', 0.5, 0.3, 0.3);
-        playTone(2093.00, 'sine', 0.6, 0.4, 0.2);
-    }} catch(e) {{ console.error('Audio fail:', e); }}
-    
-    // 2. Browser Push Notification (works even when tab is in background)
-    if ('Notification' in window && Notification.permission === 'granted') {{
-        new Notification('نظام السعيد - إشعار جديد', {{
-            body: 'لديك {notif_count} إشعارات جديدة',
-            icon: '🔔',
-            badge: '🔔',
-            tag: 'alsaeed-notif',
-            requireInteraction: true
-        }});
-    }}
-}})();
-</script>
-""", height=0, width=0)
-        st.session_state.notif_triggered = False
-
-    # 1.4 Sound Test Diagnostic (Triggered from settings)
-    if st.session_state.get('test_sound'):
-        st.components.v1.html("""
-<script>
-(function(){
-    try {
-        var ctx = new (window.AudioContext || window.webkitAudioContext)();
-        function playBell(f, s, d) {
-            var o = ctx.createOscillator(); var g = ctx.createGain();
-            o.connect(g); g.connect(ctx.destination);
-            o.type = 'sine'; o.frequency.setValueAtTime(f, ctx.currentTime + s);
-            g.gain.setValueAtTime(0.5, ctx.currentTime + s);
-            g.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + s + d);
-            o.start(ctx.currentTime + s); o.stop(ctx.currentTime + s + d);
-        }
-        playBell(880, 0, 0.5); playBell(1100, 0.2, 0.5);
-    } catch(e) {}
-})();
-</script>
-""", height=0, width=0)
-        st.session_state.test_sound = False
+    # 1. Global Audio/Push Notifications handled by background fragment for instant response.
+    # No longer needed here to avoid double-triggers.
 
     # 2. Styling and Content
     if lang == 'ar':
@@ -3297,7 +2847,7 @@ def render_top_banner():
 """, unsafe_allow_html=True)
             
             btn_clear = "🗑️ مسح الكل" if lang == 'ar' else "🗑️ Clear All"
-            if st.button(btn_clear, use_container_width=True, key="clear_all_notifs"):
+            if st.button(btn_clear, width='stretch', key="clear_all_notifs"):
                 # Mark all current notifications as seen for THIS user
                 user_id = st.session_state.user.get('username', 'guest')
                 USER_SEEN_FILE = os.path.join(BASE_DIR, f"notif_seen_{user_id}.json")
@@ -3324,81 +2874,34 @@ def render_top_banner():
                 st.rerun()
             
             # Audio Diagnostic Button
-            btn_test = "⚙️ تجربة صوت التنبيه" if lang == 'ar' else "⚙️ Test Notification Sound"
-            if st.checkbox(btn_test, key="cb_test_sound"):
-                st.session_state.test_sound = True
-                st.rerun()
+            # Audio Diagnostic & Permission Tools
+            cols_notif = st.columns([1, 1])
+            with cols_notif[0]:
+                btn_test = "⚙️ تجربة صوت التنبيه" if lang == 'ar' else "⚙️ Test Notification Sound"
+                if st.button(btn_test, key="btn_test_sound", width='stretch'):
+                    st.session_state.test_sound = True
+                    st.rerun()
+            
+            with cols_notif[1]:
+                btn_perm = "🔔 تفعيل إشعارات المتصفح" if lang == 'ar' else "🔔 Enable Browser Notifications"
+                if st.button(btn_perm, key="btn_req_notif", width='stretch'):
+                    st.html("""
+<script>
+if ('Notification' in window) {
+    Notification.requestPermission().then(permission => {
+        if (permission === 'granted') {
+            alert('تم تفعيل إشعارات المتصفح بنجاح! ✅');
+        } else {
+            alert('يرجى تفعيل الإشعارات من إعدادات المتصفح. ⚠️');
+        }
+    });
+} else {
+    alert('متصفحك لا يدعم الإشعارات. ❌');
+}
+</script>
+""")
 
-    # Hide the old CSS-based banner to avoid double rendering
-    st.markdown('<style>.persistent-top-banner { display:none !important; }</style>', unsafe_allow_html=True)
-
-    # Optional: Display notifications if there are any
-    if st.session_state.notifications:
-        exp_title = "🔔 الإشعارات الجديدة" if lang == 'ar' else "🔔 New Notifications"
-        with st.sidebar.expander(exp_title, expanded=False):
-            dir_style = "rtl" if lang == 'ar' else "ltr"
-            align_style = "right" if lang == 'ar' else "left"
-            border_side = "right" if lang == 'ar' else "left"
-            for n in reversed(st.session_state.notifications[-10:]):
-                sidebar_msg = n['msg'].replace('\n', '<br>')
-                st.markdown(f"""
-<div style="background: rgba(255,255,255,0.05); padding: 10px; border-radius: 10px; margin-bottom: 5px; border-{border_side}: 3px solid #D4AF37; direction:{dir_style};">
-    <p style="margin:0; font-weight:bold; color:#D4AF37; font-size:0.9rem;">{n['title']}</p>
-    <p style="margin:0; font-size:0.8rem; color:#FFF; line-height:1.7;">{sidebar_msg}</p>
-    <p style="margin:0; font-size:0.7rem; color:rgba(255,255,255,0.4); text-align:{align_style};">⏰ {n['time']}</p>
-</div>
-""", unsafe_allow_html=True)
-            btn_clear_side = "🗑️ مسح الإشعارات" if lang == 'ar' else "🗑️ Clear Notifications"
-            if st.button(btn_clear_side, use_container_width=True):
-                # Mark all current notifications as seen for THIS user
-                user_id = st.session_state.user.get('username', 'guest')
-                USER_SEEN_FILE = os.path.join(BASE_DIR, f"notif_seen_{user_id}.json")
-                
-                seen_ids = []
-                if os.path.exists(USER_SEEN_FILE):
-                    try:
-                        with open(USER_SEEN_FILE, "r") as f:
-                            seen_ids = json.load(f)
-                    except: pass
-                
-                for n in st.session_state.notifications:
-                    n_id = n.get('id')
-                    if n_id and n_id not in seen_ids:
-                        seen_ids.append(n_id)
-                
-                with open(USER_SEEN_FILE, "w") as f:
-                    json.dump(seen_ids, f)
-
-                st.session_state.notifications = []
-                st.rerun()
-=======
-    
-    if lang == 'ar':
-        f_name = user.get('first_name_ar', '')
-        fa_name = user.get('father_name_ar', '')
-        welcome_prefix = "مرحباً بك،"
-        program_name = "نظام السعيد المتكامل 💎"
-    else:
-        f_name = user.get('first_name_en', '')
-        fa_name = user.get('father_name_en', '')
-        welcome_prefix = "Welcome,"
-        program_name = "Alsaeed Integrated System 💎"
-
-    full_name = f"{f_name} {fa_name}".strip()
-    if not full_name: full_name = user.get('username', 'User')
-
-    # Get user avatar - Handle legacy base64 or full Data URI
-    avatar_val = st.session_state.auth.get_avatar(user.get('username', ''))
-    if avatar_val:
-        if str(avatar_val).startswith('data:'):
-            avatar_html = f'<img src="{avatar_val}" class="banner-avatar" />'
-        else:
-            # Legacy fallback
-            avatar_html = f'<img src="data:image/png;base64,{avatar_val}" class="banner-avatar" />'
-    else:
-        avatar_html = '<div class="banner-avatar" style="background:linear-gradient(135deg,#D4AF37,#8B7520);display:flex;align-items:center;justify-content:center;font-size:24px;">👤</div>'
-
-    st.markdown(f"""
+        st.markdown(f"""
     <div class="persistent-top-banner">
         <div style="display: flex; align-items: center; gap: 20px;">
              <div class="banner-user-info">
@@ -3417,21 +2920,14 @@ def render_top_banner():
         </div>
     </div>
     """, unsafe_allow_html=True)
->>>>>>> 947f1af (update)
 
 def dashboard():
     user = st.session_state.user
     lang = st.session_state.lang
-<<<<<<< HEAD
 
-    # --- 1. Silent Notification Check (First thing in Dashboard) ---
-    check_notifications()
+    # --- 1. Ready for Welcome Animation ---
     
     # --- 2. Welcome Message ---
-=======
-    
-    # Welcome Message - Premium Luxury Overlay (2026 Style, JS auto-remove)
->>>>>>> 947f1af (update)
     if st.session_state.get('show_welcome'):
         if lang == 'ar':
             f_name = user.get('first_name_ar', '')
@@ -3464,24 +2960,14 @@ def dashboard():
 
         @keyframes wFadeIn {{
             0%   {{ opacity:0; }}
-<<<<<<< HEAD
             20%  {{ opacity:1; }}
             80%  {{ opacity:1; }}
-=======
-            12%  {{ opacity:1; }}
-            78%  {{ opacity:1; }}
->>>>>>> 947f1af (update)
             100% {{ opacity:0; pointer-events:none; }}
         }}
         @keyframes wSlideUp {{
             0%   {{ transform:translateY(40px) scale(0.95); opacity:0; }}
-<<<<<<< HEAD
             20%  {{ transform:translateY(0)    scale(1);    opacity:1; }}
             80%  {{ transform:translateY(0)    scale(1);    opacity:1; }}
-=======
-            12%  {{ transform:translateY(0)    scale(1);    opacity:1; }}
-            78%  {{ transform:translateY(0)    scale(1);    opacity:1; }}
->>>>>>> 947f1af (update)
             100% {{ transform:translateY(-16px) scale(0.97); opacity:0; }}
         }}
         @keyframes wShimmer {{
@@ -3505,21 +2991,12 @@ def dashboard():
         #lux-welcome {{
             position: fixed; inset:0;
             z-index:2147483647;
-<<<<<<< HEAD
             background:rgba(4,7,16,0.8);
             backdrop-filter:blur(10px);
             -webkit-backdrop-filter:blur(10px);
             display:flex; align-items:center; justify-content:center;
             animation: wFadeIn 1.2s cubic-bezier(.4,0,.2,1) forwards;
             pointer-events:none;
-=======
-            background:rgba(4,7,16,0.87);
-            backdrop-filter:blur(16px);
-            -webkit-backdrop-filter:blur(16px);
-            display:flex; align-items:center; justify-content:center;
-            animation: wFadeIn 3.2s cubic-bezier(.4,0,.2,1) forwards;
-            pointer-events:all;
->>>>>>> 947f1af (update)
         }}
         #lux-welcome-card {{
             background:linear-gradient(160deg,#0d1220,#090e1d,#0e1428);
@@ -3529,11 +3006,7 @@ def dashboard():
             max-width:520px; width:90%; min-width: 290px;
             text-align:center;
             position:relative; overflow:hidden;
-<<<<<<< HEAD
             animation:wSlideUp 1.2s cubic-bezier(.4,0,.2,1) forwards;
-=======
-            animation:wSlideUp 3.2s cubic-bezier(.4,0,.2,1) forwards;
->>>>>>> 947f1af (update)
             box-shadow:0 40px 120px rgba(0,0,0,0.75), 0 0 60px rgba(212,175,55,0.06);
         }}
         #lux-welcome-card::before {{
@@ -3596,17 +3069,10 @@ def dashboard():
             var el = document.getElementById('lux-welcome');
             if (el) {{
                 el.style.opacity = '0';
-<<<<<<< HEAD
                 el.style.transition = 'opacity 0.4s ease';
                 setTimeout(function() {{ if (el.parentNode) el.parentNode.removeChild(el); }}, 400);
             }}
         }}, 1000);
-=======
-                el.style.transition = 'opacity 0.6s ease';
-                setTimeout(function() {{ if (el.parentNode) el.parentNode.removeChild(el); }}, 600);
-            }}
-        }}, 3000);
->>>>>>> 947f1af (update)
         </script>
         """, unsafe_allow_html=True)
 
@@ -3618,7 +3084,7 @@ def dashboard():
         sc1, sc2, sc3 = st.columns([1, 2, 1])
         with sc2:
             if os.path.exists(IMG_PATH):
-                st.image(IMG_PATH, use_container_width=True)
+                st.image(IMG_PATH, width='stretch')
         
         # Credit text - Split into two lines for clarity (with language-specific font class)
         credit_class = "programmer-credit en" if lang == "en" else "programmer-credit"
@@ -3629,123 +3095,87 @@ def dashboard():
         # Spacing
         st.markdown("<div style='margin-bottom: 20px;'></div>", unsafe_allow_html=True)
         
+        # --- 🛡️ WhatsApp Sending Lock: Prevent navigation away while sending ---
+        _wa_is_sending = st.session_state.get('wa_running', False)
+        _wa_lock_nav = _wa_is_sending and st.session_state.get('page') == 'whatsapp_marketing'
+        
         # Language Toggle (Using Wrapper for CSS targeting)
         st.markdown('<div class="lang-toggle-wrapper">', unsafe_allow_html=True)
         btn_label = "En" if lang == "ar" else "عربي"
-        if st.button(btn_label, key="lang_btn_dashboard", use_container_width=True):
+        if st.button(btn_label, key="lang_btn_dashboard", width='stretch', disabled=_wa_lock_nav):
             toggle_lang()
             st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
         
         st.markdown("<div style='margin-bottom: 30px;'></div>", unsafe_allow_html=True)
 
-        if st.button(t("dashboard", lang), use_container_width=True):
+        if _wa_lock_nav:
+            st.warning("⚠️ " + ("جاري الإرسال عبر الواتساب... لا يمكن مغادرة الصفحة الآن" if lang == 'ar' else "WhatsApp sending in progress... Cannot leave this page"))
+            # Inject JS to prevent browser tab close/refresh during sending
+            st.markdown("""
+            <script>
+            window.addEventListener('beforeunload', function (e) {
+                e.preventDefault();
+                e.returnValue = 'WhatsApp sending is still in progress. Are you sure you want to leave?';
+            });
+            </script>
+            """, unsafe_allow_html=True)
+
+        if st.button(t("dashboard", lang), width='stretch', disabled=_wa_lock_nav):
             st.session_state.page = "dashboard"
             st.rerun()
-        if st.button(t("smart_search", lang), use_container_width=True):
+        if st.button(t("smart_search", lang), width='stretch', disabled=_wa_lock_nav):
             # Reset the filter expander state to force open on entry
             for key in list(st.session_state.keys()):
                 if key.startswith("filter_expander_"):
                     del st.session_state[key]
             st.session_state.page = "search"
             st.rerun()
-        if st.button(t("cv_translator", lang), use_container_width=True):
+        if st.button(t("cv_translator", lang), width='stretch', disabled=_wa_lock_nav):
             st.session_state.page = "translator"
             st.rerun()
         if user.get("role") != "viewer":
-            if st.button(t("customer_requests", lang), use_container_width=True):
+            if st.button(t("customer_requests", lang), width='stretch', disabled=_wa_lock_nav):
                 st.session_state.page = "customer_requests"
                 st.rerun()
-        if st.button(t("order_processing", lang), use_container_width=True):
+        if st.button(t("order_processing", lang), width='stretch', disabled=_wa_lock_nav):
             st.session_state.page = "order_processing"
             st.rerun()
         
         # WhatsApp Marketing 2026 Button
-<<<<<<< HEAD
-        if st.button("📱 " + t("whatsapp_marketing", lang), use_container_width=True):
+        if st.button("📱 " + t("whatsapp_marketing", lang), width='stretch'):
             st.session_state.page = "whatsapp_marketing"
             st.rerun()
         
         # Duplicate Remover Button
-        if st.button("🗑️ " + t("duplicate_remover", lang), use_container_width=True):
+        if st.button("🗑️ " + t("duplicate_remover", lang), width='stretch', disabled=_wa_lock_nav):
             st.session_state.page = "duplicate_remover"
             st.rerun()
         
         # Determine Bengali Supply Visibility
         user_perms = user.get("permissions", [])
         if "all" in user_perms or "bengali_supply" in user_perms:
-            # PURE CSS BANGLADESH FLAG (Zero Dependency/100% Reliable)
-            st.sidebar.markdown("""
-                <style>
-                #bengali-btn-wrapper button p {
-                    display: flex !important;
-                    flex-direction: row-reverse !important;
-                    align-items: center !important;
-                    justify-content: center !important;
-                    gap: 12px !important;
-                }
-                /* Pure CSS Bangladesh Flag */
-                #bengali-btn-wrapper button p::before {
-                    content: "" !important;
-                    display: block !important;
-                    width: 24px !important;
-                    height: 16px !important;
-                    background-color: #006a4e !important;
-                    border-radius: 2px !important;
-                    position: relative !important;
-                    order: -1 !important;
-                }
-                #bengali-btn-wrapper button p::after {
-                    content: "" !important;
-                    position: absolute !important;
-                    width: 9px !important;
-                    height: 9px !important;
-                    background-color: #f42a41 !important;
-                    border-radius: 50% !important;
-                    /* Move to the right side of the button text space where ::before is */
-                    right: 21px; /* Precision position over the green box */
-                    top: 50%;
-                    transform: translateY(-50%);
-                    z-index: 101 !important;
-                }
-                </style>
-                <div id="bengali-btn-wrapper">
-            """, unsafe_allow_html=True)
+            # PURE CSS BANGLADESH FLAG (Logic moved to global CSS)
+            st.markdown('<div id="bengali-btn-wrapper">', unsafe_allow_html=True)
             
-            if st.button(t("bengali_supply_title", lang), key="btn_bengali_supply_main", use_container_width=True):
+            if st.button(t("bengali_supply_title", lang), key="btn_bengali_supply_main", width='stretch', disabled=_wa_lock_nav):
                 st.session_state.page = "bengali_supply"
                 st.rerun()
             
             st.sidebar.markdown("</div>", unsafe_allow_html=True)
 
-=======
-        if st.button("💬 " + t("whatsapp_marketing", lang), use_container_width=True):
-            st.session_state.page = "whatsapp_marketing"
-            st.rerun()
-        
-        # Determine Bengali Supply Visibility
-        user_perms = user.get("permissions", [])
-        if "all" in user_perms or "bengali_supply" in user_perms:
-            if st.button("🇧🇩 " + t("bengali_supply_title", lang), key="btn_bengali_supply_main", use_container_width=True):
-                st.session_state.page = "bengali_supply"
-                st.rerun()
->>>>>>> 947f1af (update)
         if user.get("role") == "admin":
-            if st.button(t("permissions", lang), use_container_width=True):
+            if st.button(t("permissions", lang), width='stretch', disabled=_wa_lock_nav):
                 st.session_state.page = "permissions"
                 st.rerun()
             
             # Refresh Data button below Permissions for Admins
-<<<<<<< HEAD
             refresh_notif = st.empty()
-=======
->>>>>>> 947f1af (update)
-            if st.button(t("refresh_data_btn", lang), key="force_refresh_db", use_container_width=True):
+            if st.button(t("refresh_data_btn", lang), key="force_refresh_db", width='stretch'):
                 refresh_loader = show_loading_hourglass()
                 st.session_state.db.fetch_data(force=True)
                 st.session_state.db.fetch_customer_requests(force=True)
                 refresh_loader.empty()
-<<<<<<< HEAD
                 st.session_state['_notif_refresh'] = ("success", "تم تحديث البيانات من Google Sheets بنجاح! ✅" if lang == 'ar' else "Data refreshed successfully! ✅")
                 st.rerun()
             
@@ -3753,15 +3183,10 @@ def dashboard():
             if st.session_state.get('_notif_refresh'):
                 typ, msg = st.session_state.pop('_notif_refresh')
                 show_toast(msg, typ, container=refresh_notif)
-=======
-                show_toast("تم تحديث البيانات من Google Sheets بنجاح! ✅" if lang == 'ar' else "Data refreshed successfully! ✅", "success")
-                time.sleep(1)
-                st.rerun()
->>>>>>> 947f1af (update)
         
         st.markdown("<div style='margin: 15px 0;'></div>", unsafe_allow_html=True)
         
-        if st.button(t("logout", lang), type="primary", use_container_width=True):
+        if st.button(t("logout", lang), type="primary", width='stretch'):
             st.session_state.user = None
             st.rerun()
         
@@ -3769,7 +3194,7 @@ def dashboard():
         st.sidebar.divider()
         with st.sidebar.expander(t("deep_reset", lang)):
             st.caption(t("deep_reset_desc", lang))
-            if st.button(t("deep_reset", lang), key="sidebar_deep_reset", use_container_width=True):
+            if st.button(t("deep_reset", lang), key="sidebar_deep_reset", width='stretch'):
                 # Clear all navigation and table caches
                 for k in list(st.session_state.keys()):
                     if any(k.startswith(prefix) for prefix in ["dash_table_", "last_scroll_", "trans_", "search_results"]):
@@ -3779,7 +3204,6 @@ def dashboard():
                 time.sleep(1)
                 st.rerun()
 
-<<<<<<< HEAD
     # --- Background Notifications (Handled by Fragment) ---
     silent_notification_monitor()
 
@@ -3797,22 +3221,6 @@ def dashboard():
     #                 if not d.empty: st.write(d.columns.tolist())
     #             except Exception as e:
     #                 st.error(f"Err: {e}")
-=======
-    # --- Render Global Top Banner (Persistent) ---
-    render_top_banner()
-
-    # Admin Debug
-    if user.get("role") == "admin":
-        with st.sidebar.expander(t("debug", lang)):
-            if st.button(t("test_db", lang)):
-                try:
-                    st.session_state.db.connect()
-                    d = st.session_state.db.fetch_data(force=True)
-                    st.write(f"Rows: {len(d)}")
-                    if not d.empty: st.write(d.columns.tolist())
-                except Exception as e:
-                    st.error(f"Err: {e}")
->>>>>>> 947f1af (update)
 
     page = st.session_state.get('page', 'dashboard')
     
@@ -3824,80 +3232,105 @@ def dashboard():
             st.error("🔒 لا تملك صلاحية الوصول لهذه الصفحة" if lang == 'ar' else "🔒 Access Denied")
             st.session_state.page = "dashboard"
             st.rerun()
-<<<<<<< HEAD
         render_order_processing_content()
-=======
-        render_customer_requests_content()
->>>>>>> 947f1af (update)
     elif page == "order_processing": render_order_processing_content()
     elif page == "permissions": render_permissions_content()
     elif page == "bengali_supply": render_bengali_supply_content()
     elif page == "whatsapp_marketing": render_whatsapp_page()
-<<<<<<< HEAD
     elif page == "duplicate_remover": render_duplicate_remover_content()
-
-
+    # --- 3. Notification Check (Moved to BOTTOM to prevent hanging on login) ---
+    check_notifications()
 
 def __apply_pinned_columns(df_or_style, cfg=None):
     if cfg is None: cfg = {}
     import streamlit as st
+    import pandas as pd
+    
+    # Priority Keywords for Pinning
     pin_keywords = [
         "حالة العقد", "contract status", "status",
         "وقت", "طابع", "timestamp", "registration",
         "الاسم", "name", 
         "جنسية", "nationality", "🚩", "دولة", "country",
-        "جنس", "gender", "النوع"
+        "جنس", "gender"
     ]
     
     # Handle both DataFrame and Styler
+    df_temp = None
     if hasattr(df_or_style, 'data'):
-        cols = df_or_style.data.columns
+        df_temp = df_or_style.data
+        cols = df_temp.columns
     elif hasattr(df_or_style, 'columns'):
-        cols = df_or_style.columns
+        df_temp = df_or_style
+        cols = df_temp.columns
     else:
         return cfg
         
+    # Helper function to reliably estimate screen pixel width of a string in Streamlit's font
+    def estimate_px(text):
+        px = 0
+        for char in str(text):
+            if '\u0600' <= char <= '\u06FF': px += 8   # Arabic characters are wider
+            elif char.isupper(): px += 8.5            # Capital letters
+            elif char.isdigit(): px += 7.5            # Numbers
+            elif char.islower(): px += 6.5            # Lowercase letters
+            else: px += 5                             # Spaces and punctuation
+        return px
+        
     for col in cols:
-        col_str = str(col).lower()
-        should_pin = any(kw.lower() in col_str for kw in pin_keywords)
-        if should_pin:
-            if col not in cfg:
-                cfg[col] = st.column_config.Column(pinned=True)
-            else:
-                # Robust pinning update for any column config object
-                try:
-                    existing = cfg[col]
-                    if hasattr(existing, 'pinned'):
-                        # Streamlit column config objects are immutable in some versions
-                        # Try to set it, or just use it as is if it's already pinned
-                        pass 
-                    # The safest way is to ensure the config has pinned=True if it's a dict
-                    if isinstance(existing, dict):
-                        existing["pinned"] = True
-                    # If it's a Streamlit object, we hope it was created with pinned=True 
-                    # or we try to wrap it if possible. But better to just call this 
-                    # before creating complex configs if possible.
-                except:
-                    pass
+        col_str = str(col)
+        # Determine Pinning
+        should_pin = any(kw.lower() in col_str.lower() for kw in pin_keywords)
+        
+        # Calculate pixel width of the header
+        header_px = estimate_px(col_str)
+        max_px = header_px
+        
+        if df_temp is not None and col in df_temp.columns:
+            try:
+                # Find maximum pixel width among all items in the column efficiently
+                data_px = df_temp[col].astype(str).apply(estimate_px).max()
+                if pd.notna(data_px):
+                    max_px = max(max_px, data_px + 20) # +20px safety margin for the cell padding
+            except:
+                pass
+                
+        # Force the column to be as wide as the longest string by injecting non-breaking spaces (\xA0)
+        diff_px = max_px - header_px
+        padded_label = col_str
+        
+        if diff_px > 0:
+            # A non-breaking space in Streamlit's font is approx 3 pixels wide
+            pad_amount = int(diff_px / 3) + 8 # +8 extra spaces for margin
+            left_pad = pad_amount // 2
+            right_pad = pad_amount - left_pad
+            padded_label = ("\xA0" * left_pad) + col_str + ("\xA0" * right_pad)
+        else:
+            # Minimal default padding just in case
+            padded_label = ("\xA0" * 4) + col_str + ("\xA0" * 4)
+        
+        if col not in cfg:
+            # Create new column config with padded width logic
+            cfg[col] = st.column_config.Column(pinned=should_pin, label=padded_label)
+        else:
+            # Update dictionary if passed as one
+            if isinstance(cfg[col], dict):
+                cfg[col]["pinned"] = should_pin
+                if "label" not in cfg[col]:
+                    cfg[col]["label"] = padded_label
+    
     return cfg
-=======
->>>>>>> 947f1af (update)
 
 def render_dashboard_content():
     lang = st.session_state.lang
     st.markdown('<div class="programmer-signature-neon">By: Alsaeed Alwazzan (v2.1)</div>', unsafe_allow_html=True)
     st.title(f" {t('contract_dashboard', lang)}")
     
-<<<<<<< HEAD
     # Show loader while fetching data - Moved after title for immediate UI recognition
     loading_placeholder = st.empty()
     with loading_placeholder:
         show_loading_hourglass(container=loading_placeholder)
     
-=======
-    # Show loader while fetching data
-    loading_placeholder = show_loading_hourglass()
->>>>>>> 947f1af (update)
     start_time = time.time()
     
     try:
@@ -3920,14 +3353,9 @@ def render_dashboard_content():
     
     date_col = next((c for c in cols if any(kw in clean_col(c) for kw in ["contract end", "انتهاء العقد", "contract expiry"])), None)
     if not date_col:
-<<<<<<< HEAD
         loading_placeholder.empty() # CLEAR LOADER BEFORE RETURN!
         visible_cols = [c for c in cols if not str(c).startswith('__')]
         st.error(f"⚠️ Error: Could not find the 'Contract End' column. Please check your spreadsheet headers. Available columns: {visible_cols}")
-=======
-        visible_cols = [c for c in cols if not str(c).startswith('__')]
-        st.error(f"?? Error: Could not find the 'Contract End' column. Please check your spreadsheet headers. Available columns: {visible_cols}")
->>>>>>> 947f1af (update)
         return
 
     stats = {'urgent': [], 'expired': [], 'active': []}
@@ -3992,7 +3420,6 @@ def render_dashboard_content():
             """, unsafe_allow_html=True)
     st.markdown("---")
     
-<<<<<<< HEAD
     # --- ADD SMART SEARCH UI TO DASHBOARD ---
     lbl_age = t("age", lang)
     lbl_contract = t("contract_end", lang)
@@ -4000,61 +3427,81 @@ def render_dashboard_content():
     lbl_enable = "تفعيل" if lang == "ar" else "Activate"
 
     with st.expander(t("advanced_filters", lang) if t("advanced_filters", lang) != "advanced_filters" else "تصفية متقدمة", expanded=False):
+        # 1. Row: Scheduling & Dates - Centered
         st.markdown(f'<div class="premium-filter-label">📅 {t("filter_dates_group", lang)}</div>', unsafe_allow_html=True)
-        c1, c2, c3 = st.columns(3)
-        with c1:
-            use_age = st.checkbox(f" {lbl_enable} {lbl_age}", key="dash_use_age_filter")
+        # Using 5 columns [Pad, Item, Item, Item, Pad] to center 3 items
+        r_pad1, rc3, rc2, rc1, r_pad2 = st.columns([0.5, 1, 1, 1, 0.5])
+        with rc3: # Age
+            use_age = st.checkbox(t("age", lang) if lang == 'en' else f"تفعيل {t('age', lang)}", key="dash_use_age_filter")
             if use_age:
                 ac1, ac2 = st.columns(2)
                 with ac1: a_min = st.number_input("من سن" if lang == 'ar' else "From", 1, 100, 16, key="dash_age_min")
                 with ac2: a_max = st.number_input("إلى سن" if lang == 'ar' else "To", 1, 100, 35, key="dash_age_max")
                 age_range = (a_min, a_max)
             else: age_range = (16, 35)
-        with c2:
-            use_contract = st.checkbox(f" {lbl_enable} {lbl_contract}", key="dash_use_contract_filter")
+        with rc2: # Contract
+            use_contract = st.checkbox(t("contract_end", lang) if lang == 'en' else f"تفعيل {t('contract_end', lang)}", key="dash_use_contract_filter")
             if use_contract:
                 contract_range = st.date_input("Contract Range", (datetime.now().date(), datetime.now().date() + timedelta(days=30)), label_visibility="collapsed", key="dash_contract_range")
             else: contract_range = []
-        with c3:
-            use_reg = st.checkbox(f" {lbl_enable} {lbl_reg}", key="dash_use_reg_filter")
+        with rc1: # Registration
+            use_reg = st.checkbox(t("registration_date", lang) if lang == 'en' else f"تفعيل {t('registration_date', lang)}", key="dash_use_reg_filter")
             if use_reg:
                 reg_range = st.date_input("Registration Range", (datetime.now().date().replace(day=1), datetime.now().date()), label_visibility="collapsed", key="dash_reg_range")
             else: reg_range = []
 
-        st.markdown("<br>", unsafe_allow_html=True)
+        # 2. Row: Advanced Smart Filtering - Centered
         st.markdown(f'<div class="premium-filter-label">⚙️ {t("filter_advanced_group", lang)}</div>', unsafe_allow_html=True)
-        c2_1, c2_2, c2_3 = st.columns(3)
-        with c2_1:
-            use_not_working = st.checkbox("No (هل يعمل حالياً؟)" if lang == "ar" else "Not Working (No)", key="dash_use_not_working")
-        with c2_2:
+        # Using 5 columns [Pad, Expired, NotWorking, Dropdown, Pad]
+        s_pad1, sc1, sc2, sc3, s_pad2 = st.columns([0.4, 1, 1, 1.8, 0.4])
+        with sc1:
+            use_expired = st.checkbox(t("expired_filter", lang), key="dash_use_expired")
+        with sc2:
+            use_not_working = st.checkbox(t("not_working_no", lang), key="dash_use_not_working")
+        with sc3:
             transfer_options = {"": f"— {t('transfer_all', lang)} —", "First time": t("transfer_1", lang), "Second time": t("transfer_2", lang), "The third time": t("transfer_3", lang), "More than three": t("transfer_more", lang)}
-            selected_transfer_label = st.selectbox(t("transfer_count_label", lang), options=list(transfer_options.values()), key="dash_transfer_dropdown")
+            # Inner columns: Dropdown on Right (Col1), Label on Left (Col2)
+            ic, lc = st.columns([1.2, 1])
+            with ic:
+                selected_transfer_label = st.selectbox("", options=list(transfer_options.values()), key="dash_transfer_dropdown", label_visibility="collapsed")
+            with lc:
+                st.markdown(f'<div style="font-family: \'Cairo\', sans-serif; font-size: 0.95rem; font-weight: 500; color: #FFFFFF; text-align: left; margin-top: 8px;">{t("transfer_count_label", lang)}</div>', unsafe_allow_html=True)
             selected_transfer_key = [k for k, v in transfer_options.items() if v == selected_transfer_label][0]
-        with c2_3:
-            use_no_huroob = st.checkbox(t("no_huroob", lang), key="dash_use_no_huroob")
         
-        st.markdown("<br>", unsafe_allow_html=True)
-        c3_1, c3_2 = st.columns(2)
-        with c3_1:
+        # 3. Row: Status Flags - Centered
+        st.markdown("<div style='margin-bottom: 10px;'></div>", unsafe_allow_html=True)
+        # Using 7 columns [Pad, 5 items, Pad] to center 5 items
+        t_pad1, tc5, tc4, tc3, tc2, tc1, t_pad2 = st.columns([0.2, 1, 1, 1, 1, 1, 0.2])
+        with tc5:
+            use_domestic_worker = st.checkbox(t("domestic_worker_filter", lang), key="dash_use_domestic_worker")
+        with tc4:
+            use_no_huroob = st.checkbox(t("no_huroob", lang), key="dash_use_no_huroob")
+        with tc3:
+            use_yes_huroob = st.checkbox(t("yes_huroob_label", lang), key="dash_use_yes_huroob")
+        with tc2:
+            use_sponsor_transfer = st.checkbox(t("sponsor_transfer_yes", lang), key="dash_use_sponsor_transfer")
+        with tc1:
             use_work_outside = st.checkbox(t("work_outside_city", lang), key="dash_use_work_outside")
 
     dash_query = st.text_input(t("smart_search", lang), placeholder=t("search_placeholder", lang), key="dash_search_query")
-    dash_search_clicked = st.button(t("search_btn", lang), key="dash_search_btn", use_container_width=True, type="primary")
+    dash_search_clicked = st.button(t("search_btn", lang), key="dash_search_btn", width='stretch', type="primary")
 
     dash_filters = {}
     if use_age: dash_filters['age_enabled'] = True; dash_filters['age_min'] = age_range[0]; dash_filters['age_max'] = age_range[1]
     if use_contract and len(contract_range) == 2: dash_filters['contract_enabled'] = True; dash_filters['contract_end_start'] = contract_range[0]; dash_filters['contract_end_end'] = contract_range[1]
     if use_reg and len(reg_range) == 2: dash_filters['date_enabled'] = True; dash_filters['date_start'] = reg_range[0]; dash_filters['date_end'] = reg_range[1]
     if use_not_working: dash_filters['not_working_only'] = True
+    if use_expired: dash_filters['expired_only'] = True
     if use_no_huroob: dash_filters['no_huroob'] = True
+    if use_yes_huroob: dash_filters['yes_huroob'] = True
+    if use_sponsor_transfer: dash_filters['sponsor_transfer'] = True
     if use_work_outside: dash_filters['work_outside_city'] = True
+    if use_domestic_worker: dash_filters['domestic_worker'] = True
     if selected_transfer_key: dash_filters['transfer_count'] = selected_transfer_key
 
     st.markdown("---")
     # --- END SMART SEARCH UI ---
 
-=======
->>>>>>> 947f1af (update)
     cv_col = next((c for c in cols if any(kw in clean_col(c) for kw in ["cv", "سيرة", "download"])), None)
     
     # Configuration for LinkColumn needs the TRANSLATED column name if we rename it!
@@ -4062,22 +3509,11 @@ def render_dashboard_content():
     
     t1, t2, t3 = st.tabs([t("tabs_urgent", lang), t("tabs_expired", lang), t("tabs_active", lang)])
     
-    def show(data, tab_id):
-        if not data: st.info(t("no_data", lang)); return
-        d = pd.DataFrame(data)
-<<<<<<< HEAD
+    def show(d, tab_id):
+        if d is None or d.empty: 
+            st.info(t("no_data", lang))
+            return
 
-        # Apply Smart Search if active
-        if dash_query or dash_filters:
-            eng = SmartSearchEngine(d)
-            d = eng.search(dash_query, filters=dash_filters)
-            if d.empty:
-                st.info(t("no_results", lang) if t("no_results", lang) != "no_results" else "لا توجد نتائج تطابق بحثك في هذا التبويب")
-                return
-
-=======
-        
->>>>>>> 947f1af (update)
         # Sort Logic:
         # For Expired: sort by absolute days (smallest number of days ago first)
         # For others: sort by raw days (soonest to expire first)
@@ -4126,7 +3562,6 @@ def render_dashboard_content():
             rem_key_display,
             format="%d يوم" if lang == 'ar' else "%d Days"
         )
-<<<<<<< HEAD
         
         # Flag Image Configuration
         for col in d_final.columns:
@@ -4136,20 +3571,14 @@ def render_dashboard_content():
         
         # Smart Translator Button
         d_final = render_table_translator(d_final, key_prefix=f"dash_{tab_id}")
-=======
->>>>>>> 947f1af (update)
 
         # Apply Green Text Styling
         styled_final = style_df(d_final)
         
         event = st.dataframe(
             styled_final, 
-            use_container_width=True, 
-<<<<<<< HEAD
+            width='content', 
             column_config=__apply_pinned_columns(styled_final, final_cfg),
-=======
-            column_config=final_cfg,
->>>>>>> 947f1af (update)
             on_select="rerun",
             selection_mode="single-row",
             hide_index=True,
@@ -4158,55 +3587,66 @@ def render_dashboard_content():
         
         if event.selection and event.selection.get("rows"):
             sel_idx = event.selection["rows"][0]
-            worker_row = d.iloc[sel_idx]
-            render_cv_detail_panel(worker_row, sel_idx, lang, key_prefix=f"dash_{tab_id}")
+            if 0 <= sel_idx < len(d_final):
+                selected_label = d_final.index[sel_idx]
+                worker_row = d.loc[selected_label]
+                render_cv_detail_panel(worker_row, sel_idx, lang, key_prefix=f"dash_{tab_id}")
 
     with t1: 
+        # 1. Filter Data for this tab first
+        d_urgent = pd.DataFrame(stats['urgent'])
+        if not d_urgent.empty and (dash_query or dash_filters):
+            eng_u = SmartSearchEngine(d_urgent)
+            d_urgent = eng_u.search(dash_query, filters=dash_filters)
+
         c_exp_1, c_exp_2 = st.columns([4, 1])
         with c_exp_2:
-<<<<<<< HEAD
-            xl_data = create_pasha_whatsapp_excel(pd.DataFrame(stats['urgent']), lang=lang)
+            # 2. Use the filtered data for Export
+            xl_data = create_pasha_whatsapp_excel(d_urgent, lang=lang)
             if xl_data:
                 xl_buf, xl_df = xl_data
                 btn_text = "📤 " + ("تصدير للواتساب" if lang == 'ar' else "Export to WhatsApp")
                 render_pasha_export_button(xl_df, btn_text, "Urgent_WhatsApp.xlsx", "المرشحين_العاجل", key="btn_exp_urgent")
-=======
-            xl_buf = create_pasha_whatsapp_excel(pd.DataFrame(stats['urgent']))
-            if xl_buf:
-                st.download_button("📤 تصدير للواتساب", xl_buf, "Urgent_WhatsApp.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
->>>>>>> 947f1af (update)
-        show(stats['urgent'], "urgent")
+        
+        # 3. Show the filtered data
+        show(d_urgent, "urgent")
         
     with t2: 
+        # 1. Filter Data for this tab first
+        d_expired = pd.DataFrame(stats['expired'])
+        if not d_expired.empty and (dash_query or dash_filters):
+            eng_e = SmartSearchEngine(d_expired)
+            d_expired = eng_e.search(dash_query, filters=dash_filters)
+
         c_exp_1, c_exp_2 = st.columns([4, 1])
         with c_exp_2:
-<<<<<<< HEAD
-            xl_data = create_pasha_whatsapp_excel(pd.DataFrame(stats['expired']), lang=lang)
+            # 2. Use the filtered data for Export
+            xl_data = create_pasha_whatsapp_excel(d_expired, lang=lang)
             if xl_data:
                 xl_buf, xl_df = xl_data
                 btn_text = "📤 " + ("تصدير للواتساب" if lang == 'ar' else "Export to WhatsApp")
                 render_pasha_export_button(xl_df, btn_text, "Expired_WhatsApp.xlsx", "المرشحين_المنتهية", key="btn_exp_expired")
-=======
-            xl_buf = create_pasha_whatsapp_excel(pd.DataFrame(stats['expired']))
-            if xl_buf:
-                st.download_button("📤 تصدير للواتساب", xl_buf, "Expired_WhatsApp.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
->>>>>>> 947f1af (update)
-        show(stats['expired'], "expired")
+        
+        # 3. Show the filtered data
+        show(d_expired, "expired")
         
     with t3: 
+        # 1. Filter Data for this tab first
+        d_active = pd.DataFrame(stats['active'])
+        if not d_active.empty and (dash_query or dash_filters):
+            eng_a = SmartSearchEngine(d_active)
+            d_active = eng_a.search(dash_query, filters=dash_filters)
+
         c_exp_1, c_exp_2 = st.columns([4, 1])
         with c_exp_2:
-<<<<<<< HEAD
-            xl_data = create_pasha_whatsapp_excel(pd.DataFrame(stats['active']), lang=lang)
+            # 2. Use the filtered data for Export
+            xl_data = create_pasha_whatsapp_excel(d_active, lang=lang)
             if xl_data:
                 xl_buf, xl_df = xl_data
                 render_pasha_export_button(xl_df, "📤 تصدير للواتساب", "Active_WhatsApp.xlsx", "المرشحين_الفواعل", key="btn_exp_active")
-=======
-            xl_buf = create_pasha_whatsapp_excel(pd.DataFrame(stats['active']))
-            if xl_buf:
-                st.download_button("📤 تصدير للواتساب", xl_buf, "Active_WhatsApp.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
->>>>>>> 947f1af (update)
-        show(stats['active'], "active")
+        
+        # 3. Show the filtered data
+        show(d_active, "active")
 
 def render_search_content():
     lang = st.session_state.lang
@@ -4236,7 +3676,6 @@ def render_search_content():
         with c1:
             use_age = st.checkbox(f" {lbl_enable} {lbl_age}", key="use_age_filter")
             if use_age:
-<<<<<<< HEAD
                 ac1, ac2 = st.columns(2)
                 with ac1:
                     a_min = st.number_input("من سن" if lang == 'ar' else "From", 1, 100, 16, key="age_min_search")
@@ -4245,10 +3684,6 @@ def render_search_content():
                 age_range = (a_min, a_max)
             else: 
                 age_range = (16, 35)
-=======
-                age_range = st.slider(lbl_age, 18, 60, (20, 45), key="age_slider")
-            else: age_range = (18, 60)
->>>>>>> 947f1af (update)
 
         with c2:
             use_contract = st.checkbox(f" {lbl_enable} {lbl_contract}", key="use_contract_filter")
@@ -4262,51 +3697,45 @@ def render_search_content():
                 reg_range = st.date_input("Registration Range", (datetime.now().date().replace(day=1), datetime.now().date()), label_visibility="collapsed", key="reg_range")
             else: reg_range = []
 
-        st.markdown("<br>", unsafe_allow_html=True)
+        # Row 2: Status & Dropdown Filters - Centered
         st.markdown(f'<div class="premium-filter-label">⚙️ {t("filter_advanced_group", lang)}</div>', unsafe_allow_html=True)
-        
-        # Row 2: Status & Dropdown Filters
-        c2_1, c2_2, c2_3 = st.columns(3)
-        
-        with c2_1:
-            use_expired = st.checkbox(t("expired", lang), key="use_expired_filter")
-            if use_expired:
-                st.caption("⚠️ " + ("ترتيب من الأقدم" if lang == "ar" else "Sorting Oldest first"))
-        
-        with c2_2:
-            use_not_working = st.checkbox("No (هل يعمل حالياً؟)" if lang == "ar" else "Not Working (No)", key="use_not_working_filter")
-            
-        with c2_3:
-            transfer_options = {
-                "": f"— {t('transfer_all', lang)} —",
-                "First time": t("transfer_1", lang),
-                "Second time": t("transfer_2", lang),
-                "The third time": t("transfer_3", lang),
-                "More than three": t("transfer_more", lang)
-            }
-            selected_transfer_label = st.selectbox(
-                t("transfer_count_label", lang),
-                options=list(transfer_options.values()),
-                key="transfer_count_dropdown"
-            )
-            # Find the key (English value) from the selected label
+        # Using 5 columns [Pad, Expired, NotWorking, Dropdown, Pad]
+        s_pad1, sc1, sc2, sc3, s_pad2 = st.columns([0.4, 1, 1, 1.8, 0.4])
+        with sc1:
+            use_expired = st.checkbox(t("expired_filter", lang), key="use_expired_filter")
+        with sc2:
+            use_not_working = st.checkbox(t("not_working_no", lang), key="use_not_working_filter")
+        with sc3:
+            transfer_options = {"": f"— {t('transfer_all', lang)} —", "First time": t("transfer_1", lang), "Second time": t("transfer_2", lang), "The third time": t("transfer_3", lang), "More than three": t("transfer_more", lang)}
+            # Inner columns: Dropdown on Right (Col1), Label on Left (Col2)
+            ic, lc = st.columns([1.2, 1])
+            with ic:
+                selected_transfer_label = st.selectbox("", options=list(transfer_options.values()), key="transfer_count_dropdown", label_visibility="collapsed")
+            with lc:
+                st.markdown(f'<div style="font-family: \'Cairo\', sans-serif; font-size: 0.95rem; font-weight: 500; color: #FFFFFF; text-align: left; margin-top: 8px;">{t("transfer_count_label", lang)}</div>', unsafe_allow_html=True)
             selected_transfer_key = [k for k, v in transfer_options.items() if v == selected_transfer_label][0]
         
-        # Row 3: Huroob & Outside City Filters
-        st.markdown("<br>", unsafe_allow_html=True)
-        c3_1, c3_2 = st.columns(2)
-        with c3_1:
+        # Row 3: Huroob & Outside City Filters - Centered
+        st.markdown("<div style='margin-bottom: 10px;'></div>", unsafe_allow_html=True)
+        # Using 7 columns [Pad, 5 items, Pad]
+        t_pad1, tc5, tc4, tc3, tc2, tc1, t_pad2 = st.columns([0.2, 1, 1, 1, 1, 1, 0.2])
+        with tc5:
+            use_domestic_worker = st.checkbox(t("domestic_worker_filter", lang), key="use_domestic_worker_filter")
+        with tc4:
             use_no_huroob = st.checkbox(t("no_huroob", lang), key="use_no_huroob_filter")
-        with c3_2:
+        with tc3:
+            use_yes_huroob = st.checkbox(t("yes_huroob_label", lang), key="use_yes_huroob_filter")
+        with tc2:
+            use_sponsor_transfer = st.checkbox(t("sponsor_transfer_yes", lang), key="use_sponsor_transfer_filter")
+        with tc1:
             use_work_outside = st.checkbox(t("work_outside_city", lang), key="use_work_outside_filter")
 
     # 2. Search Input & Button
     st.markdown('<div class="search-container">', unsafe_allow_html=True)
     query = st.text_input(t("smart_search", lang), placeholder=t("search_placeholder", lang), key="search_query_input")
     
-<<<<<<< HEAD
     # Search Button - Robust Full-width / Centered
-    search_clicked = st.button(t("search_btn", lang), key="main_search_btn", use_container_width=True, type="primary")
+    search_clicked = st.button(t("search_btn", lang), key="main_search_btn", width='stretch', type="primary")
     
     # NEW: Detect search trigger (Button OR Enter) and increment session ID to reset table selection
     current_search_hash = f"{query}_{str(st.session_state.get('use_age_filter'))}_{str(st.session_state.get('use_contract_filter'))}"
@@ -4316,12 +3745,6 @@ def render_search_content():
 
     # Notification placeholder right below the button
     search_notif = st.empty()
-=======
-    # Search Button - Smaller and Centered
-    sc1, sc2, sc3 = st.columns([2.5, 1, 2.5])
-    with sc2:
-        search_clicked = st.button(t("search_btn", lang), key="main_search_btn", use_container_width=True, type="primary")
->>>>>>> 947f1af (update)
     st.markdown('</div>', unsafe_allow_html=True)
     
     # Gather Filters
@@ -4351,8 +3774,17 @@ def render_search_content():
     if use_no_huroob:
         filters['no_huroob'] = True
 
+    if use_yes_huroob:
+        filters['yes_huroob'] = True
+
+    if use_sponsor_transfer:
+        filters['sponsor_transfer'] = True
+
     if use_work_outside:
         filters['work_outside_city'] = True
+        
+    if use_domestic_worker:
+        filters['domestic_worker'] = True
         
     if selected_transfer_key:
         filters['transfer_count'] = selected_transfer_key
@@ -4374,6 +3806,7 @@ def render_search_content():
             if filters.get('not_working_only'): active_filter_names.append("غير موظف" if lang == 'ar' else "Not Working")
             if filters.get('no_huroob'): active_filter_names.append(t("no_huroob", lang))
             if filters.get('work_outside_city'): active_filter_names.append(t("work_outside_city", lang))
+            if filters.get('domestic_worker'): active_filter_names.append(t("domestic_worker_filter", lang))
             if filters.get('transfer_count'): active_filter_names.append("عدد مرات النقل" if lang == 'ar' else "Transfer Count")
             
             if active_filter_names:
@@ -4384,11 +3817,7 @@ def render_search_content():
         total_rows = len(original_data)
         
         if total_rows == 0:
-<<<<<<< HEAD
             show_toast("لم يتم العثور على أي بيانات في قاعدة البيانات. تأكد من الربط مع Google Sheets.", "error", container=search_notif)
-=======
-            st.error("لم يتم العثور على أي بيانات في قاعدة البيانات. تأكد من الربط مع Google Sheets.")
->>>>>>> 947f1af (update)
             return
 
         eng = SmartSearchEngine(original_data)
@@ -4425,17 +3854,12 @@ def render_search_content():
                 status_key = 'حالة العقد' if lang == 'ar' else 'Contract Status'
                 res[status_key] = status_list
                 res['__days_sort'] = sort_list
-<<<<<<< HEAD
                 
                 # Sort Results: Primary = Geo Tier (Proximity), Secondary = Days Sort
                 sort_cols = []
                 if '__geo_tier' in res.columns: sort_cols.append('__geo_tier')
                 sort_cols.append('__days_sort')
                 res = res.sort_values(by=sort_cols, ascending=True)
-=======
-                # Sort Results
-                res = res.sort_values(by='__days_sort', ascending=True)
->>>>>>> 947f1af (update)
             else:
                 # FALLBACK SORT BY TIMESTAMP (REGISTRATION DATE)
                 ts_col = next((c for c in res_cols if any(kw in clean_col(c) for kw in ["timestamp", "طابع", "تاريخ التسجيل"])), None)
@@ -4443,7 +3867,6 @@ def render_search_content():
                     try:
                         # Temporary numeric sort
                         res['__ts_sort'] = pd.to_datetime(res[ts_col], errors='coerce')
-<<<<<<< HEAD
                         sort_cols = []
                         asc_list = []
                         if '__geo_tier' in res.columns:
@@ -4453,9 +3876,6 @@ def render_search_content():
                         asc_list.append(False) # Newest first for timestamp
                         
                         res = res.sort_values(by=sort_cols, ascending=asc_list)
-=======
-                        res = res.sort_values(by='__ts_sort', ascending=False)
->>>>>>> 947f1af (update)
                         res = res.drop(columns=['__ts_sort'])
                     except:
                         pass
@@ -4463,35 +3883,20 @@ def render_search_content():
             # Show count in UI
             count_found = len(res)
             if count_found > 0:
-<<<<<<< HEAD
                 show_toast(f"{'تم العثور على' if lang == 'ar' else 'Found'} {count_found} {'نتائج من أصل' if lang == 'ar' else 'results out of'} {total_rows}", "success", container=search_notif)
             
             # Debug Panel (for diagnosing search issues)
             # with st.expander("🔧 تشخيص البحث | Search Debug", expanded=False):
             #     debug = eng.last_debug
             #     st.json(debug)
-=======
-                st.success(f"{'تم العثور على' if lang == 'ar' else 'Found'} {count_found} {'نتائج من أصل' if lang == 'ar' else 'results out of'} {total_rows}")
-            
-            # Debug Panel (for diagnosing search issues)
-            with st.expander("🔧 تشخيص البحث | Search Debug", expanded=False):
-                debug = eng.last_debug
-                st.json(debug)
->>>>>>> 947f1af (update)
             
             # Handle both DataFrame and list returns
             is_empty = (isinstance(res, list) and len(res) == 0) or (hasattr(res, 'empty') and res.empty)
             
             if is_empty:
-<<<<<<< HEAD
                 show_toast(t("no_results", lang), "warning", container=search_notif)
             elif query and count_found == total_rows:
                 show_toast("تنبيه: البحث أرجع جميع النتائج." if lang == 'ar' else "Warning: Search returned all results.", "warning", container=search_notif)
-=======
-                st.warning(t("no_results", lang))
-            elif query and count_found == total_rows:
-                st.warning("تنبيه: البحث أرجع جميع النتائج. تحقق من تشخيص البحث أعلاه." if lang == 'ar' else "Warning: Search returned all results. Check debug panel above.")
->>>>>>> 947f1af (update)
             
             # Preserve internal diagnostic columns for logic (dropping them here was causing the ID Missing error)
             # internal_cols = [c for c in res.columns if str(c).startswith('__')]
@@ -4502,10 +3907,25 @@ def render_search_content():
             st.code(traceback.format_exc())
             return
         else:
+            # --- 1. PREPARE EXPORT DATA FIRST (Using clean, non-renamed 'res') ---
+            c_s_1, c_s_2 = st.columns([4, 1])
+            with c_s_2:
+                # IMPORTANT: We use 'res' here BEFORE any renaming or column dropping for display
+                # This ensures create_pasha_whatsapp_excel finds the original column names
+                xl_result_search = create_pasha_whatsapp_excel(res, lang=lang)
+                if xl_result_search:
+                    xl_buf_search, xl_df_search = xl_result_search
+                    btn_text = "📤 " + ("تصدير للواتساب" if lang == 'ar' else "Export to WhatsApp")
+                    render_pasha_export_button(xl_df_search, btn_text, f"Search_WhatsApp_{datetime.now().strftime('%M%S')}.xlsx", "البحث_الذكي_واتساب", key="btn_exp_search")
+
+            # --- 2. PREPARE DISPLAY DATAFRAME (Copy and Transform) ---
+            # Create a separate display dataframe to avoid modifying the logic dataframe 'res'
+            res_display = res.copy()
+
             # Rename columns before showing (Safe Rename)
             new_names = {}
             used_names = set()
-            for c in res.columns:
+            for c in res_display.columns:
                 if str(c).startswith('__'): continue
                 new_name = t_col(c, lang)
                 original_new_name = new_name
@@ -4516,21 +3936,18 @@ def render_search_content():
                 used_names.add(new_name)
                 new_names[c] = new_name
                 
-            res.rename(columns=new_names, inplace=True)
+            res_display.rename(columns=new_names, inplace=True)
             
             # FINAL POLISH: Format all visible dates to be clean (No Time)
-            res = clean_date_display(res)
-            
-            # Recalculate Column Config Key
+            res_display = clean_date_display(res_display)
             
             # Reorder columns for Search Table (Status first)
             status_key = 'حالة العقد' if lang == 'ar' else 'Contract Status'
-            if status_key in res.columns:
-                other_cols = [c for c in res.columns if c != status_key]
-                res = res[[status_key] + other_cols]
+            if status_key in res_display.columns:
+                other_cols = [c for c in res_display.columns if c != status_key]
+                res_display = res_display[[status_key] + other_cols]
 
-            # Hide internal sheet row from display but keep in original 'res' for logic
-            res_display = res.copy()
+            # Hide internal columns from display
             for int_col in ["__sheet_row", "__sheet_row_backup"]:
                 if int_col in res_display.columns:
                     res_display = res_display.drop(columns=[int_col])
@@ -4555,7 +3972,6 @@ def render_search_content():
                 format="%d يوم" if lang == 'ar' else "%d Days"
             )
 
-<<<<<<< HEAD
             # Flag Image Configuration
             for col in res_display.columns:
                 if any(kw in str(col).lower() for kw in ["nationality", "الجنسية"]):
@@ -4563,54 +3979,28 @@ def render_search_content():
 
 
 
-            # --- EXPORT BUTTON FOR SEARCH ---
-            c_s_1, c_s_2 = st.columns([4, 1])
-            with c_s_2:
-                xl_result_search = create_pasha_whatsapp_excel(res, lang=lang)
-                if xl_result_search:
-                    xl_buf_search, xl_df_search = xl_result_search
-                    btn_text = "📤 " + ("تصدير للواتساب" if lang == 'ar' else "Export to WhatsApp")
-                    render_pasha_export_button(xl_df_search, btn_text, f"Search_WhatsApp_{datetime.now().strftime('%M%S')}.xlsx", "البحث_الذكي_واتساب", key="btn_exp_search")
-            
             # Smart Translator Button
             res_display = render_table_translator(res_display, key_prefix="search_res")
-=======
-            # --- EXPORT BUTTON FOR SEARCH ---
-            c_s_1, c_s_2 = st.columns([4, 1])
-            with c_s_2:
-                xl_buf_search = create_pasha_whatsapp_excel(res)
-                if xl_buf_search:
-                    st.download_button("📤 تصدير للواتساب", xl_buf_search, f"Search_WhatsApp_{datetime.now().strftime('%M%S')}.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
->>>>>>> 947f1af (update)
             
             # Use on_select to capture row selection
             df_height = min((len(res_display) + 1) * 35 + 40, 600)
             event = st.dataframe(
-<<<<<<< HEAD
                 style_df(res_display), 
-=======
-                res_display, 
->>>>>>> 947f1af (update)
-                use_container_width=True,
+                width='content',
                 on_select="rerun",
                 selection_mode="single-row",
                 hide_index=True,
-<<<<<<< HEAD
                 column_config=__apply_pinned_columns(style_df(res_display), column_config),
                 key=f"search_results_table_{st.session_state.get('search_entry_count', 0)}",
-=======
-                column_config=column_config,
-                key="search_results_table",
->>>>>>> 947f1af (update)
                 height=df_height
             )
 
             # Handle Selection with Safety Check
             if event.selection and event.selection.get("rows"):
                 selected_idx = event.selection["rows"][0]
-                if 0 <= selected_idx < len(res):
-                    worker_row = res.iloc[selected_idx]
-<<<<<<< HEAD
+                if 0 <= selected_idx < len(res_display):
+                    selected_label = res_display.index[selected_idx]
+                    worker_row = res.loc[selected_label]
                     
                     # Generate unique UID for search mode to pass to panel
                     # Use original column names if possible or translated ones
@@ -4621,9 +4011,6 @@ def render_search_content():
                     worker_uid = hashlib.md5(f"{w_name}{w_phone}".encode()).hexdigest()
                     
                     render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search", worker_uid=worker_uid)
-=======
-                    render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search")
->>>>>>> 947f1af (update)
                 else:
                     st.toast("⚠️ Selection out of bounds. Please refresh search." if lang == 'en' else "⚠️ التحديد خارج النطاق. يرجى تحديث البحث.")
 
@@ -4824,7 +4211,7 @@ def render_translator_content():
         with btn_col2:
             translate_clicked = st.button(
                 t("translate_now", lang),
-                use_container_width=True,
+                width='stretch',
                 type="primary",
                 key="btn_start_translation"
             )
@@ -4885,7 +4272,7 @@ def render_translator_content():
                             data=result["output_bytes"],
                             file_name=result.get("output_filename", "translated_file"),
                             mime=result.get("output_mime", "application/octet-stream"),
-                            use_container_width=True,
+                            width='stretch',
                             key="dl_translated_file"
                         )
                 with dl_col2:
@@ -4895,7 +4282,7 @@ def render_translator_content():
                             data=result["translated_text"],
                             file_name=f"translated_{uploaded.name.rsplit('.', 1)[0]}.txt",
                             mime="text/plain",
-                            use_container_width=True,
+                            width='stretch',
                             key="dl_translated_txt"
                         )
 
@@ -5063,7 +4450,6 @@ def render_permissions_content():
                 label_visibility="collapsed"
             )
             if uploaded_photo:
-<<<<<<< HEAD
                 try:
                     from PIL import Image
                     from streamlit_cropper import st_cropper
@@ -5088,16 +4474,6 @@ def render_permissions_content():
                 except Exception as e:
                     st.error("عذراً، حدث خطأ أثناء معالجة الصورة. الرجاء التأكد من أن الملف سليم." if lang == 'ar' else "Error processing image. Please ensure valid file.")
                     print(f"Cropper error: {e}")
-=======
-                mime = uploaded_photo.type
-                avatar_bytes = uploaded_photo.read()
-                avatar_b64 = base64.b64encode(avatar_bytes).decode()
-                full_uri = f"data:{mime};base64,{avatar_b64}"
-                if st.button("💾 " + ("حفظ الصورة" if lang == 'ar' else "Save Photo"), key="save_avatar_btn"):
-                    st.session_state.auth.update_avatar(selected_user, full_uri)
-                    show_toast("✅ " + ("تم حفظ الصورة بنجاح" if lang == 'ar' else "Photo saved successfully!"), "success")
-                    st.rerun()
->>>>>>> 947f1af (update)
 
         if selected_user != "admin":
             st.markdown("""
@@ -5127,7 +4503,7 @@ def render_permissions_content():
             with c1:
                 with st.popover("حذف المستخدم" if lang=='ar' else "Delete User"):
                     st.warning("هل أنت متأكد من حذف هذا المستخدم؟" if lang=='ar' else "Are you sure you want to delete this user?")
-                    if st.button("نعم، احذف المستخدم" if lang=='ar' else "Yes, Delete User", type="primary", use_container_width=True):
+                    if st.button("نعم، احذف المستخدم" if lang=='ar' else "Yes, Delete User", type="primary", width='stretch'):
                         res = st.session_state.auth.delete_user(selected_user)
                         
                         # Handle both old (bool) and new (tuple) return types safely
@@ -5152,11 +4528,7 @@ def render_permissions_content():
     
     # Stylized DataFrame
     df_users = pd.DataFrame(table_data)
-<<<<<<< HEAD
-    st.dataframe(style_df(df_users), use_container_width=True, column_config=__apply_pinned_columns(style_df(df_users)))
-=======
-    st.dataframe(style_df(df_users), use_container_width=True)
->>>>>>> 947f1af (update)
+    st.dataframe(style_df(df_users), width='content', column_config=__apply_pinned_columns(style_df(df_users)))
 
 def render_order_processing_content():
     """Order Processing: Matches Customer Requests with available Workers."""
@@ -5191,62 +4563,65 @@ def render_order_processing_content():
         return
 
     # --- NEW: Advanced Filtering Panel (Matching Image) ---
-<<<<<<< HEAD
     ai_title = "(AI) البحث الذكي" if lang == 'ar' else "Smart Search (AI)"
-    st.markdown(f'<div style="color: #D4AF37; font-weight: 600; margin-bottom: 5px; font-family: \'Cairo\', sans-serif;">{ai_title}</div>', unsafe_allow_html=True)
-=======
-    st.markdown('<div style="color: #D4AF37; font-weight: 600; margin-bottom: 5px; font-family: \'Cairo\', sans-serif;">(AI) البحث الذكي</div>', unsafe_allow_html=True)
->>>>>>> 947f1af (update)
+    st.markdown(f'<div class="mobile-neon-text" style="color: #D4AF37; font-weight: 600; margin-bottom: 5px; font-family: \'Cairo\', sans-serif;">{ai_title}</div>', unsafe_allow_html=True)
     
     with st.expander("🔍 " + ("تصفية متقدمة" if lang == 'ar' else "Advanced Filtering"), expanded=False):
-        # 1. Row: Scheduling & Dates
-        st.markdown(f'<div style="color: #888; margin-bottom: 10px;">{"📅 جدولة وتواريخ" if lang == 'ar' else "📅 Scheduling & Dates"}</div>', unsafe_allow_html=True)
-        rc1, rc2, rc3 = st.columns(3)
+        # 1. Row: Scheduling & Dates - Centered
+        st.markdown(f'<div class="premium-filter-label">📅 {t("filter_dates_group", lang)}</div>', unsafe_allow_html=True)
+        # Using 5 columns [Pad, Item, Item, Item, Pad]
+        r_pad1, rc3, rc2, rc1, r_pad2 = st.columns([0.5, 1, 1, 1, 0.5])
         with rc3: # Rightmost (Arabic)
-            age_enabled = st.checkbox("تفعيل العمر" if lang == 'ar' else "Enable Age", key="op_age_en")
+            age_enabled = st.checkbox(t("age", lang) if lang == 'en' else f"تفعيل {t('age', lang)}", key="op_age_en")
             if age_enabled:
-<<<<<<< HEAD
                 ac1, ac2 = st.columns(2)
-                with ac1:
-                    a_min = st.number_input("من سن" if lang == 'ar' else "From", 1, 100, 16, key="op_age_min")
-                with ac2:
-                    a_max = st.number_input("إلى سن" if lang == 'ar' else "To", 1, 100, 35, key="op_age_max")
+                with ac1: a_min = st.number_input("من سن" if lang == 'ar' else "From", 1, 100, 16, key="op_age_min")
+                with ac2: a_max = st.number_input("إلى سن" if lang == 'ar' else "To", 1, 100, 35, key="op_age_max")
                 age_range = (a_min, a_max)
-            else:
-                age_range = (16, 35)
-=======
-                age_range = st.slider("", 18, 65, (20, 45), key="op_age_slider")
->>>>>>> 947f1af (update)
+            else: age_range = (16, 35)
         with rc2:
-            contract_enabled = st.checkbox("تفعيل تاريخ انتهاء العقد" if lang == 'ar' else "Enable Contract End Date", key="op_cont_en")
+            contract_enabled = st.checkbox(t("contract_end", lang) if lang == 'en' else f"تفعيل {t('contract_end', lang)}", key="op_cont_en")
             if contract_enabled:
                 c_start = st.date_input("من", value=datetime.today(), key="op_cont_start")
                 c_end = st.date_input("إلى", value=datetime.today() + timedelta(days=365), key="op_cont_end")
         with rc1:
-            date_enabled = st.checkbox("تفعيل تاريخ التسجيل" if lang == 'ar' else "Enable Reg. Date", key="op_date_en")
+            date_enabled = st.checkbox(t("registration_date", lang) if lang == 'en' else f"تفعيل {t('registration_date', lang)}", key="op_date_en")
             if date_enabled:
                 d_start = st.date_input("من", value=datetime.today() - timedelta(days=30), key="op_date_start")
                 d_end = st.date_input("إلى", value=datetime.today(), key="op_date_end")
 
-        # 2. Row: Advanced Smart Filtering
-        st.markdown(f'<div style="color: #888; margin-top: 15px; margin-bottom: 10px;">{"⚙️ تصفية ذكية متقدمة" if lang == 'ar' else "⚙️ Advanced Smart Filtering"}</div>', unsafe_allow_html=True)
-        sc1, sc2, sc3 = st.columns(3)
-        with sc3:
-            expired_only = st.checkbox("العقود المنتهية" if lang == 'ar' else "Expired Contracts", key="op_expired")
-        with sc2:
-            not_working_only = st.checkbox("No (هل يعمل حالياً؟)" if lang == 'ar' else "No (Working Now?)", key="op_not_working")
+        # 2. Row: Advanced Smart Filtering - Centered
+        st.markdown(f'<div class="premium-filter-label">⚙️ {t("filter_advanced_group", lang)}</div>', unsafe_allow_html=True)
+        # Using 5 columns [Pad, Expired, NotWorking, Dropdown, Pad]
+        s_pad1, sc1, sc2, sc3, s_pad2 = st.columns([0.4, 1, 1, 1.8, 0.4])
         with sc1:
-            st.markdown(f'<div style="font-size: 0.8rem; color: #888;">{"عدد نقل الكفالة" if lang == 'ar' else "Transfer Count"}</div>', unsafe_allow_html=True)
-            trans_count = st.selectbox("", ["— الكل —", "1", "2", "3", "4+"], key="op_transfer", label_visibility="collapsed")
-
-        # 3. Row: Status Flags
-        tc1, tc2, tc3 = st.columns(3)
+            expired_only = st.checkbox(t("expired_filter", lang), key="op_expired")
+        with sc2:
+            not_working_only = st.checkbox(t("not_working_no", lang), key="op_not_working")
+        with sc3:
+            # Inner columns: Dropdown on Right (Col1), Label on Left (Col2)
+            ic, lc = st.columns([1.2, 1])
+            transfer_options = {"": f"— {t('transfer_all', lang)} —", "First time": t("transfer_1", lang), "Second time": t("transfer_2", lang), "The third time": t("transfer_3", lang), "More than three": t("transfer_more", lang)}
+            with ic:
+                selected_transfer_label = st.selectbox("", options=list(transfer_options.values()), key="op_transfer", label_visibility="collapsed")
+            with lc:
+                st.markdown(f'<div style="font-family: \'Cairo\', sans-serif; font-size: 0.95rem; font-weight: 500; color: #FFFFFF; text-align: left; margin-top: 8px;">{t("transfer_count_label", lang)}</div>', unsafe_allow_html=True)
+            trans_count = [k for k, v in transfer_options.items() if v == selected_transfer_label][0]
+        
+        # 3. Row: Status Flags - Centered
+        st.markdown("<div style='margin-bottom: 10px;'></div>", unsafe_allow_html=True)
+        # Using 7 columns [Pad, 5 items, Pad]
+        t_pad1, tc5, tc4, tc3, tc2, tc1, t_pad2 = st.columns([0.2, 1, 1, 1, 1, 1, 0.2])
+        with tc5:
+            domestic_worker = st.checkbox(t("domestic_worker_filter", lang), key="op_domestic_worker")
+        with tc4:
+            no_huroob = st.checkbox(t("no_huroob", lang), key="op_no_huroob")
         with tc3:
-            no_huroob = st.checkbox("بدون بلاغ هروب (No)" if lang == 'ar' else "No Huroob (No)", key="op_no_huroob")
+            yes_huroob = st.checkbox(t("yes_huroob_label", lang), key="op_yes_huroob")
         with tc2:
-            work_outside = st.checkbox("يقبل العمل خارج مدينته (Yes)" if lang == 'ar' else "Work Outside City (Yes)", key="op_outside")
+            sponsor_transfer = st.checkbox(t("sponsor_transfer_yes", lang), key="op_sponsor_transfer")
         with tc1:
-            pass # Reserved
+            work_outside = st.checkbox(t("work_outside_city", lang), key="op_outside")
 
         # Apply Filters using SmartSearchEngine
         filters = {
@@ -5262,8 +4637,11 @@ def render_order_processing_content():
             'expired_only': expired_only,
             'not_working_only': not_working_only,
             'no_huroob': no_huroob,
+            'yes_huroob': yes_huroob,
+            'sponsor_transfer': sponsor_transfer,
             'work_outside_city': work_outside,
-            'transfer_count': trans_count if trans_count != "— الكل —" else None
+            'domestic_worker': domestic_worker,
+            'transfer_count': trans_count if trans_count != "" else None
         }
         
         # Execute global filter on worker dataset
@@ -5313,23 +4691,17 @@ def render_order_processing_content():
     c_num_emp = find_cust_col(["number of employees"]) or find_cust_col(["عدد"])
     c_work_nature = find_cust_col(["nature"]) or find_cust_col(["طبيعة"])
     c_salary = find_cust_col(["salary"]) or find_cust_col(["راتب"])
-<<<<<<< HEAD
     c_transfer_days = find_cust_col(["transfer days"]) or find_cust_col(["نقل الكفالة"]) or find_cust_col(["نقل"])
     c_working_hours = find_cust_col(["working hours"]) or find_cust_col(["ساعات"])
     c_weekly_holiday = find_cust_col(["holiday"]) or find_cust_col(["day off"]) or find_cust_col(["أسبوعي"]) or find_cust_col(["اجازة"]) or find_cust_col(["إجازة"])
     c_notes = find_cust_col(["notes"]) or find_cust_col(["ملاحظات"])
-=======
->>>>>>> 947f1af (update)
     
     # --- Worker Column Names ---
     w_name_col = next((c for c in workers_df.columns if "full name" in c.lower()), None)
     w_nationality_col = next((c for c in workers_df.columns if c.strip().lower() == "nationality"), None)
     w_gender_col = next((c for c in workers_df.columns if c.strip().lower() == "gender"), None)
     w_job_col = next((c for c in workers_df.columns if "job" in c.lower() and "looking" in c.lower()), None)
-<<<<<<< HEAD
     w_other_job_col = next((c for c in workers_df.columns if "other jobs" in c.lower()), None)
-=======
->>>>>>> 947f1af (update)
     w_city_col = next((c for c in workers_df.columns if "city" in c.lower() and "saudi" in c.lower()), None)
     w_phone_col = next((c for c in workers_df.columns if "phone" in c.lower()), None)
     w_age_col = next((c for c in workers_df.columns if "age" in c.lower()), None)
@@ -5399,7 +4771,6 @@ def render_order_processing_content():
     
     def match_job(customer_job, worker_job):
         c_job = str(customer_job).strip()
-<<<<<<< HEAD
         w_job_raw = str(worker_job).strip()
         if not c_job or not w_job_raw: return True
         
@@ -5478,67 +4849,12 @@ def render_order_processing_content():
         """Find workers. Returns (all_matches, all_scores, city_count, region_count)."""
         city_matches, city_scores = [], []
         region_matches, region_scores = [], []
-=======
-        w_job = normalize(worker_job)
-        if not c_job or not w_job: return True
-        
-        tm = st.session_state.get('tm')
-        search_terms = {normalize(c_job)}
-        if tm:
-            bundles = tm.analyze_query(c_job)
-            for b in bundles:
-                for s in b:
-                    search_terms.add(normalize(s))
-                    
-        for term in search_terms:
-            if not term: continue
-            if term in w_job or w_job in term:
-                return True
-            parts = re.split(r'[\s|,،\-–]+', term)
-            for p in parts:
-                p = p.strip()
-                if len(p) > 1 and (p in w_job or w_job in p):
-                    return True
-        return False
-    
-    def match_city(customer_location, worker_city):
-        c_loc = str(customer_location).strip()
-        w_city_val = normalize(worker_city)
-        if not c_loc or not w_city_val: return True
-        
-        tm = st.session_state.get('tm')
-        search_terms = {normalize(c_loc)}
-        if tm:
-            bundles = tm.analyze_query(c_loc)
-            for b in bundles:
-                for s in b:
-                    search_terms.add(normalize(s))
-                    
-        for term in search_terms:
-            if not term: continue
-            if term in w_city_val or w_city_val in term:
-                return True
-            parts = re.split(r'[\s|,،\-–]+', term)
-            for p in parts:
-                p = p.strip()
-                if len(p) > 1 and (p in w_city_val or w_city_val in p):
-                    return True
-        return False
-    
-    def find_matching_workers(customer_row):
-        """Find workers. Returns (all_matches, all_scores, city_count)."""
-        city_matches, city_scores = [], []
->>>>>>> 947f1af (update)
         other_matches, other_scores = [], []
         
         for _, worker in workers_df.iterrows():
             score = 0
             total_criteria = 0
-<<<<<<< HEAD
             geo_tier = 99 # 0=City, 1=Region, 2+=Proximity Regions, 99=Other
-=======
-            city_matched = False
->>>>>>> 947f1af (update)
             
             if c_category and w_gender_col:
                 cv = str(customer_row.get(c_category, ""))
@@ -5558,7 +4874,6 @@ def render_order_processing_content():
                     total_criteria += 1
                     score += 1
             
-<<<<<<< HEAD
             if c_work_nature and (w_job_col or w_other_job_col):
                 cv = str(customer_row.get(c_work_nature, ""))
                 
@@ -5579,21 +4894,12 @@ def render_order_processing_content():
                         continue # Hard Filter: Skip if job mismatch completely
                     total_criteria += 1
                     score += 1
-=======
-            if c_work_nature and w_job_col:
-                cv = str(customer_row.get(c_work_nature, ""))
-                wv = str(worker.get(w_job_col, ""))
-                if cv.strip():
-                    total_criteria += 1
-                    if match_job(cv, wv): score += 1
->>>>>>> 947f1af (update)
             
             if c_location and w_city_col:
                 cv = str(customer_row.get(c_location, ""))
                 wv = str(worker.get(w_city_col, ""))
                 if cv.strip():
                     total_criteria += 1
-<<<<<<< HEAD
                     
                     # Hierarchical Geographic Matching
                     if _fuzzy_match(wv, cv):
@@ -5627,29 +4933,12 @@ def render_order_processing_content():
                     other_scores.append(pct)
         
         # Sort each group by: 1. Score (desc), 2. Geo Tier (for others), 3. Timestamp (desc)
-=======
-                    if match_city(cv, wv):
-                        score += 1
-                        city_matched = True
-            
-            if total_criteria > 0 and score >= 1:
-                pct = int((score / total_criteria) * 100)
-                if city_matched:
-                    city_matches.append(worker)
-                    city_scores.append(pct)
-                else:
-                    other_matches.append(worker)
-                    other_scores.append(pct)
-        
-        # Sort each group by: 1. Score (desc), 2. Timestamp (desc)
->>>>>>> 947f1af (update)
         def get_sort_key(score, worker):
             ts_val = pd.NaT
             if w_timestamp_col:
                 raw_ts = str(worker.get(w_timestamp_col, ""))
                 clean_ts = raw_ts.replace('م', 'PM').replace('ص', 'AM')
                 ts_val = pd.to_datetime(clean_ts, errors='coerce')
-<<<<<<< HEAD
             
             gt = worker.get('__geo_tier', 0)
             return (-score, gt, -ts_val.timestamp() if pd.notnull(ts_val) else 0)
@@ -5668,22 +4957,6 @@ def render_order_processing_content():
         
         return f_city + f_region + f_other, f_city_scores + f_region_scores + f_other_scores, len(f_city), len(f_region)
 
-=======
-            return (-score, -ts_val.timestamp() if pd.notnull(ts_val) else 0)
-
-        if city_matches:
-            # zip(scores, workers) -> sort by get_sort_key
-            items = sorted(zip(city_scores, city_matches), key=lambda x: get_sort_key(x[0], x[1]))
-            city_scores = [it[0] for it in items]
-            city_matches = [it[1] for it in items]
-            
-        if other_matches:
-            items = sorted(zip(other_scores, other_matches), key=lambda x: get_sort_key(x[0], x[1]))
-            other_scores = [it[0] for it in items]
-            other_matches = [it[1] for it in items]
-        
-        return city_matches + other_matches, city_scores + other_scores, len(city_matches)
->>>>>>> 947f1af (update)
 
     # --- Initialize session state ---
     if 'op_hidden_clients' not in st.session_state:
@@ -5765,9 +5038,8 @@ def render_order_processing_content():
             
         return pd.DataFrame(rows), filtered_indices
 
-<<<<<<< HEAD
 
-    def info_cell(icon, label_text, value, color="#F4F4F4", min_width="200px", force_ar=False):
+    def info_cell(icon, label_text, value, color="#F4F4F4", min_width="160px", force_ar=False):
         if not value or str(value).strip().lower() in ["nan", "none", ""]:
             return ""
         
@@ -5776,42 +5048,45 @@ def render_order_processing_content():
         
         # Detect if this is a phone/number field for LTR direction
         is_phone_field = any(kw in label_text.lower() for kw in ["phone", "mobile", "جوال", "هاتف", "موبايل"])
-        val_direction = 'direction:ltr; unicode-bidi:embed;' if is_phone_field else ''
+        
+        # Explicitly set text alignment and direction for stability across browsers
+        cell_direction = 'ltr' if is_phone_field else 'rtl'
+        cell_align = 'left' if is_phone_field else 'right'
         
         # Flag Injection: Look for nationality fields
         if any(kw in label_text.lower() for kw in ["nationality", "جنسية"]):
             import re
             
-            # Comprehensive name-to-code mapping (both Arabic and English)
+            # Comprehensive name-to-emoji mapping (both Arabic and English) to optimize load time
             all_names = {
                 # Arabic names
-                "بنجلاديشي": "BD", "بنغالي": "BD", "بنجالي": "BD", "بنغلاديشي": "BD",
-                "نيبالي": "NP", "نيبال": "NP",
-                "فلبيني": "PH", "فلبينية": "PH", "الفلبين": "PH",
-                "هندي": "IN", "هندية": "IN", "الهند": "IN",
-                "مصري": "EG", "مصرية": "EG", "مصر": "EG",
-                "باكستاني": "PK", "باكستانية": "PK", "باكستان": "PK",
-                "سوداني": "SD", "سودانية": "SD", "السودان": "SD",
-                "كيني": "KE", "كينية": "KE", "كينيا": "KE",
-                "أوغندي": "UG", "أوغندية": "UG", "أوغندا": "UG",
-                "إثيوبي": "ET", "إثيوبية": "ET", "إثيوبيا": "ET",
-                "يمني": "YE", "يمنية": "YE", "اليمن": "YE",
-                "إندونيسي": "ID", "اندونيسي": "ID", "إندونيسية": "ID", "اندونيسية": "ID", "إندونيسيا": "ID",
-                "سريلانكي": "LK", "سريلانكية": "LK",
+                "بنجلاديشي": "🇧🇩", "بنغالي": "🇧🇩", "بنجالي": "🇧🇩", "بنغلاديشي": "🇧🇩",
+                "نيبالي": "🇳🇵", "نيبال": "🇳🇵",
+                "فلبيني": "🇵🇭", "فلبينية": "🇵🇭", "الفلبين": "🇵🇭",
+                "هندي": "🇮🇳", "هندية": "🇮🇳", "الهند": "🇮🇳",
+                "مصري": "🇪🇬", "مصرية": "🇪🇬", "مصر": "🇪🇬",
+                "باكستاني": "🇵🇰", "باكستانية": "🇵🇰", "باكستان": "🇵🇰",
+                "سوداني": "🇸🇩", "سودانية": "🇸🇩", "السودان": "🇸🇩",
+                "كيني": "🇰🇪", "كينية": "🇰🇪", "كينيا": "🇰🇪",
+                "أوغندي": "🇺🇬", "أوغندية": "🇺🇬", "أوغندا": "🇺🇬",
+                "إثيوبي": "🇪🇹", "إثيوبية": "🇪🇹", "إثيوبيا": "🇪🇹",
+                "يمني": "🇾🇪", "يمنية": "🇾🇪", "اليمن": "🇾🇪",
+                "إندونيسي": "🇮🇩", "اندونيسي": "🇮🇩", "إندونيسية": "🇮🇩", "اندونيسية": "🇮🇩", "إندونيسيا": "🇮🇩",
+                "سريلانكي": "🇱🇰", "سريلانكية": "🇱🇰",
                 # English names
-                "bangladeshi": "BD", "bengali": "BD", 
-                "nepali": "NP", "nepalese": "NP",
-                "filipino": "PH", "filipina": "PH", "philippines": "PH",
-                "indian": "IN",
-                "egyptian": "EG",
-                "pakistani": "PK",
-                "sudanese": "SD",
-                "kenyan": "KE",
-                "ugandan": "UG",
-                "ethiopian": "ET",
-                "yemeni": "YE",
-                "indonesian": "ID",
-                "sri lankan": "LK",
+                "bangladeshi": "🇧🇩", "bengali": "🇧🇩", 
+                "nepali": "🇳🇵", "nepalese": "🇳🇵",
+                "filipino": "🇵🇭", "filipina": "🇵🇭", "philippines": "🇵🇭",
+                "indian": "🇮🇳",
+                "egyptian": "🇪🇬",
+                "pakistani": "🇵🇰",
+                "sudanese": "🇸🇩",
+                "kenyan": "🇰🇪",
+                "ugandan": "🇺🇬",
+                "ethiopian": "🇪🇹",
+                "yemeni": "🇾🇪",
+                "indonesian": "🇮🇩",
+                "sri lankan": "🇱🇰",
             }
             
             # Split by comma only (each nationality = "عربي - English")
@@ -5825,31 +5100,23 @@ def render_order_processing_content():
                 
                 # Find the FIRST matching nationality in this segment
                 matched_code = None
-                for name, code in all_names.items():
-                    if name.lower() in seg_stripped.lower():
-                        matched_code = code
+                for n, c in all_names.items():
+                    if n.lower() in seg_stripped.lower():
+                        matched_code = c
                         break
                 
                 if matched_code:
-                    flag_img = f'<img src="https://flagsapi.com/{matched_code}/flat/24.png" style="height:16px; vertical-align:middle; margin:0 4px 2px 4px;">'
-                    new_segments.append(f"{seg_stripped} {flag_img}")
+                    new_segments.append(f"{seg_stripped} {matched_code}")
                 else:
                     new_segments.append(seg_stripped)
             
             disp_val = " , ".join(new_segments)
 
-        return f'<div style="background: rgba(255,255,255,0.04); padding: 12px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.06); margin: 5px; flex: 1 1 {min_width}; min-height: 80px; display: flex; flex-direction: column; justify-content: center;"><span style="color: #888; font-size: 0.8rem;">{label_text}</span><span style="color: {color}; font-size: 1.1rem; font-weight: 600; margin-top: 4px; {val_direction}">{icon} {disp_val}</span></div>'
+        return f"""<div style="background: rgba(255,255,255,0.04); padding: 12px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.08); margin: 4px; flex: 1 1 {min_width}; min-width: 120px; max-width: 100%; min-height: 85px; display: flex; flex-direction: column; justify-content: center; direction: {cell_direction}; text-align: {cell_align}; box-shadow: inset 0 0 10px rgba(0,0,0,0.2); overflow: hidden;">
+<span style="color: #999; font-size: 0.8rem; margin-bottom: 2px;">{label_text}</span>
+<span style="color: {color}; font-size: 1.05rem; font-weight: 600; line-height: 1.3; word-break: break-word;">{icon} {disp_val}</span>
+</div>"""
 
-=======
-    def info_cell(icon, label_text, value, color="#F4F4F4"):
-        st.markdown(f"""
-            <div style="background: rgba(255,255,255,0.04); padding: 12px; border-radius: 10px;
-                        border: 1px solid rgba(255,255,255,0.06); margin: 5px 0; min-height: 80px;">
-                <span style="color: #888; font-size: 0.8rem;">{label_text}</span><br>
-                <span style="color: {color}; font-size: 1.1rem; font-weight: 600;">{icon} {value}</span>
-            </div>
-        """, unsafe_allow_html=True)
->>>>>>> 947f1af (update)
 
     # --- Timestamp column lookup ---
     c_timestamp = find_cust_col(["timestamp"]) or find_cust_col(["الطابع"]) or find_cust_col(["تاريخ"])
@@ -5863,24 +5130,23 @@ def render_order_processing_content():
     # --- Container for all requests ---
     st.markdown("### 📋 " + t('customer_requests', lang))
     
-<<<<<<< HEAD
     # NEW SEARCH INPUT
-    search_lbl = "🔍 بحث عن بطاقة طلب (رقم الجوال أو اسم المسؤول أو موقع العمل)" if lang == 'ar' else "🔍 Search Request (Mobile, Manager or Location)"
-    cust_search_q = st.text_input(search_lbl, key="order_processing_cust_search").strip()
+    search_lbl = "🔍 بحث عن بطاقة طلب (الجوال، المسؤول، الموقع، الجنسية، المهنة، الملاحظات)" if lang == 'ar' else "🔍 Search Request (Mobile, Manager, Location, Nationality, Job, Notes)"
     
-    # Smart phone normalizer (same logic as SmartSearchEngine)
+    # --- Search & Export Row ---
+    c_search_1, c_search_2 = st.columns([4, 1])
+    with c_search_1:
+        cust_search_q = st.text_input(search_lbl, key="order_processing_cust_search", label_visibility="collapsed", placeholder=search_lbl).strip()
+    
+    # --- Search Helper Functions (Defined before usage) ---
     def _normalize_phone_op(text):
         arabic_to_western = str.maketrans('٠١٢٣٤٥٦٧٨٩', '0123456789')
         s = str(text).translate(arabic_to_western)
         digits = re.sub(r'\D', '', s)
-        if not digits:
-            return ""
-        if digits.startswith('00'):
-            digits = digits[2:]
-        if digits.startswith('966'):
-            digits = digits[3:]
-        while digits.startswith('0'):
-            digits = digits[1:]
+        if not digits: return ""
+        if digits.startswith('00'): digits = digits[2:]
+        if digits.startswith('966'): digits = digits[3:]
+        while digits.startswith('0'): digits = digits[1:]
         return digits
 
     def _is_phone_query_op(q):
@@ -5888,74 +5154,153 @@ def render_order_processing_content():
         clean = re.sub(r'[\s\+\-\(\)]', '', str(q)).translate(arabic_to_western)
         return clean.isdigit() and len(clean) >= 5
 
-=======
->>>>>>> 947f1af (update)
-    # Loop over all customers
+    # Pre-analyze search query for smart bilingual matching
+    tm_op = st.session_state.get('tm')
+    query_bundles = []
+    is_phone_search = False
+    if cust_search_q:
+        is_phone_search = _is_phone_query_op(cust_search_q)
+        if not is_phone_search:
+            query_bundles = tm_op.analyze_query(cust_search_q) if tm_op else [[cust_search_q.lower()]]
+
+    # ---------------- 🚀 PRE-FILTERING FOR PAGINATION ----------------
+    filtered_indices = []
+    
     for idx, customer_row in customers_df.iterrows():
+        client_key = f"client_{idx}"
+        if client_key in st.session_state.op_hidden_clients:
+            continue
+            
         company_val = str(customer_row.get(c_company, "")) if c_company else ""
         responsible_val = str(customer_row.get(c_responsible, "")) if c_responsible else ""
-<<<<<<< HEAD
         mobile_val = str(customer_row.get(c_mobile, "")) if c_mobile else ""
         location_val = str(customer_row.get(c_location, "")) if c_location else ""
+        nationality_val = str(customer_row.get(c_nationality, "")) if c_nationality else ""
+        category_val = str(customer_row.get(c_category, "")) if c_category else ""
+        nature_val = str(customer_row.get(c_work_nature, "")) if c_work_nature else ""
+        notes_val = str(customer_row.get(c_notes, "")) if c_notes else ""
 
         if cust_search_q:
-            if _is_phone_query_op(cust_search_q):
-                # Smart phone search: normalize both query and mobile value
+            if is_phone_search:
+                # Smart phone search
                 q_phone = _normalize_phone_op(cust_search_q)
                 m_phone = _normalize_phone_op(mobile_val)
                 if not (q_phone and q_phone in m_phone):
                     continue
             else:
-                # Text search: name or location
-                q_lower = cust_search_q.lower()
-                match = False
-                for val in [responsible_val, location_val, company_val]:
-                    if q_lower in val.lower().strip():
-                        match = True
-                        break
-                if not match:
-                    continue
+                # Advanced Bilingual Text Search
+                search_text = " ".join([responsible_val, location_val, company_val, nationality_val, category_val, nature_val, notes_val]).lower()
+                
+                if query_bundles:
+                    match_all_words = True
+                    for bundle in query_bundles:
+                        found_synonym = False
+                        for syn in bundle:
+                            if syn.lower() in search_text:
+                                found_synonym = True
+                                break
+                        if not found_synonym:
+                            match_all_words = False
+                            break
+                    if not match_all_words:
+                        continue
+                else:
+                    if cust_search_q.lower() not in search_text:
+                        continue
+                    
+        filtered_indices.append(idx)
 
-=======
->>>>>>> 947f1af (update)
+    # --- Export Button for Customers ---
+    with c_search_2:
+        if filtered_indices:
+            from src.utils.phone_utils import format_phone_number, render_pasha_export_button
+            export_cust_list = []
+            for f_idx in filtered_indices:
+                crow = customers_df.loc[f_idx]
+                r_name = str(crow.get(c_responsible, "")).strip()
+                r_comp = str(crow.get(c_company, "")).strip()
+                full_name = f"{r_name} ({r_comp})" if r_comp else r_name
+                raw_phone = str(crow.get(c_mobile, "")).strip()
+                clean_phone = format_phone_number(raw_phone)
+                
+                if clean_phone:
+                    export_cust_list.append({
+                        "Name": full_name,
+                        "Phone": clean_phone
+                    })
+            
+            if export_cust_list:
+                cust_export_df = pd.DataFrame(export_cust_list)
+                btn_label = "📤 " + ("تصدير العملاء" if lang == 'ar' else "Export Clients")
+                render_pasha_export_button(cust_export_df, btn_label, f"Clients_WhatsApp_{datetime.now().strftime('%M%S')}.xlsx", "عملاء_المعالجة", key="btn_exp_cust_op")
+        
+    # ---------------- 🚀 PAGINATION LOGIC ----------------
+    PAGE_SIZE = 15
+    total_items = len(filtered_indices)
+    total_pages = max(1, (total_items + PAGE_SIZE - 1) // PAGE_SIZE)
+    
+    if "op_page_number" not in st.session_state:
+        st.session_state.op_page_number = 1
+        
+    # Reset page to 1 if search query changes
+    if "op_last_search" not in st.session_state or st.session_state.op_last_search != cust_search_q:
+        st.session_state.op_page_number = 1
+        st.session_state.op_last_search = cust_search_q
+        
+    if st.session_state.op_page_number > total_pages:
+        st.session_state.op_page_number = total_pages
+    elif st.session_state.op_page_number < 1:
+        st.session_state.op_page_number = 1
+        
+    start_idx = (st.session_state.op_page_number - 1) * PAGE_SIZE
+    end_idx = start_idx + PAGE_SIZE
+    current_page_indices = filtered_indices[start_idx:end_idx]
+    
+    # Top Pagination Controls
+    if total_pages > 1:
+        st.markdown("<div style='margin-top: 15px;'></div>", unsafe_allow_html=True)
+        _, pc1, pc2, pc3, _ = st.columns([1, 1, 2, 1, 1])
+        with pc1:
+            if st.button("السابق ⬅️" if lang == 'ar' else "⬅️ Previous", disabled=(st.session_state.op_page_number == 1), key="prev_top", width='stretch'):
+                st.session_state.op_page_number -= 1
+                st.rerun()
+        with pc2:
+            page_text = f"صفحة {st.session_state.op_page_number} من {total_pages}" if lang == 'ar' else f"Page {st.session_state.op_page_number} of {total_pages}"
+            st.markdown(f"<div style='text-align:center; padding-top:10px; color:#ddd;'>{page_text}</div>", unsafe_allow_html=True)
+        with pc3:
+            if st.button("➡️ التالي" if lang == 'ar' else "Next ➡️", disabled=(st.session_state.op_page_number == total_pages), key="next_top", width='stretch'):
+                st.session_state.op_page_number += 1
+                st.rerun()
+                
+    st.markdown("<hr style='border-color: rgba(255,255,255,0.1); margin: 20px 0;'>", unsafe_allow_html=True)
+
+    # Loop over current page customers
+    for idx in current_page_indices:
+        customer_row = customers_df.loc[idx]
+        company_val = str(customer_row.get(c_company, "")) if c_company else ""
+        responsible_val = str(customer_row.get(c_responsible, "")) if c_responsible else ""
+        mobile_val = str(customer_row.get(c_mobile, "")) if c_mobile else ""
+        location_val = str(customer_row.get(c_location, "")) if c_location else ""
+        
         client_key = f"client_{idx}"
         
         # Display name
         display_name = f"{company_val} - {responsible_val}".strip(" -")
         if not display_name: display_name = f"طلب #{idx+1}" if lang == 'ar' else f"Request #{idx+1}"
         
-        if client_key in st.session_state.op_hidden_clients:
-            continue
-            
         # --- Single Customer Section ---
         with st.container():
-<<<<<<< HEAD
             # Header with White Neon Glow Frame integrated
             user_role = st.session_state.user.get("role")
-            display_title = f"🏢 {company_val}" if user_role != "viewer" else "🏢 " + ("طلب عميل" if lang == 'ar' else f"Customer Request")
+            display_title = f"🏢 {company_val}" if user_role != "viewer" else '<span class="mobile-neon-text">🏢 ' + ("طلبات العملاء" if lang == "ar" else "Customer Requests") + '</span>'
             
-            # Start Neon Frame and Header
+            # Start Neon Frame and Header (Static CSS to avoid mobile lag)
             st.markdown(f"""
-<style>
-@keyframes neonWhitePulseCard {{
-    0% {{ box-shadow: 0 0 10px rgba(255, 255, 255, 0.3), 0 0 20px rgba(255, 255, 255, 0.1); }}
-    100% {{ box-shadow: 0 0 20px rgba(255, 255, 255, 0.6), 0 0 40px rgba(255, 255, 255, 0.3); }}
-}}
-.neon-wrapper-card {{
-    border: 1.5px solid rgba(255, 255, 255, 0.6);
-    border-radius: 18px;
-    padding: 15px;
-    margin: 15px 0;
-    background: rgba(10, 14, 26, 0.6);
-    animation: neonWhitePulseCard 3s ease-in-out infinite alternate;
-    direction: rtl;
-}}
-</style>
-<div class="neon-wrapper-card">
-    <div style="background: linear-gradient(90deg, rgba(255,255,255,0.1), transparent); 
-                padding: 12px 20px; border-radius: 12px; border-right: 5px solid #FFFFFF; margin: 0 0 15px 0;
-                box-shadow: 0 0 15px rgba(255,255,255,0.2);">
-        <h3 style="color: #FFFFFF; margin: 0; font-family: 'Tajawal', sans-serif; text-shadow: 0 0 10px rgba(255,255,255,0.5);">
+<div style="border: 1.5px solid rgba(255, 255, 255, 0.35); border-radius: 20px; padding: 18px; margin: 18px 0; background: rgba(10, 14, 26, 0.7); box-shadow: 0 0 15px rgba(255, 255, 255, 0.15); direction: rtl;">
+    <div style="background: linear-gradient(90deg, rgba(255,255,255,0.08), transparent); 
+                padding: 14px 25px; border-radius: 12px; border-right: 6px solid #FFFFFF; margin: 0 0 18px 0;
+                box-shadow: 5px 0 15px rgba(255,255,255,0.3);">
+        <h3 style="color: #FFFFFF; margin: 0; font-family: 'Tajawal', sans-serif; text-shadow: 0 0 8px rgba(255,255,255,0.5);">
             {display_title} <span style="font-size: 0.8rem; color: #888;">#{idx+1}</span>
         </h3>
     </div>
@@ -6012,61 +5357,6 @@ def render_order_processing_content():
                 st.markdown(info_html, unsafe_allow_html=True)
             
             with action_col:
-=======
-            # Header
-            user_role = st.session_state.user.get("role")
-            display_title = f"🏢 {company_val}" if user_role != "viewer" else "🏢 " + ("طلب عميل" if lang == 'ar' else f"Customer Request")
-            st.markdown(f"""
-                <div style="background: linear-gradient(90deg, rgba(212,175,55,0.15), transparent); 
-                            padding: 10px 20px; border-radius: 10px; border-left: 5px solid #D4AF37; margin: 15px 0 5px 0;">
-                    <h3 style="color: #D4AF37; margin: 0; font-family: 'Tajawal', sans-serif;">{display_title} <span style="font-size: 0.8rem; color: #888;">#{idx+1}</span></h3>
-                </div>
-            """, unsafe_allow_html=True)
-            
-            # Info Grid
-            col1, col2, col3, col4 = st.columns([3, 3, 3, 1])
-            with col1:
-                if c_timestamp:
-                    raw_ts = str(customer_row.get(c_timestamp, ""))
-                    date_part = ""
-                    time_part = ""
-                    
-                    # Heuristic to separate Date and Time
-                    parts = raw_ts.split()
-                    for p in parts:
-                        if '/' in p or '-' in p:
-                            date_part = p
-                        elif ':' in p:
-                            time_part = p
-                    
-                    # Re-attach Arabic marker if present
-                    if 'م' in raw_ts: time_part += " م"
-                    elif 'ص' in raw_ts: time_part += " ص"
-                    
-                    # Fallback if parsing fails
-                    if not date_part and not time_part: date_part = raw_ts
-
-                    if date_part:
-                        info_cell("📅", "تاريخ الطلب" if lang == 'ar' else "Order Date", date_part)
-                    if time_part:
-                        info_cell("⏰", "وقت الطلب" if lang == 'ar' else "Order Time", time_part)
-                
-                info_cell("📍", t('work_location', lang), str(customer_row.get(c_location, "")))
-                info_cell("💼", t('work_nature', lang), str(customer_row.get(c_work_nature, "")))
-            with col2:
-                info_cell("👤", t('responsible_name', lang), responsible_val)
-                info_cell("👥", t('required_category', lang), str(customer_row.get(c_category, "")))
-                info_cell("🔢", t('num_employees', lang), str(customer_row.get(c_num_emp, "")), "#D4AF37")
-            with col3:
-                if user_role != "viewer":
-                    info_cell("📱", t('mobile_number', lang), str(customer_row.get(c_mobile, "")))
-                else:
-                    info_cell("🔒", t('mobile_number', lang), "********")
-                info_cell("🌍", t('required_nationality', lang), str(customer_row.get(c_nationality, "")))
-                info_cell("💰", t('expected_salary', lang), str(customer_row.get(c_salary, "")), "#00FF41")
-            
-            with col4:
->>>>>>> 947f1af (update)
                 if user_role != "viewer":
                     st.markdown('<div style="margin-top: 5px;"></div>', unsafe_allow_html=True)
                     # Activate Toggle (Visual only for now or session state)
@@ -6079,7 +5369,7 @@ def render_order_processing_content():
                     if "can_delete" in user_perms or "all" in user_perms:
                         with st.popover("🗑️ حذف" if lang == 'ar' else "🗑️ Delete"):
                             st.warning("⚠️ هل أنت متأكد من حذف هذا الطلب نهائياً؟" if lang == 'ar' else "⚠️ Delete this request permanently?")
-                            if st.button("نعم، حذف" if lang == 'ar' else "Yes, Delete", key=f"del_cust_{idx}", type="primary", use_container_width=True):
+                            if st.button("نعم، حذف" if lang == 'ar' else "Yes, Delete", key=f"del_cust_{idx}", type="primary", width='stretch'):
                                 # Get sheet row from hidden __sheet_row column
                                 row_num = customer_row.get('__sheet_row')
                                 if row_num:
@@ -6099,22 +5389,16 @@ def render_order_processing_content():
                     st.markdown('<div style="height: 10px;"></div>', unsafe_allow_html=True)
                     st.caption("🔒 وضع المشاهد" if lang == 'ar' else "🔒 Viewer Mode")
 
-<<<<<<< HEAD
             # Close the White Neon Glow Frame integrated
             st.markdown("</div>", unsafe_allow_html=True)
 
             # --- Workers ---
             matches, scores, city_count, region_count = find_matching_workers(customer_row)
-=======
-            # --- Workers ---
-            matches, scores, city_count = find_matching_workers(customer_row)
->>>>>>> 947f1af (update)
             
             if not matches:
                 st.warning("⚠️ " + t('no_matching_workers', lang))
             else:
                 city_list = matches[:city_count]
-<<<<<<< HEAD
                 region_list = matches[city_count : city_count + region_count]
                 other_list = matches[city_count + region_count :]
                 
@@ -6124,20 +5408,14 @@ def render_order_processing_content():
 
                 # Segment Header Helper
                 def render_segment_header(label, count, color="#D4AF37", explainer=None):
-                    st.markdown(f"""<div style="color: {color}; font-weight: 700; margin: 15px 5px 5px 5px; font-family: 'Cairo', sans-serif;">{label} — {count}</div>""", unsafe_allow_html=True)
+                    st.markdown(f"""<div style="color: {color}; font-weight: 700; margin: 15px 5px 5px 5px; font-family: 'Cairo', sans-serif; direction: rtl; text-align: right;">{label} — {count}</div>""", unsafe_allow_html=True)
                     if explainer:
-                        st.markdown(f"""<div style="font-size: 0.85rem; color: #888; margin-top: -5px; margin-bottom: 10px; margin-left: 10px; font-family: 'Cairo', sans-serif;">{explainer}</div>""", unsafe_allow_html=True)
-=======
-                other_list = matches[city_count:]
-                city_scores = scores[:city_count]
-                other_scores = scores[city_count:]
->>>>>>> 947f1af (update)
+                        st.markdown(f"""<div style="font-size: 0.85rem; color: #888; margin: -5px 5px 10px 5px; font-family: 'Cairo', sans-serif; direction: rtl; text-align: right;">{explainer}</div>""", unsafe_allow_html=True)
 
                 # Same City Table
                 if city_list:
                     city_df, city_idx_map = build_worker_table(city_list, city_scores)
                     if not city_df.empty:
-<<<<<<< HEAD
                         # Export
                         c_op_2 = st.columns([4, 1])[1]
                         with c_op_2:
@@ -6167,16 +5445,18 @@ def render_order_processing_content():
                         df_city_height = min((len(city_df) + 1) * 35 + 40, 500)
                         event_city = st.dataframe(
                             city_styled,
-                            use_container_width=True, hide_index=True, on_select="rerun",
+                            width='content', hide_index=True, on_select="rerun",
                             selection_mode="single-row", column_config=__apply_pinned_columns(city_styled, col_cfg_city),
                             key=f"op_city_table_{idx}", height=df_city_height
                         )
                         
                         if event_city.selection and event_city.selection.get("rows"):
                             sel_idx = event_city.selection["rows"][0]
-                            worker_row = city_list[city_idx_map[sel_idx]]
-                            worker_uid = city_df.iloc[sel_idx]["__uid"]
-                            render_cv_detail_panel(worker_row, sel_idx, lang, key_prefix=f"op_city_{idx}", worker_uid=worker_uid)
+                            if 0 <= sel_idx < len(city_df):
+                                actual_df_idx = city_df.index[sel_idx]
+                                worker_row = city_list[city_idx_map[actual_df_idx]]
+                                worker_uid = city_df.iloc[sel_idx]["__uid"]
+                                render_cv_detail_panel(worker_row, sel_idx, lang, key_prefix=f"op_city_{idx}", worker_uid=worker_uid)
 
                 if region_list:
                     reg_df, reg_idx_map = build_worker_table(region_list, region_scores)
@@ -6217,75 +5497,33 @@ def render_order_processing_content():
                         df_reg_h = min((len(reg_df) + 1) * 35 + 40, 400)
                         ev_reg = st.dataframe(
                             reg_styled,
-                            use_container_width=True, hide_index=True, on_select="rerun",
+                            width='content', hide_index=True, on_select="rerun",
                             selection_mode="single-row", column_config=__apply_pinned_columns(reg_styled, col_cfg_reg),
                             key=f"op_reg_table_{idx}", height=df_reg_h
                         )
                         if ev_reg.selection and ev_reg.selection.get("rows"):
                              sel_idx = ev_reg.selection["rows"][0]
-                             w_row = region_list[reg_idx_map[sel_idx]]
-                             w_uid = reg_df.iloc[sel_idx]["__uid"]
-                             render_cv_detail_panel(w_row, sel_idx, lang, key_prefix=f"op_reg_{idx}", worker_uid=w_uid)
+                             if 0 <= sel_idx < len(reg_df):
+                                 actual_df_idx = reg_df.index[sel_idx]
+                                 w_row = region_list[reg_idx_map[actual_df_idx]]
+                                 w_uid = reg_df.iloc[sel_idx]["__uid"]
+                                 render_cv_detail_panel(w_row, sel_idx, lang, key_prefix=f"op_reg_{idx}", worker_uid=w_uid)
 
-=======
-                        # --- EXPORT FOR ORDER PROCESSING ---
-                        c_op_1, c_op_2 = st.columns([4, 1])
-                        with c_op_2:
-                            xl_buf_op = create_pasha_whatsapp_excel(city_df)
-                            if xl_buf_op:
-                                st.download_button("📤 تصدير للواتساب", xl_buf_op, f"Matched_Workers_City_{idx+1}.xlsx", 
-                                                  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", 
-                                                  key=f"dl_op_city_{idx}", use_container_width=True)
-                        
-                        loc_val = str(customer_row.get(c_location, ""))
-                        regional_keywords = [
-                            "عسير", "الجنوب", "الشمال", "الشرقية", "منطقة", 
-                            "الوسطى", "الغربية", "نجد", "الحجاز",
-                            "region", "south", "north", "east", "asir", "central", "western"
-                        ]
-                        is_regional = any(kw in loc_val.lower() for kw in regional_keywords)
-                        
-                        if is_regional:
-                            label = f"🗺️ عمال في منطقة {loc_val}" if lang == 'ar' else f"🗺️ Workers in {loc_val} Region"
-                            color = "#D4AF37"
-                            explainer = f"""<div style="font-size: 0.85rem; color: #888; margin-top: -8px; margin-bottom: 10px; margin-left: 10px; font-family: 'Cairo', sans-serif;">
-                                {'هؤلاء العمال مناسبون لأن مدنهم تتبع لمنطقة ' if lang == 'ar' else 'These workers are matches because their cities belong to '} {loc_val}
-                            </div>"""
-                        else:
-                            label = f"📍 عمال في نفس المدينة ({loc_val})" if lang == 'ar' else f"📍 Workers in the same city ({loc_val})"
-                            color = "#D4AF37"
-                            explainer = ""
-
-                        st.markdown(f"""<div style="color: {color}; font-weight: 700; margin: 10px 5px;">{label} — {len(city_df)}</div>""", unsafe_allow_html=True)
-                        if explainer: st.markdown(explainer, unsafe_allow_html=True)
-                        
-                        # Use selection
-                        df_city_height = min((len(city_df) + 1) * 35 + 40, 500)
-                        event_city = st.dataframe(
-                            city_df.drop(columns=["__uid"]),
-                            use_container_width=True,
-                            hide_index=True,
-                            on_select="rerun",
-                            selection_mode="single-row",
-                            key=f"op_city_table_{idx}",
-                            height=df_city_height
-                        )
-                        
-                        if event_city.selection and event_city.selection.get("rows"):
-                            sel_row_idx = event_city.selection["rows"][0]
-                            original_idx = city_idx_map[sel_row_idx]
-                            worker_row = city_list[original_idx]
-                            worker_uid = city_df.iloc[sel_row_idx]["__uid"]
-                            
-                            # Detail Panel
-                            render_cv_detail_panel(worker_row, sel_row_idx, lang, key_prefix=f"op_city_{idx}", worker_uid=worker_uid)
->>>>>>> 947f1af (update)
 
                 # Other Cities Table
                 if other_list:
                     other_df, other_idx_map = build_worker_table(other_list, other_scores)
                     if not other_df.empty:
-<<<<<<< HEAD
+                        # Export Section
+                        exp_oth_col = st.columns([4, 1])[1]
+                        with exp_oth_col:
+                            xl_oth_data = create_pasha_whatsapp_excel(other_df, lang=lang)
+                            if xl_oth_data:
+                                _, xl_oth_df = xl_oth_data
+                                btn_exp_lbl = "📤 " + ("تصدير للواتساب" if lang == 'ar' else "Export to WhatsApp")
+                                render_pasha_export_button(xl_oth_df, btn_exp_lbl, f"Workers_Other_Cities_{idx+1}.xlsx", 
+                                                          f"Other_Cities_Table_{idx+1}", key=f"btn_xl_oth_stable_{idx}")
+
                         label_other = "🌍 عمال في مدن أخرى (مرتبين حسب القرب)" if lang == 'ar' else f"🌍 Workers in other cities (sorted by proximity)"
                         render_segment_header(label_other, len(other_df), color="#FFFFFF")
                         
@@ -6296,12 +5534,21 @@ def render_order_processing_content():
 
                         other_df = render_table_translator(other_df, key_prefix=f"op_other_{idx}")
                         other_styled = style_df(other_df.drop(columns=["__uid"]))
-                        st.dataframe(
+                        
+                        df_oth_h = min((len(other_df) + 1) * 35 + 40, 400)
+                        ev_oth = st.dataframe(
                             other_styled, 
-                            use_container_width=True, hide_index=True,
-                            column_config=__apply_pinned_columns(other_styled, col_cfg_other),
-                            key=f"op_other_table_{idx}"
+                            width='content', hide_index=True, on_select="rerun",
+                            selection_mode="single-row", column_config=__apply_pinned_columns(other_styled, col_cfg_other),
+                            key=f"op_other_table_{idx}", height=df_oth_h
                         )
+                        if ev_oth.selection and ev_oth.selection.get("rows"):
+                             sel_idx = ev_oth.selection["rows"][0]
+                             if 0 <= sel_idx < len(other_df):
+                                 actual_df_idx = other_df.index[sel_idx]
+                                 w_row = other_list[other_idx_map[actual_df_idx]]
+                                 w_uid = other_df.iloc[sel_idx]["__uid"]
+                                 render_cv_detail_panel(w_row, sel_idx, lang, key_prefix=f"op_other_{idx}", worker_uid=w_uid)
 
 
             # --- Hide Request Button (Admin Only) ---
@@ -6378,7 +5625,7 @@ def render_duplicate_remover_content():
                         value=True
                     )
             
-            if st.button("🚀 " + ("بدء المعالجة" if is_ar else "Start Processing"), type="primary", use_container_width=True):
+            if st.button("🚀 " + ("بدء المعالجة" if is_ar else "Start Processing"), type="primary", width='stretch'):
                 original_count = len(combined_df)
                 import re
                 
@@ -6480,173 +5727,19 @@ def render_duplicate_remover_content():
                 from src.utils.phone_utils import render_pasha_export_button
                 fn = f"Cleaned_Data_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx"
                 render_pasha_export_button(clean_df, "📤 " + ("تحميل الملف الآن" if is_ar else "Download Now"), fn, "Cleaned_File", key="download_cleaned")
-=======
-                        # --- EXPORT FOR OTHER WORKERS ---
-                        c_op2_1, c_op2_2 = st.columns([4, 1])
-                        with c_op2_2:
-                            xl_buf_other = create_pasha_whatsapp_excel(other_df)
-                            if xl_buf_other:
-                                st.download_button("📤 تصدير للواتساب", xl_buf_other, f"Matched_Workers_Other_{idx+1}.xlsx", 
-                                                  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", 
-                                                  key=f"dl_op_other_{idx}", use_container_width=True)
-                        
-                        label_other = "🌍 عمال في مدن أخرى مناسبين" if lang == 'ar' else f"🌍 Workers in other cities ({len(other_df)})"
-                        st.markdown(f"""
-                            <div style="background: rgba(255,255,255,0.02); padding: 5px 15px; border-radius: 8px; border-left: 3px solid #666; margin: 15px 0 5px 0;">
-                                <h5 style="color: #F4F4F4; margin: 0; font-family: 'Cairo', sans-serif;">{label_other} — {len(other_df)}</h5>
-                            </div>
-                        """, unsafe_allow_html=True)
-                        
-                        column_config_other = {}
-                        
-                        df_other_height = min((len(other_df) + 1) * 35 + 40, 500)
-                        event_other = st.dataframe(
-                            other_df.drop(columns=["__uid"]),
-                            use_container_width=True,
-                            hide_index=True,
-                            on_select="rerun",
-                            selection_mode="single-row",
-                            key=f"op_other_table_{idx}",
-                            height=df_other_height
-                        )
-                        
-                        if event_other.selection and event_other.selection.get("rows"):
-                            sel_row_idx = event_other.selection["rows"][0]
-                            original_idx = other_idx_map[sel_row_idx]
-                            worker_row = other_list[original_idx]
-                            worker_uid = other_df.iloc[sel_row_idx]["__uid"]
-                            
-                            # Detail Panel
-                            render_cv_detail_panel(worker_row, sel_row_idx, lang, key_prefix=f"op_other_{idx}", worker_uid=worker_uid)
-                
-                if (not city_list or build_worker_table(city_list, city_scores)[0].empty) and \
-                   (not other_list or build_worker_table(other_list, other_scores)[0].empty):
-                    st.info("تم إخفاء جميع العمال المطابقين لهذا الطلب.")
-
-            # --- Hide Request Button ---
-            col_h1, col_h2 = st.columns([1, 4])
-            with col_h1:
-                if st.button("🚫 " + ("إخفاء هذا الطلب" if lang == 'ar' else "Hide this request"), 
-                             key=f"hide_client_btn_{idx}"):
-                    st.session_state.op_hidden_clients.add(client_key)
-                    st.rerun()
-
-            st.markdown("<div style='height: 40px;'></div>", unsafe_allow_html=True)
-            st.divider()
-
-
-
-def render_customer_requests_content():
-    lang = st.session_state.lang
-    st.markdown('<div class="programmer-signature-neon">By: Alsaeed Alwazzan</div>', unsafe_allow_html=True)
-    st.title(f" {t('customer_requests_title', lang)}")
-    
-    loading_placeholder = show_loading_hourglass()
-    try:
-        # Fetch data using the specific method
-        df = st.session_state.db.fetch_customer_requests()
-    except Exception as e:
-        loading_placeholder.empty()
-        import traceback
-        full_err = traceback.format_exc()
-        err_msg = str(e)
-        
-        # Check if it looks like a permission or connection issue
-        is_permission_error = any(kw in err_msg.lower() or kw in full_err.lower() 
-                                for kw in ["403", "permission", "not found", "gspread", "api"])
-
-        if not err_msg:
-            err_msg = "Connection or Permission Error" if is_permission_error else "Technical Error (Details below)"
-            
-        st.error(f"{t('error', lang)}: {err_msg}")
-        
-        # Show setup instructions for ANY error in this module to be safe
-        st.warning("⚠️ إعدادات الربط غير مكتملة أو الملف غير متاح")
-        st.info("لحل هذه المشكلة، يرجى التأكد من **مشاركة (Share)** ملف الإكسل مع هذا البريد الإلكتروني كـ **Editor**:")
-        st.code("sheet-bot@smooth-league-454322-p2.iam.gserviceaccount.com")
-        
-        with st.expander("Show Technical Details | تفاصيل الخطأ التقنية"):
-            st.code(full_err)
-            
-        if "REPLACE_WITH_CUSTOMER_REQUESTS_SHEET_URL" in err_msg or "URL" in err_msg:
-            st.info("⚠️ يرجى تزويد المبرمج برابط ملف جوجل شيت (Spreadsheet) الخاص بتبويب 'الردود' في النموذج لإتمام الربط.")
-        
-        st.markdown("""
-        **خطوات التأكد من الربط:**
-        1. افتح ملف جوجل شيت (الذي سجلت فيه ردود النموذج).
-        2. اضغط على زر **Share** (مشاركة) في الزاوية العلوية.
-        3. انسخ هذا الإيميل: `sheet-bot@smooth-league-454322-p2.iam.gserviceaccount.com`
-        4. أضف الإيميل وتأكد من اختيار **Editor** (محرر).
-        5. اضغط على زر **Send** (إرسال).
-        6. عد هنا وقم بـ **تحديث الصفحة (Refresh)**.
-        """)
-        return
-
-    loading_placeholder.empty()
-
-    if df.empty:
-        st.warning(t("no_data", lang))
-        return
-
-    # Similar display logic to the search results
-    res = df.copy()
-    
-    # Rename columns before showing
-    new_names = {}
-    used_names = set()
-    for c in res.columns:
-        new_name = t_col(c, lang)
-        original_new_name = new_name
-        counter = 1
-        while new_name in used_names:
-            counter += 1
-            new_name = f"{original_new_name} ({counter})"
-        used_names.add(new_name)
-        new_names[c] = new_name
-        
-    res.rename(columns=new_names, inplace=True)
-    res = clean_date_display(res)
-    
-    # Hide internal columns
-    res_display = res.copy()
-    for int_col in ["__sheet_row", "__sheet_row_backup"]:
-        if int_col in res_display.columns:
-            res_display = res_display.drop(columns=[int_col])
-            
-    st.dataframe(
-        style_df(res_display), 
-        use_container_width=True,
-        hide_index=True,
-        key="customer_requests_table"
-    )
-
->>>>>>> 947f1af (update)
 
 def render_bengali_supply_content():
     lang = st.session_state.lang
     bm = BengaliDataManager()
-<<<<<<< HEAD
     # High-quality flag image for the title
     flag_url = "https://flagsapi.com/BD/flat/64.png"
     flag_html = f'<img src="{flag_url}" style="height:40px; vertical-align:middle; margin-bottom:10px; margin-left:10px;">'
     st.markdown(f'<div class="luxury-main-title">{flag_html} {t("bengali_supply_title", lang)}</div>', unsafe_allow_html=True)
-=======
-    
-    st.markdown(f'<div class="luxury-main-title">{t("bengali_supply_title", lang)}</div>', unsafe_allow_html=True)
-    
-    # Show queued overlay messages (after rerun)
-    if st.session_state.get('bengali_msg'):
-        msg_type, msg_text = st.session_state.bengali_msg
-        show_toast(msg_text, msg_type)
-        del st.session_state.bengali_msg
->>>>>>> 947f1af (update)
     
     tab1, tab2, tab3 = st.tabs([t("form_supplier_employer", lang), t("form_worker_details", lang), t("search_manage_title", lang)])
     
     with tab1:
         st.markdown(f'### 🏗️ {t("form_supplier_employer", lang)}')
-<<<<<<< HEAD
-<<<<<<< HEAD
         col1, col2 = st.columns(2)
         with col1:
             with st.container(border=True):
@@ -6655,7 +5748,7 @@ def render_bengali_supply_content():
                     s_name = st.text_input(t("supplier_name", lang))
                     s_phone = st.text_input(t("supplier_phone", lang))
                     s_notes = st.text_area(t("general_notes", lang), key="s_notes_input")
-                    if st.form_submit_button(t("add_supplier_btn", lang), use_container_width=True):
+                    if st.form_submit_button(t("add_supplier_btn", lang), width='stretch'):
                         if s_name:
                             bm.add_supplier({"name": s_name, "phone": s_phone, "notes": s_notes})
                             st.success("✅ " + ("تم إضافة المورد بنجاح" if lang == 'ar' else "Supplier added"))
@@ -6670,7 +5763,7 @@ def render_bengali_supply_content():
                     e_cafe = st.text_input(t("cafe_name", lang))
                     e_city = st.text_input(t("city", lang))
                     e_notes = st.text_area(t("general_notes", lang), key="e_notes_input")
-                    if st.form_submit_button(t("add_supplier_btn", lang), use_container_width=True):
+                    if st.form_submit_button(t("add_supplier_btn", lang), width='stretch'):
                         if e_name:
                             bm.add_employer({"name": e_name, "cafe": e_cafe, "mobile": e_mobile, "city": e_city, "notes": e_notes})
                             st.success("✅ " + ("تم إضافة صاحب العمل بنجاح" if lang == 'ar' else "Employer added"))
@@ -6717,7 +5810,7 @@ def render_bengali_supply_content():
 
                 notes = st.text_area(t("general_notes", lang))
                 
-                if st.form_submit_button(t("add_worker_btn", lang), use_container_width=True):
+                if st.form_submit_button(t("add_worker_btn", lang), width='stretch'):
                     bm.add_worker({
                         "name": w_name, "id": w_id, "supplier": sel_s, "employer": sel_e,
                         "general_notes": notes, "is_headcount": is_batch, "headcount": w_count,
@@ -6746,7 +5839,7 @@ def render_bengali_supply_content():
             def clear_master_search():
                 st.session_state.master_search_bengali = ""
             
-            st.button("🔄", use_container_width=True, help="تفريغ البحث", on_click=clear_master_search)
+            st.button("🔄", width='stretch', help="تفريغ البحث", on_click=clear_master_search)
 
         # 2. Filter All Data first for Counts
         if g_search:
@@ -6877,7 +5970,7 @@ def render_bengali_supply_content():
                             # Actions
                             ac1, ac2, ac3 = st.columns(3)
                             with ac1:
-                                with st.popover("✏️ " + t("edit_btn", lang), use_container_width=True):
+                                with st.popover("✏️ " + t("edit_btn", lang), width='stretch'):
                                     with st.form(f"edit_w_{w_uuid}"):
                                         new_name = st.text_input("Name", w.get('name'))
                                         new_id = st.text_input("ID", w.get('id'))
@@ -6889,24 +5982,24 @@ def render_bengali_supply_content():
                                 # Return Logic (Decrements headcount or deletes)
 
                                 if "headcount" in w:
-                                    with st.popover("🔄 " + t("return_btn", lang), use_container_width=True):
+                                    with st.popover("🔄 " + t("return_btn", lang), width='stretch'):
                                         st.write(f"Current Count: {w['headcount']}")
                                         ret_amt = st.number_input("Return Amount", min_value=1, max_value=int(w['headcount']), value=1, key=f"ret_amt_{w_uuid}")
-                                        if st.button("Confirm Return", key=f"conf_ret_{w_uuid}", use_container_width=True, type="primary"):
+                                        if st.button("Confirm Return", key=f"conf_ret_{w_uuid}", width='stretch', type="primary"):
                                             bm.return_worker(w_uuid, ret_amt)
                                             st.success("✅ Success")
                                             st.rerun()
                                 else:
-                                    if st.button("🔄 " + t("return_btn", lang), key=f"ret_indiv_{w_uuid}", use_container_width=True):
+                                    if st.button("🔄 " + t("return_btn", lang), key=f"ret_indiv_{w_uuid}", width='stretch'):
                                         bm.return_worker(w_uuid)
                                         st.rerun()
 
 
                             with ac3:
                                 if can_edit_delete:
-                                    with st.popover("🗑️ " + t("delete_btn_sm", lang), use_container_width=True):
+                                    with st.popover("🗑️ " + t("delete_btn_sm", lang), width='stretch'):
                                         st.write("هل أنت متأكد من الحذف؟" if lang == 'ar' else "Are you sure?")
-                                        if st.button("تأكيد الحذف 🗑️" if lang == 'ar' else "Confirm Delete 🗑️", key=f"del_w_{w_uuid}", use_container_width=True, type="primary"):
+                                        if st.button("تأكيد الحذف 🗑️" if lang == 'ar' else "Confirm Delete 🗑️", key=f"del_w_{w_uuid}", width='stretch', type="primary"):
                                             bm.delete_worker(w_uuid)
                                             st.rerun()
 
@@ -6931,7 +6024,7 @@ def render_bengali_supply_content():
                         st.write(f"📝 {s['notes']}")
                     
                     with sc3:
-                        with st.popover("⚙️", use_container_width=True):
+                        with st.popover("⚙️", width='stretch'):
                             with st.form(f"ed_sup_{s['id']}"):
                                 sn = st.text_input("Name", s['name'])
                                 sp = st.text_input("Phone", s['phone'])
@@ -6940,9 +6033,9 @@ def render_bengali_supply_content():
                                     bm.update_supplier(s['id'], {"name": sn, "phone": sp, "notes": snt})
                                     st.rerun()
                             if can_edit_delete:
-                                with st.popover("🗑️ " + ("حذف" if lang=='ar' else "Delete"), use_container_width=True):
+                                with st.popover("🗑️ " + ("حذف" if lang=='ar' else "Delete"), width='stretch'):
                                     st.write("هل أنت متأكد؟" if lang=='ar' else "Are you sure?")
-                                    if st.button("تأكيد 🗑️" if lang=='ar' else "Confirm 🗑️", key=f"del_s_b_{s['id']}", use_container_width=True, type="primary"):
+                                    if st.button("تأكيد 🗑️" if lang=='ar' else "Confirm 🗑️", key=f"del_s_b_{s['id']}", width='stretch', type="primary"):
                                         bm.delete_supplier(s['id'])
                                         st.rerun()
 
@@ -6968,7 +6061,7 @@ def render_bengali_supply_content():
                             st.write(f"Mobile: {e.get('mobile','')}")
                             if e.get('notes'):
                                 st.info(f"📝 {e['notes']}")
-                            with st.popover("✏️", use_container_width=True):
+                            with st.popover("✏️", width='stretch'):
                                 with st.form(f"ed_emp_{e['id']}"):
                                     en = st.text_input("Name", e['name'])
                                     ec = st.text_input("Cafe", e.get('cafe',''))
@@ -6979,9 +6072,9 @@ def render_bengali_supply_content():
                                         bm.update_employer(e['id'], {"name": en, "cafe": ec, "mobile": em, "city": ect, "notes": ent})
                                         st.rerun()
                             if can_edit_delete:
-                                with st.popover("🗑️ " + ("حذف" if lang=='ar' else "Delete"), use_container_width=True):
+                                with st.popover("🗑️ " + ("حذف" if lang=='ar' else "Delete"), width='stretch'):
                                     st.write("هل أنت متأكد؟" if lang=='ar' else "Are you sure?")
-                                    if st.button("تأكيد 🗑️" if lang=='ar' else "Confirm 🗑️", key=f"del_e_b_{e['id']}", use_container_width=True, type="primary"):
+                                    if st.button("تأكيد 🗑️" if lang=='ar' else "Confirm 🗑️", key=f"del_e_b_{e['id']}", width='stretch', type="primary"):
                                         bm.delete_employer(e['id'])
                                         st.rerun()
 
@@ -6989,239 +6082,16 @@ def render_bengali_supply_content():
 
 
 # 11. Main Entry
-placeholder = st.empty()
+# IMMEDIATE UI CLEANUP: Hide login screen elements the millisecond we are authenticated
+if st.session_state.get('user'):
+    st.markdown("<style>#login-container-wrapper { display: none !important; }</style>", unsafe_allow_html=True)
+
+# Using st.empty container to ensure the screen is fully cleared between login and dashboard states
+main_container = st.empty()
 if not st.session_state.user:
-    with placeholder.container(): login_screen()
+    with main_container.container():
+        login_screen()
 else:
-    placeholder.empty()
-    dashboard()
+    with main_container.container():
+        dashboard()
     silent_notification_monitor()
-
-=======
-        with st.form("supplier_employer_form", clear_on_submit=True):
-            col1, col2 = st.columns(2)
-            with col1:
-                st.markdown(f"**👤 {t('supplier_name', lang)}**")
-                s_name = st.text_input(t("supplier_name", lang), label_visibility="collapsed")
-                st.markdown(f"**📞 {t('supplier_phone', lang)}**")
-                s_phone = st.text_input(t("supplier_phone", lang), label_visibility="collapsed")
-            with col2:
-                st.markdown(f"**🏢 {t('employer_name', lang)}**")
-                e_name = st.text_input(t("employer_name", lang), label_visibility="collapsed")
-                st.markdown(f"**☕ {t('cafe_name', lang)}**")
-                e_cafe = st.text_input(t("cafe_name", lang), label_visibility="collapsed")
-                st.markdown(f"**📱 {t('employer_mobile', lang)}**")
-                e_mobile = st.text_input(t("employer_mobile", lang), label_visibility="collapsed")
-                st.markdown(f"**📍 {t('city', lang)}**")
-                e_city = st.text_input(t("city", lang), label_visibility="collapsed")
-            
-            if st.form_submit_button(t("add_supplier_btn", lang), use_container_width=True):
-                if s_name and e_name:
-                    bm.add_supplier_employer(
-                        {"name": s_name, "phone": s_phone},
-                        {"name": e_name, "cafe": e_cafe, "mobile": e_mobile, "city": e_city}
-                    )
-                    st.session_state.bengali_msg = ("success", t("save_success", lang))
-                    st.rerun()
-                else:
-                    show_toast("يرجى إكمال البيانات الأساسية", "error")
-=======
-        
-        # We split the form into two columns, each with its own form
-        col_sup, col_emp = st.columns(2)
-        
-        with col_sup:
-            with st.container(border=True):
-                st.markdown(f"#### 📦 إضافة مورد جديد")
-                with st.form("supplier_only_form", clear_on_submit=True):
-                    st.markdown(f"**👤 {t('supplier_name', lang)}**")
-                    s_name = st.text_input(t("supplier_name", lang), label_visibility="collapsed")
-                    st.markdown(f"**📞 {t('supplier_phone', lang)}**")
-                    s_phone = st.text_input(t("supplier_phone", lang), label_visibility="collapsed")
-                    
-                    if st.form_submit_button(t("add_supplier_btn", lang) + " المورد", use_container_width=True):
-                        if s_name:
-                            bm.add_supplier({"name": s_name, "phone": s_phone})
-                            st.session_state.bengali_msg = ("success", f"تم إضافة المورد: {s_name} بنجاح")
-                            st.rerun()
-                        else:
-                            show_toast("يرجى إدخال اسم المورد على الأقل", "error")
-
-        with col_emp:
-            with st.container(border=True):
-                st.markdown(f"#### 🏢 إضافة عميل (صاحب عمل) جديد")
-                with st.form("employer_only_form", clear_on_submit=True):
-                    st.markdown(f"**🏢 {t('employer_name', lang)}**")
-                    e_name = st.text_input(t("employer_name", lang), label_visibility="collapsed")
-                    st.markdown(f"**☕ {t('cafe_name', lang)}**")
-                    e_cafe = st.text_input(t("cafe_name", lang), label_visibility="collapsed")
-                    st.markdown(f"**📱 {t('employer_mobile', lang)}**")
-                    e_mobile = st.text_input(t("employer_mobile", lang), label_visibility="collapsed")
-                    st.markdown(f"**📍 {t('city', lang)}**")
-                    e_city = st.text_input(t("city", lang), label_visibility="collapsed")
-                    
-                    if st.form_submit_button(t("add_supplier_btn", lang) + " صاحب العمل", use_container_width=True):
-                        if e_name:
-                            bm.add_employer({"name": e_name, "cafe": e_cafe, "mobile": e_mobile, "city": e_city})
-                            st.session_state.bengali_msg = ("success", f"تم إضافة صاحب العمل: {e_name} بنجاح")
-                            st.rerun()
-                        else:
-                            show_toast("يرجى إدخال اسم صاحب العمل على الأقل", "error")
->>>>>>> 8795180 (Update Bengali search table to add vertical and horizontal scrolling and search on enter)
-
-    with tab2:
-        st.markdown(f'### 👷 {t("form_worker_details", lang)}')
-        suppliers = bm.get_suppliers()
-        employers = bm.get_employers()
-        
-        s_options = [f"{s['name']} ({s['phone']})" for s in suppliers]
-        e_options = [f"{e['name']} - {e['cafe']} ({e['city']})" for e in employers]
-        
-        with st.form("worker_entry_form", clear_on_submit=True):
-            c1, c2 = st.columns(2)
-            with c1:
-                st.markdown(f"**Name - الاسم**")
-                w_name = st.text_input(t("worker_name", lang), label_visibility="collapsed", key="w_name_in")
-                st.markdown(f"**Mobile - الجوال**")
-                w_mobile = st.text_input(t("worker_phone", lang), label_visibility="collapsed", key="w_mob_in")
-            with c2:
-                st.markdown(f"**ID/Passport - الهوية أو الجواز**")
-                w_id = st.text_input(t("worker_passport_iqama", lang), label_visibility="collapsed", key="w_id_in")
-            
-            st.markdown(f"**Select Supplier - المورد**")
-            sel_s = st.selectbox(t("select_supplier", lang), options=s_options, label_visibility="collapsed", key="w_s_sel")
-            
-            st.markdown(f"**Select Employer - صاحب العمل**")
-            sel_e = st.selectbox(t("select_employer", lang), options=e_options, label_visibility="collapsed", key="w_e_sel")
-            
-            st.markdown(f"**Attachments - المرفقات**")
-            uploaded_files = st.file_uploader(t("upload_multiple_imgs", lang), accept_multiple_files=True, type=['png', 'jpg', 'jpeg', 'pdf'], label_visibility="collapsed", key="w_files")
-            
-            st.markdown(f"**Files Notes - ملاحظات المرفقات**")
-            f_notes = st.text_area(t("notes_files", lang), label_visibility="collapsed", key="w_f_notes")
-            
-            st.markdown(f"**General Notes - ملاحظات عامة**")
-            g_notes = st.text_area(t("general_notes", lang), label_visibility="collapsed", key="w_g_notes")
-            
-            if st.form_submit_button(t("add_worker_btn", lang), use_container_width=True):
-                if w_name and (sel_s if s_options else True) and (sel_e if e_options else True):
-                    worker_data = {
-                        "name": w_name,
-                        "mobile": w_mobile,
-                        "id": w_id,
-                        "supplier": sel_s if s_options else "",
-                        "employer": sel_e if e_options else "",
-                        "file_notes": f_notes,
-                        "general_notes": g_notes,
-                        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                    }
-                    bm.add_worker(worker_data)
-                    st.session_state.bengali_msg = ("success", t("save_success", lang))
-                    st.rerun()
-                else:
-                    show_toast("يرجى إكمال بيانات العامل واختيار المورد وصاحب العمل", "error")
-
-    with tab3:
-        st.markdown(f"### {t('search_manage_title', lang)}")
-        
-        # Debug info for the user
-        workers_all = bm.get_workers()
-        suppliers_all = bm.get_suppliers()
-        employers_all = bm.get_employers()
-        
-        col_stats1, col_stats2, col_stats3 = st.columns(3)
-        col_stats1.metric("👷 Workers - العمال", len(workers_all))
-        col_stats2.metric("📦 Suppliers - الموردين", len(suppliers_all))
-        col_stats3.metric("🏢 Employers - العملاء", len(employers_all))
-        
-        # Added a hint to press Enter for search
-        st.caption("⌨️ اكتب للبحث واضغط Enter (يتم البحث في جميع البيانات: عمال، عملاء، موردين)")
-        search_q = st.text_input(t("search_manage_title", lang), placeholder=t("search_placeholder_bengali", lang), label_visibility="collapsed", key="bengali_search_q")
-        
-        def normalize_ar(text):
-            if not text: return ""
-            t = str(text).lower().strip()
-            # Basic Arabic Normalization
-            t = t.replace("أ", "ا").replace("إ", "ا").replace("آ", "ا")
-            t = t.replace("ة", "ه").replace("ى", "ي")
-            t = t.replace("ئ", "ي").replace("ؤ", "و").replace("ء", "")
-            return t
-
-        workers = workers_all
-        if search_q:
-            q = normalize_ar(search_q)
-            workers = [w for w in workers if 
-                       q in normalize_ar(w.get("name", "")) or 
-                       q in normalize_ar(w.get("supplier", "")) or 
-                       q in normalize_ar(w.get("employer", "")) or 
-                       q in normalize_ar(w.get("mobile", "")) or 
-                       q in normalize_ar(w.get("id", ""))]
-        
-        if not workers:
-            if not workers_all:
-                st.warning("⚠️ لا توجد سجلات مضافة حتى الآن. يرجى إضافة بيانات في القسم الأول والثاني.")
-            else:
-                st.info(t("no_records_found", lang))
-        else:
-            st.success(f"🔍 Found {len(workers)} records - تم العثور على {len(workers)} سجلات")
-            
-            # --- Table View with Scrolling ---
-            df_data = []
-            for w in sorted(workers, key=lambda x: x.get("timestamp", ""), reverse=True):
-                df_data.append({
-                    "العامل": w.get("name", "N/A"),
-                    "صاحب العمل": w.get("employer", "N/A"),
-                    "المورد": w.get("supplier", "N/A"),
-                    "الجوال": w.get("mobile", "N/A"),
-                    "الهوية/الجواز": w.get("id", "N/A"),
-                    "التاريخ": w.get("timestamp", "N/A")
-                })
-            
-            # Set height to enable vertical scroll, explicitly allowing it to overflow horizontally
-            st.dataframe(pd.DataFrame(df_data), height=400, hide_index=True)
-            
-            st.markdown("---")
-            st.markdown("### 📄 تفاصيل السجلات (للحذف)")
-            
-            for w in sorted(workers, key=lambda x: x.get("timestamp", ""), reverse=True):
-                with st.container(border=True):
-                    # Header with Worker Name and Delete button
-                    h1, h2 = st.columns([0.85, 0.15])
-                    with h1:
-                        st.markdown(f"### 👷 {w.get('name', 'N/A')}")
-                    with h2:
-                        user_perms = st.session_state.user.get('permissions', [])
-                        if "can_delete" in user_perms or "all" in user_perms:
-                            if st.button("🗑️", key=f"del_{w['worker_uuid']}", help=t("delete_btn", lang)):
-                                if bm.delete_worker(w['worker_uuid']):
-                                    show_toast("تم حذف السجل بنجاح", "success")
-                                    time.sleep(0.5)
-                                    st.rerun()
-                        else:
-                            st.button("🔒", key=f"lock_{w['worker_uuid']}", disabled=True, help="لا تملك صلاحية الحذف")
-
-                    # Full Details in Columns
-                    d1, d2, d3 = st.columns(3)
-                    with d1:
-                        st.markdown(f"**👤 Worker - العامل**")
-                        st.write(f"📞 {w.get('mobile', 'N/A')}")
-                        st.write(f"🆔 {w.get('id', 'N/A')}")
-                        st.caption(f"📅 {w.get('timestamp', 'N/A')}")
-                    with d2:
-                        st.markdown(f"**🏢 Employer - صاحب العمل**")
-                        st.info(w.get('employer', 'N/A'))
-                    with d3:
-                        st.markdown(f"**📦 Supplier - المورد**")
-                        st.warning(w.get('supplier', 'N/A'))
-                    
-                    if w.get('file_notes') or w.get('general_notes'):
-                        with st.expander("📝 Notes - ملاحظات"):
-                            if w.get('file_notes'): st.write(f"**Files:** {w['file_notes']}")
-                            if w.get('general_notes'): st.write(f"**General:** {w['general_notes']}")
-
-# 11. Main Entry
-if not st.session_state.user:
-    login_screen()
-else:
-    dashboard()
->>>>>>> 947f1af (update)
