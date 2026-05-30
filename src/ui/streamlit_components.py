@@ -233,12 +233,14 @@ def render_table_translator(df, key_prefix="table"):
         div[class*="stVerticalBlock"]:has(.nat-badge-marker) {
             display: flex !important;
             flex-direction: row !important;
-            flex-wrap: wrap !important;
+            flex-wrap: nowrap !important; /* Don't wrap to new line */
+            overflow-x: auto !important; /* Add horizontal scroll if needed */
             gap: 10px !important;
-            justify-content: center !important;
+            justify-content: flex-start !important; /* Align to start */
             align-items: center !important;
             margin-top: 10px !important;
             margin-bottom: 20px !important;
+            padding: 5px 0 !important; /* Some padding for scroll */
         }
         .nat-badge-marker {
             display: none !important;

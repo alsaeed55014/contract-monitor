@@ -3544,19 +3544,21 @@ def render_dashboard_content():
             valid_items = [(code, int(cnt)) for code, cnt in code_counts.items() if code]
             
             if valid_items:
-                # --- CSS for Emoji Flag Badges (EXACTLY LIKE THE EXAMPLE) ---
+                # --- CSS for Emoji Flag Badges (SIDE BY SIDE, NO WRAP) ---
                 base_css = """
                 <style>
                 div[data-testid="stVerticalBlock"]:has(.nat-badge-marker),
                 div[class*="stVerticalBlock"]:has(.nat-badge-marker) {
                     display: flex !important;
                     flex-direction: row !important;
-                    flex-wrap: wrap !important;
+                    flex-wrap: nowrap !important; /* Don't wrap to new line */
+                    overflow-x: auto !important; /* Add horizontal scroll if needed */
                     gap: 10px !important;
-                    justify-content: center !important;
+                    justify-content: flex-start !important; /* Align to start */
                     align-items: center !important;
                     margin-top: 10px !important;
                     margin-bottom: 20px !important;
+                    padding: 5px 0 !important; /* Some padding for scroll */
                 }
                 .nat-badge-marker {
                     display: none !important;
