@@ -1360,6 +1360,40 @@ def _get_flag_url_cached(val):
 # Pre-sort FLAG_MAP keys once at startup
 FLAG_MAP_SORTED = sorted(FLAG_MAP.items(), key=lambda x: len(x[0]), reverse=True)
 
+def _get_nationality_code(val):
+    if not val or pd.isna(val): return None
+    s_val = str(val).strip().lower()
+    
+    # Remove emoji flags
+    s_val = re.sub(r'[\U0001F1E6-\U0001F1FF]{2}\s*', '', s_val)
+    # Remove extra non-word chars
+    s_val = re.sub(r'[^\w\s]', ' ', s_val).strip()
+    
+    if s_val.startswith("ال") and len(s_val) > 4:
+        s_val = s_val[2:]
+        
+    s_val = (s_val.replace("أ", "ا")
+                  .replace("إ", "ا")
+                  .replace("آ", "ا")
+                  .replace("ة", "ه")
+                  .replace("ى", "ي"))
+                  
+    for key, code in FLAG_MAP_SORTED:
+        norm_key = (key.replace("أ", "ا")
+                       .replace("إ", "ا")
+                       .replace("آ", "ا")
+                       .replace("ة", "ه")
+                       .replace("ى", "ي"))
+        if len(norm_key) <= 3:
+            pattern = rf'(?:^|[\s,:;.\-/]){re.escape(norm_key)}(?:[\s,:;.\-/]|$)'
+            if re.search(pattern, s_val):
+                return code.lower()
+        else:
+            if norm_key in s_val:
+                return code.lower()
+    return None
+
+
 def style_df(df):
     """
     Applies custom styling to DataFrames (Optimized for 2026 Speed).
@@ -1478,6 +1512,7 @@ def render_table_translator(df, key_prefix="table"):
     """
     Renders side-by-side translation buttons (Arabic and Tagalog) above tables.
     Translates Requested Job, Other Skills, and Iqama Profession columns.
+    Also shows interactive nationality flag badges to filter the table.
     """
     if df is None or df.empty:
         return df
@@ -1497,9 +1532,161 @@ def render_table_translator(df, key_prefix="table"):
     from src.core.translation import TranslationManager
     tm = TranslationManager()
 
+    # --- Record Count Header & Nationality Stats ---
+    lang = st.session_state.get('lang', 'ar')
+    active_code = st.session_state.get(f"selected_nat_{key_prefix}")
+
+    # Inject global CSS for interactive badges
+    st.markdown("""
+        <style>
+        div[data-testid="stVerticalBlock"]:has(.nat-badge-marker),
+        div[class*="stVerticalBlock"]:has(.nat-badge-marker) {
+            display: flex !important;
+            flex-direction: row !important;
+            flex-wrap: wrap !important;
+            gap: 10px !important;
+            justify-content: center !important;
+            align-items: center !important;
+            margin-top: 10px !important;
+            margin-bottom: 20px !important;
+        }
+        .nat-badge-marker {
+            display: none !important;
+        }
+        .nat-btn, .nat-btn-clear {
+            display: inline-block !important;
+        }
+        .nat-btn div[data-testid="stButton"], .nat-btn-clear div[data-testid="stButton"] {
+            margin: 0 !important;
+            padding: 0 !important;
+        }
+        .nat-btn button {
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            background: rgba(255, 255, 255, 0.08) !important;
+            color: #FFF !important;
+            font-weight: 800 !important;
+            font-size: 0.95rem !important;
+            font-family: 'Inter', sans-serif !important;
+            border-radius: 12px !important;
+            border: 1px solid rgba(212, 175, 55, 0.25) !important;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2) !important;
+            height: 32px !important;
+            min-height: 32px !important;
+            line-height: 1 !important;
+            cursor: pointer !important;
+            transition: all 0.3s ease !important;
+            padding-top: 0 !important;
+            padding-bottom: 0 !important;
+            padding-right: 12px !important;
+        }
+        .nat-btn button:hover {
+            border-color: #D4AF37 !important;
+            background: rgba(255, 255, 255, 0.15) !important;
+            box-shadow: 0 0 10px rgba(212, 175, 55, 0.3) !important;
+            transform: translateY(-1px) !important;
+        }
+        .nat-btn-selected button {
+            background: rgba(212, 175, 55, 0.2) !important;
+            border-color: #D4AF37 !important;
+            box-shadow: 0 0 15px rgba(212, 175, 55, 0.5) !important;
+        }
+        .nat-btn-clear button {
+            background: rgba(255, 75, 75, 0.1) !important;
+            color: #FF4B4B !important;
+            border: 1px solid rgba(255, 75, 75, 0.3) !important;
+            border-radius: 12px !important;
+            font-weight: 700 !important;
+            font-size: 0.9rem !important;
+            height: 32px !important;
+            min-height: 32px !important;
+            cursor: pointer !important;
+            transition: all 0.3s ease !important;
+            padding: 0 12px !important;
+        }
+        .nat-btn-clear button:hover {
+            background: rgba(255, 75, 75, 0.2) !important;
+            border-color: #FF4B4B !important;
+            box-shadow: 0 0 10px rgba(255, 75, 75, 0.3) !important;
+        }
+        </style>
+    """, unsafe_allow_html=True)
+
+    # Try to find nationality column
+    nat_col = None
+    for c in df.columns:
+        c_str = str(c).lower()
+        if "nationality" in c_str or "الجنسية" in c_str or "جنسية" in c_str:
+            nat_col = c
+            break
+            
+    if nat_col is not None and not df.empty:
+        # Calculate nationality codes on the UNFILTERED data
+        df_nat_codes = df[nat_col].apply(_get_nationality_code)
+        code_counts = df_nat_codes.value_counts()
+        
+        css_rules = []
+        for code in code_counts.index:
+            if code:
+                css_rules.append(f"""
+                .nat-btn-{code} button {{
+                    background-image: url('https://flagcdn.com/w40/{code}.png') !important;
+                    background-size: 22px !important;
+                    background-repeat: no-repeat !important;
+                    background-position: left 10px center !important;
+                    padding-left: 38px !important;
+                }}
+                """)
+        if css_rules:
+            st.markdown(f"<style>{chr(10).join(css_rules)}</style>", unsafe_allow_html=True)
+
+        badge_container = st.container()
+        with badge_container:
+            st.markdown('<div class="nat-badge-marker"></div>', unsafe_allow_html=True)
+            for code, c in code_counts.items():
+                if not code: continue
+                is_selected = (active_code == code)
+                btn_class = f"nat-btn nat-btn-{code}"
+                if is_selected:
+                    btn_class += " nat-btn-selected"
+                st.markdown(f'<div class="{btn_class}">', unsafe_allow_html=True)
+                if st.button(f"{c}", key=f"btn_nat_{key_prefix}_{code}"):
+                    if is_selected:
+                        st.session_state[f"selected_nat_{key_prefix}"] = None
+                    else:
+                        st.session_state[f"selected_nat_{key_prefix}"] = code
+                    st.rerun()
+                st.markdown('</div>', unsafe_allow_html=True)
+            
+            if active_code:
+                st.markdown('<div class="nat-btn-clear">', unsafe_allow_html=True)
+                clear_lbl = "❌ الكل" if lang == 'ar' else "❌ All"
+                if st.button(clear_lbl, key=f"btn_nat_clear_{key_prefix}"):
+                    st.session_state[f"selected_nat_{key_prefix}"] = None
+                    st.rerun()
+                st.markdown('</div>', unsafe_allow_html=True)
+
+        # Apply filtering to the dataframe
+        if active_code:
+            df = df[df_nat_codes == active_code]
+
+    # Render total count banner
+    count = len(df)
+    count_label = "عدد العمال" if lang == 'ar' else "Total Workers"
+    st.markdown(f"""<div style="margin-bottom: 20px; padding: 15px; background: linear-gradient(135deg, rgba(20, 20, 20, 0.95) 0%, rgba(30, 30, 30, 0.8) 100%); border-radius: 20px; border: 1.5px solid rgba(212, 175, 55, 0.3); box-shadow: 0 8px 25px rgba(0,0,0,0.5); text-align: center;">
+    <div style="display: flex; justify-content: center; align-items: center; gap: 15px;">
+        <div style="color: #D4AF37; font-weight: 800; font-family: 'Cairo', sans-serif; font-size: 1.2rem; display: flex; align-items: center; gap: 10px;">
+            ✦ {count_label}
+        </div>
+        <div style="background: linear-gradient(135deg, #D4AF37, #8B7520); color: #000; width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 1.2rem; box-shadow: 0 0 15px rgba(212,175,55,0.6);">
+            {count}
+        </div>
+    </div>
+</div>""", unsafe_allow_html=True)
+
     st.markdown('<div class="table-translator-container">', unsafe_allow_html=True)
     ct1, ct2 = st.columns(2)
-    
     t_state_key = f"table_trans_{key_prefix}"
     
     with ct1:
@@ -1520,74 +1707,6 @@ def render_table_translator(df, key_prefix="table"):
                 st.session_state[t_state_key] = "tl"
         st.markdown('</div>', unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)
-
-    # --- Record Count Header & Nationality Stats ---
-    count = len(df)
-    lang = st.session_state.get('lang', 'ar')
-    count_label = "عدد العمال" if lang == 'ar' else "Total Workers"
-    
-    # Calculate Nationality Stats
-    nat_stats_html = ""
-    # Try to find nationality column
-    nat_col = None
-    for c in df.columns:
-        c_str = str(c).lower()
-        if "nationality" in c_str or "الجنسية" in c_str or "جنسية" in c_str:
-            nat_col = c
-            break
-            
-    if nat_col is not None and not df.empty:
-        counts = df[nat_col].value_counts()
-        nat_map = {
-            "filipino": "ph", "philippines": "ph", "philippine": "ph", "فلبيني": "ph", "الفلبين": "ph", "فلبينية": "ph",
-            "indian": "in", "india": "in", "هندي": "in", "الهند": "in", "هندية": "in",
-            "pakistani": "pk", "pakistan": "pk", "باكستاني": "pk", "باكستان": "pk", "باكستانية": "pk",
-            "egyptian": "eg", "egypt": "eg", "مصري": "eg", "مصر": "eg", "مصرية": "eg",
-            "bangladeshi": "bd", "bangladesh": "bd", "بنغلاديشي": "bd", "بنغلاديش": "bd", "بنغالي": "bd",
-            "sri lankan": "lk", "sri lanka": "lk", "سريلانكي": "lk", "سريلانكا": "lk",
-            "kenyan": "ke", "kenya": "ke", "كيني": "ke", "كينيا": "ke",
-            "ugandan": "ug", "uganda": "ug", "أوغندي": "ug", "أوغندا": "ug",
-            "ethiopian": "et", "ethiopia": "et", "إثيوبي": "et", "إثيوبيا": "et", "اثيوبي": "et",
-            "nepali": "np", "nepal": "np", "نيبالي": "np", "نيبال": "np",
-            "indonesian": "id", "indonesia": "id", "إندونيسي": "id", "إندونيسيا": "id", "اندونيسي": "id",
-            "sudanese": "sd", "sudan": "sd", "سوداني": "sd", "السودان": "sd",
-            "yemeni": "ye", "yemen": "ye", "يمني": "ye", "اليمن": "ye",
-            "saudi": "sa", "saudi arabia": "sa", "سعودي": "sa", "السعودية": "sa"
-        }
-        
-        stat_items = []
-        for val, c in counts.items():
-            if not val or pd.isna(val): continue
-            # Robust cleaning: remove emojis and non-alphanumeric chars for matching
-            val_clean = re.sub(r'[^\w\s]', ' ', str(val)).lower().strip()
-            # Try matching parts if full string doesn't match
-            code = nat_map.get(val_clean)
-            if not code:
-                for word in val_clean.split():
-                    if word in nat_map:
-                        code = nat_map[word]
-                        break
-            
-            if code:
-                flag_url = f"https://flagcdn.com/w40/{code}.png"
-                stat_items.append(f"""<div style="display: flex; align-items: center; gap: 6px; background: rgba(255,255,255,0.08); padding: 4px 10px; border-radius: 12px; border: 1px solid rgba(212,175,55,0.25); box-shadow: 0 2px 5px rgba(0,0,0,0.2);">
-    <img src="{flag_url}" style="width: 22px; border-radius: 3px; box-shadow: 0 0 4px rgba(0,0,0,0.3);">
-    <span style="color: #FFF; font-weight: 800; font-size: 0.95rem; font-family: 'Inter', sans-serif;">{c}</span>
-</div>""")
-        if stat_items:
-            nat_stats_html = f'<div style="display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; justify-content: center;">{" ".join(stat_items)}</div>'
-
-    st.markdown(f"""<div style="margin-bottom: 20px; padding: 15px; background: linear-gradient(135deg, rgba(20, 20, 20, 0.95) 0%, rgba(30, 30, 30, 0.8) 100%); border-radius: 20px; border: 1.5px solid rgba(212, 175, 55, 0.3); box-shadow: 0 8px 25px rgba(0,0,0,0.5); text-align: center;">
-    <div style="display: flex; justify-content: center; align-items: center; gap: 15px;">
-        <div style="color: #D4AF37; font-weight: 800; font-family: 'Cairo', sans-serif; font-size: 1.2rem; display: flex; align-items: center; gap: 10px;">
-            ✦ {count_label}
-        </div>
-        <div style="background: linear-gradient(135deg, #D4AF37, #8B7520); color: #000; width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 1.2rem; box-shadow: 0 0 15px rgba(212,175,55,0.6);">
-            {count}
-        </div>
-    </div>
-    {nat_stats_html}
-</div>""", unsafe_allow_html=True)
     
     target_lang = st.session_state.get(t_state_key)
     if target_lang in ['ar', 'tl']:
@@ -3504,8 +3623,10 @@ def render_dashboard_content():
         
         if event.selection and event.selection.get("rows"):
             sel_idx = event.selection["rows"][0]
-            worker_row = d.iloc[sel_idx]
-            render_cv_detail_panel(worker_row, sel_idx, lang, key_prefix=f"dash_{tab_id}")
+            if 0 <= sel_idx < len(d_final):
+                selected_label = d_final.index[sel_idx]
+                worker_row = d.loc[selected_label]
+                render_cv_detail_panel(worker_row, sel_idx, lang, key_prefix=f"dash_{tab_id}")
 
     with t1: 
         # 1. Filter Data for this tab first
@@ -3913,8 +4034,9 @@ def render_search_content():
             # Handle Selection with Safety Check
             if event.selection and event.selection.get("rows"):
                 selected_idx = event.selection["rows"][0]
-                if 0 <= selected_idx < len(res):
-                    worker_row = res.iloc[selected_idx]
+                if 0 <= selected_idx < len(res_display):
+                    selected_label = res_display.index[selected_idx]
+                    worker_row = res.loc[selected_label]
                     
                     # Generate unique UID for search mode to pass to panel
                     # Use original column names if possible or translated ones
@@ -5127,46 +5249,6 @@ def render_order_processing_content():
     # --- Export Button for Customers ---
     with c_search_2:
         if filtered_indices:
-            # WhatsApp Message Customization Expander
-            with st.expander("⚙️ " + ("إعدادات الرسالة" if lang == 'ar' else "Message Settings")):
-                # Message Template Selection
-                msg_presets = {
-                    "نموذج العمالة (جديد)": "Mr/Ms {name}, You have contacted us regarding {job}, and the worker has been provided and his work is attached. Please review and let us know whether you approve the worker or not.",
-                    "نموذج التعارف (قديم)": "Good evening Mr/Ms {name}, which city are you in now and how old are you {job}, and what is your experience, what are the things you are good at doing"
-                } if lang == 'ar' else {
-                    "Worker Request (New)": "Mr/Ms {name}, You have contacted us regarding {job}, and the worker has been provided and his work is attached. Please review and let us know whether you approve the worker or not.",
-                    "Intro Model (Old)": "Good evening Mr/Ms {name}, which city are you in now and how old are you {job}, and what is your experience, what are the things you are good at doing"
-                }
-                
-                selected_preset = st.selectbox(
-                    "اختر النموذج" if lang == 'ar' else "Select Template",
-                    options=list(msg_presets.keys()),
-                    key="op_msg_preset_select"
-                )
-
-                msg_template = st.text_area(
-                    "تعديل نص الرسالة" if lang == 'ar' else "Edit Message Text",
-                    value=msg_presets[selected_preset],
-                    help="استخدم {job} للمهنة و {name} لاسم المسؤول" if lang == 'ar' else "Use {job} for job and {name} for manager name",
-                    key="op_msg_template"
-                )
-                
-                col_cfg1, col_cfg2 = st.columns(2)
-                with col_cfg1:
-                    gender_opt = st.radio(
-                        "نوع العامل" if lang == 'ar' else "Worker Type",
-                        options=["عامل", "عاملة"] if lang == 'ar' else ["Male", "Female"],
-                        horizontal=True,
-                        key="op_gender_toggle"
-                    )
-                with col_cfg2:
-                    salutation_opt = st.radio(
-                        "لقب العميل" if lang == 'ar' else "Client Salutation",
-                        options=["السيد", "السيدة"] if lang == 'ar' else ["Mr", "Ms"],
-                        horizontal=True,
-                        key="op_salutation_toggle"
-                    )
-
             from src.utils.phone_utils import format_phone_number, render_pasha_export_button
             export_cust_list = []
             for f_idx in filtered_indices:
@@ -5177,36 +5259,16 @@ def render_order_processing_content():
                 raw_phone = str(crow.get(c_mobile, "")).strip()
                 clean_phone = format_phone_number(raw_phone)
                 
-                # Get Job/Nature of work for the message
-                job_val = str(crow.get(c_work_nature, "")).strip()
-                # Apply gender replacement for worker type if needed
-                if lang == 'ar':
-                    if gender_opt == "عاملة":
-                        job_val = job_val.replace("عامل", "عاملة")
-                    else:
-                        job_val = job_val.replace("عاملة", "عامل")
-                
-                # Prepare salutation
-                salutation = salutation_opt
-                
-                # Prepare personalized message
-                # 1. Replace {name} with Salutation + Manager Name
-                final_msg = msg_template.replace("{name}", f"{salutation} {r_name}")
-                # 2. Replace {job}
-                final_msg = final_msg.replace("{job}", job_val)
-                
                 if clean_phone:
                     export_cust_list.append({
                         "Name": full_name,
-                        "Phone": clean_phone,
-                        "Message": final_msg
+                        "Phone": clean_phone
                     })
             
             if export_cust_list:
                 cust_export_df = pd.DataFrame(export_cust_list)
-                btn_label = "📤 " + ("تصدير للواتساب" if lang == 'ar' else "WhatsApp Export")
-                # Format file name for WhatsApp Marketing software compatibility
-                render_pasha_export_button(cust_export_df, btn_label, f"WhatsApp_Marketing_{datetime.now().strftime('%M%S')}.xlsx", "عملاء_الواتساب", key="btn_exp_cust_op")
+                btn_label = "📤 " + ("تصدير العملاء" if lang == 'ar' else "Export Clients")
+                render_pasha_export_button(cust_export_df, btn_label, f"Clients_WhatsApp_{datetime.now().strftime('%M%S')}.xlsx", "عملاء_المعالجة", key="btn_exp_cust_op")
         
     # ---------------- 🚀 PAGINATION LOGIC ----------------
     PAGE_SIZE = 15
@@ -5426,9 +5488,11 @@ def render_order_processing_content():
                         
                         if event_city.selection and event_city.selection.get("rows"):
                             sel_idx = event_city.selection["rows"][0]
-                            worker_row = city_list[city_idx_map[sel_idx]]
-                            worker_uid = city_df.iloc[sel_idx]["__uid"]
-                            render_cv_detail_panel(worker_row, sel_idx, lang, key_prefix=f"op_city_{idx}", worker_uid=worker_uid)
+                            if 0 <= sel_idx < len(city_df):
+                                actual_df_idx = city_df.index[sel_idx]
+                                worker_row = city_list[city_idx_map[actual_df_idx]]
+                                worker_uid = city_df.iloc[sel_idx]["__uid"]
+                                render_cv_detail_panel(worker_row, sel_idx, lang, key_prefix=f"op_city_{idx}", worker_uid=worker_uid)
 
                 if region_list:
                     reg_df, reg_idx_map = build_worker_table(region_list, region_scores)
@@ -5475,9 +5539,11 @@ def render_order_processing_content():
                         )
                         if ev_reg.selection and ev_reg.selection.get("rows"):
                              sel_idx = ev_reg.selection["rows"][0]
-                             w_row = region_list[reg_idx_map[sel_idx]]
-                             w_uid = reg_df.iloc[sel_idx]["__uid"]
-                             render_cv_detail_panel(w_row, sel_idx, lang, key_prefix=f"op_reg_{idx}", worker_uid=w_uid)
+                             if 0 <= sel_idx < len(reg_df):
+                                 actual_df_idx = reg_df.index[sel_idx]
+                                 w_row = region_list[reg_idx_map[actual_df_idx]]
+                                 w_uid = reg_df.iloc[sel_idx]["__uid"]
+                                 render_cv_detail_panel(w_row, sel_idx, lang, key_prefix=f"op_reg_{idx}", worker_uid=w_uid)
 
 
                 # Other Cities Table
@@ -5514,9 +5580,11 @@ def render_order_processing_content():
                         )
                         if ev_oth.selection and ev_oth.selection.get("rows"):
                              sel_idx = ev_oth.selection["rows"][0]
-                             w_row = other_list[other_idx_map[sel_idx]]
-                             w_uid = other_df.iloc[sel_idx]["__uid"]
-                             render_cv_detail_panel(w_row, sel_idx, lang, key_prefix=f"op_other_{idx}", worker_uid=w_uid)
+                             if 0 <= sel_idx < len(other_df):
+                                 actual_df_idx = other_df.index[sel_idx]
+                                 w_row = other_list[other_idx_map[actual_df_idx]]
+                                 w_uid = other_df.iloc[sel_idx]["__uid"]
+                                 render_cv_detail_panel(w_row, sel_idx, lang, key_prefix=f"op_other_{idx}", worker_uid=w_uid)
 
 
             # --- Hide Request Button (Admin Only) ---

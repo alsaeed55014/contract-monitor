@@ -118,16 +118,89 @@ def show_loading_hourglass(text=None, container=None):
         """, unsafe_allow_html=True)
     return target
 
+FLAG_MAP = {
+    # Arabic
+    "هندي": "in", "هنديه": "in", "الهند": "in", "هند": "in",
+    "فلبيني": "ph", "فلبينيه": "ph", "الفلبين": "ph", "فلبين": "ph",
+    "نيبالي": "np", "نيباليه": "np", "نيبال": "np",
+    "بنجلاديشي": "bd", "بنجاليه": "bd", "بنجلاديش": "bd", "بنقالي": "bd", "بنغالي": "bd", "بنغاليه": "bd",
+    "باكستاني": "pk", "باكستانيه": "pk", "باكستان": "pk",
+    "مصري": "eg", "مصريه": "eg", "مصر": "eg",
+    "سوداني": "sd", "سودانيه": "sd", "السودان": "sd",
+    "سيريلانكي": "lk", "سيريلانكيه": "lk", "سيريلانكا": "lk", "سيرلانكي": "lk", "سيرلانكيه": "lk",
+    "كيني": "ke", "كينيه": "ke", "كينيا": "ke",
+    "اوغندي": "ug", "اوغنديه": "ug", "اوغندا": "ug",
+    "اثيوبي": "et", "اثيوبيه": "et", "اثيوبيا": "et",
+    "مغربي": "ma", "مغربيه": "ma", "المغرب": "ma",
+    "يمني": "ye", "يمنيه": "ye", "اليمن": "ye",
+    "اندونيسي": "id", "اندونيسيه": "id", "اندونيسيا": "id", "اندونيسا": "id",
+    "رواندي": "rw", "روانديه": "rw", "رواندا": "rw", "روندا": "rw", "روندي": "rw", "رونديه": "rw",
+    "افغاني": "af", "افغانيه": "af", "افغانستان": "af", "افغان": "af",
+    "نيجيري": "ng", "نيجيريه": "ng", "نيجيريا": "ng", "نيجريا": "ng", "نيجري": "ng", "نيجرية": "ng",
+    "غاني": "gh", "غانيه": "gh", "غانا": "gh",
+    "فيتنام": "vn", "فيتنامي": "vn", "فيتناميه": "vn",
+    "سيراليون": "sl",
+    "بوروندي": "bi",
+    # English
+    "indian": "in", "filipino": "ph", "nepi": "np", "nepali": "np", "nepal": "np",
+    "bangla": "bd", "bangladeshi": "bd", "pakistan": "pk", "pakistani": "pk",
+    "egypt": "eg", "egyptian": "eg", "sudan": "sd", "sudanese": "sd",
+    "sri lanka": "lk", "sri lankan": "lk", "kenya": "ke", "kenyan": "ke",
+    "uganda": "ug", "ugandan": "ug", "ethiopia": "et", "ethiopian": "et",
+    "indonesian": "id", "indonesia": "id", "rwandan": "rw", "rwanda": "rw",
+    "afghan": "af", "afghanistan": "af", "nigerian": "ng", "nigeria": "ng"
+}
+
+FLAG_MAP_SORTED = sorted(FLAG_MAP.items(), key=lambda x: len(x[0]), reverse=True)
+
+def _get_nationality_code(val):
+    if not val or pd.isna(val): return None
+    s_val = str(val).strip().lower()
+    
+    # Remove emoji flags
+    s_val = re.sub(r'[\U0001F1E6-\U0001F1FF]{2}\s*', '', s_val)
+    # Remove extra non-word chars
+    s_val = re.sub(r'[^\w\s]', ' ', s_val).strip()
+    
+    if s_val.startswith("ال") and len(s_val) > 4:
+        s_val = s_val[2:]
+        
+    s_val = (s_val.replace("أ", "ا")
+                  .replace("إ", "ا")
+                  .replace("آ", "ا")
+                  .replace("ة", "ه")
+                  .replace("ى", "ي"))
+                  
+    for key, code in FLAG_MAP_SORTED:
+        norm_key = (key.replace("أ", "ا")
+                       .replace("إ", "ا")
+                       .replace("آ", "ا")
+                       .replace("ة", "ه")
+                       .replace("ى", "ي"))
+        if len(norm_key) <= 3:
+            pattern = rf'(?:^|[\s,:;.\-/]){re.escape(norm_key)}(?:[\s,:;.\-/]|$)'
+            if re.search(pattern, s_val):
+                return code.lower()
+        else:
+            if norm_key in s_val:
+                return code.lower()
+    return None
+
 def render_table_translator(df, key_prefix="table"):
+    """
+    Renders side-by-side translation buttons (Arabic and Tagalog) above tables.
+    Translates Requested Job, Other Skills, and Iqama Profession columns.
+    Also shows interactive nationality flag badges to filter the table.
+    """
     if df is None or df.empty:
         return df
 
     # Expanded Keywords to catch all relevant columns in any language
     target_keywords = [
         "وظيفة", "الوظيفة", "مهنة", "المهنة", "مهارة", "مهارات", "خبرة", "الخبرة",
-        "جنسية", "الجنسية", "جنس", "الجنس", "حالة", "الحالة",
+        "جنسية", "الجنسية", "جنس", "الجنس", "حالة", "الحالة", "جاهز", "هروب",
         "job", "profession", "skill", "experience", "occupation",
-        "nationality", "gender", "status", "requested"
+        "nationality", "gender", "status", "requested", "ready", "escape", "abscond"
     ]
     cols_to_translate = [c for c in df.columns if any(kw.lower() in str(c).lower() for kw in target_keywords)]
 
@@ -138,12 +211,86 @@ def render_table_translator(df, key_prefix="table"):
     tm = TranslationManager()
 
     # --- Record Count Header & Nationality Stats ---
-    count = len(df)
     lang = st.session_state.get('lang', 'ar')
-    count_label = "عدد العمال" if lang == 'ar' else "Total Workers"
-    
-    # Calculate Nationality Stats
-    nat_stats_html = ""
+    active_code = st.session_state.get(f"selected_nat_{key_prefix}")
+
+    # Inject global CSS for interactive badges
+    st.markdown("""
+        <style>
+        div[data-testid="stVerticalBlock"]:has(.nat-badge-marker),
+        div[class*="stVerticalBlock"]:has(.nat-badge-marker) {
+            display: flex !important;
+            flex-direction: row !important;
+            flex-wrap: wrap !important;
+            gap: 10px !important;
+            justify-content: center !important;
+            align-items: center !important;
+            margin-top: 10px !important;
+            margin-bottom: 20px !important;
+        }
+        .nat-badge-marker {
+            display: none !important;
+        }
+        .nat-btn, .nat-btn-clear {
+            display: inline-block !important;
+        }
+        .nat-btn div[data-testid="stButton"], .nat-btn-clear div[data-testid="stButton"] {
+            margin: 0 !important;
+            padding: 0 !important;
+        }
+        .nat-btn button {
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            background: rgba(255, 255, 255, 0.08) !important;
+            color: #FFF !important;
+            font-weight: 800 !important;
+            font-size: 0.95rem !important;
+            font-family: 'Inter', sans-serif !important;
+            border-radius: 12px !important;
+            border: 1px solid rgba(212, 175, 55, 0.25) !important;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2) !important;
+            height: 32px !important;
+            min-height: 32px !important;
+            line-height: 1 !important;
+            cursor: pointer !important;
+            transition: all 0.3s ease !important;
+            padding-top: 0 !important;
+            padding-bottom: 0 !important;
+            padding-right: 12px !important;
+        }
+        .nat-btn button:hover {
+            border-color: #D4AF37 !important;
+            background: rgba(255, 255, 255, 0.15) !important;
+            box-shadow: 0 0 10px rgba(212, 175, 55, 0.3) !important;
+            transform: translateY(-1px) !important;
+        }
+        .nat-btn-selected button {
+            background: rgba(212, 175, 55, 0.2) !important;
+            border-color: #D4AF37 !important;
+            box-shadow: 0 0 15px rgba(212, 175, 55, 0.5) !important;
+        }
+        .nat-btn-clear button {
+            background: rgba(255, 75, 75, 0.1) !important;
+            color: #FF4B4B !important;
+            border: 1px solid rgba(255, 75, 75, 0.3) !important;
+            border-radius: 12px !important;
+            font-weight: 700 !important;
+            font-size: 0.9rem !important;
+            height: 32px !important;
+            min-height: 32px !important;
+            cursor: pointer !important;
+            transition: all 0.3s ease !important;
+            padding: 0 12px !important;
+        }
+        .nat-btn-clear button:hover {
+            background: rgba(255, 75, 75, 0.2) !important;
+            border-color: #FF4B4B !important;
+            box-shadow: 0 0 10px rgba(255, 75, 75, 0.3) !important;
+        }
+        </style>
+    """, unsafe_allow_html=True)
+
     # Try to find nationality column
     nat_col = None
     for c in df.columns:
@@ -153,46 +300,58 @@ def render_table_translator(df, key_prefix="table"):
             break
             
     if nat_col is not None and not df.empty:
-        counts = df[nat_col].value_counts()
-        nat_map = {
-            "filipino": "ph", "philippines": "ph", "philippine": "ph", "فلبيني": "ph", "الفلبين": "ph", "فلبينية": "ph",
-            "indian": "in", "india": "in", "هندي": "in", "الهند": "in", "هندية": "in",
-            "pakistani": "pk", "pakistan": "pk", "باكستاني": "pk", "باكستان": "pk", "باكستانية": "pk",
-            "egyptian": "eg", "egypt": "eg", "مصري": "eg", "مصر": "eg", "مصرية": "eg",
-            "bangladeshi": "bd", "bangladesh": "bd", "بنغلاديشي": "bd", "بنغلاديش": "bd", "بنغالي": "bd",
-            "sri lankan": "lk", "sri lanka": "lk", "سريلانكي": "lk", "سريلانكا": "lk",
-            "kenyan": "ke", "kenya": "ke", "كيني": "ke", "كينيا": "ke",
-            "ugandan": "ug", "uganda": "ug", "أوغندي": "ug", "أوغندا": "ug",
-            "ethiopian": "et", "ethiopia": "et", "إثيوبي": "et", "إثيوبيا": "et", "اثيوبي": "et",
-            "nepali": "np", "nepal": "np", "نيبالي": "np", "نيبال": "np",
-            "indonesian": "id", "indonesia": "id", "إندونيسي": "id", "إندونيسيا": "id", "اندونيسي": "id",
-            "sudanese": "sd", "sudan": "sd", "سوداني": "sd", "السودان": "sd",
-            "yemeni": "ye", "yemen": "ye", "يمني": "ye", "اليمن": "ye",
-            "saudi": "sa", "saudi arabia": "sa", "سعودي": "sa", "السعودية": "sa"
-        }
+        # Calculate nationality codes on the UNFILTERED data
+        df_nat_codes = df[nat_col].apply(_get_nationality_code)
+        code_counts = df_nat_codes.value_counts()
         
-        stat_items = []
-        for val, c in counts.items():
-            if not val or pd.isna(val): continue
-            # Robust cleaning: remove emojis and non-alphanumeric chars for matching
-            val_clean = re.sub(r'[^\w\s]', ' ', str(val)).lower().strip()
-            # Try matching parts if full string doesn't match
-            code = nat_map.get(val_clean)
-            if not code:
-                for word in val_clean.split():
-                    if word in nat_map:
-                        code = nat_map[word]
-                        break
-            
+        css_rules = []
+        for code in code_counts.index:
             if code:
-                flag_url = f"https://flagcdn.com/w40/{code}.png"
-                stat_items.append(f"""<div style="display: flex; align-items: center; gap: 6px; background: rgba(255,255,255,0.08); padding: 4px 10px; border-radius: 12px; border: 1px solid rgba(212,175,55,0.25); box-shadow: 0 2px 5px rgba(0,0,0,0.2);">
-    <img src="{flag_url}" style="width: 22px; border-radius: 3px; box-shadow: 0 0 4px rgba(0,0,0,0.3);">
-    <span style="color: #FFF; font-weight: 800; font-size: 0.95rem; font-family: 'Inter', sans-serif;">{c}</span>
-</div>""")
-        if stat_items:
-            nat_stats_html = f'<div style="display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; justify-content: center;">{" ".join(stat_items)}</div>'
+                css_rules.append(f"""
+                .nat-btn-{code} button {{
+                    background-image: url('https://flagcdn.com/w40/{code}.png') !important;
+                    background-size: 22px !important;
+                    background-repeat: no-repeat !important;
+                    background-position: left 10px center !important;
+                    padding-left: 38px !important;
+                }}
+                """)
+        if css_rules:
+            st.markdown(f"<style>{chr(10).join(css_rules)}</style>", unsafe_allow_html=True)
 
+        badge_container = st.container()
+        with badge_container:
+            st.markdown('<div class="nat-badge-marker"></div>', unsafe_allow_html=True)
+            for code, c in code_counts.items():
+                if not code: continue
+                is_selected = (active_code == code)
+                btn_class = f"nat-btn nat-btn-{code}"
+                if is_selected:
+                    btn_class += " nat-btn-selected"
+                st.markdown(f'<div class="{btn_class}">', unsafe_allow_html=True)
+                if st.button(f"{c}", key=f"btn_nat_{key_prefix}_{code}"):
+                    if is_selected:
+                        st.session_state[f"selected_nat_{key_prefix}"] = None
+                    else:
+                        st.session_state[f"selected_nat_{key_prefix}"] = code
+                    st.rerun()
+                st.markdown('</div>', unsafe_allow_html=True)
+            
+            if active_code:
+                st.markdown('<div class="nat-btn-clear">', unsafe_allow_html=True)
+                clear_lbl = "❌ الكل" if lang == 'ar' else "❌ All"
+                if st.button(clear_lbl, key=f"btn_nat_clear_{key_prefix}"):
+                    st.session_state[f"selected_nat_{key_prefix}"] = None
+                    st.rerun()
+                st.markdown('</div>', unsafe_allow_html=True)
+
+        # Apply filtering to the dataframe
+        if active_code:
+            df = df[df_nat_codes == active_code]
+
+    # Render total count banner
+    count = len(df)
+    count_label = "عدد العمال" if lang == 'ar' else "Total Workers"
     st.markdown(f"""<div style="margin-bottom: 20px; padding: 15px; background: linear-gradient(135deg, rgba(20, 20, 20, 0.95) 0%, rgba(30, 30, 30, 0.8) 100%); border-radius: 20px; border: 1.5px solid rgba(212, 175, 55, 0.3); box-shadow: 0 8px 25px rgba(0,0,0,0.5); text-align: center;">
     <div style="display: flex; justify-content: center; align-items: center; gap: 15px;">
         <div style="color: #D4AF37; font-weight: 800; font-family: 'Cairo', sans-serif; font-size: 1.2rem; display: flex; align-items: center; gap: 10px;">
@@ -202,12 +361,10 @@ def render_table_translator(df, key_prefix="table"):
             {count}
         </div>
     </div>
-    {nat_stats_html}
 </div>""", unsafe_allow_html=True)
 
     st.markdown('<div class="table-translator-container">', unsafe_allow_html=True)
     ct1, ct2 = st.columns(2)
-    
     t_state_key = f"table_trans_{key_prefix}"
     
     with ct1:
