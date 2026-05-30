@@ -3544,82 +3544,105 @@ def render_dashboard_content():
             valid_items = [(code, int(cnt)) for code, cnt in code_counts.items() if code]
             
             if valid_items:
-                # --- CSS for Emoji Flag Badges ---
+                # --- CSS for Emoji Flag Badges (EXACTLY LIKE THE EXAMPLE) ---
                 base_css = """
                 <style>
+                div[data-testid="stVerticalBlock"]:has(.nat-badge-marker),
+                div[class*="stVerticalBlock"]:has(.nat-badge-marker) {
+                    display: flex !important;
+                    flex-direction: row !important;
+                    flex-wrap: wrap !important;
+                    gap: 10px !important;
+                    justify-content: center !important;
+                    align-items: center !important;
+                    margin-top: 10px !important;
+                    margin-bottom: 20px !important;
+                }
+                .nat-badge-marker {
+                    display: none !important;
+                }
+                .nat-flag-badge, .nat-clear-badge {
+                    display: inline-block !important;
+                }
+                .nat-flag-badge div[data-testid="stButton"], .nat-clear-badge div[data-testid="stButton"] {
+                    margin: 0 !important;
+                    padding: 0 !important;
+                }
                 .nat-flag-badge button {
-                    background: rgba(255,255,255,0.08) !important;
+                    display: flex !important;
+                    align-items: center !important;
+                    justify-content: center !important;
+                    background: rgba(255, 255, 255, 0.08) !important;
                     color: #FFF !important;
                     font-weight: 800 !important;
                     font-size: 1rem !important;
                     font-family: 'Inter', sans-serif !important;
                     border-radius: 12px !important;
-                    border: 1px solid rgba(212,175,55,0.25) !important;
+                    border: 1px solid rgba(212, 175, 55, 0.25) !important;
+                    box-shadow: 0 2px 5px rgba(0,0,0,0.2) !important;
                     height: 40px !important;
                     min-height: 40px !important;
-                    width: auto !important;
+                    line-height: 1 !important;
+                    cursor: pointer !important;
+                    transition: all 0.3s ease !important;
+                    padding-top: 0 !important;
+                    padding-bottom: 0 !important;
                     padding-left: 12px !important;
                     padding-right: 12px !important;
-                    cursor: pointer !important;
-                    transition: all 0.2s ease !important;
-                    white-space: nowrap !important;
-                    display: flex !important;
-                    align-items: center !important;
-                    justify-content: center !important;
                     gap: 8px !important;
+                    width: auto !important;
                 }
                 .nat-flag-badge button:hover {
                     border-color: #D4AF37 !important;
-                    background: rgba(255,255,255,0.15) !important;
-                    box-shadow: 0 0 10px rgba(212,175,55,0.35) !important;
+                    background: rgba(255, 255, 255, 0.15) !important;
+                    box-shadow: 0 0 10px rgba(212, 175, 55, 0.3) !important;
                     transform: translateY(-1px) !important;
                 }
                 .nat-flag-badge-active button {
-                    background: rgba(212,175,55,0.22) !important;
-                    border: 2px solid #D4AF37 !important;
-                    box-shadow: 0 0 14px rgba(212,175,55,0.55) !important;
+                    background: rgba(212, 175, 55, 0.2) !important;
+                    border-color: #D4AF37 !important;
+                    box-shadow: 0 0 15px rgba(212, 175, 55, 0.5) !important;
                 }
                 .nat-clear-badge button {
-                    background: rgba(255,75,75,0.12) !important;
+                    background: rgba(255, 75, 75, 0.1) !important;
                     color: #FF4B4B !important;
-                    font-weight: 700 !important;
-                    font-family: 'Inter', sans-serif !important;
+                    border: 1px solid rgba(255, 75, 75, 0.3) !important;
                     border-radius: 12px !important;
-                    border: 1px solid rgba(255,75,75,0.35) !important;
+                    font-weight: 700 !important;
+                    font-size: 0.9rem !important;
                     height: 40px !important;
                     min-height: 40px !important;
-                    width: auto !important;
                     cursor: pointer !important;
-                    transition: all 0.2s ease !important;
+                    transition: all 0.3s ease !important;
+                    padding: 0 12px !important;
+                    width: auto !important;
                 }
                 .nat-clear-badge button:hover {
-                    background: rgba(255,75,75,0.22) !important;
-                    box-shadow: 0 0 10px rgba(255,75,75,0.35) !important;
+                    background: rgba(255, 75, 75, 0.2) !important;
+                    border-color: #FF4B4B !important;
+                    box-shadow: 0 0 10px rgba(255, 75, 75, 0.3) !important;
                 }
                 </style>
                 """
                 st.markdown(base_css, unsafe_allow_html=True)
                 
-                # Use container + columns to display badges properly with flexible width
-                n_cols = len(valid_items) + (1 if active_code else 0)
-                cols = st.columns(n_cols)
-                
-                for i, (code, cnt) in enumerate(valid_items):
-                    with cols[i]:
+                # Use flexible container layout for badges
+                badge_container = st.container()
+                with badge_container:
+                    st.markdown('<div class="nat-badge-marker"></div>', unsafe_allow_html=True)
+                    for code, cnt in valid_items:
                         is_sel = (active_code == code)
                         btn_cls = "nat-flag-badge"
                         if is_sel:
                             btn_cls += " nat-flag-badge-active"
                         st.markdown(f'<div class="{btn_cls}">', unsafe_allow_html=True)
                         flag_emoji = _country_code_to_emoji(code)
-                        btn_label = f"{cnt} {flag_emoji}"
-                        if st.button(btn_label, key=f"dash_badge_{key_prefix}_{code}"):
+                        if st.button(f"{cnt} {flag_emoji}", key=f"dash_badge_{key_prefix}_{code}"):
                             st.session_state[f"selected_nat_{key_prefix}"] = None if is_sel else code
                             st.rerun()
                         st.markdown('</div>', unsafe_allow_html=True)
-                
-                if active_code:
-                    with cols[-1]:
+                    
+                    if active_code:
                         st.markdown('<div class="nat-clear-badge">', unsafe_allow_html=True)
                         clear_lbl = "❌ الكل" if lang == 'ar' else "❌ All"
                         if st.button(clear_lbl, key=f"dash_badge_clear_{key_prefix}"):
