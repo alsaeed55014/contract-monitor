@@ -3547,6 +3547,9 @@ def render_dashboard_content():
         show_cols = [status_key] + [c for c in cols if c in d.columns and not str(c).startswith('__')]
         d_final = d[show_cols].copy()
         
+        # --- Step 1: Render Table Translator FIRST (so it can find original column names like 'nationality') ---
+        d_final = render_table_translator(d_final, key_prefix=f"dash_{tab_id}")
+        
         # Rename Columns Mechanism (Safe to prevent duplicates)
         new_names = {}
         used_names = set()
@@ -3581,15 +3584,13 @@ def render_dashboard_content():
             format="%d يوم" if lang == 'ar' else "%d Days"
         )
         
-        # Flag Image Configuration
-        for col in d_final.columns:
-            if any(kw in str(col).lower() for kw in ["nationality", "الجنسية"]):
-                final_cfg[f"🚩_{col}"] = st.column_config.ImageColumn(t("country_label", lang), width="small", pinned=True)
+        # Flag Image Configuration: check original column names (from new_names key)
+        for original_col, renamed_col in new_names.items():
+            if any(kw in str(original_col).lower() for kw in ["nationality", "الجنسية"]):
+                flag_col = f"🚩_{renamed_col}"
+                if flag_col in d_final.columns:
+                    final_cfg[flag_col] = st.column_config.ImageColumn(t("country_label", lang), width="small", pinned=True)
         
-        
-        # Smart Translator Button
-        d_final = render_table_translator(d_final, key_prefix=f"dash_{tab_id}")
-
         # Apply Green Text Styling
         styled_final = style_df(d_final)
         
