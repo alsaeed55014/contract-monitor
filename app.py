@@ -1425,31 +1425,31 @@ def style_df(df):
                 if styled_df[col].dtype == 'object':
                     styled_df[col] = styled_df[col].apply(lambda x: auto_translate(x, target_lang='en'))
 
-    # 1. Flag Image Injection DISABLED - we use emoji badges instead
-    # nat_cols = [c for c in styled_df.columns if any(kw in str(c).lower() for kw in ["nationality", "الجنسية"])]
-    # for col in nat_cols:
-    #     flag_col = f"🚩_{col}"
-    #     if flag_col not in styled_df.columns:
-    #         # Get current index of nationality column
-    #         idx = list(styled_df.columns).index(col)
-    #         # Insert flag column at the same position (shifts nationality to right)
-    #         styled_df.insert(idx, flag_col, styled_df[col].apply(_get_flag_url_cached))
-    #     else:
-    #         # Ensure it's in the correct position if it already exists
-    #         cols = list(styled_df.columns)
-    #         flag_idx = cols.index(flag_col)
-    #         nat_idx = cols.index(col)
-    #         if flag_idx != nat_idx - 1:
-    #             cols.remove(flag_col)
-    #             # Re-calculate index after removal
-    #             new_nat_idx = cols.index(col)
-    #             cols.insert(new_nat_idx, flag_col)
-    #             styled_df = styled_df[cols]
+    # 1. Flag Image Injection (Optimized) - Insert BEFORE nationality column
+    nat_cols = [c for c in styled_df.columns if any(kw in str(c).lower() for kw in ["nationality", "الجنسية"])]
+    for col in nat_cols:
+        flag_col = f"🚩_{col}"
+        if flag_col not in styled_df.columns:
+            # Get current index of nationality column
+            idx = list(styled_df.columns).index(col)
+            # Insert flag column at the same position (shifts nationality to right)
+            styled_df.insert(idx, flag_col, styled_df[col].apply(_get_flag_url_cached))
+        else:
+            # Ensure it's in the correct position if it already exists
+            cols = list(styled_df.columns)
+            flag_idx = cols.index(flag_col)
+            nat_idx = cols.index(col)
+            if flag_idx != nat_idx - 1:
+                cols.remove(flag_col)
+                # Re-calculate index after removal
+                new_nat_idx = cols.index(col)
+                cols.insert(new_nat_idx, flag_col)
+                styled_df = styled_df[cols]
         
 
-    #     # Fast cleanup - remove emoji flags from text (Safe conversion for Arrow)
-    #     import re
-    #     styled_df[col] = styled_df[col].astype(str).apply(lambda x: re.sub(r'[\U0001F1E6-\U0001F1FF]{2}\s*', '', x))
+        # Fast cleanup - remove emoji flags from text (Safe conversion for Arrow)
+        import re
+        styled_df[col] = styled_df[col].astype(str).apply(lambda x: re.sub(r'[\U0001F1E6-\U0001F1FF]{2}\s*', '', x))
 
 
     # 2. Gender Icon Injection (Fast Vectorized replacement)
@@ -3545,7 +3545,7 @@ def render_dashboard_content():
             st.info(t("no_data", lang))
             return
 
-        # --- Render Nationality Badges FIRST ---
+        # --- Render Nationality Badges FIRST! ---
         nat_col = None
         for c in d.columns:
             c_str = str(c).lower()
@@ -3553,6 +3553,7 @@ def render_dashboard_content():
                 nat_col = c
                 break
         
+        active_code = None
         if nat_col is not None:
             df_nat_codes = d[nat_col].apply(_get_nationality_code)
             code_counts = df_nat_codes.value_counts()
@@ -3561,7 +3562,7 @@ def render_dashboard_content():
             if valid_items:
                 active_code = st.session_state.get(f"selected_nat_{tab_id}")
                 
-                # --- SIMPLEST & GUARANTEED: Use small columns batches (6 per row), NO OVERWRITING 'cols'!
+                # --- SIMPLE: 6 badges per row, NO OVERWRITING 'cols'! ---
                 badges_per_row = 6
                 total_badges = len(valid_items)
                 num_rows = (total_badges + badges_per_row - 1) // badges_per_row
@@ -3586,20 +3587,19 @@ def render_dashboard_content():
                 
                 # Render clear button separately if needed
                 if active_code and num_rows > 0:
-                    if num_rows >0:
-                        last_row_cols = st.columns(1)
-                        with last_row_cols[0]:
-                            clear_lbl = "❌ الكل" if lang == 'ar' else "❌ All"
-                            if st.button(clear_lbl, key=f"dash_badge_clear_{tab_id}"):
-                                st.session_state[f"selected_nat_{tab_id}"] = None
-                                st.rerun()
-                
-                # Apply filtering if needed
-                if active_code:
-                    d = d[df_nat_codes == active_code]
-                    if d.empty:
-                        st.info(t("no_data", lang))
-                        return
+                    last_row_cols = st.columns(1)
+                    with last_row_cols[0]:
+                        clear_lbl = "❌ الكل" if lang == 'ar' else "❌ All"
+                        if st.button(clear_lbl, key=f"dash_badge_clear_{tab_id}"):
+                            st.session_state[f"selected_nat_{tab_id}"] = None
+                            st.rerun()
+            
+            # Apply filtering if needed
+            if active_code:
+                d = d[df_nat_codes == active_code]
+                if d.empty:
+                    st.info(t("no_data", lang))
+                    return
 
         # Sort Logic:
         # For Expired: sort by absolute days (smallest number of days ago first)
@@ -3650,7 +3650,10 @@ def render_dashboard_content():
             format="%d يوم" if lang == 'ar' else "%d Days"
         )
         
-        # No Flag Image Configuration - we use emoji badges instead
+        # Flag Image Configuration
+        for col in d_final.columns:
+            if any(kw in str(col).lower() for kw in ["nationality", "الجنسية"]):
+                final_cfg[f"🚩_{col}"] = st.column_config.ImageColumn(t("country_label", lang), width="small", pinned=True)
         
         
         # Smart Translator Button

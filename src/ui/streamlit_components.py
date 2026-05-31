@@ -4,9 +4,6 @@ import time
 import base64
 from datetime import datetime
 from src.core.i18n import t
-from src.ui.styles import get_base64_image
-import pandas as pd
-import re
 
 def show_toast(message, typ="success", duration=5, container=None):
     is_contextual = container is not None
@@ -118,101 +115,15 @@ def show_loading_hourglass(text=None, container=None):
         """, unsafe_allow_html=True)
     return target
 
-FLAG_MAP = {
-    # Arabic
-    "هندي": "in", "هنديه": "in", "الهند": "in", "هند": "in",
-    "فلبيني": "ph", "فلبينيه": "ph", "الفلبين": "ph", "فلبين": "ph",
-    "نيبالي": "np", "نيباليه": "np", "نيبال": "np",
-    "بنجلاديشي": "bd", "بنجاليه": "bd", "بنجلاديش": "bd", "بنقالي": "bd", "بنغالي": "bd", "بنغاليه": "bd",
-    "باكستاني": "pk", "باكستانيه": "pk", "باكستان": "pk",
-    "مصري": "eg", "مصريه": "eg", "مصر": "eg",
-    "سوداني": "sd", "سودانيه": "sd", "السودان": "sd",
-    "سيريلانكي": "lk", "سيريلانكيه": "lk", "سيريلانكا": "lk", "سيرلانكي": "lk", "سيرلانكيه": "lk",
-    "كيني": "ke", "كينيه": "ke", "كينيا": "ke",
-    "اوغندي": "ug", "اوغنديه": "ug", "اوغندا": "ug",
-    "اثيوبي": "et", "اثيوبيه": "et", "اثيوبيا": "et",
-    "مغربي": "ma", "مغربيه": "ma", "المغرب": "ma",
-    "يمني": "ye", "يمنيه": "ye", "اليمن": "ye",
-    "اندونيسي": "id", "اندونيسيه": "id", "اندونيسيا": "id", "اندونيسا": "id",
-    "رواندي": "rw", "روانديه": "rw", "رواندا": "rw", "روندا": "rw", "روندي": "rw", "رونديه": "rw",
-    "افغاني": "af", "افغانيه": "af", "افغانستان": "af", "افغان": "af",
-    "نيجيري": "ng", "نيجيريه": "ng", "نيجيريا": "ng", "نيجريا": "ng", "نيجري": "ng", "نيجرية": "ng",
-    "غاني": "gh", "غانيه": "gh", "غانا": "gh",
-    "فيتنام": "vn", "فيتنامي": "vn", "فيتناميه": "vn",
-    "سيراليون": "sl",
-    "بوروندي": "bi",
-    # English
-    "indian": "in", "filipino": "ph", "nepi": "np", "nepali": "np", "nepal": "np",
-    "bangla": "bd", "bangladeshi": "bd", "pakistan": "pk", "pakistani": "pk",
-    "egypt": "eg", "egyptian": "eg", "sudan": "sd", "sudanese": "sd",
-    "sri lanka": "lk", "sri lankan": "lk", "kenya": "ke", "kenyan": "ke",
-    "uganda": "ug", "ugandan": "ug", "ethiopia": "et", "ethiopian": "et",
-    "indonesian": "id", "indonesia": "id", "rwandan": "rw", "rwanda": "rw",
-    "afghan": "af", "afghanistan": "af", "nigerian": "ng", "nigeria": "ng"
-}
-
-FLAG_MAP_SORTED = sorted(FLAG_MAP.items(), key=lambda x: len(x[0]), reverse=True)
-
-def _get_nationality_code(val):
-    if not val or pd.isna(val): return None
-    s_val = str(val).strip().lower()
-    
-    # Remove emoji flags
-    s_val = re.sub(r'[\U0001F1E6-\U0001F1FF]{2}\s*', '', s_val)
-    # Remove extra non-word chars
-    s_val = re.sub(r'[^\w\s]', ' ', s_val).strip()
-    
-    if s_val.startswith("ال") and len(s_val) > 4:
-        s_val = s_val[2:]
-        
-    s_val = (s_val.replace("أ", "ا")
-                  .replace("إ", "ا")
-                  .replace("آ", "ا")
-                  .replace("ة", "ه")
-                  .replace("ى", "ي"))
-                  
-    for key, code in FLAG_MAP_SORTED:
-        norm_key = (key.replace("أ", "ا")
-                       .replace("إ", "ا")
-                       .replace("آ", "ا")
-                       .replace("ة", "ه")
-                       .replace("ى", "ي"))
-        if len(norm_key) <= 3:
-            pattern = rf'(?:^|[\s,:;.\-/]){re.escape(norm_key)}(?:[\s,:;.\-/]|$)'
-            if re.search(pattern, s_val):
-                return code.lower()
-        else:
-            if norm_key in s_val:
-                return code.lower()
-    return None
-
-
-def _country_code_to_emoji(code):
-    """Converts 2-letter country code to Unicode flag emoji."""
-    if not code:
-        return "🏁"
-    code = code.strip().upper()
-    if len(code) != 2:
-        return "🏁"
-    # Convert ASCII letters to regional indicator symbols
-    return chr(ord(code[0]) + 0x1F1E6 - 0x41) + chr(ord(code[1]) + 0x1F1E6 - 0x41)
-
-
 def render_table_translator(df, key_prefix="table"):
-    """
-    Renders side-by-side translation buttons (Arabic and Tagalog) above tables.
-    Translates Requested Job, Other Skills, and Iqama Profession columns.
-    Also shows interactive nationality flag badges to filter the table.
-    """
     if df is None or df.empty:
         return df
 
-    # Expanded Keywords to catch all relevant columns in any language
     target_keywords = [
-        "وظيفة", "الوظيفة", "مهنة", "المهنة", "مهارة", "مهارات", "خبرة", "الخبرة",
-        "جنسية", "الجنسية", "جنس", "الجنس", "حالة", "الحالة", "جاهز", "هروب",
-        "job", "profession", "skill", "experience", "occupation",
-        "nationality", "gender", "status", "requested", "ready", "escape", "abscond"
+        "الوظيفة المطلوبة", "Requested Job", "Job Requested", "Which job are you looking for",
+        "مهارات أخرى", "Other Skills", "What other jobs can you do",
+        "المهنة في الإقامة", "Iqama Profession", "What is the occupation listed on your Iqama",
+        "Iqama Job", "occupation listed on your Iqama"
     ]
     cols_to_translate = [c for c in df.columns if any(kw.lower() in str(c).lower() for kw in target_keywords)]
 
@@ -222,113 +133,33 @@ def render_table_translator(df, key_prefix="table"):
     from src.core.translation import TranslationManager
     tm = TranslationManager()
 
-    # --- Record Count Header & Nationality Stats ---
-    lang = st.session_state.get('lang', 'ar')
-    active_code = st.session_state.get(f"selected_nat_{key_prefix}")
-
-    # Try to find nationality column
-    nat_col = None
-    for c in df.columns:
-        c_str = str(c).lower()
-        if "nationality" in c_str or "الجنسية" in c_str or "جنسية" in c_str:
-            nat_col = c
-            break
-            
-    if nat_col is not None and not df.empty:
-        # Calculate nationality codes on the UNFILTERED data
-        df_nat_codes = df[nat_col].apply(_get_nationality_code)
-        code_counts = df_nat_codes.value_counts()
-        valid_items = [(code, int(cnt)) for code, cnt in code_counts.items() if code]
-        
-        if valid_items:
-            # --- SIMPLEST & GUARANTEED: Use small columns batches (6 per row), NO OVERWRITING 'cols'!
-            badges_per_row = 6
-            total_badges = len(valid_items)
-            num_rows = (total_badges + badges_per_row - 1) // badges_per_row
-                
-            for row in range(num_rows):
-                start_idx = row * badges_per_row
-                end_idx = min((row + 1) * badges_per_row, total_badges)
-                row_items = valid_items[start_idx:end_idx]
-                
-                # Add 1 extra column for clear button on LAST row if needed
-                row_cols = st.columns(len(row_items) + (1 if (active_code and row == num_rows -1) else 0))
-                
-                # Render buttons in row
-                for i, (code, cnt) in enumerate(row_items):
-                    with row_cols[i]:
-                        flag_emoji = _country_code_to_emoji(code)
-                        btn_label = f"{cnt} {flag_emoji}"
-                        is_selected = (active_code == code)
-                        if st.button(btn_label, key=f"btn_nat_{key_prefix}_{code}", type="primary" if is_selected else "secondary"):
-                            st.session_state[f"selected_nat_{key_prefix}"] = None if is_selected else code
-                            st.rerun()
-            
-            # Render clear button separately if needed
-            if active_code and num_rows >0:
-                last_row_cols = st.columns(1)
-                with last_row_cols[0]:
-                    clear_lbl = "❌ الكل" if lang == 'ar' else "❌ All"
-                    if st.button(clear_lbl, key=f"btn_nat_clear_{key_prefix}"):
-                        st.session_state[f"selected_nat_{key_prefix}"] = None
-                        st.rerun()
-            
-            # Apply filtering to the dataframe
-            if active_code:
-                df = df[df_nat_codes == active_code]
-
-    # Render total count banner
-    count = len(df)
-    count_label = "عدد العمال" if lang == 'ar' else "Total Workers"
-    st.markdown(f"""<div style="margin-bottom: 20px; padding: 15px; background: linear-gradient(135deg, rgba(20, 20, 20, 0.95) 0%, rgba(30, 30, 30, 0.8) 100%); border-radius: 20px; border: 1.5px solid rgba(212, 175, 55, 0.3); box-shadow: 0 8px 25px rgba(0,0,0,0.5); text-align: center;">
-    <div style="display: flex; justify-content: center; align-items: center; gap: 15px;">
-        <div style="color: #D4AF37; font-weight: 800; font-family: 'Cairo', sans-serif; font-size: 1.2rem; display: flex; align-items: center; gap: 10px;">
-            ✦ {count_label}
-        </div>
-        <div style="background: linear-gradient(135deg, #D4AF37, #8B7520); color: #000; width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 1.2rem; box-shadow: 0 0 15px rgba(212,175,55,0.6);">
-            {count}
-        </div>
-    </div>
-</div>""", unsafe_allow_html=True)
-
     st.markdown('<div class="table-translator-container">', unsafe_allow_html=True)
     ct1, ct2 = st.columns(2)
-    t_state_key = f"table_trans_{key_prefix}"
     
     with ct1:
         st.markdown('<div class="table-translator-btn">', unsafe_allow_html=True)
-        if st.button("🇸🇦 الترجمة للعربية", key=f"btn_ar_{key_prefix}", width='stretch'):
-            if st.session_state.get(t_state_key) == "ar":
-                st.session_state[t_state_key] = None
-            else:
-                st.session_state[t_state_key] = "ar"
+        if st.button("🇸🇦 الترجمة للعربية", key=f"btn_ar_{key_prefix}", use_container_width=True):
+            with st.spinner("جارِ الترجمة للعربية..."):
+                for col in cols_to_translate:
+                    unique_vals = [v for v in df[col].unique() if v and isinstance(v, str)]
+                    if unique_vals:
+                        translations = {val: tm.translate_full_text(val, target_lang='ar') for val in unique_vals}
+                        df[col] = df[col].map(translations).fillna(df[col])
+                st.success("✅ تم")
         st.markdown('</div>', unsafe_allow_html=True)
 
     with ct2:
         st.markdown('<div class="table-translator-btn">', unsafe_allow_html=True)
-        if st.button("🇵🇭 ISALIN SA TAGALOG", key=f"btn_tl_{key_prefix}", width='stretch'):
-            if st.session_state.get(t_state_key) == "tl":
-                st.session_state[t_state_key] = None
-            else:
-                st.session_state[t_state_key] = "tl"
+        if st.button("🇵🇭 Isalin sa Tagalog", key=f"btn_tl_{key_prefix}", use_container_width=True):
+            with st.spinner("Isinasalin sa Tagalog..."):
+                for col in cols_to_translate:
+                    unique_vals = [v for v in df[col].unique() if v and isinstance(v, str)]
+                    if unique_vals:
+                        translations = {val: tm.translate_full_text(val, target_lang='tl') for val in unique_vals}
+                        df[col] = df[col].map(translations).fillna(df[col])
+                st.success("✅ Tapos na")
         st.markdown('</div>', unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)
-    
-    target_lang = st.session_state.get(t_state_key)
-    if target_lang in ['ar', 'tl']:
-        spinner_msg = "جارِ الترجمة..." if target_lang == 'ar' else "Isinasalin sa Tagalog..."
-        with st.spinner(spinner_msg):
-            for col in cols_to_translate:
-                unique_vals = [v for v in df[col].unique() if v and isinstance(v, str) and len(str(v).strip()) > 0]
-                if unique_vals:
-                    translations = {val: tm.translate_full_text(val, target_lang=target_lang) for val in unique_vals}
-                    df[col] = df[col].map(translations).fillna(df[col])
-            
-            # Show toast only upon completion to confirm it worked
-            if 'last_trans_msg' not in st.session_state or st.session_state.last_trans_msg != f"{key_prefix}_{target_lang}":
-                msg = "✅ تمت الترجمة!" if target_lang == 'ar' else "✅ Tapos na ang pagsasalin!"
-                st.toast(msg)
-                st.session_state.last_trans_msg = f"{key_prefix}_{target_lang}"
     
     return df
 
@@ -340,7 +171,7 @@ def render_top_banner(user, lang, auth_manager):
     notif_count = len(notifs)
 
     if st.session_state.get('notif_triggered'):
-        st.html("""
+        st.components.v1.html("""
 <script>
 (async function(){
     try {
@@ -360,7 +191,7 @@ def render_top_banner(user, lang, auth_manager):
     } catch(e) {}
 })();
 </script>
-""")
+""", height=0, width=0)
         st.session_state.notif_triggered = False
 
     if lang == 'ar':
@@ -470,7 +301,7 @@ def render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search", 
 
     for idx, config in enumerate(translate_configs):
         with col_a if idx == 0 else col_b:
-            if st.button(config["label"], width='stretch', type="primary" if idx == 0 else "secondary", key=f"btn_trans_{key_prefix}_{worker_id}_{config['key_suffix']}"):
+            if st.button(config["label"], use_container_width=True, type="primary" if idx == 0 else "secondary", key=f"btn_trans_{key_prefix}_{worker_id}_{config['key_suffix']}"):
                 if cv_url and str(cv_url).startswith("http"):
                     trans_loader = show_loading_hourglass(t("extracting", lang))
                     try:
@@ -578,8 +409,8 @@ def login_screen(auth_manager, t, toggle_lang, load_saved_credentials, save_cred
             persist_txt = "هل تريد حفظ الدخول" if lang == 'ar' else "Do you want to stay logged in?"
             persist = st.checkbox(persist_txt, value=(True if saved else False))
             
-            submit = st.form_submit_button(t("login_btn", lang), width='stretch')
-            lang_toggle = st.form_submit_button("En" if lang == "ar" else "عربي", width='stretch')
+            submit = st.form_submit_button(t("login_btn", lang), use_container_width=True)
+            lang_toggle = st.form_submit_button("En" if lang == "ar" else "عربي", use_container_width=True)
 
             if submit:
                 if not u or not p:
