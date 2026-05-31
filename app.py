@@ -3561,37 +3561,34 @@ def render_dashboard_content():
             if valid_items:
                 active_code = st.session_state.get(f"selected_nat_{tab_id}")
                 
-                # Render badges with proper flex container using HTML + JS for perfect LTR
-                st.markdown("""
-                    <style>
-                    .badge-container {
-                        display: flex;
-                        flex-direction: row;
-                        flex-wrap: nowrap;
-                        overflow-x: auto;
-                        gap: 10px;
-                        padding: 10px 0;
-                        direction: ltr;
-                        direction: ltr;
-                    }
-                    </style>
-                    """, unsafe_allow_html=True)
+                # --- SIMPLEST & GUARANTEED: Use small columns batches (6 per row), NO OVERWRITING 'cols'!
+                badges_per_row = 6
+                total_badges = len(valid_items)
+                num_rows = (total_badges + badges_per_row - 1) // badges_per_row
                 
-                # Render all badges with flex container (NO OVERWRITING 'cols' variable!)
-                with st.container():
-                    # Render badges in small groups for better layout, RENAME TO 'badge_cols' NOT 'cols'!
-                    badge_cols = st.columns(len(valid_items) + (1 if active_code else 0))
-                    for i, (code, cnt) in enumerate(valid_items):
-                        with badge_cols[i]:
+                for row in range(num_rows):
+                    start_idx = row * badges_per_row
+                    end_idx = min((row + 1) * badges_per_row, total_badges)
+                    row_items = valid_items[start_idx:end_idx]
+                    
+                    # Add 1 extra column for clear button on LAST row if needed
+                    row_cols = st.columns(len(row_items) + (1 if (active_code and row == num_rows -1) else 0))
+                    
+                    # Render buttons in row
+                    for i, (code, cnt) in enumerate(row_items):
+                        with row_cols[i]:
                             flag_emoji = _country_code_to_emoji(code)
                             btn_label = f"{cnt} {flag_emoji}"
                             is_selected = (active_code == code)
                             if st.button(btn_label, key=f"dash_badge_{tab_id}_{code}", type="primary" if is_selected else "secondary"):
                                 st.session_state[f"selected_nat_{tab_id}"] = None if is_selected else code
                                 st.rerun()
-                        
-                    if active_code:
-                        with badge_cols[-1]:
+                
+                # Render clear button separately if needed
+                if active_code and num_rows > 0:
+                    if num_rows >0:
+                        last_row_cols = st.columns(1)
+                        with last_row_cols[0]:
                             clear_lbl = "❌ الكل" if lang == 'ar' else "❌ All"
                             if st.button(clear_lbl, key=f"dash_badge_clear_{tab_id}"):
                                 st.session_state[f"selected_nat_{tab_id}"] = None

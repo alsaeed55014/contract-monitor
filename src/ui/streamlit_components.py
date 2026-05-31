@@ -241,21 +241,33 @@ def render_table_translator(df, key_prefix="table"):
         valid_items = [(code, int(cnt)) for code, cnt in code_counts.items() if code]
         
         if valid_items:
-            # Render all buttons in a single row using simple columns (RENAMED to badge_cols!)
-            total_badge_cols = len(valid_items) + (1 if active_code else 0)
-            badge_cols = st.columns(total_badge_cols)
+            # --- SIMPLEST & GUARANTEED: Use small columns batches (6 per row), NO OVERWRITING 'cols'!
+            badges_per_row = 6
+            total_badges = len(valid_items)
+            num_rows = (total_badges + badges_per_row - 1) // badges_per_row
+                
+            for row in range(num_rows):
+                start_idx = row * badges_per_row
+                end_idx = min((row + 1) * badges_per_row, total_badges)
+                row_items = valid_items[start_idx:end_idx]
+                
+                # Add 1 extra column for clear button on LAST row if needed
+                row_cols = st.columns(len(row_items) + (1 if (active_code and row == num_rows -1) else 0))
+                
+                # Render buttons in row
+                for i, (code, cnt) in enumerate(row_items):
+                    with row_cols[i]:
+                        flag_emoji = _country_code_to_emoji(code)
+                        btn_label = f"{cnt} {flag_emoji}"
+                        is_selected = (active_code == code)
+                        if st.button(btn_label, key=f"btn_nat_{key_prefix}_{code}", type="primary" if is_selected else "secondary"):
+                            st.session_state[f"selected_nat_{key_prefix}"] = None if is_selected else code
+                            st.rerun()
             
-            for i, (code, cnt) in enumerate(valid_items):
-                with badge_cols[i]:
-                    flag_emoji = _country_code_to_emoji(code)
-                    btn_label = f"{cnt} {flag_emoji}"
-                    is_selected = (active_code == code)
-                    if st.button(btn_label, key=f"btn_nat_{key_prefix}_{code}", type="primary" if is_selected else "secondary"):
-                        st.session_state[f"selected_nat_{key_prefix}"] = None if is_selected else code
-                        st.rerun()
-            
-            if active_code:
-                with badge_cols[-1]:
+            # Render clear button separately if needed
+            if active_code and num_rows >0:
+                last_row_cols = st.columns(1)
+                with last_row_cols[0]:
                     clear_lbl = "❌ الكل" if lang == 'ar' else "❌ All"
                     if st.button(clear_lbl, key=f"btn_nat_clear_{key_prefix}"):
                         st.session_state[f"selected_nat_{key_prefix}"] = None
