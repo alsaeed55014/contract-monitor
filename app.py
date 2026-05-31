@@ -3561,24 +3561,41 @@ def render_dashboard_content():
             if valid_items:
                 active_code = st.session_state.get(f"selected_nat_{tab_id}")
                 
-                # Render all buttons in a single row with horizontal scroll
-                total_cols = len(valid_items) + (1 if active_code else 0)
-                cols = st.columns(total_cols)
+                # Render badges with proper flex container using HTML + JS for perfect LTR
+                st.markdown("""
+                    <style>
+                    .badge-container {
+                        display: flex;
+                        flex-direction: row;
+                        flex-wrap: nowrap;
+                        overflow-x: auto;
+                        gap: 10px;
+                        padding: 10px 0;
+                        direction: ltr;
+                        direction: ltr;
+                    }
+                    </style>
+                    """, unsafe_allow_html=True)
                 
-                for i, (code, cnt) in enumerate(valid_items):
-                    with cols[i]:
-                        flag_emoji = _country_code_to_emoji(code)
-                        btn_label = f"{cnt} {flag_emoji}"
-                        if st.button(btn_label, key=f"dash_badge_{tab_id}_{code}"):
-                            st.session_state[f"selected_nat_{tab_id}"] = None if (active_code == code) else code
-                            st.rerun()
-                
-                if active_code:
-                    with cols[-1]:
-                        clear_lbl = "❌ الكل" if lang == 'ar' else "❌ All"
-                        if st.button(clear_lbl, key=f"dash_badge_clear_{tab_id}"):
-                            st.session_state[f"selected_nat_{tab_id}"] = None
-                            st.rerun()
+                # Render all badges with flex container (NO OVERWRITING 'cols' variable!)
+                with st.container():
+                    # Render badges in small groups for better layout, RENAME TO 'badge_cols' NOT 'cols'!
+                    badge_cols = st.columns(len(valid_items) + (1 if active_code else 0))
+                    for i, (code, cnt) in enumerate(valid_items):
+                        with badge_cols[i]:
+                            flag_emoji = _country_code_to_emoji(code)
+                            btn_label = f"{cnt} {flag_emoji}"
+                            is_selected = (active_code == code)
+                            if st.button(btn_label, key=f"dash_badge_{tab_id}_{code}", type="primary" if is_selected else "secondary"):
+                                st.session_state[f"selected_nat_{tab_id}"] = None if is_selected else code
+                                st.rerun()
+                        
+                    if active_code:
+                        with badge_cols[-1]:
+                            clear_lbl = "❌ الكل" if lang == 'ar' else "❌ All"
+                            if st.button(clear_lbl, key=f"dash_badge_clear_{tab_id}"):
+                                st.session_state[f"selected_nat_{tab_id}"] = None
+                                st.rerun()
                 
                 # Apply filtering if needed
                 if active_code:
