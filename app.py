@@ -1401,7 +1401,6 @@ def _country_code_to_emoji(code):
     code = code.strip().upper()
     if len(code) != 2:
         return "🏁"
-    # Convert ASCII letters to regional indicator symbols
     return chr(ord(code[0]) + 0x1F1E6 - 0x41) + chr(ord(code[1]) + 0x1F1E6 - 0x41)
 
 
@@ -1586,6 +1585,7 @@ def render_table_translator(df, key_prefix="table"):
     align-items: center !important;
     justify-content: center !important;
     gap: 8px !important;
+    direction: ltr !important;
 }
 .nat-flag-badge button:hover {
     border-color: #D4AF37 !important;
@@ -1611,15 +1611,17 @@ def render_table_translator(df, key_prefix="table"):
     cursor: pointer !important;
     transition: all 0.2s ease !important;
     padding: 0 12px !important;
+    direction: ltr !important;
 }
 .nat-clear-badge button:hover {
     background: rgba(255,75,75,0.22) !important;
     box-shadow: 0 0 10px rgba(255,75,75,0.35) !important;
 }
+</style>
 """
-            st.markdown(base_css + "</style>", unsafe_allow_html=True)
+            st.markdown(base_css, unsafe_allow_html=True)
 
-            # ---- Single row: one column per badge (using badge_cols, not cols!) ----
+            # ---- Single row: one column per badge (using badge_cols NOT cols!) ----
             n_badge_cols = len(valid_items) + (1 if has_clear else 0)
             badge_cols = st.columns(n_badge_cols)
 
@@ -3529,113 +3531,6 @@ def render_dashboard_content():
         if d is None or d.empty: 
             st.info(t("no_data", lang))
             return
-
-        # --- Render Nationality Badges FIRST! ---
-        nat_col = None
-        for c in d.columns:
-            c_str = str(c).lower()
-            if "nationality" in c_str or "الجنسية" in c_str or "جنسية" in c_str:
-                nat_col = c
-                break
-        
-        active_code = None
-        if nat_col is not None:
-            df_nat_codes = d[nat_col].apply(_get_nationality_code)
-            code_counts = df_nat_codes.value_counts()
-            valid_items = [(code, int(cnt)) for code, cnt in code_counts.items() if code]
-            
-            if valid_items:
-                active_code = st.session_state.get(f"selected_nat_{tab_id}")
-                
-                # --- Add the SAME CSS as search page for consistency ---
-                st.markdown("""
-<style>
-.nat-flag-badge button {
-    background-color: rgba(255,255,255,0.08) !important;
-    color: #FFF !important;
-    font-weight: 800 !important;
-    font-size: 0.9rem !important;
-    font-family: 'Inter', sans-serif !important;
-    border-radius: 10px !important;
-    border: 1px solid rgba(212,175,55,0.25) !important;
-    height: 38px !important;
-    min-height: 38px !important;
-    width: 100% !important;
-    padding: 0 12px !important;
-    cursor: pointer !important;
-    transition: all 0.2s ease !important;
-    white-space: nowrap !important;
-    display: flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-    gap: 8px !important;
-}
-.nat-flag-badge button:hover {
-    border-color: #D4AF37 !important;
-    background-color: rgba(255,255,255,0.15) !important;
-    box-shadow: 0 0 10px rgba(212,175,55,0.35) !important;
-    transform: translateY(-1px) !important;
-}
-.nat-flag-badge-active button {
-    background-color: rgba(212,175,55,0.22) !important;
-    border: 2px solid #D4AF37 !important;
-    box-shadow: 0 0 14px rgba(212,175,55,0.55) !important;
-}
-.nat-clear-badge button {
-    background: rgba(255,75,75,0.12) !important;
-    color: #FF4B4B !important;
-    font-weight: 700 !important;
-    font-family: 'Inter', sans-serif !important;
-    border-radius: 10px !important;
-    border: 1px solid rgba(255,75,75,0.35) !important;
-    height: 38px !important;
-    min-height: 38px !important;
-    width: 100% !important;
-    cursor: pointer !important;
-    transition: all 0.2s ease !important;
-    padding: 0 12px !important;
-}
-.nat-clear-badge button:hover {
-    background: rgba(255,75,75,0.22) !important;
-    box-shadow: 0 0 10px rgba(255,75,75,0.35) !important;
-}
-</style>
-""", unsafe_allow_html=True)
-
-                # --- ALL badges in ONE row using badge_cols (not cols!) ---
-                n_badge_cols = len(valid_items) + (1 if active_code else 0)
-                badge_cols = st.columns(n_badge_cols)
-                
-                for i, (code, cnt) in enumerate(valid_items):
-                    with badge_cols[i]:
-                        flag_emoji = _country_code_to_emoji(code)
-                        btn_label = f"{cnt} {flag_emoji}"
-                        is_sel = (active_code == code)
-                        base_cls = "nat-flag-badge"
-                        if is_sel:
-                            base_cls += " nat-flag-badge-active"
-                        div_cls = base_cls + " nbadge-dash-" + tab_id + "-" + code
-                        st.markdown('<div class="' + div_cls + '">', unsafe_allow_html=True)
-                        if st.button(btn_label, key=f"dash_badge_{tab_id}_{code}"):
-                            st.session_state[f"selected_nat_{tab_id}"] = None if is_sel else code
-                            st.rerun()
-                        st.markdown('</div>', unsafe_allow_html=True)
-                
-                if active_code:
-                    with badge_cols[-1]:
-                        clear_lbl = "❌ الكل" if lang == 'ar' else "❌ All"
-                        st.markdown('<div class="nat-clear-badge">', unsafe_allow_html=True)
-                        if st.button(clear_lbl, key=f"dash_badge_clear_{tab_id}"):
-                            st.session_state[f"selected_nat_{tab_id}"] = None
-                            st.rerun()
-                        st.markdown('</div>', unsafe_allow_html=True)
-            
-            # Apply filtering if needed
-            if active_code:
-                d = d[df_nat_codes == active_code]
-                if d.empty:
-                    st.info(t("no_data", lang))
-                    return
 
         # Sort Logic:
         # For Expired: sort by absolute days (smallest number of days ago first)
