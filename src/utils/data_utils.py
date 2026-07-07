@@ -112,10 +112,10 @@ def style_df(df):
                     if len(key) <= 3:
                         pattern = r'(?:^|[\s,:;.\-/])' + re.escape(key) + r'(?:[\s,:;.\-/]|$)'
                         if re.search(pattern, s_val):
-                            return f"https://flagsapi.com/{code.upper()}/flat/64.png"
+                            return f"https://cdn.jsdelivr.net/gh/lipis/flag-icons@7.2.0/flags/4x3/{code.lower()}.svg"
                     else:
                         if key in s_val:
-                            return f"https://flagsapi.com/{code.upper()}/flat/64.png"
+                            return f"https://cdn.jsdelivr.net/gh/lipis/flag-icons@7.2.0/flags/4x3/{code.lower()}.svg"
                 return None
             
             idx = list(styled_df.columns).index(col)

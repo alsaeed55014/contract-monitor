@@ -239,6 +239,224 @@ def render_whatsapp_page():
         'wa_placeholders_guide': t('wa_placeholders_guide', lang),
     }
 
+    # === Mode Selection ===
+    wa_mode = st.radio(
+        "اختر الوضع" if is_ar else "Select Mode",
+        ["📱 واتساب ماركتنج (2026)" if is_ar else "📱 WhatsApp Marketing (2026)", 
+         "🏢 واتساب للعملاء" if is_ar else "🏢 WhatsApp for Employers"],
+        horizontal=True,
+        key="wa_mode_selection"
+    )
+
+    if wa_mode == ("🏢 واتساب للعملاء" if is_ar else "🏢 WhatsApp for Employers"):
+        # === WhatsApp Marketing for Employers (from Bengali Supply) ===
+        st.markdown(f'### 🏢 {"واتساب ماركتنج للعملاء" if is_ar else "WhatsApp Marketing for Employers"}')
+        
+        # Data Source Selection
+        st.markdown(f"#### {'مصدر البيانات' if is_ar else 'Data Source'}")
+        data_source = st.radio(
+            "اختر مصدر البيانات" if is_ar else "Select Data Source",
+            ["من النظام (Bengali Supply)" if is_ar else "From System (Bengali Supply)", 
+             "استيراد ملف Excel" if is_ar else "Import Excel File"],
+            horizontal=True,
+            key="wa_bengali_data_source"
+        )
+        
+        target_phones = []
+        target_names = []
+        
+        if data_source == ("من النظام (Bengali Supply)" if is_ar else "From System (Bengali Supply)"):
+            # Import BengaliDataManager
+            from src.data.bengali_manager import BengaliDataManager
+            bm = BengaliDataManager()
+            
+            # Get all employers
+            all_employers = bm.get_employers()
+            
+            if not all_employers:
+                st.warning("⚠️ " + ("لا يوجد عملاء في النظام" if is_ar else "No employers in the system"))
+            else:
+                # Select employers to send to
+                st.markdown(f"#### {'اختر العملاء للإرسال' if is_ar else 'Select Employers to Send'}")
+                
+                # Multi-select employers
+                employer_options = [f"{e['name']} - {e.get('mobile', '')}" for e in all_employers]
+                selected_employers = st.multiselect(
+                    "العملاء" if is_ar else "Employers",
+                    employer_options,
+                    key="wa_bengali_employers"
+                )
+                
+                if selected_employers:
+                    # Extract phone numbers
+                    for selection in selected_employers:
+                        # Extract phone from selection
+                        parts = selection.split(' - ')
+                        if len(parts) > 1:
+                            phone = parts[-1].strip()
+                            name = parts[0].strip()
+                            # Clean phone number
+                            clean_phone = "".join(filter(str.isdigit, phone))
+                            if clean_phone:
+                                target_phones.append(clean_phone)
+                                target_names.append(name)
+                
+                st.info(f"📊 {'تم اختيار' if is_ar else 'Selected'}: {len(target_phones)} {'عميل' if is_ar else 'employers'}")
+        else:
+            # Excel Import
+            st.markdown(f"#### {'استيراد ملف Excel' if is_ar else 'Import Excel File'}")
+            uploaded_file = st.file_uploader(
+                "ارفع ملف Excel" if is_ar else "Upload Excel file",
+                type=['xlsx', 'xls'],
+                key="wa_bengali_excel_upload"
+            )
+            
+            if uploaded_file:
+                try:
+                    df = pd.read_excel(uploaded_file)
+                    st.success(f"✅ {'تم تحميل الملف بنجاح' if is_ar else 'File loaded successfully'}: {len(df)} {'صف' if is_ar else 'rows'}")
+                    
+                    # Show columns
+                    st.write(f"**{'الأعمدة المتاحة' if is_ar else 'Available columns'}:**", list(df.columns))
+                    
+                    # Select name and phone columns
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        name_col = st.selectbox(
+                            "عمود الاسم" if is_ar else "Name column",
+                            df.columns.tolist(),
+                            key="wa_bengali_name_col"
+                        )
+                    with col2:
+                        phone_col = st.selectbox(
+                            "عمود رقم الهاتف" if is_ar else "Phone column",
+                            df.columns.tolist(),
+                            key="wa_bengali_phone_col"
+                        )
+                    
+                    if st.button("📥 " + ("استخراج البيانات" if is_ar else "Extract Data"), key="extract_bengali_data"):
+                        for _, row in df.iterrows():
+                            name = str(row[name_col]).strip()
+                            phone = str(row[phone_col]).strip()
+                            # Clean phone number
+                            clean_phone = "".join(filter(str.isdigit, phone))
+                            if clean_phone and name != 'nan':
+                                target_phones.append(clean_phone)
+                                target_names.append(name)
+                        
+                        st.success(f"✅ {'تم استخراج' if is_ar else 'Extracted'}: {len(target_phones)} {'عميل' if is_ar else 'employers'}")
+                except Exception as e:
+                    st.error(f"❌ {'خطأ في قراءة الملف' if is_ar else 'Error reading file'}: {str(e)}")
+        
+        if target_phones:
+            # Message input (empty for manual writing)
+            st.markdown(f"#### {'اكتب رسالتك' if is_ar else 'Write Your Message'}")
+            custom_message = st.text_area(
+                "الرسالة" if is_ar else "Message",
+                placeholder="اكتب رسالتك هنا... استخدم {Name} لاسم العميل" if is_ar else "Write your message here... Use {Name} for customer name",
+                height=200,
+                key="wa_bengali_message"
+            )
+            
+            # Random delay settings
+            st.markdown(f"#### {'إعدادات التأخير العشوائي' if is_ar else 'Random Delay Settings'}")
+            col_d1, col_d2 = st.columns(2)
+            with col_d1:
+                min_delay = st.number_input(
+                    "الحد الأدنى (ثواني)" if is_ar else "Min delay (seconds)",
+                    min_value=5,
+                    max_value=300,
+                    value=30,
+                    key="wa_bengali_min_delay"
+                )
+            with col_d2:
+                max_delay = st.number_input(
+                    "الحد الأقصى (ثواني)" if is_ar else "Max delay (seconds)",
+                    min_value=10,
+                    max_value=600,
+                    value=60,
+                    key="wa_bengali_max_delay"
+                )
+            
+            # Message variation settings
+            st.markdown(f"#### {'إعدادات تغيير الرسالة' if is_ar else 'Message Variation Settings'}")
+            col_v1, col_v2 = st.columns(2)
+            with col_v1:
+                enable_variation = st.checkbox(
+                    "تفعيل تغيير الصيغة" if is_ar else "Enable Message Variation",
+                    value=True,
+                    help="تغيير صيغة الرسالة كل 5 رسائل بنفس المعنى لتجنب الحظر"
+                )
+            with col_v2:
+                variation_interval = st.number_input(
+                    "تغيير كل (رسالة)" if is_ar else "Change every (messages)",
+                    min_value=1,
+                    max_value=20,
+                    value=5,
+                    key="wa_bengali_interval"
+                )
+            
+            # Send button
+            if st.button("📨 إرسال الرسائل" if is_ar else "📨 Send Messages", type="primary", key="send_bengali_wa"):
+                if not custom_message:
+                    st.error("❌ " + ("يرجى كتابة الرسالة أولاً" if is_ar else "Please write a message first"))
+                elif not target_phones:
+                    st.error("❌ " + ("لا يوجد أرقام هواتف صالحة" if is_ar else "No valid phone numbers"))
+                else:
+                    # Send messages
+                    success_count = 0
+                    fail_count = 0
+                    
+                    progress_bar = st.progress(0)
+                    status_text = st.empty()
+                    
+                    for i, (phone, name) in enumerate(zip(target_phones, target_names)):
+                        status_text.text(f"{'جاري الإرسال إلى' if is_ar else 'Sending to'}: {name} ({i+1}/{len(target_phones)})")
+                        
+                        # Generate message variation
+                        if enable_variation and (i + 1) % variation_interval == 0:
+                            # Simple variation: change greeting and structure
+                            variations = [
+                                custom_message,
+                                custom_message.replace("مرحبا", "أهلاً").replace("Hello", "Hi"),
+                                custom_message.replace("،", ".").replace(",", "."),
+                                custom_message.replace("\n\n", "\n"),
+                                custom_message.replace(".", "...")
+                            ]
+                            message_to_send = variations[(i // variation_interval) % len(variations)]
+                        else:
+                            message_to_send = custom_message
+                        
+                        # Replace {Name} placeholder
+                        message_to_send = message_to_send.replace("{Name}", name).replace("{name}", name)
+                        
+                        # Send message
+                        success, msg = st.session_state.wa_service.send_message(phone, message_to_send)
+                        
+                        if success:
+                            success_count += 1
+                        else:
+                            fail_count += 1
+                            st.warning(f"⚠️ {name}: {msg}")
+                        
+                        progress_bar.progress((i + 1) / len(target_phones))
+                        
+                        # Random delay between messages (anti-ban)
+                        if i < len(target_phones) - 1:  # Don't delay after last message
+                            random_delay = random.randint(min_delay, max_delay)
+                            delay_text = f"⏳ {'تأخير عشوائي' if is_ar else 'Random delay'}: {random_delay} {'ثانية' if is_ar else 'seconds'}"
+                            status_text.text(delay_text)
+                            time.sleep(random_delay)
+                    
+                    status_text.empty()
+                    progress_bar.empty()
+                    
+                    st.success(f"✅ {'تم الإرسال بنجاح' if is_ar else 'Sending completed'}: {success_count} {'رسالة' if is_ar else 'messages'}")
+                    if fail_count > 0:
+                        st.warning(f"⚠️ {'فشل' if is_ar else 'Failed'}: {fail_count}")
+        return
+
+    # === Original WhatsApp Marketing (2026) ===
     # 1. Connection Status
     status = st.session_state.wa_service.get_status()
     c1, c2, c3 = st.columns([2, 1, 1])
@@ -905,9 +1123,9 @@ HR Manager"""
                     </div>
                     """, unsafe_allow_html=True)
 
-    # Diagnostic
-    if status not in ["Connected", "Awaiting Login"]:
-        with st.expander(lbl['diag']):
-            if st.button(lbl['screenshot']):
-                img = st.session_state.wa_service.get_diagnostic_screenshot()
-                if img: st.image(f"data:image/png;base64,{img}")
+        # Diagnostic
+        if status not in ["Connected", "Awaiting Login"]:
+            with st.expander(lbl['diag']):
+                if st.button(lbl['screenshot']):
+                    img = st.session_state.wa_service.get_diagnostic_screenshot()
+                    if img: st.image(f"data:image/png;base64,{img}")

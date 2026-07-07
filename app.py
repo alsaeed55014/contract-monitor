@@ -434,14 +434,22 @@ def get_css(lang='ar'):
             border: 1px solid var(--luxury-gold) !important;
         }}
 
-        /* WhatsApp Export Button - Red Text */
+        /* WhatsApp Export Button - Premium WhatsApp Green */
         .whatsapp-export-btn .stButton button,
         .whatsapp-export-btn .stDownloadButton button {{
-            color: #FF0000 !important;
+            background: linear-gradient(135deg, #25D366 0%, #128C7E 100%) !important;
+            color: #FFFFFF !important;
+            border: 1px solid #25D366 !important;
+            box-shadow: 0 4px 15px rgba(37, 211, 102, 0.3) !important;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.2) !important;
         }}
         .whatsapp-export-btn .stButton button:hover,
         .whatsapp-export-btn .stDownloadButton button:hover {{
-            color: #FF0000 !important;
+            background: linear-gradient(135deg, #128C7E 0%, #075E54 100%) !important;
+            color: #FFFFFF !important;
+            border-color: #128C7E !important;
+            box-shadow: 0 0 25px rgba(37, 211, 102, 0.6) !important;
+            transform: translateY(-2px) !important;
         }}
 
         /* 6) Table & Data Presentation - WHITE NEON STYLE (For DataFrames) */
@@ -1143,10 +1151,23 @@ def get_css(lang='ar'):
                 filter: drop-shadow(0 0 6px rgba(255, 0, 0, 0.6)) !important;
             }}
 
-            /* === MOBILE RED: WhatsApp export button === */
-            /* WhatsApp Export Button - Mobile (Unified Luxury Style) */
+            /* === MOBILE: WhatsApp export button === */
             .whatsapp-export-btn .stButton button,
-            .whatsapp-export-btn .stDownloadButton button,
+            .whatsapp-export-btn .stDownloadButton button {{
+                background: linear-gradient(135deg, #25D366 0%, #128C7E 100%) !important;
+                color: #FFFFFF !important;
+                border: 1px solid #25D366 !important;
+                box-shadow: 0 4px 15px rgba(37, 211, 102, 0.3) !important;
+                text-shadow: none !important;
+            }}
+            .whatsapp-export-btn .stButton button:hover,
+            .whatsapp-export-btn .stDownloadButton button:hover {{
+                background: linear-gradient(135deg, #128C7E 0%, #075E54 100%) !important;
+                color: #FFFFFF !important;
+                box-shadow: 0 0 20px rgba(37, 211, 102, 0.6) !important;
+            }}
+
+            /* Other Download Buttons - Mobile */
             .stDownloadButton button {{
                 background: linear-gradient(135deg, #0a0e1a 0%, #06080f 100%) !important;
                 color: #D4AF37 !important;
@@ -1154,8 +1175,6 @@ def get_css(lang='ar'):
                 box-shadow: 0 0 10px rgba(212, 175, 55, 0.2) !important;
                 text-shadow: 0 0 5px rgba(212, 175, 55, 0.3) !important;
             }}
-            .whatsapp-export-btn .stButton button:hover,
-            .whatsapp-export-btn .stDownloadButton button:hover,
             .stDownloadButton button:hover {{
                 background: #D4AF37 !important;
                 color: #000000 !important;
@@ -1349,11 +1368,11 @@ def _get_flag_url_cached(val):
             # Short keys (like ISO codes if any) need strict word matching
             pattern = rf'(?:^|[\s,:;.\-/]){re.escape(norm_key)}(?:[\s,:;.\-/]|$)'
             if re.search(pattern, s_val):
-                return f"https://flagsapi.com/{code.upper()}/flat/64.png"
+                return f"https://cdn.jsdelivr.net/gh/lipis/flag-icons@7.2.0/flags/4x3/{code.lower()}.svg"
         else:
             # Longer names can be matched as substrings
             if norm_key in s_val:
-                return f"https://flagsapi.com/{code.upper()}/flat/64.png"
+                return f"https://cdn.jsdelivr.net/gh/lipis/flag-icons@7.2.0/flags/4x3/{code.lower()}.svg"
                 
     return None
 
@@ -1566,56 +1585,151 @@ def render_table_translator(df, key_prefix="table"):
             # ---- Base CSS (applies to all badge buttons) ----
             base_css = """
 <style>
-.nat-flag-badge button {
-    background-color: rgba(255,255,255,0.08) !important;
+/* Base CSS for Nationality Filter Badges */
+div[data-testid="stHorizontalBlock"]:has(.nat-flag-badge) {
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    overflow-x: auto !important;
+    padding: 12px 6px !important;
+    gap: 12px !important;
+    justify-content: flex-start !important;
+    scrollbar-width: thin !important;
+    scrollbar-color: #D4AF37 rgba(255,255,255,0.05) !important;
+}
+
+/* Custom premium scrollbar for badges on Webkit */
+div[data-testid="stHorizontalBlock"]:has(.nat-flag-badge)::-webkit-scrollbar {
+    height: 6px !important;
+}
+div[data-testid="stHorizontalBlock"]:has(.nat-flag-badge)::-webkit-scrollbar-track {
+    background: rgba(255,255,255,0.02) !important;
+    border-radius: 10px !important;
+}
+div[data-testid="stHorizontalBlock"]:has(.nat-flag-badge)::-webkit-scrollbar-thumb {
+    background: rgba(212,175,55,0.3) !important;
+    border-radius: 10px !important;
+}
+div[data-testid="stHorizontalBlock"]:has(.nat-flag-badge)::-webkit-scrollbar-thumb:hover {
+    background: rgba(212,175,55,0.6) !important;
+}
+
+/* Style each column as a premium card */
+div[data-testid="stHorizontalBlock"]:has(.nat-flag-badge) > div[data-testid="column"] {
+    flex: 0 0 auto !important;
+    width: 95px !important;
+    min-width: 95px !important;
+    background: rgba(255,255,255,0.03) !important;
+    border: 1px solid rgba(212,175,55,0.2) !important;
+    border-radius: 12px !important;
+    padding: 10px 6px !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    height: 100px !important;
+    margin: 0 !important;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.3) !important;
+}
+
+div[data-testid="stHorizontalBlock"]:has(.nat-flag-badge) > div[data-testid="column"]:hover {
+    border-color: #D4AF37 !important;
+    background: rgba(212,175,55,0.08) !important;
+    box-shadow: 0 8px 25px rgba(212,175,55,0.25) !important;
+    transform: translateY(-2px) !important;
+}
+
+/* Selected badge card styling */
+div[data-testid="stHorizontalBlock"]:has(.nat-flag-badge) > div[data-testid="column"]:has(.nat-flag-badge-active) {
+    background: rgba(212, 175, 55, 0.15) !important;
+    border: 1.5px solid #D4AF37 !important;
+    box-shadow: 0 0 15px rgba(212, 175, 55, 0.35) !important;
+}
+
+/* Style flag image container */
+div[data-testid="stHorizontalBlock"]:has(.nat-flag-badge) div[data-testid="stImage"] {
+    display: flex !important;
+    justify-content: center !important;
+    align-items: center !important;
+    width: 100% !important;
+    margin: 0 0 4px 0 !important;
+    height: auto !important;
+}
+
+/* Style flag image itself */
+div[data-testid="stHorizontalBlock"]:has(.nat-flag-badge) div[data-testid="stImage"] img {
+    display: block !important;
+    width: 38px !important;
+    height: 24px !important;
+    object-fit: cover !important;
+    border-radius: 4px !important;
+    border: 1px solid rgba(255,255,255,0.15) !important;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.5) !important;
+    margin: 0 !important;
+}
+
+/* Badge button style (inside the card column) */
+div[data-testid="stHorizontalBlock"]:has(.nat-flag-badge) .stButton button {
+    background-color: transparent !important;
     color: #FFF !important;
     font-weight: 800 !important;
-    font-size: 0.9rem !important;
-    font-family: 'Inter', sans-serif !important;
-    border-radius: 10px !important;
-    border: 1px solid rgba(212,175,55,0.25) !important;
-    height: 38px !important;
-    min-height: 38px !important;
+    font-size: 0.95rem !important;
+    font-family: 'Inter', 'Cairo', sans-serif !important;
+    border: none !important;
+    height: 32px !important;
+    min-height: 32px !important;
     width: 100% !important;
-    padding: 0 12px !important;
+    padding: 0 !important;
+    margin: 0 !important;
     cursor: pointer !important;
     transition: all 0.2s ease !important;
     white-space: nowrap !important;
     display: flex !important;
     align-items: center !important;
     justify-content: center !important;
-    gap: 8px !important;
     direction: ltr !important;
+    box-shadow: none !important;
 }
-.nat-flag-badge button:hover {
-    border-color: #D4AF37 !important;
-    background-color: rgba(255,255,255,0.15) !important;
-    box-shadow: 0 0 10px rgba(212,175,55,0.35) !important;
-    transform: translateY(-1px) !important;
+
+/* Hover/active adjustments for the transparent button */
+div[data-testid="stHorizontalBlock"]:has(.nat-flag-badge) .stButton button:hover {
+    background-color: transparent !important;
+    color: #D4AF37 !important;
+    box-shadow: none !important;
+    transform: none !important;
 }
-.nat-flag-badge-active button {
-    background-color: rgba(212,175,55,0.22) !important;
-    border: 2px solid #D4AF37 !important;
-    box-shadow: 0 0 14px rgba(212,175,55,0.55) !important;
+
+/* Clear button column container */
+div[data-testid="stHorizontalBlock"]:has(.nat-flag-badge) > div[data-testid="column"]:has(.nat-clear-badge) {
+    justify-content: center !important;
+    height: 100px !important;
+    background: rgba(255,75,75,0.03) !important;
+    border: 1px solid rgba(255,75,75,0.2) !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
 }
-.nat-clear-badge button {
-    background: rgba(255,75,75,0.12) !important;
+div[data-testid="stHorizontalBlock"]:has(.nat-flag-badge) > div[data-testid="column"]:has(.nat-clear-badge):hover {
+    background: rgba(255,75,75,0.08) !important;
+    border-color: #FF4B4B !important;
+    box-shadow: 0 8px 25px rgba(255,75,75,0.25) !important;
+}
+
+/* Clear button style */
+div[data-testid="stHorizontalBlock"]:has(.nat-flag-badge) .nat-clear-badge .stButton button {
+    background: transparent !important;
     color: #FF4B4B !important;
     font-weight: 700 !important;
-    font-family: 'Inter', sans-serif !important;
-    border-radius: 10px !important;
-    border: 1px solid rgba(255,75,75,0.35) !important;
-    height: 38px !important;
-    min-height: 38px !important;
+    font-family: 'Inter', 'Cairo', sans-serif !important;
+    border: none !important;
+    height: 100% !important;
     width: 100% !important;
     cursor: pointer !important;
-    transition: all 0.2s ease !important;
-    padding: 0 12px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
     direction: ltr !important;
-}
-.nat-clear-badge button:hover {
-    background: rgba(255,75,75,0.22) !important;
-    box-shadow: 0 0 10px rgba(255,75,75,0.35) !important;
+    white-space: nowrap !important;
 }
 </style>
 """
@@ -1632,11 +1746,25 @@ def render_table_translator(df, key_prefix="table"):
                     if is_sel:
                         base_cls += " nat-flag-badge-active"
                     div_cls = base_cls + " nbadge-" + key_prefix + "-" + code
-                    st.markdown('<div class="' + div_cls + '">', unsafe_allow_html=True)
-                    flag_emoji = _country_code_to_emoji(code)
-                    btn_label = f"{cnt} {flag_emoji}"
-                    if st.button(btn_label, key="nbadge_" + key_prefix + "_" + code):
+                    
+                    # Use flag-icons for robust global delivery and compatibility
+                    flag_url = f"https://cdn.jsdelivr.net/gh/lipis/flag-icons@7.2.0/flags/4x3/{code.lower()}.svg"
+                    
+                    # Centered layout using simple, clean containers without nested columns
+                    st.markdown(f'<div class="{div_cls}" style="text-align:center;"></div>', unsafe_allow_html=True)
+                    st.image(flag_url, width=32)
+                    
+                    button_label = f"{cnt} {code.upper()}"
+                    if st.button(button_label, key="nbadge_v2_" + key_prefix + "_" + code, use_container_width=True):
                         st.session_state["selected_nat_" + key_prefix] = None if is_sel else code
+                        st.rerun()
+
+            if has_clear:
+                with badge_cols[-1]:
+                    clear_lbl = "❌ الكل" if lang == 'ar' else "❌ All"
+                    st.markdown('<div class="nat-clear-badge">', unsafe_allow_html=True)
+                    if st.button(clear_lbl, key="nbadge_v2_" + key_prefix + "___clear__"):
+                        st.session_state["selected_nat_" + key_prefix] = None
                         st.rerun()
                     st.markdown('</div>', unsafe_allow_html=True)
 
@@ -1644,7 +1772,7 @@ def render_table_translator(df, key_prefix="table"):
                 with badge_cols[-1]:
                     clear_lbl = "❌ الكل" if lang == 'ar' else "❌ All"
                     st.markdown('<div class="nat-clear-badge">', unsafe_allow_html=True)
-                    if st.button(clear_lbl, key="nbadge_" + key_prefix + "___clear__"):
+                    if st.button(clear_lbl, key="nbadge_v2_" + key_prefix + "___clear__"):
                         st.session_state["selected_nat_" + key_prefix] = None
                         st.rerun()
                     st.markdown('</div>', unsafe_allow_html=True)
@@ -2422,8 +2550,8 @@ if ('Notification' in window && Notification.permission === 'default') {
     lang = st.session_state.lang
     
     # 2026 Luxury Flag Icons
-    sa_icon = '<img src="https://flagcdn.com/w40/sa.png" style="width:24px; vertical-align:middle; border-radius:3px; margin:0 4px; box-shadow:0 0 8px rgba(0,0,0,0.4);">'
-    ph_icon = '<img src="https://flagcdn.com/w40/ph.png" style="width:24px; vertical-align:middle; border-radius:3px; margin:0 4px; box-shadow:0 0 8px rgba(0,0,0,0.4);">'
+    sa_icon = '<img src="https://cdn.jsdelivr.net/gh/lipis/flag-icons@7.2.0/flags/4x3/sa.svg" style="width:24px; vertical-align:middle; border-radius:3px; margin:0 4px; box-shadow:0 0 8px rgba(0,0,0,0.4);">'
+    ph_icon = '<img src="https://cdn.jsdelivr.net/gh/lipis/flag-icons@7.2.0/flags/4x3/ph.svg" style="width:24px; vertical-align:middle; border-radius:3px; margin:0 4px; box-shadow:0 0 8px rgba(0,0,0,0.4);">'
     
     if lang == "ar":
         title_text = f'برنامج توريد العمالة الفلبينية {ph_icon} {sa_icon}'
@@ -2449,9 +2577,9 @@ if ('Notification' in window && Notification.permission === 'default') {
                     b64 = get_base64_image(IMG_PATH)
                     st.markdown(f'<div style="text-align:right;"><img src="data:image/jpeg;base64,{b64}" class="profile-img-circular" style="width:80px; height:80px; border:2px solid #FFF; box-shadow: 0 0 15px #FFF;"></div>', unsafe_allow_html=True)
             
-            # Inputs - Pre-fill with saved data if available
-            u = st.text_input(t("username", lang), value=saved_u, label_visibility="collapsed", placeholder=t("username", lang), key=f"user_{suffix}")
-            p = st.text_input(t("password", lang), value=saved_p, type="password", label_visibility="collapsed", placeholder=t("password", lang), key=f"pass_{suffix}")
+            # Inputs - Do NOT pre-fill with saved data for security (prevents auto-fill on mobile WhatsApp links)
+            u = st.text_input(t("username", lang), value="", label_visibility="collapsed", placeholder=t("username", lang), key=f"user_{suffix}")
+            p = st.text_input(t("password", lang), value="", type="password", label_visibility="collapsed", placeholder=t("password", lang), key=f"pass_{suffix}")
             
             # Persistent check - White Neon Label
             persist_txt = "هل تريد حفظ الدخول" if lang == 'ar' else "Do you want to stay logged in?"
@@ -3588,8 +3716,7 @@ def render_dashboard_content():
         for original_col, renamed_col in new_names.items():
             if any(kw in str(original_col).lower() for kw in ["nationality", "الجنسية"]):
                 flag_col = f"🚩_{renamed_col}"
-                if flag_col in d_final.columns:
-                    final_cfg[flag_col] = st.column_config.ImageColumn(t("country_label", lang), width="small", pinned=True)
+                final_cfg[flag_col] = st.column_config.ImageColumn(t("country_label", lang), width="small", pinned=True)
         
         # Apply Green Text Styling
         styled_final = style_df(d_final)
@@ -3624,7 +3751,7 @@ def render_dashboard_content():
             xl_data = create_pasha_whatsapp_excel(d_urgent, lang=lang)
             if xl_data:
                 xl_buf, xl_df = xl_data
-                btn_text = "📤 " + ("تصدير للواتساب" if lang == 'ar' else "Export to WhatsApp")
+                btn_text = "💬 " + ("تصدير للواتساب" if lang == 'ar' else "Export to WhatsApp")
                 render_pasha_export_button(xl_df, btn_text, "Urgent_WhatsApp.xlsx", "المرشحين_العاجل", key="btn_exp_urgent")
         
         # 3. Show the filtered data
@@ -3643,7 +3770,7 @@ def render_dashboard_content():
             xl_data = create_pasha_whatsapp_excel(d_expired, lang=lang)
             if xl_data:
                 xl_buf, xl_df = xl_data
-                btn_text = "📤 " + ("تصدير للواتساب" if lang == 'ar' else "Export to WhatsApp")
+                btn_text = "💬 " + ("تصدير للواتساب" if lang == 'ar' else "Export to WhatsApp")
                 render_pasha_export_button(xl_df, btn_text, "Expired_WhatsApp.xlsx", "المرشحين_المنتهية", key="btn_exp_expired")
         
         # 3. Show the filtered data
@@ -3662,7 +3789,7 @@ def render_dashboard_content():
             xl_data = create_pasha_whatsapp_excel(d_active, lang=lang)
             if xl_data:
                 xl_buf, xl_df = xl_data
-                render_pasha_export_button(xl_df, "📤 تصدير للواتساب", "Active_WhatsApp.xlsx", "المرشحين_الفواعل", key="btn_exp_active")
+                render_pasha_export_button(xl_df, "💬 تصدير للواتساب", "Active_WhatsApp.xlsx", "المرشحين_الفواعل", key="btn_exp_active")
         
         # 3. Show the filtered data
         show(d_active, "active")
@@ -3934,7 +4061,7 @@ def render_search_content():
                 xl_result_search = create_pasha_whatsapp_excel(res, lang=lang)
                 if xl_result_search:
                     xl_buf_search, xl_df_search = xl_result_search
-                    btn_text = "📤 " + ("تصدير للواتساب" if lang == 'ar' else "Export to WhatsApp")
+                    btn_text = "💬 " + ("تصدير للواتساب" if lang == 'ar' else "Export to WhatsApp")
                     render_pasha_export_button(xl_df_search, btn_text, f"Search_WhatsApp_{datetime.now().strftime('%M%S')}.xlsx", "البحث_الذكي_واتساب", key="btn_exp_search")
 
             # --- 2. PREPARE DISPLAY DATAFRAME (Copy and Transform) ---
@@ -5441,7 +5568,7 @@ def render_order_processing_content():
                             xl_data_op = create_pasha_whatsapp_excel(city_df, lang=lang)
                             if xl_data_op:
                                 _, xl_df_op = xl_data_op
-                                btn_exp = "📤 " + ("تصدير للواتساب" if lang == 'ar' else "Export to WhatsApp")
+                                btn_exp = "💬 " + ("تصدير للواتساب" if lang == 'ar' else "Export to WhatsApp")
                                 render_pasha_export_button(xl_df_op, btn_exp, f"Matched_Workers_City_{idx+1}.xlsx", 
                                                           f"Matched_Workers_City_{idx+1}", key=f"dl_op_city_{idx}")
                         
@@ -5485,7 +5612,7 @@ def render_order_processing_content():
                             xl_reg = create_pasha_whatsapp_excel(reg_df, lang=lang)
                             if xl_reg:
                                 _, xl_df_reg = xl_reg
-                                btn_exp = "📤 " + ("تصدير للواتساب" if lang == 'ar' else "Export to WhatsApp")
+                                btn_exp = "💬 " + ("تصدير للواتساب" if lang == 'ar' else "Export to WhatsApp")
                                 render_pasha_export_button(xl_df_reg, btn_exp, f"Region_Match_{idx+1}.xlsx", 
                                                           f"Region_Match_{idx+1}", key=f"dl_op_reg_{idx}")
                         
@@ -5539,7 +5666,7 @@ def render_order_processing_content():
                             xl_oth_data = create_pasha_whatsapp_excel(other_df, lang=lang)
                             if xl_oth_data:
                                 _, xl_oth_df = xl_oth_data
-                                btn_exp_lbl = "📤 " + ("تصدير للواتساب" if lang == 'ar' else "Export to WhatsApp")
+                                btn_exp_lbl = "💬 " + ("تصدير للواتساب" if lang == 'ar' else "Export to WhatsApp")
                                 render_pasha_export_button(xl_oth_df, btn_exp_lbl, f"Workers_Other_Cities_{idx+1}.xlsx", 
                                                           f"Other_Cities_Table_{idx+1}", key=f"btn_xl_oth_stable_{idx}")
 
@@ -5751,7 +5878,7 @@ def render_bengali_supply_content():
     lang = st.session_state.lang
     bm = BengaliDataManager()
     # High-quality flag image for the title
-    flag_url = "https://flagsapi.com/BD/flat/64.png"
+    flag_url = "https://cdn.jsdelivr.net/gh/lipis/flag-icons@7.2.0/flags/4x3/bd.svg"
     flag_html = f'<img src="{flag_url}" style="height:40px; vertical-align:middle; margin-bottom:10px; margin-left:10px;">'
     st.markdown(f'<div class="luxury-main-title">{flag_html} {t("bengali_supply_title", lang)}</div>', unsafe_allow_html=True)
     
@@ -6061,6 +6188,22 @@ def render_bengali_supply_content():
         with m_t3:
             st.markdown(f"#### 🏢 {t('employers_tab', lang)}")
             
+            # Export button for employers (placed at top for visibility)
+            if filtered_e:
+                col_export1, col_export2 = st.columns([3, 1])
+                with col_export2:
+                    export_df = pd.DataFrame([{
+                        "الاسم": e.get('name', ''),
+                        "رقم الهاتف": e.get('mobile', ''),
+                        "المقهى": e.get('cafe', ''),
+                        "المدينة": e.get('city', ''),
+                        "ملاحظات": e.get('notes', '')
+                    } for e in filtered_e])
+                    
+                    fn = f"Employers_Export_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx"
+                    render_pasha_export_button(export_df, "📤 تصدير" if lang == 'ar' else "📤 Export", fn, "Employers_Export", key="export_employers")
+                st.markdown("---")
+            
             if not filtered_e:
                 st.info("⚠️ " + t("no_results", lang))
 
@@ -6096,8 +6239,6 @@ def render_bengali_supply_content():
                                     if st.button("تأكيد 🗑️" if lang=='ar' else "Confirm 🗑️", key=f"del_e_b_{e['id']}", width='stretch', type="primary"):
                                         bm.delete_employer(e['id'])
                                         st.rerun()
-
-
 
 
 # 11. Main Entry
