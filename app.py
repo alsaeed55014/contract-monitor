@@ -4598,28 +4598,43 @@ def render_permissions_content():
             if uploaded_photo:
                 try:
                     from PIL import Image
-                    from streamlit_cropper import st_cropper
                     import io
                     
                     img = Image.open(uploaded_photo)
-                    st.markdown("🎯 **حدد الجزء المراد قصه من الصورة داخل المربع**" if lang == 'ar' else "🎯 **Drag to adjust the circular crop**", unsafe_allow_html=True)
                     
-                    # Display the interactive cropper
-                    cropped_img = st_cropper(img, realtime_update=True, box_color='#D4AF37', aspect_ratio=(1, 1), key=f"cropper_{selected_user}")
+                    # Auto center-crop to 1:1 square
+                    w, h = img.size
+                    side = min(w, h)
+                    left = (w - side) // 2
+                    top  = (h - side) // 2
+                    img_cropped = img.crop((left, top, left + side, top + side))
+                    img_cropped = img_cropped.resize((400, 400), Image.LANCZOS)
                     
-                    if st.button("💾 " + ("حفظ الصورة المحددة" if lang == 'ar' else "Save Cropped Photo"), key="save_avatar_btn", type="primary"):
+                    # Preview
+                    prev_buf = io.BytesIO()
+                    img_cropped.convert("RGB").save(prev_buf, format="JPEG", quality=85)
+                    prev_b64 = base64.b64encode(prev_buf.getvalue()).decode('utf-8')
+                    st.markdown(
+                        f'<div style="display:flex;justify-content:center;margin:10px 0;">'
+                        f'<img src="data:image/jpeg;base64,{prev_b64}" '
+                        f'style="width:150px;height:150px;border-radius:50%;object-fit:cover;border:3px solid #D4AF37;" /></div>',
+                        unsafe_allow_html=True
+                    )
+                    st.caption("👆 " + ("معاينة الصورة - سيتم اقتصاصها تلقائياً بشكل دائري" if lang == 'ar' else "Preview — auto center-cropped to circle"))
+                    
+                    if st.button("💾 " + ("حفظ الصورة" if lang == 'ar' else "Save Photo"), key="save_avatar_btn", type="primary"):
                         buf = io.BytesIO()
-                        cropped_img.save(buf, format="PNG")
+                        img_cropped.convert("RGB").save(buf, format="JPEG", quality=85)
                         avatar_bytes = buf.getvalue()
                         avatar_b64 = base64.b64encode(avatar_bytes).decode('utf-8')
-                        full_uri = f"data:image/png;base64,{avatar_b64}"
+                        full_uri = f"data:image/jpeg;base64,{avatar_b64}"
                         
                         st.session_state.auth.update_avatar(selected_user, full_uri)
-                        show_toast("✅ " + ("تم حفظ الصورة المحددة بنجاح" if lang == 'ar' else "Cropped photo saved successfully!"), "success")
+                        show_toast("✅ " + ("تم حفظ الصورة بنجاح" if lang == 'ar' else "Photo saved successfully!"), "success")
                         st.rerun()
                 except Exception as e:
                     st.error("عذراً، حدث خطأ أثناء معالجة الصورة. الرجاء التأكد من أن الملف سليم." if lang == 'ar' else "Error processing image. Please ensure valid file.")
-                    print(f"Cropper error: {e}")
+                    print(f"Avatar upload error: {e}")
 
         if selected_user != "admin":
             st.markdown("""
