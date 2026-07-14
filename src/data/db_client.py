@@ -195,6 +195,53 @@ class DBClient:
             print(f"[ERROR] Failed to append row: {e}")
             return False, str(e)
 
+    def update_row(self, row_number, column_name, new_value, url=None):
+        """Updates a specific cell in a row in Google Sheets with retry logic."""
+        if url is None:
+            url = "https://docs.google.com/spreadsheets/d/1u87sScIve_-xT_jDG56EKFMXegzAxOqwVJCh3Irerrw/edit"
+
+        if not self.client:
+            self.connect()
+        
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                sheet = self.client.open_by_url(url).sheet1
+                
+                # Get headers to find column index
+                headers = sheet.row_values(1)
+                print(f"[DEBUG] Available headers: {headers}")
+                print(f"[DEBUG] Looking for column: '{column_name}'")
+                
+                # Try to find the column by partial match
+                col_index = None
+                for i, header in enumerate(headers):
+                    if str(column_name).lower() in str(header).lower() or str(header).lower() in str(column_name).lower():
+                        col_index = i + 1  # 1-based index
+                        print(f"[DEBUG] Found column at index {col_index}: '{header}'")
+                        break
+                
+                if col_index is None:
+                    return False, f"Column '{column_name}' not found. Available: {headers}"
+                
+                # Update the cell
+                sheet.update_cell(row_number, col_index, new_value)
+                
+                # Clear cache
+                cache_key = f"cache_{hashlib.md5(url.encode()).hexdigest()}"
+                if cache_key in self._data_caches:
+                    del self._data_caches[cache_key]
+                
+                return True, "Updated successfully"
+            except Exception as e:
+                print(f"[ERROR] Failed to update row (attempt {attempt + 1}/{max_retries}): {e}")
+                if attempt < max_retries - 1:
+                    # Reconnect and retry
+                    time.sleep(2)
+                    self.connect()
+                else:
+                    return False, f"Failed after {max_retries} attempts: {str(e)}"
+
     def get_headers(self, url=None):
         """Returns the list of headers for the current data."""
         if url is None:

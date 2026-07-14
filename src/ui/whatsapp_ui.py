@@ -251,7 +251,81 @@ def render_whatsapp_page():
     if wa_mode == ("🏢 واتساب للعملاء" if is_ar else "🏢 WhatsApp for Employers"):
         # === WhatsApp Marketing for Employers (from Bengali Supply) ===
         st.markdown(f'### 🏢 {"واتساب ماركتنج للعملاء" if is_ar else "WhatsApp Marketing for Employers"}')
-        
+
+        # ──────────────────────────────────────────────────────────────
+        # 🔌 قسم الاتصال والباركود (نفس واتساب ماركتنج)
+        # ──────────────────────────────────────────────────────────────
+        st.markdown("---")
+        st.markdown(f"#### 📡 {'حالة الاتصال' if is_ar else 'Connection Status'}")
+
+        status_emp = st.session_state.wa_service.get_status()
+        ec1, ec2, ec3 = st.columns([2, 1, 1])
+        with ec1:
+            if   status_emp == "Connected":     st.success(lbl['connected'])
+            elif status_emp == "Awaiting Login": st.warning(lbl['awaiting'])
+            elif status_emp == "Loading...":     st.info(lbl['loading'])
+            else:
+                st.error(lbl['stopped'])
+                if getattr(st.session_state.wa_service, 'last_error', ''):
+                    with st.expander("🔍 " + ("تفاصيل الخطأ" if is_ar else "Error Details"), expanded=True):
+                        st.code(st.session_state.wa_service.last_error, language=None)
+        with ec2:
+            if st.button(lbl['start_engine'], type="primary", width='stretch', key="emp_start_engine"):
+                with st.spinner(lbl['starting']):
+                    st.session_state.wa_service.close()
+                    ok, msg = st.session_state.wa_service.start_driver(headless=is_cloud, force_clean=False)
+                    if ok: st.toast(f"✅ {msg}")
+                    else:  st.error(f"❌ {msg}")
+                    st.rerun()
+        with ec3:
+            if st.button(lbl['full_reset'], width='stretch', key="emp_full_reset",
+                         help="سيتم مسح بيانات تسجيل الدخول بالكامل. ستحتاج لمسح الباركود مرة أخرى." if is_ar else "This will clear all login data. You'll need to scan the QR again."):
+                with st.spinner(lbl['resetting']):
+                    st.session_state.wa_service.close()
+                    ok, msg = st.session_state.wa_service.start_driver(headless=is_cloud, force_clean=True)
+                    if ok: st.toast(f"✅ {msg}")
+                    else:  st.error(f"❌ {msg}")
+                    st.rerun()
+
+        # ── QR Code ──
+        if status_emp == "Awaiting Login":
+            qr_b64 = st.session_state.wa_service.get_qr_hd()
+            if qr_b64:
+                src = qr_b64 if qr_b64.startswith("data:") else f"data:image/png;base64,{qr_b64}"
+                st.markdown(
+                    f'<div style="background:#FFFFFF;padding:25px;border-radius:20px;max-width:420px;'
+                    f'margin:15px auto;text-align:center;box-shadow:0 0 40px rgba(255,255,255,0.4);">'
+                    f'<img src="{src}" style="width:350px;height:350px;image-rendering:pixelated;image-rendering:crisp-edges;" />'
+                    f'</div>',
+                    unsafe_allow_html=True
+                )
+            else:
+                st.info(lbl['qr_loading'])
+
+            qb1, qb2 = st.columns(2)
+            with qb1:
+                if st.button(lbl['refresh_qr'], width='stretch', key="emp_refresh_qr"):
+                    st.rerun()
+            with qb2:
+                if st.button(lbl['verify'], width='stretch', type="primary", key="emp_verify"):
+                    with st.spinner(lbl['verifying']):
+                        connected = st.session_state.wa_service.wait_for_connection(timeout=30)
+                    if connected:
+                        st.toast(lbl['connected_ok'])
+                        st.balloons()
+                    else:
+                        st.error(lbl['not_connected'])
+                    st.rerun()
+
+        # ── إذا لم يتصل، أوقف ولا تكمل ──
+        if status_emp != "Connected":
+            st.info("💡 " + ("قم بتشغيل المحرك ومسح الباركود أولاً للبدء بالإرسال." if is_ar else "Start the engine and scan the QR code first to begin sending."))
+            st.markdown("---")
+            return
+
+        st.markdown("---")
+        # ──────────────────────────────────────────────────────────────
+
         # Data Source Selection
         st.markdown(f"#### {'مصدر البيانات' if is_ar else 'Data Source'}")
         data_source = st.radio(
@@ -443,10 +517,21 @@ def render_whatsapp_page():
                         
                         # Random delay between messages (anti-ban)
                         if i < len(target_phones) - 1:  # Don't delay after last message
-                            random_delay = random.randint(min_delay, max_delay)
+                            # Use uniform for more natural random delay
+                            random_delay = int(random.uniform(min_delay, max_delay))
                             delay_text = f"⏳ {'تأخير عشوائي' if is_ar else 'Random delay'}: {random_delay} {'ثانية' if is_ar else 'seconds'}"
                             status_text.text(delay_text)
                             time.sleep(random_delay)
+                            
+                            # Anti-ban: Secondary random micro-rest (1-3 seconds)
+                            micro_rest = random.uniform(1.0, 3.0)
+                            time.sleep(micro_rest)
+                            
+                            # 🛡️ استراحة "تفكير" مفاجئة كل 3-6 رسائل لمحاكاة التعب البشري
+                            if i > 0 and i % random.randint(3, 6) == 0:
+                                stealth_break = random.uniform(6.0, 15.0)
+                                st.toast("🛡️ " + ("استراحة تمويهية قصيرة..." if is_ar else "Short stealth break..."), icon="⏳")
+                                time.sleep(stealth_break)
                     
                     status_text.empty()
                     progress_bar.empty()
@@ -455,6 +540,7 @@ def render_whatsapp_page():
                     if fail_count > 0:
                         st.warning(f"⚠️ {'فشل' if is_ar else 'Failed'}: {fail_count}")
         return
+
 
     # === Original WhatsApp Marketing (2026) ===
     # 1. Connection Status
@@ -673,7 +759,12 @@ def render_whatsapp_page():
                     st.rerun()
             
         # Consolidate Pending Targets for the rest of the application
-        final_targets = [trg for trg in st.session_state.wa_review_targets if not trg['is_sent']]
+        # Only recalculate if not currently running to avoid state issues
+        if not st.session_state.wa_running:
+            final_targets = [trg for trg in st.session_state.wa_review_targets if not trg['is_sent']]
+        else:
+            # Use active targets during sending to maintain consistency
+            final_targets = st.session_state.get('wa_active_targets', [])
 
         
         # LTR for English messages
@@ -910,6 +1001,12 @@ HR Manager"""
         if st.session_state.wa_running and st.session_state.get('wa_active_targets'):
             active_targets = st.session_state.wa_active_targets
             
+            # Ensure wa_idx is within bounds
+            if st.session_state.wa_idx >= len(active_targets):
+                st.session_state.wa_running = False
+                st.session_state.wa_done = True
+                st.rerun()
+            
             # 🛡️ Prevent browser close/refresh while sending
             st.markdown("""
             <script>
@@ -974,7 +1071,9 @@ HR Manager"""
                     
                     wait_ph = st.empty()
                     for i in range(current_delay, 0, -1):
-                        if not st.session_state.wa_running: break
+                        if not st.session_state.wa_running: 
+                            wait_ph.empty()
+                            break
                         # Displaying the current countdown + total randomized time to show it's working
                         status_text = f"{prefix}: {format_time(i)} / {format_time(current_delay)}"
                         if is_batch_pause:

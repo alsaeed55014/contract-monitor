@@ -4855,7 +4855,13 @@ def render_order_processing_content():
     c_transfer_days = find_cust_col(["transfer days"]) or find_cust_col(["نقل الكفالة"]) or find_cust_col(["نقل"])
     c_working_hours = find_cust_col(["working hours"]) or find_cust_col(["ساعات"])
     c_weekly_holiday = find_cust_col(["holiday"]) or find_cust_col(["day off"]) or find_cust_col(["أسبوعي"]) or find_cust_col(["اجازة"]) or find_cust_col(["إجازة"])
-    c_notes = find_cust_col(["notes"]) or find_cust_col(["ملاحظات"])
+    # Try multiple variations for notes column
+    c_notes = None
+    for col in customers_df.columns:
+        col_lower = str(col).lower()
+        if "notes" in col_lower or "ملاحظات" in col_lower:
+            c_notes = col
+            break
     
     # --- Worker Column Names ---
     w_name_col = next((c for c in workers_df.columns if "full name" in c.lower()), None)
@@ -5552,6 +5558,80 @@ def render_order_processing_content():
 
             # Close the White Neon Glow Frame integrated
             st.markdown("</div>", unsafe_allow_html=True)
+
+            # --- Follow-up Notes Section ---
+            if user_role != "viewer":
+                st.markdown("---")
+                st.markdown(f"#### 📝 {'ملاحظات المتابعة' if lang == 'ar' else 'Follow-up Notes'}")
+                
+                # Get current follow-up notes from session state (language-specific)
+                follow_up_key = f"follow_up_{idx}_{lang}"
+                
+                # If not in session state, try to extract from Google Sheets data
+                if follow_up_key not in st.session_state:
+                    raw_notes = str(customer_row.get(c_notes, ""))
+                    # Extract language-specific notes from combined format
+                    if "AR:" in raw_notes and "EN:" in raw_notes:
+                        # Parse combined format: "AR: ... | EN: ..."
+                        try:
+                            parts = raw_notes.split(" | ")
+                            ar_part = [p for p in parts if p.startswith("AR:")]
+                            en_part = [p for p in parts if p.startswith("EN:")]
+                            
+                            if ar_part:
+                                ar_notes = ar_part[0].replace("AR:", "").strip()
+                                st.session_state[f"follow_up_{idx}_ar"] = ar_notes
+                            if en_part:
+                                en_notes = en_part[0].replace("EN:", "").strip()
+                                st.session_state[f"follow_up_{idx}_en"] = en_notes
+                        except:
+                            pass
+                    elif raw_notes:
+                        # Legacy format - save to both languages
+                        st.session_state[f"follow_up_{idx}_ar"] = raw_notes
+                        st.session_state[f"follow_up_{idx}_en"] = raw_notes
+                
+                current_notes = st.session_state.get(follow_up_key, "")
+                
+                # Text area for notes
+                new_notes = st.text_area(
+                    "اكتب ملاحظاتك هنا..." if lang == 'ar' else "Write your notes here...",
+                    value=current_notes,
+                    height=100,
+                    key=f"notes_input_{idx}_{lang}",
+                    placeholder="مثال: تواصلت مع العميل يوم 14/07/2026، مهتم بالعمال، طلب إرسال السير الذاتية..." if lang == 'ar' else "Example: Contacted client on 14/07/2026, interested in workers, requested CVs..."
+                )
+                
+                # Save button
+                col_save, col_clear = st.columns([1, 1])
+                with col_save:
+                    if st.button("💾 حفظ الملاحظات" if lang == 'ar' else "💾 Save Notes", key=f"save_notes_{idx}_{lang}", type="primary"):
+                        # Update session state (language-specific)
+                        st.session_state[follow_up_key] = new_notes
+                        
+                        # Update Google Sheets (save both languages in the same cell with separator)
+                        row_num = customer_row.get('__sheet_row')
+                        if row_num and c_notes:
+                            # Get notes from both languages
+                            ar_notes = st.session_state.get(f"follow_up_{idx}_ar", "")
+                            en_notes = st.session_state.get(f"follow_up_{idx}_en", "")
+                            
+                            # Combine both notes with separator
+                            combined_notes = f"AR: {ar_notes} | EN: {en_notes}" if ar_notes or en_notes else ""
+                            
+                            url = "https://docs.google.com/spreadsheets/d/1u87sScIve_-xT_jDG56EKFMXegzAxOqwVJCh3Irerrw/edit"
+                            success, msg = st.session_state.db.update_row(row_num, c_notes, combined_notes, url=url)
+                            if success:
+                                st.toast("✅ تم حفظ الملاحظات" if lang == 'ar' else "✅ Notes saved successfully")
+                            else:
+                                st.error(f"❌ {msg}")
+                        else:
+                            st.warning("⚠️ تعذر حفظ الملاحظات في Google Sheets" if lang == 'ar' else "⚠️ Could not save notes to Google Sheets")
+                
+                with col_clear:
+                    if st.button("🗑️ مسح الملاحظات" if lang == 'ar' else "🗑️ Clear Notes", key=f"clear_notes_{idx}_{lang}"):
+                        st.session_state[follow_up_key] = ""
+                        st.rerun()
 
             # --- Workers ---
             matches, scores, city_count, region_count = find_matching_workers(customer_row)
