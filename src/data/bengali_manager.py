@@ -1,7 +1,10 @@
 import json
 import os
 import uuid
+import logging
 from src.config import BENGALI_DATA_FILE
+
+logger = logging.getLogger(__name__)
 
 class BengaliDataManager:
     def __init__(self):
@@ -67,16 +70,19 @@ class BengaliDataManager:
                     self.data = data # Temporary assign for save_data
                     self.save_data()
                 return data
-        except Exception as ex:
-            print(f"[ERROR] Failed to load bengali data: {ex}")
+        except Exception:
+            logger.exception("Failed to load bengali data from %s", BENGALI_DATA_FILE)
             return default_structure
 
     def save_data(self):
+        """Persists data to disk. Returns True on success, False on failure."""
         try:
             with open(BENGALI_DATA_FILE, "w", encoding="utf-8") as f:
                 json.dump(self.data, f, ensure_ascii=False, indent=4)
-        except Exception as e:
-            print(f"[WARNING] Could not save bengali data to file: {e}")
+            return True
+        except Exception:
+            logger.exception("Could not save bengali data to %s", BENGALI_DATA_FILE)
+            return False
 
     def add_supplier(self, supplier):
         """Add ONLY a supplier."""
@@ -214,7 +220,8 @@ class BengaliDataManager:
                             self.data["workers"].pop(i)
                         else:
                             w["headcount"] = new_val
-                    except:
+                    except Exception:
+                        logger.warning("Invalid headcount for worker %s; removing entry", worker_uuid, exc_info=True)
                         self.data["workers"].pop(i)
                 else:
                     # Individual worker return

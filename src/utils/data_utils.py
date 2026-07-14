@@ -1,7 +1,10 @@
 import pandas as pd
 import re
+import logging
 from datetime import datetime
 import streamlit as st
+
+logger = logging.getLogger(__name__)
 
 FLAG_MAP = {
     # Arabic
@@ -84,7 +87,8 @@ def auto_translate(val, target_lang='en'):
             if translated != val_str: return translated
             
         return st.session_state.tm.translate_full_text(val_str, target_lang=target_lang)
-    except:
+    except Exception:
+        logger.debug("auto_translate failed; returning original value", exc_info=True)
         return val
 
 def style_df(df):
@@ -167,12 +171,12 @@ def clean_date_display(df):
             clean_s = re.sub(r'[صم]', '', val_str).strip()
             dt = dateutil_parser.parse(clean_s, dayfirst=False)
             return dt.strftime('%Y-%m-%d')
-        except:
+        except Exception:
             try:
                 dt = pd.to_datetime(val, errors='coerce')
                 if pd.isna(dt): return str(val)
                 return dt.strftime('%Y-%m-%d')
-            except:
+            except Exception:
                 return str(val)
 
     date_keywords = ["date", "time", "تاريخ", "طابع", "التسجيل", "expiry", "end", "متى"]

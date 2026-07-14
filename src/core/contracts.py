@@ -13,7 +13,7 @@ class ContractManager:
             d_clean = str(date_str).strip().replace('ص', 'AM').replace('م', 'PM')
             # Use fuzzy parsing
             return parser.parse(d_clean, fuzzy=True).date()
-        except:
+        except Exception:
             return None
 
     @staticmethod

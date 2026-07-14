@@ -1,12 +1,15 @@
 import streamlit as st
 import pandas as pd
 import time
+import logging
 from datetime import datetime
 from src.core.contracts import ContractManager
 from src.core.i18n import t, t_col
 from src.utils.phone_utils import create_pasha_whatsapp_excel, render_pasha_export_button
 from src.ui.streamlit_components import show_loading_hourglass, render_cv_detail_panel, render_table_translator
 from src.utils.data_utils import style_df, clean_date_display
+
+logger = logging.getLogger(__name__)
 
 def __apply_pinned_columns(df_or_style, cfg=None):
     if cfg is None: cfg = {}
@@ -19,7 +22,7 @@ def __apply_pinned_columns(df_or_style, cfg=None):
             if col not in cfg: cfg[col] = st.column_config.Column(pinned=True)
             else:
                 try: cfg[col].pinned = True
-                except: pass
+                except Exception: pass
     return cfg
 
 def render_dashboard_content():
@@ -68,7 +71,9 @@ def render_dashboard_content():
             if global_status in ['urgent', 'warning']: stats['urgent'].append(r)
             elif global_status == 'expired': stats['expired'].append(r)
             elif global_status == 'active': stats['active'].append(r)
-        except: continue
+        except Exception:
+            logger.debug("Skipping row while computing contract status", exc_info=True)
+            continue
 
     loading_placeholder.empty()
 

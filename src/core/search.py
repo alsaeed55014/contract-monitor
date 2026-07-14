@@ -326,7 +326,7 @@ class SmartSearchEngine:
                     
                     try:
                         return pd.Timestamp(dateutil_parser.parse(val_str, dayfirst=False))
-                    except:
+                    except Exception:
                         return pd.to_datetime(val_str, errors='coerce')
                 except Exception:
                     return pd.NaT

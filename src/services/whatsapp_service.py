@@ -6,7 +6,10 @@ import io
 import random
 import subprocess
 import re
+import logging
 from datetime import datetime
+
+logger = logging.getLogger(__name__)
 
 # Selenium imports are done lazily in methods to avoid blocking app startup
 
@@ -25,8 +28,8 @@ class WhatsAppService:
                 output = subprocess.check_output(r'reg query "HKEY_CURRENT_USER\Software\Google\Chrome\BLBeacon" /v version', shell=True)
                 version = re.search(r'\d+', output.decode()).group()
                 return int(version)
-        except:
-            pass
+        except Exception:
+            logger.debug("Could not detect Chrome version", exc_info=True)
         return None
 
     def _get_random_ua(self, version=None):
@@ -45,7 +48,8 @@ class WhatsAppService:
             try:
                 self.driver.current_url
                 return True, "Active"
-            except: 
+            except Exception:
+                logger.debug("Existing driver is stale; closing", exc_info=True)
                 self.close()
 
         # --- Clean Existing Locks ---
@@ -59,7 +63,8 @@ class WhatsAppService:
             p = os.path.join(self.session_path, lf)
             try:
                 if os.path.exists(p): os.remove(p)
-            except: pass
+            except Exception:
+                logger.debug("Could not remove lock file %s", p, exc_info=True)
         
         # --- Stealth & Environment Setup ---
         is_cloud = "/mount/" in __file__.replace("\\", "/")
@@ -138,7 +143,8 @@ class WhatsAppService:
                     print(f"[{time.strftime('%H:%M:%S')}] Retrying with fresh session...")
                     self._kill_zombies()
                     try: shutil.rmtree(self.session_path, ignore_errors=True)
-                    except: pass
+                    except Exception:
+                        logger.debug("Could not remove session path %s", self.session_path, exc_info=True)
                     time.sleep(2)
                     continue 
 
@@ -196,7 +202,8 @@ class WhatsAppService:
                 for cmd in ['google-chrome', 'chromium', 'google-chrome-stable']:
                     path = subprocess.check_output(['which', cmd]).decode().strip()
                     if path: return path
-            except: pass
+            except Exception:
+                logger.debug("Could not locate chrome binary via 'which'", exc_info=True)
             
         return None
 
@@ -210,7 +217,8 @@ class WhatsAppService:
                 # Portable Linux cleanup
                 os.system('pkill -f chromedriver > /dev/null 2>&1')
                 os.system('pkill -f chrome > /dev/null 2>&1')
-        except: pass
+        except Exception:
+            logger.debug("Failed to kill zombie chrome processes", exc_info=True)
 
 
     def get_status(self):
@@ -219,11 +227,11 @@ class WhatsAppService:
         try:
             self.driver.find_element(By.XPATH, '//*[@id="side"]')
             return "Connected"
-        except:
+        except Exception:
             try:
                 self.driver.find_element(By.CSS_SELECTOR, "canvas")
                 return "Awaiting Login"
-            except:
+            except Exception:
                 return "Loading..."
 
     def wait_for_connection(self, timeout=30):
@@ -236,7 +244,8 @@ class WhatsAppService:
                 EC.presence_of_element_located((By.XPATH, '//*[@id="side"]'))
             )
             return True
-        except:
+        except Exception:
+            logger.debug("WhatsApp connection wait timed out", exc_info=True)
             return False
 
     def get_qr_hd(self):
@@ -265,18 +274,22 @@ class WhatsAppService:
             final.save(buf, format="PNG", optimize=True)
             buf.seek(0)
             return base64.b64encode(buf.read()).decode()
-        except:
+        except Exception:
+            logger.debug("HD QR capture failed; falling back to raw canvas", exc_info=True)
             try:
                 return self.driver.execute_script(
                     "return document.querySelector('canvas').toDataURL('image/png')"
                 )
-            except:
+            except Exception:
+                logger.debug("Raw QR capture failed", exc_info=True)
                 return None
 
     def get_diagnostic_screenshot(self):
         if not self.driver: return None
         try: return self.driver.get_screenshot_as_base64()
-        except: return None
+        except Exception:
+            logger.debug("Diagnostic screenshot failed", exc_info=True)
+            return None
 
     def _type_human_like(self, element, text):
         """يحاكي الطباعة البشرية مع أخطاء مطبعية نادرة وفواصل زمنية عشوائية لتجنب الحظر"""
@@ -331,7 +344,8 @@ class WhatsAppService:
                 self.driver.execute_script(f"window.scrollBy(0, {random.randint(100, 300)})")
                 time.sleep(random.uniform(0.5, 1.0))
                 self.driver.execute_script(f"window.scrollBy(0, -{random.randint(50, 150)})")
-            except: pass
+            except Exception:
+                logger.debug("Human-like mouse/scroll simulation failed", exc_info=True)
             
             wait = WebDriverWait(self.driver, 45)
             
@@ -340,7 +354,8 @@ class WhatsAppService:
                 msg_input = wait.until(EC.presence_of_element_located(
                     (By.XPATH, '//div[@contenteditable="true"][@data-tab="10"]')
                 ))
-            except:
+            except Exception:
+                logger.debug("Message input box not found in time", exc_info=True)
                 src = self.driver.page_source.lower()
                 if "invalid" in src or "غير صحيح" in src:
                     return False, "رقم غير مسجل في الواتساب"
@@ -389,7 +404,8 @@ class WhatsAppService:
                     send_btn = self.driver.find_element(By.XPATH, '//span[@data-icon="send"]')
                     actions = ActionChains(self.driver)
                     actions.move_to_element(send_btn).pause(random.uniform(0.2, 0.5)).click().perform()
-                except:
+                except Exception:
+                    logger.debug("Send button click failed; falling back to ENTER", exc_info=True)
                     caption_input.send_keys(Keys.ENTER)
             else:
                 # Simple text message
@@ -405,7 +421,8 @@ class WhatsAppService:
                         send_btn = self.driver.find_element(By.XPATH, '//span[@data-icon="send"]')
                         actions = ActionChains(self.driver)
                         actions.move_to_element(send_btn).pause(random.uniform(0.2, 0.5)).click().perform()
-                    except:
+                    except Exception:
+                        logger.debug("Send button click failed; falling back to ENTER", exc_info=True)
                         msg_input.send_keys(Keys.ENTER)
             
             time.sleep(random.uniform(2.0, 4.0)) # Wait for send
@@ -417,5 +434,6 @@ class WhatsAppService:
     def close(self):
         if self.driver:
             try: self.driver.quit()
-            except: pass
+            except Exception:
+                logger.debug("Error while quitting driver", exc_info=True)
             self.driver = None

@@ -12,6 +12,13 @@ import pytz
 print(">>> DEBUG: Core libraries imported")
 import base64
 import re
+import logging
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+)
+logger = logging.getLogger("contract_monitor.app")
 
 # Saudi Arabia timezone for consistent time display
 SAUDI_TZ = pytz.timezone('Asia/Riyadh')
@@ -65,6 +72,7 @@ class AuthManager:
             except Exception as e:
                 # Store error for UI feedback
                 self.load_error = str(e)
+                logger.exception("Error loading users from %s", self.users_file)
                 self.users = {}
         
         # Ensure Default Admin
@@ -81,11 +89,15 @@ class AuthManager:
             self.save_users()
 
     def save_users(self):
+        """Persists users to disk. Returns True on success, False on failure."""
         try:
             with open(self.users_file, 'w', encoding='utf-8') as f:
                 json.dump({"users": self.users}, f, ensure_ascii=False, indent=4)
+            return True
         except Exception as e:
-            print(f"Error saving users: {e}")
+            self.save_error = str(e)
+            logger.exception("Error saving users to %s", self.users_file)
+            return False
 
     def hash_password(self, password):
         return hashlib.sha256(str(password).encode()).hexdigest()
@@ -109,7 +121,9 @@ class AuthManager:
             "first_name_en": f_en, "father_name_en": fa_en,
             "permissions": ["all"] if role == "admin" else []
         }
-        self.save_users()
+        if not self.save_users():
+            del self.users[username]
+            return False, f"Failed to save user: {getattr(self, 'save_error', 'disk error')}"
         return True, "User added successfully"
 
     def update_password(self, username, new_password):
@@ -121,8 +135,11 @@ class AuthManager:
                 break
         
         if target:
+            previous = self.users[target].get("password")
             self.users[target]["password"] = self.hash_password(new_password)
-            self.save_users()
+            if not self.save_users():
+                self.users[target]["password"] = previous
+                return False
             return True
         return False
 
@@ -142,12 +159,12 @@ class AuthManager:
                 break
         
         if user_to_del:
-            try:
-                del self.users[user_to_del]
-                self.save_users()
-                return True, "تم الحذف"
-            except Exception as e:
-                return False, f"خطأ أثناء الحذف: {str(e)}"
+            removed = self.users.pop(user_to_del, None)
+            if not self.save_users():
+                if removed is not None:
+                    self.users[user_to_del] = removed
+                return False, f"خطأ أثناء الحذف: {getattr(self, 'save_error', 'disk error')}"
+            return True, "تم الحذف"
         
         return False, "المستخدم غير موجود في النظام"
 
@@ -160,28 +177,41 @@ class AuthManager:
                 break
         
         if target:
+            previous = {
+                "role": self.users[target].get("role"),
+                "permissions": self.users[target].get("permissions"),
+            }
             self.users[target]["role"] = new_role
             self.users[target]["permissions"] = ["read"] if new_role == "viewer" else ["all"]
-            self.save_users()
+            if not self.save_users():
+                self.users[target]["role"] = previous["role"]
+                self.users[target]["permissions"] = previous["permissions"]
+                return False
             return True
         return False
 
     def update_profile(self, username, f_ar=None, fa_ar=None, f_en=None, fa_en=None):
         target = str(username).lower().strip()
         if target in self.users:
+            snapshot = dict(self.users[target])
             if f_ar is not None: self.users[target]["first_name_ar"] = f_ar
             if fa_ar is not None: self.users[target]["father_name_ar"] = fa_ar
             if f_en is not None: self.users[target]["first_name_en"] = f_en
             if fa_en is not None: self.users[target]["father_name_en"] = fa_en
-            self.save_users()
+            if not self.save_users():
+                self.users[target] = snapshot
+                return False
             return True
         return False
 
     def update_permissions(self, username, perms_list):
         target = str(username).lower().strip()
         if target in self.users:
+            previous = self.users[target].get("permissions")
             self.users[target]["permissions"] = perms_list
-            self.save_users()
+            if not self.save_users():
+                self.users[target]["permissions"] = previous
+                return False
             return True
         return False
 
@@ -189,8 +219,11 @@ class AuthManager:
         """Save a base64-encoded profile photo for the user."""
         target = str(username).lower().strip()
         if target in self.users:
+            previous = self.users[target].get("avatar")
             self.users[target]["avatar"] = avatar_b64
-            self.save_users()
+            if not self.save_users():
+                self.users[target]["avatar"] = previous
+                return False
             return True
         return False
 
@@ -204,7 +237,8 @@ def load_saved_credentials():
         try:
             with open(PERSIST_FILE, 'r', encoding='utf-8') as f:
                 return json.load(f)
-        except:
+        except Exception:
+            logger.exception("Failed to load saved credentials from %s", PERSIST_FILE)
             return None
     return None
 
@@ -213,15 +247,17 @@ def save_credentials(u, p):
         os.makedirs(os.path.dirname(PERSIST_FILE), exist_ok=True)
         with open(PERSIST_FILE, 'w', encoding='utf-8') as f:
             json.dump({"u": u, "p": p}, f)
-    except Exception as e:
-        print(f"Error saving credentials: {e}")
+        return True
+    except Exception:
+        logger.exception("Failed to save credentials to %s", PERSIST_FILE)
+        return False
 
 def clear_credentials():
     if os.path.exists(PERSIST_FILE):
         try:
             os.remove(PERSIST_FILE)
-        except:
-            pass
+        except Exception:
+            logger.exception("Failed to clear saved credentials at %s", PERSIST_FILE)
 
 @st.cache_data(ttl=3600, show_spinner=False)
 def get_base64_image(image_path):
@@ -1511,13 +1547,13 @@ def _parse_to_date_str_cached(val):
         clean_s = re.sub(r'[صم]', '', val_str).strip()
         dt = dateutil_parser.parse(clean_s, dayfirst=False)
         return dt.strftime('%Y-%m-%d')
-    except:
+    except Exception:
         # Fallback to pandas
         try:
             dt = pd.to_datetime(val, errors='coerce')
             if pd.isna(dt): return str(val)
             return dt.strftime('%Y-%m-%d')
-        except:
+        except Exception:
             return str(val)
 
 def clean_date_display(df):
@@ -1843,7 +1879,8 @@ def get_cached_translation(val, target_lang):
         from src.core.translation import TranslationManager
         tm = TranslationManager()
         return tm.translate_full_text(val, target_lang=target_lang)
-    except:
+    except Exception:
+        logger.debug("Translation failed; returning original value", exc_info=True)
         return val
 
 def auto_translate(val, target_lang='en', force_stay_ar=False):
@@ -1880,7 +1917,8 @@ def auto_translate(val, target_lang='en', force_stay_ar=False):
              return get_cached_translation(val_str, target_lang)
              
         return val_str
-    except:
+    except Exception:
+        logger.debug("auto_translate failed; returning original value", exc_info=True)
         return val_str
 
 def show_toast(message, typ="success", duration=5, container=None):
@@ -2465,14 +2503,14 @@ def render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search", 
                 st.warning(t("confirm_delete_msg", lang))
                 if st.button(t("confirm_btn", lang), type="primary", width='stretch', key=f"del_confirm_{key_prefix}_{worker_id}"):
                     with st.spinner("⏳ جارٍ الحذف النهائي..."):
-                        success = st.session_state.db.delete_row(sheet_row)
-                        if success == True:
+                        success, message = st.session_state.db.delete_row(sheet_row)
+                        if success:
                             st.success(t("delete_success", lang))
                             time.sleep(1)
                             if f"last_scroll_{key_prefix}" in st.session_state: del st.session_state[f"last_scroll_{key_prefix}"]
                             st.rerun()
                         else:
-                            st.error(f"{t('delete_error', lang)}: {success}")
+                            st.error(f"{t('delete_error', lang)}: {message}")
         else:
             # Final Error UI with reset options
             st.error(f"⚠️ {t('delete_error', lang)} (ID Missing)")
@@ -2737,8 +2775,8 @@ def check_notifications():
                 saved_state = json.load(f)
                 saved_worker_count = saved_state.get('worker_count')
                 saved_cust_count = saved_state.get('cust_count')
-    except:
-        pass
+    except Exception:
+        logger.warning("Failed to read notification state from %s", NOTIF_STATE_FILE, exc_info=True)
 
     def get_flag(nat_name):
         """Converts nationality name to emoji flag."""
@@ -3003,7 +3041,8 @@ def render_top_banner():
                     try:
                         with open(USER_SEEN_FILE, "r") as f:
                             seen_ids = json.load(f)
-                    except: pass
+                    except Exception:
+                        logger.warning("Failed to read seen-notifications file %s", USER_SEEN_FILE, exc_info=True)
                 
                 # Add current notification IDs to seen list
                 for n in st.session_state.notifications:
@@ -3438,8 +3477,8 @@ def __apply_pinned_columns(df_or_style, cfg=None):
                 data_px = df_temp[col].astype(str).apply(estimate_px).max()
                 if pd.notna(data_px):
                     max_px = max(max_px, data_px + 20) # +20px safety margin for the cell padding
-            except:
-                pass
+            except Exception:
+                logger.debug("Column width estimation failed for a column", exc_info=True)
                 
         # Force the column to be as wide as the longest string by injecting non-breaking spaces (\xA0)
         diff_px = max_px - header_px
@@ -4023,8 +4062,8 @@ def render_search_content():
                         
                         res = res.sort_values(by=sort_cols, ascending=asc_list)
                         res = res.drop(columns=['__ts_sort'])
-                    except:
-                        pass
+                    except Exception:
+                        logger.debug("Result sorting failed; leaving order unchanged", exc_info=True)
             
             # Show count in UI
             count_found = len(res)
@@ -4566,14 +4605,22 @@ def render_permissions_content():
                 if delete_perm:
                     if "can_delete" not in new_perms: new_perms.append("can_delete")
                 
-                st.session_state.auth.update_permissions(selected_user, new_perms)
-                st.session_state.auth.update_role(selected_user, new_role)
-                st.session_state.auth.update_profile(selected_user, new_f_ar, new_fa_ar, new_f_en, new_fa_en)
+                ok = st.session_state.auth.update_permissions(selected_user, new_perms)
+                ok = st.session_state.auth.update_role(selected_user, new_role) and ok
+                ok = st.session_state.auth.update_profile(selected_user, new_f_ar, new_fa_ar, new_f_en, new_fa_en) and ok
                 if new_pass:
-                    st.session_state.auth.update_password(selected_user, new_pass)
-                
-                st.session_state.permissions_success = t("update_success", lang)
-                st.rerun()
+                    ok = st.session_state.auth.update_password(selected_user, new_pass) and ok
+
+                if ok:
+                    st.session_state.permissions_success = t("update_success", lang)
+                    st.rerun()
+                else:
+                    show_toast(
+                        (f"فشل حفظ التغييرات: {getattr(st.session_state.auth, 'save_error', '')}"
+                         if lang == 'ar'
+                         else f"Failed to save changes: {getattr(st.session_state.auth, 'save_error', '')}"),
+                        "error",
+                    )
 
         # Profile Photo Upload Section
         st.markdown("---")
@@ -4840,8 +4887,8 @@ def render_order_processing_content():
             # Sort newest first
             customers_df = customers_df.sort_values(by='__temp_sort', ascending=False)
             customers_df = customers_df.drop(columns=['__temp_sort'])
-        except:
-            pass
+        except Exception:
+            logger.debug("Customer sorting failed; leaving order unchanged", exc_info=True)
     
     c_company = find_cust_col(["company"]) or find_cust_col(["شركه"]) or find_cust_col(["مؤسس"])
     c_responsible = find_cust_col(["responsible"]) or find_cust_col(["مسؤول"])
@@ -5535,13 +5582,13 @@ def render_order_processing_content():
                                 row_num = customer_row.get('__sheet_row')
                                 if row_num:
                                     url = "https://docs.google.com/spreadsheets/d/1ZlLGXqbFSnKrr2J-PRnxRhxykwrNOgOE6Mb34Zei_FU/edit"
-                                    success = st.session_state.db.delete_row(row_num, url=url)
+                                    success, message = st.session_state.db.delete_row(row_num, url=url)
                                     if success:
                                         show_toast("✅ تم حذف الطلب بنجاح" if lang == 'ar' else "✅ Request deleted successfully", "success")
                                         time.sleep(1)
                                         st.rerun()
                                     else:
-                                        st.error("فشل الحذف" if lang == 'ar' else "Delete failed")
+                                        st.error((f"فشل الحذف: {message}" if lang == 'ar' else f"Delete failed: {message}"))
                                 else:
                                     st.error("تعذر تحديد رقم الصف" if lang == 'ar' else "Could not determine row number")
                     else:
@@ -6085,7 +6132,8 @@ def render_bengali_supply_content():
                                     days_text = f"⏳ {days_diff} {t('days_passed_label', lang)}"
                             else:
                                 days_text = "-"
-                        except:
+                        except Exception:
+                            logger.debug("Failed to compute days text", exc_info=True)
                             days_text = "-"
                             
                         c3.markdown(f"**{days_text}**")

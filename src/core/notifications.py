@@ -1,7 +1,10 @@
 import streamlit as st
 import os
 import json
+import logging
 from datetime import datetime
+
+logger = logging.getLogger(__name__)
 
 def check_notifications():
     """Checks for new worker entries or customer requests and synchronizes UI data."""
@@ -57,7 +60,8 @@ def check_notifications():
             try:
                 with open(STATE_FILE, "r") as f:
                     disk_state = json.load(f)
-            except: pass
+            except Exception:
+                logger.warning("Failed to read notification state from %s", STATE_FILE, exc_info=True)
 
         df_workers = st.session_state.db.fetch_data(is_notif_check=True)
         current_worker_count = len(df_workers)
@@ -125,8 +129,8 @@ def check_notifications():
             with open(STATE_FILE, "w") as f: json.dump(disk_state, f, indent=4)
         
         st.session_state.notif_last_cust_count = current_cust_count
-    except Exception as e:
-        print(f"Error checking notifications: {e}")
+    except Exception:
+        logger.exception("Error checking notifications")
 
 @st.fragment(run_every="20s")
 def silent_notification_monitor():

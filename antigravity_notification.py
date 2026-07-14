@@ -96,7 +96,8 @@ def load_all_states():
     if STATE_FILE.exists():
         with open(STATE_FILE, "r") as f:
             try: return json.load(f)
-            except: pass
+            except Exception:
+                logging.warning("Failed to read state file %s", STATE_FILE, exc_info=True)
     return {}
 
 def save_all_states(states):
@@ -118,7 +119,8 @@ def load_cached_notifications():
             try:
                 content = json.load(f)
                 if isinstance(content, list): return content
-            except: pass
+            except Exception:
+                logging.warning("Failed to read cache file %s", CACHE_FILE, exc_info=True)
     return []
 
 def save_cached_notifications(notifications):

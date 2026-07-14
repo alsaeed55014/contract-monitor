@@ -2,8 +2,11 @@ import tkinter as tk
 from tkinter import messagebox
 from PIL import Image, ImageTk, ImageDraw
 import os
+import logging
 from src.config import COLORS, ASSETS_DIR, PROGRAMMER_NAME_EN
 from src.ui.components import LuxuryButton, ModernEntry
+
+logger = logging.getLogger(__name__)
 
 class LoginScreen:
     def __init__(self, root, auth_manager, on_login_success):
@@ -77,7 +80,8 @@ class LoginScreen:
             output.paste(pil_image, (0, 0), mask=mask)
             self.photo_small = ImageTk.PhotoImage(output)
             tk.Label(parent, image=self.photo_small, bg=COLORS["bg_main"]).pack(pady=5)
-        except: pass
+        except Exception:
+            logger.warning("Failed to load login avatar image", exc_info=True)
 
     def center_window(self):
         self.root.update_idletasks()
