@@ -6,6 +6,7 @@ import os
 import sys
 import json
 import hashlib
+import secrets
 import time
 from datetime import datetime, timedelta
 import pytz
@@ -49,6 +50,19 @@ except ImportError:
     print(">>> DEBUG: Project modules (core.*) imported successfully via fallback")
 
 # 2. Local Auth Class to prevent Import/Sync Errors
+def _resolve_default_admin_password():
+    """Return the initial admin password from the environment, or generate a
+    random one. Avoids shipping a hardcoded default credential in source."""
+    pw = os.environ.get("CM_ADMIN_PASSWORD")
+    if pw:
+        return pw
+    pw = secrets.token_urlsafe(16)
+    print("[SECURITY] CM_ADMIN_PASSWORD is not set; generated a random admin password.")
+    print(f"[SECURITY] Initial admin password: {pw}")
+    print("[SECURITY] Log in and change it immediately, or set CM_ADMIN_PASSWORD.")
+    return pw
+
+
 class AuthManager:
     def __init__(self, users_file_path):
         self.users_file = users_file_path
@@ -69,8 +83,9 @@ class AuthManager:
         
         # Ensure Default Admin
         if "admin" not in self.users:
+            default_pw = _resolve_default_admin_password()
             self.users["admin"] = {
-                "password": self.hash_password("266519111"), # User's preferred password
+                "password": self.hash_password(default_pw),
                 "role": "admin",
                 "first_name_ar": "السعيد",
                 "father_name_ar": "الوزان",
