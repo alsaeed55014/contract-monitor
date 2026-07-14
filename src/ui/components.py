@@ -3,6 +3,7 @@ import os
 import json
 from datetime import datetime
 from src.utils.phone_utils import mask_phone
+from src.utils.data_utils import find_matching_column, get_flag_emoji, safe_value
 
 def show_toast(msg, typ="info", container=None):
     """Modern toast with luxury styling."""
@@ -37,39 +38,13 @@ def show_toast(msg, typ="info", container=None):
         st.markdown(html, unsafe_allow_html=True)
 
 def get_flag(nat_name):
-    """Converts nationality name to emoji flag."""
-    nat_name = str(nat_name).lower().strip()
-    flags = {
-        'مصر': '🇪🇬', 'مصري': '🇪🇬', 'egypt': '🇪🇬',
-        'السودان': '🇸🇩', 'سوداني': '🇸🇩', 'sudan': '🇸🇩',
-        'باكستان': '🇵🇰', 'باكستاني': '🇵🇰', 'pakistan': '🇵🇰',
-        'الهند': '🇮🇳', 'هندي': '🇮🇳', 'india': '🇮🇳',
-        'اليمن': '🇾🇪', 'يمني': '🇾🇪', 'yemen': '🇾🇪',
-        'بنجلاديش': '🇧🇩', 'بنجالي': '🇧🇩', 'bangladesh': '🇧🇩', 'bangladeshi': '🇧🇩',
-        'الفلبين': '🇵🇭', 'فلبيني': '🇵🇭', 'philippines': '🇵🇭',
-        'كينيا': '🇰🇪', 'كيني': '🇰🇪', 'kenya': '🇰🇪',
-        'أوغندا': '🇺🇬', 'أوغندي': '🇺🇬', 'uganda': '🇺🇬',
-        'إثيوبيا': '🇪🇹', 'إثيوبي': '🇪🇹', 'ethiopia': '🇪🇹',
-        'نيبال': '🇳🇵', 'نيبالي': '🇳🇵', 'nepal': '🇳🇵', 'nepali': '🇳🇵',
-    }
-    for k, v in flags.items():
-        if k in nat_name: return v
-    return '🏳️' # Use a more neutral flag for unknown
+    return get_flag_emoji(nat_name, default='🏳️')
 
 def safe_val(row, col_name):
-    if col_name is None: return '---'
-    if hasattr(row, 'get'):
-        val = str(row.get(col_name, '---')).strip()
-    else:
-        val = str(row).strip()
-    if val in ['nan', 'None', '', 'NaN']: return '---'
-    return val
+    return safe_value(row, col_name)
 
 def find_col(df, options):
-    for o in options:
-        match = next((c for c in df.columns if o.lower() in str(c).lower()), None)
-        if match: return match
-    return None
+    return find_matching_column(df, options)
 
 def silent_notification_monitor():
     """Background monitor for new entries (Placeholder for app.py integration)."""
