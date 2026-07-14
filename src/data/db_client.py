@@ -5,6 +5,9 @@ from datetime import datetime
 import time
 import streamlit as st
 import hashlib
+import logging
+
+logger = logging.getLogger(__name__)
 
 class DBClient:
     _instance = None
@@ -155,13 +158,21 @@ class DBClient:
         return None
 
     def delete_row(self, row_number, url=None):
-        """Permanently deletes a row from Google Sheets."""
+        """Permanently deletes a row from Google Sheets.
+
+        Returns a ``(success, message)`` tuple so callers can reliably detect
+        and surface failures instead of mistaking an error for success.
+        """
         if url is None:
             url = "https://docs.google.com/spreadsheets/d/1u87sScIve_-xT_jDG56EKFMXegzAxOqwVJCh3Irerrw/edit"
 
         if not self.client:
             self.connect()
-        
+        if not self.client:
+            msg = getattr(self, '_error_msg', 'No connection to Google Sheets')
+            logger.error("Failed to delete row: %s", msg)
+            return False, msg
+
         try:
             sheet = self.client.open_by_url(url).sheet1
             sheet.delete_rows(int(row_number))
@@ -171,16 +182,23 @@ class DBClient:
             if cache_key in self._data_caches:
                 del self._data_caches[cache_key]
             
-            return True
+            return True, "Row deleted"
         except Exception as e:
-            print(f"[ERROR] Failed to delete row: {e}")
+            logger.exception("Failed to delete row %s", row_number)
             return False, str(e)
 
     def append_row(self, row_data, url):
-        """Appends a new row to the specified Google Sheet."""
+        """Appends a new row to the specified Google Sheet.
+
+        Returns a ``(success, message)`` tuple for consistent error handling.
+        """
         if not self.client:
             self.connect()
-        
+        if not self.client:
+            msg = getattr(self, '_error_msg', 'No connection to Google Sheets')
+            logger.error("Failed to append row: %s", msg)
+            return False, msg
+
         try:
             sheet = self.client.open_by_url(url).sheet1
             sheet.append_row(row_data)
@@ -190,9 +208,9 @@ class DBClient:
             if cache_key in self._data_caches:
                 del self._data_caches[cache_key]
             
-            return True
+            return True, "Row appended"
         except Exception as e:
-            print(f"[ERROR] Failed to append row: {e}")
+            logger.exception("Failed to append row")
             return False, str(e)
 
     def get_headers(self, url=None):

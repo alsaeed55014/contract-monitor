@@ -3,6 +3,7 @@ import pandas as pd
 import json
 import os
 import time
+import logging
 from datetime import datetime
 # WhatsAppService is imported lazily inside render_whatsapp_page() to avoid blocking app startup with selenium
 from src.utils.phone_utils import validate_numbers, format_phone_number, save_to_local_desktop, render_pasha_export_button
@@ -10,6 +11,8 @@ from src.core.i18n import t
 from src.config import WA_HISTORY_FILE, WA_TEMPLATES_FILE
 from src.ui.styles import get_base64_image
 import random
+
+logger = logging.getLogger(__name__)
 
 # --- Smart Message Templates (Updated 2026-03-20) ---
 SMART_TEMPLATES = {
@@ -71,7 +74,8 @@ def load_templates():
                         if isinstance(v, str):
                             data["custom"][k] = {"body": v, "is_smart": False, "job_title": ""}
                 return data
-        except:
+        except Exception:
+            logger.warning("Failed to load WhatsApp templates from %s", WA_TEMPLATES_FILE, exc_info=True)
             return default_templates
     return default_templates
 
@@ -79,8 +83,8 @@ def save_templates(templates):
     try:
         with open(WA_TEMPLATES_FILE, 'w', encoding='utf-8') as f:
             json.dump(templates, f, ensure_ascii=False, indent=4)
-    except:
-        pass
+    except Exception:
+        logger.exception("Failed to save WhatsApp templates to %s", WA_TEMPLATES_FILE)
 
 def generate_smart_message(name, cv_link, custom_job=""):
     templates = load_templates().get("smart", SMART_TEMPLATES)
@@ -132,7 +136,8 @@ def load_wa_history():
         try:
             with open(WA_HISTORY_FILE, 'r', encoding='utf-8') as f:
                 return set(json.load(f))
-        except:
+        except Exception:
+            logger.warning("Failed to load WhatsApp history from %s", WA_HISTORY_FILE, exc_info=True)
             return set()
     return set()
 
@@ -140,8 +145,8 @@ def save_wa_history(history_set):
     try:
         with open(WA_HISTORY_FILE, 'w', encoding='utf-8') as f:
             json.dump(list(history_set), f, ensure_ascii=False)
-    except:
-        pass
+    except Exception:
+        logger.exception("Failed to save WhatsApp history to %s", WA_HISTORY_FILE)
 
 def render_whatsapp_page():
     from src.services.whatsapp_service import WhatsAppService
@@ -158,8 +163,8 @@ def render_whatsapp_page():
             sig = inspect.signature(st.session_state.wa_service.send_message)
             if 'attachment_path' not in sig.parameters:
                 st.session_state.wa_service = WhatsAppService()
-        except:
-            pass
+        except Exception:
+            logger.debug("Could not refresh WhatsApp service signature", exc_info=True)
 
     if 'wa_logs' not in st.session_state: st.session_state.wa_logs = []
     if 'wa_running' not in st.session_state: st.session_state.wa_running = False
@@ -1082,7 +1087,8 @@ HR Manager"""
                     tp = st.session_state.get('wa_temp_path')
                     if os.path.exists(tp):
                         try: os.remove(tp)
-                        except: pass
+                        except Exception:
+                            logger.debug("Failed to remove temp attachment %s", tp, exc_info=True)
                     st.session_state.wa_temp_path = None
 
         # 📄 Professional 2026 Log Section

@@ -1,6 +1,9 @@
 import json
 import hashlib
 import os
+import logging
+
+logger = logging.getLogger(__name__)
 
 class AuthManager:
     def __init__(self, users_file_path):
@@ -14,8 +17,8 @@ class AuthManager:
                 with open(self.users_file, 'r', encoding='utf-8') as f:
                     data = json.load(f)
                     self.users = data.get("users", {})
-            except Exception as e:
-                print(f"Error loading users: {e}")
+            except Exception:
+                logger.exception("Error loading users from %s", self.users_file)
                 self.users = {}
         
         # Ensure Default Admin
@@ -30,11 +33,14 @@ class AuthManager:
             self.save_users()
 
     def save_users(self):
+        """Persists users to disk. Returns True on success, False on failure."""
         try:
             with open(self.users_file, 'w', encoding='utf-8') as f:
                 json.dump({"users": self.users}, f, ensure_ascii=False, indent=4)
-        except Exception as e:
-            print(f"Error saving users: {e}")
+            return True
+        except Exception:
+            logger.exception("Error saving users to %s", self.users_file)
+            return False
 
     def hash_password(self, password):
         return hashlib.sha256(str(password).encode()).hexdigest()
@@ -59,30 +65,45 @@ class AuthManager:
             "full_name_en": name_en,
             "permissions": ["read"] if role == "viewer" else ["all"]
         }
-        self.save_users()
+        if not self.save_users():
+            # Roll back the in-memory change so state matches disk.
+            del self.users[username]
+            return False, "Failed to save user to disk"
         return True, "User added successfully"
 
     def update_password(self, username, new_password):
         username = username.lower().strip()
         if username in self.users:
+            previous = self.users[username].get("password")
             self.users[username]["password"] = self.hash_password(new_password)
-            self.save_users()
+            if not self.save_users():
+                self.users[username]["password"] = previous
+                return False
             return True
         return False
 
     def delete_user(self, username):
         username = username.lower().strip()
         if username in self.users and username != "admin":
-            del self.users[username]
-            self.save_users()
+            removed = self.users.pop(username)
+            if not self.save_users():
+                self.users[username] = removed
+                return False
             return True
         return False
 
     def update_role(self, username, new_role):
         username = username.lower().strip()
         if username in self.users and username != "admin":
+            previous = {
+                "role": self.users[username].get("role"),
+                "permissions": self.users[username].get("permissions"),
+            }
             self.users[username]["role"] = new_role
             self.users[username]["permissions"] = ["read"] if new_role == "viewer" else ["all"]
-            self.save_users()
+            if not self.save_users():
+                self.users[username]["role"] = previous["role"]
+                self.users[username]["permissions"] = previous["permissions"]
+                return False
             return True
         return False
