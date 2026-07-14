@@ -32,29 +32,66 @@ FLAG_MAP = {
     "afghan": "af", "afghanistan": "af", "nigerian": "ng", "nigeria": "ng"
 }
 
+EMOJI_FLAG_MAP = {
+    "مصر": "🇪🇬", "مصري": "🇪🇬", "مصرية": "🇪🇬", "egypt": "🇪🇬", "egyptian": "🇪🇬",
+    "السودان": "🇸🇩", "سوداني": "🇸🇩", "سودانية": "🇸🇩", "sudan": "🇸🇩", "sudanese": "🇸🇩",
+    "باكستان": "🇵🇰", "باكستاني": "🇵🇰", "باكستانية": "🇵🇰", "pakistan": "🇵🇰", "pakistani": "🇵🇰",
+    "الهند": "🇮🇳", "هندي": "🇮🇳", "هندية": "🇮🇳", "india": "🇮🇳", "indian": "🇮🇳",
+    "اليمن": "🇾🇪", "يمني": "🇾🇪", "يمنية": "🇾🇪", "yemen": "🇾🇪",
+    "بنجلاديش": "🇧🇩", "بنجلاديشي": "🇧🇩", "بنجالي": "🇧🇩", "بنجالية": "🇧🇩",
+    "bangladesh": "🇧🇩", "bangladeshi": "🇧🇩",
+    "الفلبين": "🇵🇭", "فلبيني": "🇵🇭", "فلبينية": "🇵🇭", "filipino": "🇵🇭", "philippines": "🇵🇭",
+    "كينيا": "🇰🇪", "كيني": "🇰🇪", "كينية": "🇰🇪", "kenya": "🇰🇪", "kenyan": "🇰🇪",
+    "أوغندا": "🇺🇬", "اوغندا": "🇺🇬", "أوغندي": "🇺🇬", "اوغندي": "🇺🇬",
+    "uganda": "🇺🇬", "ugandan": "🇺🇬",
+    "إثيوبيا": "🇪🇹", "اثيوبيا": "🇪🇹", "إثيوبي": "🇪🇹", "اثيوبي": "🇪🇹",
+    "ethiopia": "🇪🇹", "ethiopian": "🇪🇹",
+    "نيبال": "🇳🇵", "نيبالي": "🇳🇵", "نيبالية": "🇳🇵", "nepal": "🇳🇵", "nepali": "🇳🇵",
+    "المغرب": "🇲🇦", "مغربي": "🇲🇦", "مغربية": "🇲🇦", "morocco": "🇲🇦",
+    "تونس": "🇹🇳", "تونسي": "🇹🇳", "تونسية": "🇹🇳", "tunisia": "🇹🇳",
+    "الجزائر": "🇩🇿", "جزائري": "🇩🇿", "جزائرية": "🇩🇿", "algeria": "🇩🇿",
+    "نيجيريا": "🇳🇬", "نيجيري": "🇳🇬", "نيجيرية": "🇳🇬", "nigeria": "🇳🇬", "nigerian": "🇳🇬",
+    "إندونيسيا": "🇮🇩", "اندونيسيا": "🇮🇩", "إندونيسي": "🇮🇩", "اندونيسي": "🇮🇩",
+    "indonesia": "🇮🇩", "indonesian": "🇮🇩",
+}
+
 GENDER_MAP = {
     "ذكر": "🚹", "male": "🚹",
     "أنثى": "🚺", "female": "🚺"
 }
 
-def get_flag_emoji(nat_name):
+def get_flag_emoji(nat_name, default='🏁'):
     """Converts nationality name to emoji flag."""
     nat_name = str(nat_name).lower().strip()
-    flags = {
-        'مصر': '🇪🇬', 'مصري': '🇪🇬', 'egypt': '🇪🇬',
-        'السودان': '🇸🇩', 'سوداني': '🇸🇩', 'sudan': '🇸🇩',
-        'باكستان': '🇵🇰', 'باكستاني': '🇵🇰', 'pakistan': '🇵🇰',
-        'الهند': '🇮🇳', 'هندي': '🇮🇳', 'india': '🇮🇳',
-        'اليمن': '🇾🇪', 'يمني': '🇾🇪', 'yemen': '🇾🇪',
-        'بنجلاديش': '🇧🇩', 'بنجالي': '🇧🇩', 'bangladesh': '🇧🇩',
-        'الفلبين': '🇵🇭', 'فلبيني': '🇵🇭', 'philippines': '🇵🇭',
-        'كينيا': '🇰🇪', 'كيني': '🇰🇪', 'kenya': '🇰🇪',
-        'أوغندا': '🇺🇬', 'أوغندي': '🇺🇬', 'uganda': '🇺🇬',
-        'إثيوبيا': '🇪🇹', 'إثيوبي': '🇪🇹', 'ethiopia': '🇪🇹',
-    }
-    for k, v in flags.items():
+    for k, v in EMOJI_FLAG_MAP.items():
         if k in nat_name: return v
-    return '🏁'
+    return default
+
+def find_matching_column(df, options, flexible_arabic=False):
+    for option in options:
+        option_text = str(option)
+        if flexible_arabic:
+            pattern = ''.join('[ةه]' if char in 'ةه' else re.escape(char) for char in option_text)
+            match = next((column for column in df.columns if re.search(pattern, str(column), re.IGNORECASE)), None)
+        else:
+            match = next((column for column in df.columns if option_text.lower() in str(column).lower()), None)
+        if match is not None:
+            return match
+    return None
+
+def safe_value(row, column, default='---'):
+    if column is None:
+        return default
+    value = row.get(column, default) if hasattr(row, 'get') else row
+    value = str(value).strip()
+    return default if value in {'nan', 'None', '', 'NaN'} else value
+
+def find_row_value(row, keywords, default='---'):
+    for key, value in row.items():
+        key_text = str(key).lower().strip()
+        if any(str(keyword).lower() in key_text for keyword in keywords):
+            return value
+    return default
 
 def auto_translate(val, target_lang='en'):
     if not val or not isinstance(val, (str, object)):
