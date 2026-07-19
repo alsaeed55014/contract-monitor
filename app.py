@@ -2066,6 +2066,18 @@ if 'last_login_time' not in st.session_state:
     st.session_state.last_login_time = 0
 if 'notifications' not in st.session_state:
     st.session_state.notifications = []
+# Inactivity auto-logout: track last activity in query params via JS
+if 'force_logout_inactive' not in st.session_state:
+    st.session_state.force_logout_inactive = False
+
+# Handle forced logout from inactivity (triggered by JS reload with ?logout=inactive)
+query_params = st.query_params
+if query_params.get('logout') == 'inactive':
+    st.session_state.user = None
+    st.session_state.force_logout_inactive = False
+    clear_credentials()
+    st.query_params.clear()
+    st.rerun()
 
 # 5. Apply Dynamic Styles Based on Language
 st.markdown(get_css(st.session_state.lang), unsafe_allow_html=True)
@@ -6340,6 +6352,93 @@ def render_bengali_supply_content():
 # IMMEDIATE UI CLEANUP: Hide login screen elements the millisecond we are authenticated
 if st.session_state.get('user'):
     st.markdown("<style>#login-container-wrapper { display: none !important; }</style>", unsafe_allow_html=True)
+
+# ========== 🕑 نظام الخروج التلقائي بعد 30 دقيقة من عدم الاستخدام (JavaScript-based) ==========
+# يعتمد على JavaScript لتتبع نشاط المستخدم وإعادة التحميل عند الخمول
+if st.session_state.get('user'):
+    is_wa_running = str(st.session_state.get('wa_running', False)).lower()
+    st.markdown(f"""
+    <script>
+    (function() {{
+        var INACTIVITY_TIMEOUT = 30 * 60 * 1000; // 30 دقيقة بالمليثاني
+        var WARNING_TIME = 2 * 60 * 1000;        // تحذير قبل دقيقتين
+        var IS_SENDING = {is_wa_running};         // هل الإرسال جارٍ
+        
+        // لا تشغيل المؤقّت أثناء إرسال واتساب
+        if (IS_SENDING) return;
+        
+        var lastActivity = Date.now();
+        var warningShown = false;
+        var warningDiv = null;
+        
+        // تتبع نشاط المستخدم
+        function resetActivity() {{
+            lastActivity = Date.now();
+            warningShown = false;
+            if (warningDiv) {{
+                warningDiv.style.display = 'none';
+            }}
+        }}
+        
+        ['mousemove','keydown','mousedown','touchstart','scroll','click'].forEach(function(ev) {{
+            document.addEventListener(ev, resetActivity, {{passive: true}});
+        }});
+        
+        // إنشاء مربع التحذير
+        function createWarningDiv() {{
+            if (warningDiv) return;
+            warningDiv = document.createElement('div');
+            warningDiv.id = 'wa-inactivity-warning';
+            warningDiv.style.cssText = [
+                'position:fixed', 'bottom:20px', 'right:20px', 'z-index:2147483647',
+                'background:linear-gradient(135deg,#1a0000,#2d0000)',
+                'border:2px solid rgba(255,100,0,0.9)',
+                'border-radius:15px', 'padding:15px 22px',
+                'box-shadow:0 0 30px rgba(255,100,0,0.6)',
+                'text-align:center', 'direction:rtl',
+                'min-width:220px', 'display:none'
+            ].join(';');
+            warningDiv.innerHTML = [
+                '<div style="color:#FF6600;font-weight:800;font-size:1rem">⚠️ سيتم الخروج تلقائياً</div>',
+                '<div id="wa-countdown" style="color:#FFD700;font-size:1.6rem;font-weight:900;margin:5px 0">2:00</div>',
+                '<div style="color:#aaa;font-size:0.78rem">تحرّك أي شيء لاستمرار الجلسة</div>'
+            ].join('');
+            document.body.appendChild(warningDiv);
+        }}
+        
+        // تحقّق من حالة الخمول كل ثانية
+        setInterval(function() {{
+            var now = Date.now();
+            var elapsed = now - lastActivity;
+            var remaining = INACTIVITY_TIMEOUT - elapsed;
+            
+            // تحقّق من جديد إذا بدأ الإرسال (من Streamlit state)
+            if (window.__wa_is_sending) return;
+            
+            if (remaining <= 0) {{
+                // انتهت المدة - خروج تلقائي
+                window.location.href = window.location.pathname + '?logout=inactive';
+                return;
+            }}
+            
+            if (remaining <= WARNING_TIME) {{
+                // عرض التحذير
+                createWarningDiv();
+                if (warningDiv) {{
+                    warningDiv.style.display = 'block';
+                    var secsLeft = Math.ceil(remaining / 1000);
+                    var m = Math.floor(secsLeft / 60);
+                    var s = secsLeft % 60;
+                    var countEl = document.getElementById('wa-countdown');
+                    if (countEl) {{
+                        countEl.textContent = m + ':' + (s < 10 ? '0' : '') + s;
+                    }}
+                }}
+            }}
+        }}, 1000);
+    }})();
+    </script>
+    """, unsafe_allow_html=True)
 
 # Using st.empty container to ensure the screen is fully cleared between login and dashboard states
 main_container = st.empty()

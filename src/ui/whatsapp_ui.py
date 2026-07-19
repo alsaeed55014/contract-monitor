@@ -1007,19 +1007,46 @@ HR Manager"""
                 st.session_state.wa_done = True
                 st.rerun()
             
-            # 🛡️ Prevent browser close/refresh while sending
+            # 🛡️ Prevent browser close/refresh while sending - ENHANCED LOCK
             st.markdown("""
             <script>
-            window.__wa_sending_guard = function(e) {
-                e.preventDefault();
-                e.returnValue = 'WhatsApp sending is still in progress!';
-            };
-            window.removeEventListener('beforeunload', window.__wa_sending_guard);
-            window.addEventListener('beforeunload', window.__wa_sending_guard);
+            (function() {
+                // Remove any old guard first
+                if (window.__wa_sending_guard) {
+                    window.removeEventListener('beforeunload', window.__wa_sending_guard);
+                }
+                // Create a strong guard that always fires
+                window.__wa_sending_guard = function(e) {
+                    e.preventDefault();
+                    e.stopImmediatePropagation();
+                    var msg = '⚠️ الإرسال جارٍ... هل أنت متأكد من الإغلاق؟ سيتوقف الإرسال!';
+                    e.returnValue = msg;
+                    return msg;
+                };
+                // Register with capture=true so it fires even if other handlers call stopPropagation
+                window.addEventListener('beforeunload', window.__wa_sending_guard, true);
+                window.addEventListener('beforeunload', window.__wa_sending_guard, false);
+                // Also intercept visibilitychange to warn on tab hide
+                document.addEventListener('visibilitychange', function() {
+                    if (document.visibilityState === 'hidden' && window.__wa_is_sending) {
+                        // Can't block tab switch, but log it
+                        console.warn('Tab hidden while WhatsApp sending is in progress!');
+                    }
+                });
+                window.__wa_is_sending = true;
+            })();
             </script>
-            <div style="background: linear-gradient(90deg, rgba(255,0,0,0.15), rgba(255,165,0,0.1)); padding: 10px 15px; border-radius: 10px; border: 1px solid rgba(255,0,0,0.3); margin-bottom: 10px; text-align: center; direction: rtl;">
-                <span style="color: #FF6B6B; font-weight: 700; font-size: 0.95rem;">🔒 لا تغلق المتصفح أثناء الإرسال | Do not close the browser while sending</span>
+            <div style="background: linear-gradient(90deg, rgba(255,0,0,0.25), rgba(255,100,0,0.15)); padding: 12px 20px; border-radius: 12px; border: 2px solid rgba(255,0,0,0.5); margin-bottom: 10px; text-align: center; direction: rtl; animation: pulse-border 1.5s infinite;">
+                <div style="color: #FF4444; font-weight: 800; font-size: 1rem; text-shadow: 0 0 10px rgba(255,68,68,0.6);">🔒 الإرسال جارٍ... لا تغلق المتصفح أو التبويب!</div>
+                <div style="color: #FF8C00; font-size: 0.82rem; margin-top: 4px;">Do not close browser or tab — sending in progress</div>
             </div>
+            <style>
+            @keyframes pulse-border {{
+                0%   {{ box-shadow: 0 0 5px rgba(255,0,0,0.4); }}
+                50%  {{ box-shadow: 0 0 20px rgba(255,0,0,0.8); }}
+                100% {{ box-shadow: 0 0 5px rgba(255,0,0,0.4); }}
+            }}
+            </style>
             """, unsafe_allow_html=True)
             
             # Save attachment to temp file ONCE at the start of the batch
@@ -1168,11 +1195,14 @@ HR Manager"""
             
             # Clean up temp file and browser guard ONLY when done or stopped
             if not st.session_state.wa_running:
-                # Remove JS Guard
+                # Remove JS Guard - both capture and bubble phase
                 st.markdown("""
                 <script>
+                window.__wa_is_sending = false;
                 if (window.__wa_sending_guard) {
-                    window.removeEventListener('beforeunload', window.__wa_sending_guard);
+                    window.removeEventListener('beforeunload', window.__wa_sending_guard, true);
+                    window.removeEventListener('beforeunload', window.__wa_sending_guard, false);
+                    window.__wa_sending_guard = null;
                 }
                 </script>
                 """, unsafe_allow_html=True)
