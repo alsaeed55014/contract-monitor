@@ -2569,6 +2569,19 @@ if ('Notification' in window && Notification.permission === 'default') {
         saved_u = saved.get("u", "") if saved else ""
         saved_p = saved.get("p", "") if saved else ""
         
+        user_key = f"user_{suffix}"
+        pass_key = f"pass_{suffix}"
+        persist_key = f"persist_{suffix}"
+        
+        # Pre-fill session state keys if saved credentials exist
+        if saved:
+            if user_key not in st.session_state:
+                st.session_state[user_key] = saved_u
+            if pass_key not in st.session_state:
+                st.session_state[pass_key] = saved_p
+            if persist_key not in st.session_state:
+                st.session_state[persist_key] = True
+        
         with st.form(f"login_form_{suffix}"):
             # Row 1: Profile Image next to Welcome Text
             head_col1, head_col2 = st.columns([1, 2])
@@ -2580,13 +2593,13 @@ if ('Notification' in window && Notification.permission === 'default') {
                     b64 = get_base64_image(IMG_PATH)
                     st.markdown(f'<div style="text-align:right;"><img src="data:image/jpeg;base64,{b64}" class="profile-img-circular" style="width:80px; height:80px; border:2px solid #FFF; box-shadow: 0 0 15px #FFF;"></div>', unsafe_allow_html=True)
             
-            # Inputs - Do NOT pre-fill with saved data for security (prevents auto-fill on mobile WhatsApp links)
-            u = st.text_input(t("username", lang), value="", label_visibility="collapsed", placeholder=t("username", lang), key=f"user_{suffix}")
-            p = st.text_input(t("password", lang), value="", type="password", label_visibility="collapsed", placeholder=t("password", lang), key=f"pass_{suffix}")
+            # Inputs - Pre-fill with saved credentials
+            u = st.text_input(t("username", lang), value=saved_u, label_visibility="collapsed", placeholder=t("username", lang), key=user_key)
+            p = st.text_input(t("password", lang), value=saved_p, type="password", label_visibility="collapsed", placeholder=t("password", lang), key=pass_key)
             
             # Persistent check - White Neon Label
             persist_txt = "هل تريد حفظ الدخول" if lang == 'ar' else "Do you want to stay logged in?"
-            st.checkbox(persist_txt, value=(True if saved else False), key=f"persist_{suffix}")
+            st.checkbox(persist_txt, value=(True if saved else False), key=persist_key)
             
             submit = st.form_submit_button(t("login_btn", lang), width='stretch')
             lang_toggle = st.form_submit_button("En" if lang == "ar" else "عربي", width='stretch')
@@ -2600,7 +2613,7 @@ if ('Notification' in window && Notification.permission === 'default') {
                     login_loader.empty()
                     if user:
                         # Handle Persistence Logic
-                        should_persist = st.session_state.get(f"persist_{suffix}", False)
+                        should_persist = st.session_state.get(persist_key, False)
                         if should_persist:
                             save_credentials(u, p.strip())
                         else:
