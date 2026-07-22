@@ -317,8 +317,8 @@ def render_whatsapp_page():
                         st.error(lbl['not_connected'])
                     st.rerun()
 
-        # ── إذا لم يتصل، أوقف ولا تكمل ──
-        if status_emp != "Connected":
+        # ── إذا لم يتصل، أوقف ولا تكمل (إلا إذا كان الإرسال جاري بالفعل) ──
+        if status_emp != "Connected" and not st.session_state.get('wa_running', False):
             st.info("💡 " + ("قم بتشغيل المحرك ومسح الباركود أولاً للبدء بالإرسال." if is_ar else "Start the engine and scan the QR code first to begin sending."))
             st.markdown("---")
             return
@@ -520,8 +520,12 @@ def render_whatsapp_page():
                             # Use uniform for more natural random delay
                             random_delay = int(random.uniform(min_delay, max_delay))
                             delay_text = f"⏳ {'تأخير عشوائي' if is_ar else 'Random delay'}: {random_delay} {'ثانية' if is_ar else 'seconds'}"
-                            status_text.text(delay_text)
-                            time.sleep(random_delay)
+                            
+                            for s_sec in range(random_delay, 0, -1):
+                                status_text.text(f"{delay_text} ({s_sec}s)")
+                                if s_sec % 10 == 0:
+                                    st.session_state.wa_service.keep_alive()
+                                time.sleep(1)
                             
                             # Anti-ban: Secondary random micro-rest (1-3 seconds)
                             micro_rest = random.uniform(1.0, 3.0)
@@ -599,7 +603,7 @@ def render_whatsapp_page():
                 st.rerun()
 
     # 3. INPUT + BROADCAST
-    if status == "Connected":
+    if status == "Connected" or st.session_state.get('wa_running', False):
         st.markdown("---")
         
         # --- 🏗️ Linear Layout: Images Top, Main Middle, Review Bottom ---
@@ -1107,6 +1111,11 @@ HR Manager"""
                             wait_ph.warning(status_text)
                         else:
                             wait_ph.info(status_text)
+                        
+                        # 🛡️ Keep-Alive Heartbeat every 10s to keep Chrome active & prevent tab sleeping
+                        if i % 10 == 0:
+                            st.session_state.wa_service.keep_alive()
+
                         time.sleep(1)
                     wait_ph.empty()
 

@@ -67,7 +67,8 @@ class WhatsAppService:
         ua = self._get_random_ua(ver)
 
         def apply_stealth_args(o, is_uc=False):
-            o.add_argument("--headless=new")
+            if not is_uc:
+                o.add_argument("--headless=new")
             o.add_argument("--no-sandbox")
             o.add_argument("--disable-dev-shm-usage")
             o.add_argument("--disable-gpu")
@@ -82,6 +83,14 @@ class WhatsAppService:
             o.add_argument("--disable-browser-side-navigation")
             o.add_argument("--disable-features=IsolateOrigins,site-per-process")
             o.add_argument("--password-store=basic")
+            # 🛡️ 2026 Anti-Sleep & Memory Keep-Alive Arguments (Prevent Engine Shutdown & Tab Sleeping)
+            o.add_argument("--disable-background-timer-throttling")
+            o.add_argument("--disable-backgrounding-occluded-windows")
+            o.add_argument("--disable-renderer-backgrounding")
+            o.add_argument("--memory-pressure-off")
+            o.add_argument("--js-flags=--max-old-space-size=4096")
+            if not is_uc:
+                o.add_argument(f"--user-data-dir={self.session_path}")
 
         # --- STREAMLIT CLOUD PYTHON 3.12/3.13 DISTUTILS PATCH ---
         import sys
@@ -118,6 +127,7 @@ class WhatsAppService:
                 print(f"[{time.strftime('%H:%M:%S')}] Initializing UC (Ver: {ver}, Binary: {binary})...")
                 self.driver = uc.Chrome(
                     options=opts, 
+                    user_data_dir=self.session_path,
                     browser_executable_path=binary,
                     use_subprocess=False, # Changed to False for better stability in restricted environments
                     headless=False, 
@@ -213,18 +223,46 @@ class WhatsAppService:
         except: pass
 
 
+    def keep_alive(self):
+        """Pings Chrome JavaScript engine to prevent tab sleeping, renderer suspension, and DevTools timeout"""
+        if not self.driver: return False
+        try:
+            self.driver.execute_script("return document.readyState;")
+            return True
+        except Exception as e:
+            print(f"[{time.strftime('%H:%M:%S')}] Keep-alive check failed: {e}")
+            return False
+
     def get_status(self):
         from selenium.webdriver.common.by import By
+        import streamlit as st
         if not self.driver: return "Disconnected"
         try:
-            self.driver.find_element(By.XPATH, '//*[@id="side"]')
-            return "Connected"
+            # Verify browser window process is responsive
+            _ = self.driver.window_handles
         except:
-            try:
-                self.driver.find_element(By.CSS_SELECTOR, "canvas")
+            self.driver = None
+            return "Disconnected"
+
+        try:
+            # Check for active WhatsApp DOM elements
+            elements = self.driver.find_elements(By.XPATH, '//*[@id="side"] | //div[@id="main"] | //div[@contenteditable="true"]')
+            if elements:
+                return "Connected"
+            
+            canvas = self.driver.find_elements(By.CSS_SELECTOR, "canvas")
+            if canvas:
                 return "Awaiting Login"
-            except:
-                return "Loading..."
+
+            # If sending loop is running, maintain Connected status so UI does not drop during page navigation
+            if st.session_state.get('wa_running', False):
+                return "Connected"
+
+            return "Loading..."
+        except:
+            if st.session_state.get('wa_running', False) and self.driver:
+                return "Connected"
+            return "Disconnected"
 
     def wait_for_connection(self, timeout=30):
         from selenium.webdriver.common.by import By
