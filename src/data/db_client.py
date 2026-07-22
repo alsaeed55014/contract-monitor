@@ -6,6 +6,9 @@ import time
 import streamlit as st
 import hashlib
 
+WORKERS_SHEET_URL = "https://docs.google.com/spreadsheets/d/1u87sScIve_-xT_jDG56EKFMXegzAxOqwVJCh3Irerrw/edit"
+CUSTOMER_SHEET_URL = "https://docs.google.com/spreadsheets/d/1ZlLGXqbFSnKrr2J-PRnxRhxykwrNOgOE6Mb34Zei_FU/edit"
+
 class DBClient:
     _instance = None
     _data_caches = {}

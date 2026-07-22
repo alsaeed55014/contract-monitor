@@ -1768,15 +1768,6 @@ div[data-testid="stHorizontalBlock"]:has(.nat-flag-badge) .nat-clear-badge .stBu
                         st.rerun()
                     st.markdown('</div>', unsafe_allow_html=True)
 
-            if has_clear:
-                with badge_cols[-1]:
-                    clear_lbl = "❌ الكل" if lang == 'ar' else "❌ All"
-                    st.markdown('<div class="nat-clear-badge">', unsafe_allow_html=True)
-                    if st.button(clear_lbl, key="nbadge_v2_" + key_prefix + "___clear__"):
-                        st.session_state["selected_nat_" + key_prefix] = None
-                        st.rerun()
-                    st.markdown('</div>', unsafe_allow_html=True)
-
         # Apply filtering to the dataframe
         if active_code:
             df = df[df_nat_codes == active_code]
@@ -5631,7 +5622,7 @@ def render_order_processing_content():
                             # Combine both notes with separator
                             combined_notes = f"AR: {ar_notes} | EN: {en_notes}" if ar_notes or en_notes else ""
                             
-                            url = "https://docs.google.com/spreadsheets/d/1u87sScIve_-xT_jDG56EKFMXegzAxOqwVJCh3Irerrw/edit"
+                            url = "https://docs.google.com/spreadsheets/d/1ZlLGXqbFSnKrr2J-PRnxRhxykwrNOgOE6Mb34Zei_FU/edit"
                             success, msg = st.session_state.db.update_row(row_num, c_notes, combined_notes, url=url)
                             if success:
                                 st.toast("✅ تم حفظ الملاحظات" if lang == 'ar' else "✅ Notes saved successfully")
