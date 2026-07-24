@@ -160,6 +160,9 @@ def render_whatsapp_page():
                 st.session_state.wa_service = WhatsAppService()
         except:
             pass
+        
+        # Keep the WhatsApp connection alive every time we render the page!
+        st.session_state.wa_service.keep_alive()
 
     if 'wa_logs' not in st.session_state: st.session_state.wa_logs = []
     if 'wa_running' not in st.session_state: st.session_state.wa_running = False

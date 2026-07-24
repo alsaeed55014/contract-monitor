@@ -83,12 +83,24 @@ class WhatsAppService:
             o.add_argument("--disable-browser-side-navigation")
             o.add_argument("--disable-features=IsolateOrigins,site-per-process")
             o.add_argument("--password-store=basic")
-            # 🛡️ 2026 Anti-Sleep & Memory Keep-Alive Arguments (Prevent Engine Shutdown & Tab Sleeping)
+            # 🛡️ 2026 Enhanced Anti-Sleep & Memory Keep-Alive Arguments
             o.add_argument("--disable-background-timer-throttling")
             o.add_argument("--disable-backgrounding-occluded-windows")
             o.add_argument("--disable-renderer-backgrounding")
             o.add_argument("--memory-pressure-off")
             o.add_argument("--js-flags=--max-old-space-size=4096")
+            o.add_argument("--disable-hang-monitor")
+            o.add_argument("--disable-client-side-phishing-detection")
+            o.add_argument("--disable-component-update")
+            o.add_argument("--disable-domain-reliability")
+            o.add_argument("--disable-sync")
+            o.add_argument("--disable-translate")
+            o.add_argument("--metrics-recording-only")
+            o.add_argument("--no-first-run")
+            o.add_argument("--safebrowsing-disable-auto-update")
+            o.add_argument("--enable-automation=false")
+            o.add_argument("--autoplay-policy=no-user-gesture-required")
+            o.add_argument("--disable-features=VizDisplayCompositor")
             if not is_uc:
                 o.add_argument(f"--user-data-dir={self.session_path}")
 
@@ -224,10 +236,17 @@ class WhatsAppService:
 
 
     def keep_alive(self):
-        """Pings Chrome JavaScript engine to prevent tab sleeping, renderer suspension, and DevTools timeout"""
+        """Enhanced keep-alive to prevent tab sleeping, renderer suspension, and DevTools timeout"""
         if not self.driver: return False
         try:
-            self.driver.execute_script("return document.readyState;")
+            # Run multiple small JS commands to keep the renderer active
+            self.driver.execute_script("""
+                // Keep the page active
+                document.hasFocus();
+                // Touch the DOM to prevent optimizations
+                document.body.classList.toggle('keep-alive-dummy');
+                document.body.classList.toggle('keep-alive-dummy');
+            """)
             return True
         except Exception as e:
             print(f"[{time.strftime('%H:%M:%S')}] Keep-alive check failed: {e}")
@@ -238,11 +257,12 @@ class WhatsAppService:
         import streamlit as st
         if not self.driver: return "Disconnected"
         try:
-            # Verify browser window process is responsive
+            # Verify browser window process is responsive (don't kill driver on failure!)
             _ = self.driver.window_handles
-        except:
-            self.driver = None
-            return "Disconnected"
+        except Exception as e:
+            print(f"[{time.strftime('%H:%M:%S')}] Window handles check failed: {e}")
+            # Don't set self.driver = None here, just note the issue
+            pass
 
         try:
             # Check for active WhatsApp DOM elements
@@ -259,10 +279,12 @@ class WhatsAppService:
                 return "Connected"
 
             return "Loading..."
-        except:
+        except Exception as e:
+            print(f"[{time.strftime('%H:%M:%S')}] DOM check failed: {e}")
             if st.session_state.get('wa_running', False) and self.driver:
                 return "Connected"
-            return "Disconnected"
+            # Don't return Disconnected immediately, maybe temporary!
+            return "Loading..."
 
     def wait_for_connection(self, timeout=30):
         from selenium.webdriver.common.by import By

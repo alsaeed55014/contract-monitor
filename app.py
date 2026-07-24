@@ -56,18 +56,41 @@ class AuthManager:
         self.is_bilingual = True # Version marker for session refresh
         self.load_users()
 
+    def get_default_user(self):
+        # Return all default fields for a user
+        return {
+            "password": "",
+            "role": "viewer",
+            "first_name_ar": "",
+            "father_name_ar": "",
+            "first_name_en": "",
+            "father_name_en": "",
+            "permissions": [],
+            "avatar": None
+        }
+
     def load_users(self):
+        default_user = self.get_default_user()
+        
         if os.path.exists(self.users_file):
             try:
                 with open(self.users_file, 'r', encoding='utf-8') as f:
                     data = json.load(f)
                     self.users = data.get("users", {})
+                
+                # Apply default fields to existing users (preserve old data)
+                for username, user_data in self.users.items():
+                    # For each default field, if it's missing in user_data, add it
+                    for key, default_value in default_user.items():
+                        if key not in user_data:
+                            user_data[key] = default_value
+                            
             except Exception as e:
                 # Store error for UI feedback
                 self.load_error = str(e)
                 self.users = {}
         
-        # Ensure Default Admin
+        # Ensure Default Admin (only if not exists)
         if "admin" not in self.users:
             self.users["admin"] = {
                 "password": self.hash_password("266519111"), # User's preferred password
@@ -76,8 +99,16 @@ class AuthManager:
                 "father_name_ar": "الوزان",
                 "first_name_en": "Alsaeed",
                 "father_name_en": "Alwazzan",
-                "permissions": ["all"]
+                "permissions": ["all"],
+                "avatar": None
             }
+            self.save_users()
+        else:
+            # If admin exists, make sure it has all default fields too!
+            admin_data = self.users["admin"]
+            for key, default_value in default_user.items():
+                if key not in admin_data:
+                    admin_data[key] = default_value
             self.save_users()
 
     def save_users(self):
@@ -102,13 +133,15 @@ class AuthManager:
         username = username.lower().strip()
         if username in self.users:
             return False, "User already exists"
-        self.users[username] = {
-            "password": self.hash_password(password),
-            "role": role,
-            "first_name_ar": f_ar, "father_name_ar": fa_ar,
-            "first_name_en": f_en, "father_name_en": fa_en,
-            "permissions": ["all"] if role == "admin" else []
-        }
+        new_user = self.get_default_user()
+        new_user["password"] = self.hash_password(password)
+        new_user["role"] = role
+        new_user["first_name_ar"] = f_ar
+        new_user["father_name_ar"] = fa_ar
+        new_user["first_name_en"] = f_en
+        new_user["father_name_en"] = fa_en
+        new_user["permissions"] = ["all"] if role == "admin" else []
+        self.users[username] = new_user
         self.save_users()
         return True, "User added successfully"
 
@@ -200,28 +233,16 @@ class AuthManager:
         return self.users.get(target, {}).get("avatar", None)
 
 def load_saved_credentials():
-    if os.path.exists(PERSIST_FILE):
-        try:
-            with open(PERSIST_FILE, 'r', encoding='utf-8') as f:
-                return json.load(f)
-        except:
-            return None
+    # Do NOT load credentials from server to avoid sharing between users
     return None
 
 def save_credentials(u, p):
-    try:
-        os.makedirs(os.path.dirname(PERSIST_FILE), exist_ok=True)
-        with open(PERSIST_FILE, 'w', encoding='utf-8') as f:
-            json.dump({"u": u, "p": p}, f)
-    except Exception as e:
-        print(f"Error saving credentials: {e}")
+    # Do NOT save credentials to server to avoid sharing between users
+    pass
 
 def clear_credentials():
-    if os.path.exists(PERSIST_FILE):
-        try:
-            os.remove(PERSIST_FILE)
-        except:
-            pass
+    # Do nothing, since we don't save credentials anymore
+    pass
 
 @st.cache_data(ttl=3600, show_spinner=False)
 def get_base64_image(image_path):
@@ -2565,22 +2586,8 @@ if ('Notification' in window && Notification.permission === 'default') {
     st.markdown(f'<div id="login-container-wrapper"><div class="luxury-main-title">{title_text}</div>', unsafe_allow_html=True)
     
     def render_login_box(suffix):
-        saved = load_saved_credentials()
-        saved_u = saved.get("u", "") if saved else ""
-        saved_p = saved.get("p", "") if saved else ""
-        
         user_key = f"user_{suffix}"
         pass_key = f"pass_{suffix}"
-        persist_key = f"persist_{suffix}"
-        
-        # Pre-fill session state keys if saved credentials exist
-        if saved:
-            if user_key not in st.session_state:
-                st.session_state[user_key] = saved_u
-            if pass_key not in st.session_state:
-                st.session_state[pass_key] = saved_p
-            if persist_key not in st.session_state:
-                st.session_state[persist_key] = True
         
         with st.form(f"login_form_{suffix}"):
             # Row 1: Profile Image next to Welcome Text
@@ -2593,13 +2600,9 @@ if ('Notification' in window && Notification.permission === 'default') {
                     b64 = get_base64_image(IMG_PATH)
                     st.markdown(f'<div style="text-align:right;"><img src="data:image/jpeg;base64,{b64}" class="profile-img-circular" style="width:80px; height:80px; border:2px solid #FFF; box-shadow: 0 0 15px #FFF;"></div>', unsafe_allow_html=True)
             
-            # Inputs - Pre-fill with saved credentials
-            u = st.text_input(t("username", lang), value=saved_u, label_visibility="collapsed", placeholder=t("username", lang), key=user_key)
-            p = st.text_input(t("password", lang), value=saved_p, type="password", label_visibility="collapsed", placeholder=t("password", lang), key=pass_key)
-            
-            # Persistent check - White Neon Label
-            persist_txt = "هل تريد حفظ الدخول" if lang == 'ar' else "Do you want to stay logged in?"
-            st.checkbox(persist_txt, value=(True if saved else False), key=persist_key)
+            # Inputs - NO pre-filled credentials
+            u = st.text_input(t("username", lang), value="", label_visibility="collapsed", placeholder=t("username", lang), key=user_key)
+            p = st.text_input(t("password", lang), value="", type="password", label_visibility="collapsed", placeholder=t("password", lang), key=pass_key)
             
             submit = st.form_submit_button(t("login_btn", lang), width='stretch')
             lang_toggle = st.form_submit_button("En" if lang == "ar" else "عربي", width='stretch')
@@ -2612,13 +2615,6 @@ if ('Notification' in window && Notification.permission === 'default') {
                     user = st.session_state.auth.authenticate(u, p.strip())
                     login_loader.empty()
                     if user:
-                        # Handle Persistence Logic
-                        should_persist = st.session_state.get(persist_key, False)
-                        if should_persist:
-                            save_credentials(u, p.strip())
-                        else:
-                            clear_credentials()
-                            
                         user['username'] = u.lower().strip()
                         st.session_state.user = user
                         st.session_state.last_login_time = time.time()
