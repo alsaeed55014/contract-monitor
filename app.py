@@ -50,7 +50,7 @@ except ImportError:
 
 # 2. Active Users Tracking
 ACTIVE_USERS_FILE = os.path.join(BASE_DIR, "src", "active_users.json")
-HEARTBEAT_TIMEOUT = 30  # seconds - consider user inactive after this time
+HEARTBEAT_TIMEOUT = 120  # seconds - consider user inactive after this time (2 minutes)
 
 def load_active_users():
     if os.path.exists(ACTIVE_USERS_FILE):
@@ -3445,6 +3445,63 @@ def dashboard():
             if st.session_state.get('_notif_refresh'):
                 typ, msg = st.session_state.pop('_notif_refresh')
                 show_toast(msg, typ, container=refresh_notif)
+            
+            # 🟢 Active Users Section (Dedicated for Admin in Sidebar)
+            st.sidebar.divider()
+            active_users_expander_title = "🟢 " + ("المستخدمون المتصلون الآن" if lang == 'ar' else "Users Online Now")
+            with st.sidebar.expander(active_users_expander_title, expanded=True):
+                # Refresh active users
+                active_users = get_active_users()
+                if not active_users:
+                    st.info("ℹ️ " + ("لا يوجد مستخدمون متصلون حالياً" if lang == 'ar' else "No users online right now"))
+                else:
+                    st.success(f"✅ " + (f"عدد المتصلين: {len(active_users)}" if lang == 'ar' else f"Online users: {len(active_users)}"))
+                    for username in sorted(active_users.keys()):
+                        user_data = auth_manager.users.get(username, {})
+                        # Get name
+                        if lang == 'ar':
+                            display_name = f"{user_data.get('first_name_ar', '')} {user_data.get('father_name_ar', '')}".strip()
+                        else:
+                            display_name = f"{user_data.get('first_name_en', '')} {user_data.get('father_name_en', '')}".strip()
+                        if not display_name:
+                            display_name = username
+                        # Get avatar
+                        u_avatar = user_data.get('avatar')
+                        if u_avatar:
+                            av_html = f'<img src="data:image/png;base64,{u_avatar}" style="width:36px;height:36px;border-radius:50%;border:2px solid #D4AF37;object-fit:cover;">'
+                        else:
+                            initial = display_name[0].upper() if display_name else "U"
+                            av_html = f'<div style="width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#D4AF37,#8B7300);display:flex;align-items:center;justify-content:center;border:2px solid #D4AF37;font-size:16px;font-weight:bold;color:#000;">{initial}</div>'
+                        # Get last seen time
+                        last_seen_str = ""
+                        try:
+                            last_seen_dt = datetime.fromisoformat(active_users[username]["last_seen"])
+                            if last_seen_dt.tzinfo is None:
+                                last_seen_dt = SAUDI_TZ.localize(last_seen_dt)
+                            time_diff = (datetime.now(SAUDI_TZ) - last_seen_dt).total_seconds()
+                            if time_diff < 60:
+                                last_seen_str = "الآن" if lang == 'ar' else "Now"
+                            elif time_diff < 3600:
+                                mins = int(time_diff // 60)
+                                last_seen_str = f"منذ {mins} دقيقة" if lang == 'ar' else f"{mins} min ago"
+                            else:
+                                hrs = int(time_diff // 3600)
+                                last_seen_str = f"منذ {hrs} ساعة" if lang == 'ar' else f"{hrs} hours ago"
+                        except:
+                            last_seen_str = ""
+                        # Render user row
+                        st.markdown(f"""
+                        <div style="display:flex;align-items:center;gap:10px;padding:8px;background:rgba(212,175,55,0.08);border-radius:10px;margin-bottom:6px;border:1px solid rgba(212,175,55,0.2);">
+                            {av_html}
+                            <div style="flex-grow:1;min-width:0;">
+                                <div style="color:#FFF;font-weight:600;font-size:0.9rem;display:flex;align-items:center;gap:6px;">
+                                    {display_name}
+                                    <span style="width:8px;height:8px;border-radius:50%;background:#00FF41;box-shadow:0 0 8px rgba(0,255,65,0.8);flex-shrink:0;"></span>
+                                </div>
+                                <div style="color:rgba(255,255,255,0.6);font-size:0.7rem;">@{username}</div>
+                            </div>
+                        </div>
+                        """, unsafe_allow_html=True)
         
         st.markdown("<div style='margin: 15px 0;'></div>", unsafe_allow_html=True)
         
