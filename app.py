@@ -2671,8 +2671,10 @@ if ('Notification' in window && Notification.permission === 'default') {
                     user = st.session_state.auth.authenticate(u, p.strip())
                     login_loader.empty()
                     if user:
-                        user['username'] = u.lower().strip()
+                        uname = u.lower().strip()
+                        user['username'] = uname
                         st.session_state.user = user
+                        st.session_state.username = uname  # Explicitly set username for tracking!
                         st.session_state.last_login_time = time.time()
                         st.session_state.show_welcome = True
                         
@@ -3117,6 +3119,9 @@ if ('Notification' in window) {
 
         # Update user heartbeat safely
         current_username = st.session_state.get('username', '') or st.session_state.user.get('username', '')
+        # Ensure st.session_state.username is always set for consistency!
+        if current_username and not st.session_state.get('username'):
+            st.session_state.username = current_username
         if current_username:
             update_user_heartbeat(current_username)
         

@@ -413,8 +413,10 @@ def login_screen(auth_manager, t, toggle_lang, load_saved_credentials, save_cred
                     user = auth_manager.authenticate(u, p.strip())
                     login_loader.empty()
                     if user:
-                        user['username'] = u.lower().strip()
+                        uname = u.lower().strip()
+                        user['username'] = uname
                         st.session_state.user = user
+                        st.session_state.username = uname  # Explicitly set username for tracking!
                         st.session_state.show_welcome = True
                         st.markdown("<style>div[data-testid='stForm'] { display: none !important; }</style>", unsafe_allow_html=True)
                         st.success("جاري الدخول... | Loading..." if lang == 'ar' else "Loading... | Entering")
