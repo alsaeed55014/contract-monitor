@@ -3191,7 +3191,12 @@ if ('Notification' in window) {
                     # Get user's avatar
                     user_avatar = user_data.get('avatar')
                     if user_avatar:
-                        user_avatar_html = f'<img src="data:image/png;base64,{user_avatar}" class="banner-avatar" style="width:40px; height:40px; border-width:1px;">'
+                        # Fix double data:image/png;base64, prefix
+                        if user_avatar.startswith('data:image'):
+                            av_src = user_avatar
+                        else:
+                            av_src = f'data:image/png;base64,{user_avatar}'
+                        user_avatar_html = f'<img src="{av_src}" class="banner-avatar" style="width:40px; height:40px; border-width:1px;">'
                     else:
                         user_avatar_html = f'<div style="width:40px; height:40px; border-radius:50%; background: linear-gradient(135deg, #D4AF37, #8B7300); display:flex; align-items:center; justify-content:center; border:1px solid #D4AF37; box-shadow:0 0 10px rgba(212,175,55,0.3);"><span style="font-size:16px; color:#000; font-weight:bold;">{user_name[0].upper() if user_name else "U"}</span></div>'
                     # Create user card
@@ -3307,8 +3312,12 @@ def dashboard():
             if str(avatar_val).startswith('data:'):
                 avatar_html = f'<img src="{avatar_val}" style="width:80px;height:80px;border-radius:50%;object-fit:cover;border:2px solid #D4AF37;" />'
             else:
-                # Legacy fallback
-                avatar_html = f'<img src="data:image/png;base64,{avatar_val}" style="width:80px;height:80px;border-radius:50%;object-fit:cover;border:2px solid #D4AF37;" />'
+                # Legacy fallback - fix double prefix
+                if avatar_val.startswith('data:image'):
+                    av_src = avatar_val
+                else:
+                    av_src = f'data:image/png;base64,{avatar_val}'
+                avatar_html = f'<img src="{av_src}" style="width:80px;height:80px;border-radius:50%;object-fit:cover;border:2px solid #D4AF37;" />'
         else:
             avatar_html = '<div style="width:80px;height:80px;border-radius:50%;background:linear-gradient(135deg,#D4AF37,#8B7520);display:flex;align-items:center;justify-content:center;font-size:36px;">👤</div>'
 
@@ -3564,7 +3573,12 @@ def dashboard():
                         # Get avatar
                         u_avatar = user_data.get('avatar')
                         if u_avatar:
-                            av_html = f'<img src="data:image/png;base64,{u_avatar}" style="width:36px;height:36px;border-radius:50%;border:2px solid #D4AF37;object-fit:cover;">'
+                            # Fix double data:image/png;base64, prefix
+                            if u_avatar.startswith('data:image'):
+                                av_src = u_avatar
+                            else:
+                                av_src = f'data:image/png;base64,{u_avatar}'
+                            av_html = f'<img src="{av_src}" style="width:36px;height:36px;border-radius:50%;border:2px solid #D4AF37;object-fit:cover;">'
                         else:
                             initial = display_name[0].upper() if display_name else "U"
                             av_html = f'<div style="width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#D4AF37,#8B7300);display:flex;align-items:center;justify-content:center;border:2px solid #D4AF37;font-size:16px;font-weight:bold;color:#000;">{initial}</div>'
