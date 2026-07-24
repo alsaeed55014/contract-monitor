@@ -3115,9 +3115,10 @@ if ('Notification' in window) {
 </script>
 """)
 
-        # Update user heartbeat
-        current_username = st.session_state.username
-        update_user_heartbeat(current_username)
+        # Update user heartbeat safely
+        current_username = st.session_state.get('username', '') or st.session_state.user.get('username', '')
+        if current_username:
+            update_user_heartbeat(current_username)
         
         # Build active users section if admin
         active_users_section = ""
