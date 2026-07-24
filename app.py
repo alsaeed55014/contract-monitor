@@ -48,7 +48,60 @@ except ImportError:
     from core.matcher import CandidateMatcher, format_match_result, _find_city_region, _fuzzy_match, REGION_PROXIMITY, REGION_MAP
     print(">>> DEBUG: Project modules (core.*) imported successfully via fallback")
 
-# 2. Local Auth Class to prevent Import/Sync Errors
+# 2. Active Users Tracking
+ACTIVE_USERS_FILE = os.path.join(BASE_DIR, "src", "active_users.json")
+HEARTBEAT_TIMEOUT = 30  # seconds - consider user inactive after this time
+
+def load_active_users():
+    if os.path.exists(ACTIVE_USERS_FILE):
+        try:
+            with open(ACTIVE_USERS_FILE, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except:
+            return {}
+    return {}
+
+def save_active_users(active_users):
+    try:
+        with open(ACTIVE_USERS_FILE, 'w', encoding='utf-8') as f:
+            json.dump(active_users, f, ensure_ascii=False, indent=4)
+    except Exception as e:
+        print(f"Error saving active users: {e}")
+
+def update_user_heartbeat(username):
+    active_users = load_active_users()
+    active_users[username] = {
+        "last_seen": datetime.now(SAUDI_TZ).isoformat()
+    }
+    save_active_users(active_users)
+
+def get_active_users():
+    active_users = load_active_users()
+    current_time = datetime.now(SAUDI_TZ)
+    # Filter out inactive users
+    filtered_users = {}
+    for username, data in active_users.items():
+        try:
+            last_seen = datetime.fromisoformat(data["last_seen"])
+            # Timezone-aware comparison
+            if last_seen.tzinfo is None:
+                last_seen = SAUDI_TZ.localize(last_seen)
+            if (current_time - last_seen).total_seconds() < HEARTBEAT_TIMEOUT:
+                filtered_users[username] = data
+        except:
+            pass
+    # Clean up the file (remove inactive users)
+    if len(filtered_users) != len(active_users):
+        save_active_users(filtered_users)
+    return filtered_users
+
+def remove_user_from_active(username):
+    active_users = load_active_users()
+    if username in active_users:
+        del active_users[username]
+        save_active_users(active_users)
+
+# 3. Local Auth Class to prevent Import/Sync Errors
 class AuthManager:
     def __init__(self, users_file_path):
         self.users_file = users_file_path
@@ -2085,6 +2138,9 @@ if 'force_logout_inactive' not in st.session_state:
 # Handle forced logout from inactivity (triggered by JS reload with ?logout=inactive)
 query_params = st.query_params
 if query_params.get('logout') == 'inactive':
+    # Remove user from active users list
+    if 'username' in st.session_state:
+        remove_user_from_active(st.session_state.username)
     st.session_state.user = None
     st.session_state.force_logout_inactive = False
     clear_credentials()
@@ -3059,9 +3115,50 @@ if ('Notification' in window) {
 </script>
 """)
 
+        # Update user heartbeat
+        current_username = st.session_state.username
+        update_user_heartbeat(current_username)
+        
+        # Build active users section if admin
+        active_users_section = ""
+        if st.session_state.user.get('role') == 'admin':
+            active_users = get_active_users()
+            if active_users:
+                user_cards = []
+                for username in active_users.keys():
+                    user_data = auth_manager.users.get(username, {})
+                    # Get user's name
+                    user_name = ""
+                    if lang == 'ar':
+                        user_name = f"{user_data.get('first_name_ar', '')} {user_data.get('father_name_ar', '')}".strip()
+                    else:
+                        user_name = f"{user_data.get('first_name_en', '')} {user_data.get('father_name_en', '')}".strip()
+                    if not user_name:
+                        user_name = username
+                    # Get user's avatar
+                    user_avatar = user_data.get('avatar')
+                    if user_avatar:
+                        user_avatar_html = f'<img src="data:image/png;base64,{user_avatar}" class="banner-avatar" style="width:40px; height:40px; border-width:1px;">'
+                    else:
+                        user_avatar_html = f'<div style="width:40px; height:40px; border-radius:50%; background: linear-gradient(135deg, #D4AF37, #8B7300); display:flex; align-items:center; justify-content:center; border:1px solid #D4AF37; box-shadow:0 0 10px rgba(212,175,55,0.3);"><span style="font-size:16px; color:#000; font-weight:bold;">{user_name[0].upper() if user_name else "U"}</span></div>'
+                    # Create user card
+                    user_cards.append(f"""
+                        <div style="display: flex; align-items: center; gap: 8px; background: rgba(212,175,55,0.1); padding: 5px 10px; border-radius: 20px; border: 1px solid rgba(212,175,55,0.3);">
+                            {user_avatar_html}
+                            <span style="color: #FFF; font-size: 0.8rem; font-weight: 500;">{user_name}</span>
+                            <span style="width:8px; height:8px; border-radius:50%; background: #00FF41; box-shadow:0 0 10px rgba(0,255,65,0.8);"></span>
+                        </div>
+                    """)
+                active_users_section = f"""
+                <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                    <span style="color: rgba(255,255,255,0.8); font-size: 0.8rem; font-weight: 600; margin-right: 5px;">{"المستخدمون المتصلون" if lang == 'ar' else "Active Users"}:</span>
+                    {"".join(user_cards)}
+                </div>
+                """
+        
         st.markdown(f"""
     <div class="persistent-top-banner">
-        <div style="display: flex; align-items: center; gap: 20px;">
+        <div style="display: flex; align-items: center; gap: 20px; flex-wrap: wrap;">
              <div class="banner-user-info">
                 {avatar_html}
             </div>
@@ -3069,6 +3166,7 @@ if ('Notification' in window) {
                 <p class="banner-welcome-msg">{welcome_prefix} {full_name}</p>
                 <p class="banner-subtext">{program_name}</p>
             </div>
+            {active_users_section}
         </div>
         <div style="display: flex; align-items: center; gap: 15px;">
             <div style="text-align: right;">
@@ -3345,6 +3443,9 @@ def dashboard():
         st.markdown("<div style='margin: 15px 0;'></div>", unsafe_allow_html=True)
         
         if st.button(t("logout", lang), type="primary", width='stretch'):
+            # Remove user from active users list
+            if 'username' in st.session_state:
+                remove_user_from_active(st.session_state.username)
             st.session_state.user = None
             st.rerun()
         
