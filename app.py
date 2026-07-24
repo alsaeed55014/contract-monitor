@@ -3152,7 +3152,7 @@ if ('Notification' in window) {
             if active_users:
                 user_cards = []
                 for username in active_users.keys():
-                    user_data = auth_manager.users.get(username, {})
+                    user_data = st.session_state.auth.users.get(username, {})
                     # Get user's name
                     user_name = ""
                     if lang == 'ar':
@@ -3491,7 +3491,7 @@ def dashboard():
                 else:
                     st.success(f"✅ " + (f"عدد المتصلين: {len(active_users)}" if lang == 'ar' else f"Online users: {len(active_users)}"))
                     for username in sorted(active_users.keys()):
-                        user_data = auth_manager.users.get(username, {})
+                        user_data = st.session_state.auth.users.get(username, {})
                         # Get name
                         if lang == 'ar':
                             display_name = f"{user_data.get('first_name_ar', '')} {user_data.get('father_name_ar', '')}".strip()
