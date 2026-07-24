@@ -57,7 +57,17 @@ def load_active_users():
         try:
             with open(ACTIVE_USERS_FILE, 'r', encoding='utf-8') as f:
                 return json.load(f)
-        except:
+        except Exception as e:
+            # If file is corrupted, backup and return empty
+            print(f"[WARN] Corrupted active_users.json detected: {e}")
+            try:
+                backup_path = ACTIVE_USERS_FILE + f".corrupted.{datetime.now().strftime('%Y%m%d_%H%M%S')}.bak"
+                import shutil
+                shutil.copy2(ACTIVE_USERS_FILE, backup_path)
+                # Remove the corrupted file so it's recreated fresh
+                os.remove(ACTIVE_USERS_FILE)
+            except Exception as be:
+                print(f"[ERROR] Failed to backup/clean active_users.json: {be}")
             return {}
     return {}
 
@@ -141,6 +151,16 @@ class AuthManager:
             except Exception as e:
                 # Store error for UI feedback
                 self.load_error = str(e)
+                print(f"[WARN] Corrupted users.json detected: {e}")
+                # Create backup of corrupted file
+                try:
+                    backup_path = self.users_file + f".corrupted.{datetime.now().strftime('%Y%m%d_%H%M%S')}.bak"
+                    import shutil
+                    shutil.copy2(self.users_file, backup_path)
+                    print(f"[INFO] Corrupted users.json backed up to: {backup_path}")
+                except Exception as be:
+                    print(f"[ERROR] Failed to backup corrupted users.json: {be}")
+                # Reset users to empty to start fresh
                 self.users = {}
         
         # Ensure Default Admin (only if not exists)
