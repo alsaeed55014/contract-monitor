@@ -73,8 +73,20 @@ def load_active_users():
 
 def save_active_users(active_users):
     try:
-        with open(ACTIVE_USERS_FILE, 'w', encoding='utf-8') as f:
-            json.dump(active_users, f, ensure_ascii=False, indent=4)
+        # ATOMIC WRITE for active_users.json too!
+        import tempfile
+        temp_dir = os.path.dirname(ACTIVE_USERS_FILE) or "."
+        with tempfile.NamedTemporaryFile(
+            mode='w',
+            encoding='utf-8',
+            dir=temp_dir,
+            delete=False,
+            suffix='.tmp',
+            prefix='active_users_save_'
+        ) as tmp_f:
+            json.dump(active_users, tmp_f, ensure_ascii=False, indent=4)
+            tmp_path = tmp_f.name
+        os.replace(tmp_path, ACTIVE_USERS_FILE)
     except Exception as e:
         print(f"Error saving active users: {e}")
 
@@ -186,8 +198,23 @@ class AuthManager:
 
     def save_users(self):
         try:
-            with open(self.users_file, 'w', encoding='utf-8') as f:
-                json.dump({"users": self.users}, f, ensure_ascii=False, indent=4)
+            # ATOMIC WRITE: Write to temp file FIRST, then rename!
+            # (Prevents users.json corruption if server crashes/reboots during write)
+            import tempfile
+            temp_dir = os.path.dirname(self.users_file) or "."
+            # Create temp file in SAME directory as users.json (so rename is atomic)
+            with tempfile.NamedTemporaryFile(
+                mode='w',
+                encoding='utf-8',
+                dir=temp_dir,
+                delete=False,
+                suffix='.tmp',
+                prefix='users_save_'
+            ) as tmp_f:
+                json.dump({"users": self.users}, tmp_f, ensure_ascii=False, indent=2)
+                tmp_path = tmp_f.name
+            # Atomic rename - replaces old file in ONE operation (OS-level safe)
+            os.replace(tmp_path, self.users_file)
         except Exception as e:
             print(f"Error saving users: {e}")
 
@@ -3215,11 +3242,46 @@ def dashboard():
     if current_username:
         update_user_heartbeat(current_username)
 
-    # 2. Auto-Refresh page every 30 seconds to keep heartbeat alive
-    # (Streamlit only reruns on user interaction, so we need forced refresh!)
-    st.markdown("""
-    <meta http-equiv="refresh" content="30">
-    """, unsafe_allow_html=True)
+    # 2. SMART Auto-Refresh page every 35 seconds BUT ONLY IF USER IS NOT TYPING!
+    # (Prevents breaking form submissions / password input / OTP input!)
+    st.components.v1.html("""
+<script>
+(function() {
+    const REFRESH_INTERVAL = 35000; // 35 seconds
+    function isUserTyping() {
+        const active = document.activeElement;
+        if (!active) return false;
+        // Skip refresh if user is in any input field (password, text, number, textarea)
+        const tag = active.tagName.toLowerCase();
+        if (tag === 'input' || tag === 'textarea' || tag === 'select') {
+            return true;
+        }
+        // Also skip if any modal is open
+        if (document.querySelector('[role="dialog"]')) {
+            return true;
+        }
+        return false;
+    }
+    function scheduleRefresh() {
+        setTimeout(function() {
+            if (isUserTyping()) {
+                // User is busy - wait 5 more seconds and check again
+                setTimeout(scheduleRefresh, 5000);
+            } else {
+                // Safe to refresh - reload page
+                window.location.reload();
+            }
+        }, REFRESH_INTERVAL);
+    }
+    // Start the schedule after page loads
+    if (document.readyState === 'complete' || document.readyState === 'interactive') {
+        scheduleRefresh();
+    } else {
+        window.addEventListener('DOMContentLoaded', scheduleRefresh);
+    }
+})();
+</script>
+""", height=0, width=0)
 
     # --- 1. Ready for Welcome Animation ---
     
