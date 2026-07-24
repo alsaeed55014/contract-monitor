@@ -3207,6 +3207,20 @@ def dashboard():
     user = st.session_state.user
     lang = st.session_state.lang
 
+    # ---------- CRITICAL: ACTIVE USER HEARTBEAT (EARLY UPDATE) ----------
+    # 1. Force early heartbeat update BEFORE anything else
+    current_username = st.session_state.get('username', '') or user.get('username', '')
+    if current_username and not st.session_state.get('username'):
+        st.session_state.username = current_username
+    if current_username:
+        update_user_heartbeat(current_username)
+
+    # 2. Auto-Refresh page every 30 seconds to keep heartbeat alive
+    # (Streamlit only reruns on user interaction, so we need forced refresh!)
+    st.markdown("""
+    <meta http-equiv="refresh" content="30">
+    """, unsafe_allow_html=True)
+
     # --- 1. Ready for Welcome Animation ---
     
     # --- 2. Welcome Message ---
