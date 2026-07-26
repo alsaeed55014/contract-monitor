@@ -1699,6 +1699,109 @@ def render_table_translator(df, key_prefix="table"):
         code_counts  = df_nat_codes.value_counts()
         valid_items  = [(code, int(cnt)) for code, cnt in code_counts.items() if code]
 
+        # =======================================================
+        # 🌍 Full Country Names mapping: 2-letter code → (Arabic, English)
+        # =======================================================
+        COUNTRY_NAMES = {
+            "PH": ("الفلبينية", "Filipino"),
+            "NG": ("نيجيريا", "Nigeria"),
+            "LK": ("سريلانكا", "Sri Lanka"),
+            "NP": ("نيبال", "Nepal"),
+            "ET": ("إثيوبيا", "Ethiopia"),
+            "ID": ("إندونيسيا", "Indonesia"),
+            "KE": ("كينيا", "Kenya"),
+            "UG": ("أوغندا", "Uganda"),
+            "IN": ("الهند", "India"),
+            "PK": ("باكستان", "Pakistan"),
+            "BD": ("بنجلاديش", "Bangladesh"),
+            "EG": ("مصر", "Egypt"),
+            "SA": ("السعودية", "Saudi Arabia"),
+            "AE": ("الإمارات", "UAE"),
+            "QA": ("قطر", "Qatar"),
+            "KW": ("الكويت", "Kuwait"),
+            "BH": ("البحرين", "Bahrain"),
+            "OM": ("عُمان", "Oman"),
+            "JO": ("الأردن", "Jordan"),
+            "LB": ("لبنان", "Lebanon"),
+            "SY": ("سوريا", "Syria"),
+            "IQ": ("العراق", "Iraq"),
+            "YE": ("اليمن", "Yemen"),
+            "MA": ("المغرب", "Morocco"),
+            "DZ": ("الجزائر", "Algeria"),
+            "TN": ("تونس", "Tunisia"),
+            "LY": ("ليبيا", "Libya"),
+            "SD": ("السودان", "Sudan"),
+            "TR": ("تركيا", "Turkey"),
+            "IR": ("إيران", "Iran"),
+            "AF": ("أفغانستان", "Afghanistan"),
+            "VN": ("فيتنام", "Vietnam"),
+            "TH": ("تايلاند", "Thailand"),
+            "MY": ("ماليزيا", "Malaysia"),
+            "SG": ("سنغافورة", "Singapore"),
+            "KH": ("كمبوديا", "Cambodia"),
+            "MM": ("ميانمار", "Myanmar"),
+            "JP": ("اليابان", "Japan"),
+            "KR": ("كوريا الجنوبية", "South Korea"),
+            "CN": ("الصين", "China"),
+            "TW": ("تايوان", "Taiwan"),
+            "HK": ("هونغ كونغ", "Hong Kong"),
+            "RU": ("روسيا", "Russia"),
+            "UA": ("أوكرانيا", "Ukraine"),
+            "US": ("الولايات المتحدة", "USA"),
+            "CA": ("كندا", "Canada"),
+            "MX": ("المكسيك", "Mexico"),
+            "BR": ("البرازيل", "Brazil"),
+            "AR": ("الأرجنتين", "Argentina"),
+            "CO": ("كولومبيا", "Colombia"),
+            "PE": ("بيرو", "Peru"),
+            "CL": ("تشيلي", "Chile"),
+            "VE": ("فنزويلا", "Venezuela"),
+            "GB": ("بريطانيا", "UK"),
+            "FR": ("فرنسا", "France"),
+            "DE": ("ألمانيا", "Germany"),
+            "ES": ("إسبانيا", "Spain"),
+            "IT": ("إيطاليا", "Italy"),
+            "PT": ("البرتغال", "Portugal"),
+            "NL": ("هولندا", "Netherlands"),
+            "BE": ("بلجيكا", "Belgium"),
+            "CH": ("سويسرا", "Switzerland"),
+            "AT": ("النمسا", "Austria"),
+            "SE": ("السويد", "Sweden"),
+            "NO": ("النرويج", "Norway"),
+            "DK": ("الدنمارك", "Denmark"),
+            "FI": ("فنلندا", "Finland"),
+            "PL": ("بولندا", "Poland"),
+            "GR": ("اليونان", "Greece"),
+            "AU": ("أستراليا", "Australia"),
+            "NZ": ("نيوزيلندا", "New Zealand"),
+            "ZA": ("جنوب أفريقيا", "South Africa"),
+            "TZ": ("تنزانيا", "Tanzania"),
+            "RW": ("رواندا", "Rwanda"),
+            "ZM": ("زامبيا", "Zambia"),
+            "ZW": ("زيمبابوي", "Zimbabwe"),
+            "MZ": ("موزمبيق", "Mozambique"),
+            "MG": ("مدغشقر", "Madagascar"),
+            "CI": ("ساحل العاج", "Ivory Coast"),
+            "GH": ("غانا", "Ghana"),
+            "CM": ("الكاميرون", "Cameroon"),
+            "SN": ("السنغال", "Senegal"),
+            "NG": ("نيجيريا", "Nigeria"),
+            "NE": ("النيجر", "Niger"),
+            "ML": ("مالي", "Mali"),
+            "BF": ("بوركينا فاسو", "Burkina Faso"),
+            "TD": ("تشاد", "Chad"),
+            "CF": ("جمهورية أفريقيا الوسطى", "CAR"),
+            "GA": ("الغابون", "Gabon"),
+            "CG": ("الكونغو", "Congo"),
+            "CD": ("كونغو الديمقراطية", "DR Congo"),
+            "AO": ("أنغولا", "Angola"),
+            "NA": ("ناميبيا", "Namibia"),
+            "BW": ("بوتسوانا", "Botswana"),
+            "LS": ("ليسوتو", "Lesotho"),
+            "SZ": ("إيسواتيني", "Eswatini"),
+            "MW": ("مالاوي", "Malawi"),
+        }
+
         if valid_items:
             active_code = st.session_state.get(f"selected_nat_{key_prefix}")
             has_clear   = bool(active_code)
@@ -1734,11 +1837,11 @@ div[data-testid="stHorizontalBlock"]:has(.nat-flag-badge)::-webkit-scrollbar-thu
     background: rgba(212,175,55,0.6) !important;
 }
 
-/* Style each column as a premium card */
+/* Style each column as a premium card — WIDER to fit full country names */
 div[data-testid="stHorizontalBlock"]:has(.nat-flag-badge) > div[data-testid="column"] {
     flex: 0 0 auto !important;
-    width: 95px !important;
-    min-width: 95px !important;
+    width: 125px !important;
+    min-width: 125px !important;
     background: rgba(255,255,255,0.03) !important;
     border: 1px solid rgba(212,175,55,0.2) !important;
     border-radius: 12px !important;
@@ -1747,7 +1850,7 @@ div[data-testid="stHorizontalBlock"]:has(.nat-flag-badge) > div[data-testid="col
     flex-direction: column !important;
     align-items: center !important;
     justify-content: space-between !important;
-    height: 100px !important;
+    height: 110px !important;
     margin: 0 !important;
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
     box-shadow: 0 4px 10px rgba(0,0,0,0.3) !important;
@@ -1789,26 +1892,28 @@ div[data-testid="stHorizontalBlock"]:has(.nat-flag-badge) div[data-testid="stIma
     margin: 0 !important;
 }
 
-/* Badge button style (inside the card column) */
+/* Badge button style (inside the card column) — Adjusted for long full country names */
 div[data-testid="stHorizontalBlock"]:has(.nat-flag-badge) .stButton button {
     background-color: transparent !important;
     color: #FFF !important;
-    font-weight: 800 !important;
-    font-size: 0.95rem !important;
+    font-weight: 700 !important;
+    font-size: 0.75rem !important;
     font-family: 'Inter', 'Cairo', sans-serif !important;
     border: none !important;
-    height: 32px !important;
-    min-height: 32px !important;
+    height: 42px !important;
+    min-height: 42px !important;
     width: 100% !important;
-    padding: 0 !important;
+    padding: 2px 4px !important;
     margin: 0 !important;
     cursor: pointer !important;
     transition: all 0.2s ease !important;
-    white-space: nowrap !important;
+    white-space: normal !important;
+    word-wrap: break-word !important;
+    line-height: 1.1 !important;
     display: flex !important;
     align-items: center !important;
     justify-content: center !important;
-    direction: ltr !important;
+    text-align: center !important;
     box-shadow: none !important;
 }
 
@@ -1823,7 +1928,7 @@ div[data-testid="stHorizontalBlock"]:has(.nat-flag-badge) .stButton button:hover
 /* Clear button column container */
 div[data-testid="stHorizontalBlock"]:has(.nat-flag-badge) > div[data-testid="column"]:has(.nat-clear-badge) {
     justify-content: center !important;
-    height: 100px !important;
+    height: 110px !important;
     background: rgba(255,75,75,0.03) !important;
     border: 1px solid rgba(255,75,75,0.2) !important;
     display: flex !important;
@@ -1875,7 +1980,21 @@ div[data-testid="stHorizontalBlock"]:has(.nat-flag-badge) .nat-clear-badge .stBu
                     st.markdown(f'<div class="{div_cls}" style="text-align:center;"></div>', unsafe_allow_html=True)
                     st.image(flag_url, width=32)
                     
-                    button_label = f"{cnt} {code.upper()}"
+                    # Get full country name based on language
+                    code_upper = code.upper()
+                    if code_upper in COUNTRY_NAMES:
+                        name_ar, name_en = COUNTRY_NAMES[code_upper]
+                        country_name = name_ar if lang == 'ar' else name_en
+                    else:
+                        country_name = code_upper  # Fallback to code if unknown
+                    
+                    # Show count on top line, country name on second line (button CSS allows wrapping)
+                    # For Arabic, place count after name; English count before name
+                    if lang == 'ar':
+                        button_label = f"{country_name} ({cnt})"
+                    else:
+                        button_label = f"{cnt} {country_name}"
+                    
                     if st.button(button_label, key="nbadge_v2_" + key_prefix + "_" + code, use_container_width=True):
                         st.session_state["selected_nat_" + key_prefix] = None if is_sel else code
                         st.rerun()
