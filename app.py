@@ -3191,14 +3191,21 @@ if ('Notification' in window) {
                     # Get user's avatar
                     user_avatar = user_data.get('avatar')
                     if user_avatar:
-                        # Fix double data:image/png;base64, prefix
-                        if user_avatar.startswith('data:image'):
-                            av_src = user_avatar
+                        # Fix double data:image/png;base64, prefix + strip whitespace
+                        user_avatar_clean = str(user_avatar).strip().replace("\n", "").replace("\r", "")
+                        if user_avatar_clean.startswith('data:image'):
+                            av_src = user_avatar_clean
                         else:
-                            av_src = f'data:image/png;base64,{user_avatar}'
-                        user_avatar_html = f'<img src="{av_src}" class="banner-avatar" style="width:40px; height:40px; border-width:1px;">'
+                            av_src = f'data:image/png;base64,{user_avatar_clean}'
+                        # onerror: if image fails to load, replace with a generic placeholder div
+                        initial = user_name[0].upper() if user_name else "U"
+                        user_avatar_html = f'''<img 
+                            src="{av_src}" 
+                            class="banner-avatar" 
+                            onerror="this.outerHTML='<div style=\\'width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,#D4AF37,#8B7300);display:flex;align-items:center;justify-content:center;border:2px solid #D4AF37;font-size:16px;font-weight:bold;color:#000;\\'>{initial}</div>'"
+                            style="width:40px; height:40px; border-radius:50%; border:2px solid #D4AF37; object-fit:cover; box-shadow:0 0 8px rgba(212,175,55,0.3);">'''
                     else:
-                        user_avatar_html = f'<div style="width:40px; height:40px; border-radius:50%; background: linear-gradient(135deg, #D4AF37, #8B7300); display:flex; align-items:center; justify-content:center; border:1px solid #D4AF37; box-shadow:0 0 10px rgba(212,175,55,0.3);"><span style="font-size:16px; color:#000; font-weight:bold;">{user_name[0].upper() if user_name else "U"}</span></div>'
+                        user_avatar_html = f'<div style="width:40px; height:40px; border-radius:50%; background: linear-gradient(135deg, #D4AF37, #8B7300); display:flex; align-items:center; justify-content:center; border:2px solid #D4AF37; box-shadow:0 0 10px rgba(212,175,55,0.3);"><span style="font-size:16px; color:#000; font-weight:bold;">{user_name[0].upper() if user_name else "U"}</span></div>'
                     # Create user card
                     user_cards.append(f"""
                         <div style="display: flex; align-items: center; gap: 8px; background: rgba(212,175,55,0.1); padding: 5px 10px; border-radius: 20px; border: 1px solid rgba(212,175,55,0.3);">
@@ -3305,19 +3312,22 @@ def dashboard():
         if not full_name: full_name = user.get('username', 'User')
         greeting = "أهلاً،" if lang == 'ar' else "Hello,"
 
-        # Get user avatar if exists - Universal Format Detection
+        # Get user avatar if exists - Universal Format Detection + Robust Handling
         username_key = user.get('username', '')
         avatar_val = st.session_state.auth.get_avatar(username_key)
         if avatar_val:
-            if str(avatar_val).startswith('data:'):
-                avatar_html = f'<img src="{avatar_val}" style="width:80px;height:80px;border-radius:50%;object-fit:cover;border:2px solid #D4AF37;" />'
+            av_clean = str(avatar_val).strip().replace("\n", "").replace("\r", "")
+            if av_clean.startswith('data:'):
+                av_src = av_clean
+            elif av_clean.startswith('data:image'):
+                av_src = av_clean
             else:
-                # Legacy fallback - fix double prefix
-                if avatar_val.startswith('data:image'):
-                    av_src = avatar_val
-                else:
-                    av_src = f'data:image/png;base64,{avatar_val}'
-                avatar_html = f'<img src="{av_src}" style="width:80px;height:80px;border-radius:50%;object-fit:cover;border:2px solid #D4AF37;" />'
+                av_src = f'data:image/png;base64,{av_clean}'
+            # onerror fallback to placeholder with icon
+            avatar_html = f'''<img 
+                src="{av_src}" 
+                onerror="this.outerHTML='<div style=\\'width:80px;height:80px;border-radius:50%;background:linear-gradient(135deg,#D4AF37,#8B7520);display:flex;align-items:center;justify-content:center;border:2px solid #D4AF37;font-size:36px;\\'>👤</div>'"
+                style="width:80px;height:80px;border-radius:50%;object-fit:cover;border:2px solid #D4AF37;box-shadow:0 0 12px rgba(212,175,55,0.3);" />'''
         else:
             avatar_html = '<div style="width:80px;height:80px;border-radius:50%;background:linear-gradient(135deg,#D4AF37,#8B7520);display:flex;align-items:center;justify-content:center;font-size:36px;">👤</div>'
 
@@ -3573,12 +3583,18 @@ def dashboard():
                         # Get avatar
                         u_avatar = user_data.get('avatar')
                         if u_avatar:
-                            # Fix double data:image/png;base64, prefix
-                            if u_avatar.startswith('data:image'):
-                                av_src = u_avatar
+                            # Fix double prefix + strip whitespace/newlines (common corruption)
+                            u_avatar_clean = str(u_avatar).strip().replace("\n", "").replace("\r", "")
+                            if u_avatar_clean.startswith('data:image'):
+                                av_src = u_avatar_clean
                             else:
-                                av_src = f'data:image/png;base64,{u_avatar}'
-                            av_html = f'<img src="{av_src}" style="width:36px;height:36px;border-radius:50%;border:2px solid #D4AF37;object-fit:cover;">'
+                                av_src = f'data:image/png;base64,{u_avatar_clean}'
+                            # onerror fallback
+                            initial = display_name[0].upper() if display_name else "U"
+                            av_html = f'''<img 
+                                src="{av_src}" 
+                                onerror="this.outerHTML='<div style=\\'width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#D4AF37,#8B7300);display:flex;align-items:center;justify-content:center;border:2px solid #D4AF37;font-size:16px;font-weight:bold;color:#000;\\'>{initial}</div>'"
+                                style="width:36px;height:36px;border-radius:50%;border:2px solid #D4AF37;object-fit:cover;box-shadow:0 0 6px rgba(212,175,55,0.3);">'''
                         else:
                             initial = display_name[0].upper() if display_name else "U"
                             av_html = f'<div style="width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#D4AF37,#8B7300);display:flex;align-items:center;justify-content:center;border:2px solid #D4AF37;font-size:16px;font-weight:bold;color:#000;">{initial}</div>'
