@@ -1768,15 +1768,6 @@ div[data-testid="stHorizontalBlock"]:has(.nat-flag-badge) .nat-clear-badge .stBu
                         st.rerun()
                     st.markdown('</div>', unsafe_allow_html=True)
 
-            if has_clear:
-                with badge_cols[-1]:
-                    clear_lbl = "❌ الكل" if lang == 'ar' else "❌ All"
-                    st.markdown('<div class="nat-clear-badge">', unsafe_allow_html=True)
-                    if st.button(clear_lbl, key="nbadge_v2_" + key_prefix + "___clear__"):
-                        st.session_state["selected_nat_" + key_prefix] = None
-                        st.rerun()
-                    st.markdown('</div>', unsafe_allow_html=True)
-
         # Apply filtering to the dataframe
         if active_code:
             df = df[df_nat_codes == active_code]
@@ -2066,6 +2057,18 @@ if 'last_login_time' not in st.session_state:
     st.session_state.last_login_time = 0
 if 'notifications' not in st.session_state:
     st.session_state.notifications = []
+# Inactivity auto-logout: track last activity in query params via JS
+if 'force_logout_inactive' not in st.session_state:
+    st.session_state.force_logout_inactive = False
+
+# Handle forced logout from inactivity (triggered by JS reload with ?logout=inactive)
+query_params = st.query_params
+if query_params.get('logout') == 'inactive':
+    st.session_state.user = None
+    st.session_state.force_logout_inactive = False
+    clear_credentials()
+    st.query_params.clear()
+    st.rerun()
 
 # 5. Apply Dynamic Styles Based on Language
 st.markdown(get_css(st.session_state.lang), unsafe_allow_html=True)
@@ -2566,6 +2569,19 @@ if ('Notification' in window && Notification.permission === 'default') {
         saved_u = saved.get("u", "") if saved else ""
         saved_p = saved.get("p", "") if saved else ""
         
+        user_key = f"user_{suffix}"
+        pass_key = f"pass_{suffix}"
+        persist_key = f"persist_{suffix}"
+        
+        # Pre-fill session state keys if saved credentials exist
+        if saved:
+            if user_key not in st.session_state:
+                st.session_state[user_key] = saved_u
+            if pass_key not in st.session_state:
+                st.session_state[pass_key] = saved_p
+            if persist_key not in st.session_state:
+                st.session_state[persist_key] = True
+        
         with st.form(f"login_form_{suffix}"):
             # Row 1: Profile Image next to Welcome Text
             head_col1, head_col2 = st.columns([1, 2])
@@ -2577,13 +2593,13 @@ if ('Notification' in window && Notification.permission === 'default') {
                     b64 = get_base64_image(IMG_PATH)
                     st.markdown(f'<div style="text-align:right;"><img src="data:image/jpeg;base64,{b64}" class="profile-img-circular" style="width:80px; height:80px; border:2px solid #FFF; box-shadow: 0 0 15px #FFF;"></div>', unsafe_allow_html=True)
             
-            # Inputs - Do NOT pre-fill with saved data for security (prevents auto-fill on mobile WhatsApp links)
-            u = st.text_input(t("username", lang), value="", label_visibility="collapsed", placeholder=t("username", lang), key=f"user_{suffix}")
-            p = st.text_input(t("password", lang), value="", type="password", label_visibility="collapsed", placeholder=t("password", lang), key=f"pass_{suffix}")
+            # Inputs - Pre-fill with saved credentials
+            u = st.text_input(t("username", lang), value=saved_u, label_visibility="collapsed", placeholder=t("username", lang), key=user_key)
+            p = st.text_input(t("password", lang), value=saved_p, type="password", label_visibility="collapsed", placeholder=t("password", lang), key=pass_key)
             
             # Persistent check - White Neon Label
             persist_txt = "هل تريد حفظ الدخول" if lang == 'ar' else "Do you want to stay logged in?"
-            st.checkbox(persist_txt, value=(True if saved else False), key=f"persist_{suffix}")
+            st.checkbox(persist_txt, value=(True if saved else False), key=persist_key)
             
             submit = st.form_submit_button(t("login_btn", lang), width='stretch')
             lang_toggle = st.form_submit_button("En" if lang == "ar" else "عربي", width='stretch')
@@ -2597,7 +2613,7 @@ if ('Notification' in window && Notification.permission === 'default') {
                     login_loader.empty()
                     if user:
                         # Handle Persistence Logic
-                        should_persist = st.session_state.get(f"persist_{suffix}", False)
+                        should_persist = st.session_state.get(persist_key, False)
                         if should_persist:
                             save_credentials(u, p.strip())
                         else:
@@ -2912,6 +2928,91 @@ def check_notifications():
     except Exception as e:
         print(f"[ERROR] Notification check failed: {e}")
 
+def update_user_heartbeat(username, user_info=None):
+    """Tracks active user sessions with last seen timestamp."""
+    try:
+        active_file = os.path.join(BASE_DIR, "online_users.json")
+        data = {}
+        if os.path.exists(active_file):
+            try:
+                with open(active_file, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+            except:
+                data = {}
+        
+        now_ts = time.time()
+        data = {u: info for u, info in data.items() if isinstance(info, dict) and now_ts - info.get("last_seen", 0) < 300}
+        
+        if username:
+            u_clean = str(username).lower().strip()
+            display_name = u_clean
+            if user_info and isinstance(user_info, dict):
+                fn_ar = user_info.get("first_name_ar", "")
+                fa_ar = user_info.get("father_name_ar", "")
+                fn_en = user_info.get("first_name_en", "")
+                fa_en = user_info.get("father_name_en", "")
+                if fn_ar or fa_ar: display_name = f"{fn_ar} {fa_ar}".strip()
+                elif fn_en or fa_en: display_name = f"{fn_en} {fa_en}".strip()
+            
+            data[u_clean] = {
+                "username": u_clean,
+                "display_name": display_name,
+                "last_seen": now_ts
+            }
+        
+        with open(active_file, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        pass
+
+def get_online_users_html(auth_manager, current_user, lang='ar'):
+    """Generates clean HTML badges for online connected users."""
+    try:
+        active_file = os.path.join(BASE_DIR, "online_users.json")
+        data = {}
+        now_ts = time.time()
+        if os.path.exists(active_file):
+            try:
+                with open(active_file, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+            except:
+                data = {}
+        
+        active_users = []
+        for u, info in data.items():
+            if isinstance(info, dict) and now_ts - info.get("last_seen", 0) < 300:
+                active_users.append(info)
+        
+        curr_uname = current_user.get("username", "user").lower().strip() if isinstance(current_user, dict) else str(current_user).lower().strip()
+        if not any(u.get("username") == curr_uname for u in active_users):
+            fn_ar = current_user.get("first_name_ar", "") if isinstance(current_user, dict) else ""
+            fa_ar = current_user.get("father_name_ar", "") if isinstance(current_user, dict) else ""
+            disp = f"{fn_ar} {fa_ar}".strip() if (fn_ar or fa_ar) else curr_uname
+            active_users.append({"username": curr_uname, "display_name": disp, "last_seen": now_ts})
+            
+        label = "المستخدمون المتصلون:" if lang == 'ar' else "Online Users:"
+        
+        user_badges = []
+        for u_info in active_users:
+            uname = u_info.get("username", "user")
+            disp_name = u_info.get("display_name", uname)
+            
+            av_val = auth_manager.get_avatar(uname) if auth_manager and hasattr(auth_manager, 'get_avatar') else None
+            if av_val:
+                av_src = av_val if str(av_val).startswith('data:') else f"data:image/png;base64,{av_val}"
+                img_html = f'<img src="{av_src}" style="width:22px;height:22px;border-radius:50%;object-fit:cover;border:1px solid #D4AF37;" />'
+            else:
+                img_html = '<div style="width:22px;height:22px;border-radius:50%;background:linear-gradient(135deg,#D4AF37,#8B7520);display:flex;align-items:center;justify-content:center;font-size:12px;color:#fff;">👤</div>'
+                
+            badge = f'''<div style="display: flex; align-items: center; gap: 8px; background: rgba(212,175,55,0.1); padding: 5px 10px; border-radius: 20px; border: 1px solid rgba(212,175,55,0.3);">{img_html}<span style="color: #FFFFFF; font-size: 0.8rem; font-weight: 600; font-family: 'Cairo', sans-serif;">{disp_name}</span><span style="width: 8px; height: 8px; background-color: #22c55e; border-radius: 50%; display: inline-block; box-shadow: 0 0 6px #22c55e;"></span></div>'''
+            user_badges.append(badge)
+            
+        all_badges_html = "".join(user_badges)
+        
+        return f'''<div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 5px;"><span style="color: rgba(255,255,255,0.8); font-size: 0.8rem; font-weight: 600; margin-right: 5px; font-family: 'Cairo', sans-serif;">{label}</span>{all_badges_html}</div>'''
+    except Exception as e:
+        return ""
+
 def render_top_banner():
     """renders a persistent top banner with user image and welcome message."""
     user = st.session_state.user
@@ -2919,8 +3020,8 @@ def render_top_banner():
     notifs = st.session_state.get('notifications', [])
     notif_count = len(notifs)
 
-    # 1. Global Audio/Push Notifications handled by background fragment for instant response.
-    # No longer needed here to avoid double-triggers.
+    if user:
+        update_user_heartbeat(user.get('username', ''), user)
 
     # 2. Styling and Content
     if lang == 'ar':
@@ -2940,13 +3041,9 @@ def render_top_banner():
     with st.container():
         # Language-aware column ordering to keep Bell on the Far Left
         if lang == 'ar':
-            # In RTL: Index 0 is Right, Index 3 is Left. 
-            # We assign c4(Date) to 0, c3(Spacer) to 1, c2(Profile) to 2, c1(Bell) to 3.
             cols = st.columns([2, 4.7, 2.5, 0.8])
             c4, c3, c2, c1 = cols[0], cols[1], cols[2], cols[3]
         else:
-            # In LTR: Index 0 is Left, Index 3 is Right.
-            # We assign c1(Bell) to 0, c2(Profile) to 1, c3(Spacer) to 2, c4(Date) to 3.
             cols = st.columns([0.8, 2.5, 4.7, 2])
             c1, c2, c3, c4 = cols[0], cols[1], cols[2], cols[3]
         
@@ -2961,7 +3058,12 @@ def render_top_banner():
         with c2: # Profile
             st.markdown(f'<div style="display:flex; align-items:center; gap:15px; margin-top:5px;">{avatar_html}<div><p style="margin:0; font-weight:700; color:white;">{welcome_prefix} {full_name}</p><p style="margin:0; font-size:0.75rem; color:#D4AF37;">{program_name}</p></div></div>', unsafe_allow_html=True)
         
-        with c3: st.write("") # Spacer
+        with c3:
+            online_html = get_online_users_html(st.session_state.auth, user, lang)
+            if online_html:
+                st.markdown(online_html, unsafe_allow_html=True)
+            else:
+                st.write("")
             
         with c4: # Date/Log at absolute right
             now = get_saudi_time()
@@ -4855,7 +4957,13 @@ def render_order_processing_content():
     c_transfer_days = find_cust_col(["transfer days"]) or find_cust_col(["نقل الكفالة"]) or find_cust_col(["نقل"])
     c_working_hours = find_cust_col(["working hours"]) or find_cust_col(["ساعات"])
     c_weekly_holiday = find_cust_col(["holiday"]) or find_cust_col(["day off"]) or find_cust_col(["أسبوعي"]) or find_cust_col(["اجازة"]) or find_cust_col(["إجازة"])
-    c_notes = find_cust_col(["notes"]) or find_cust_col(["ملاحظات"])
+    # Try multiple variations for notes column
+    c_notes = None
+    for col in customers_df.columns:
+        col_lower = str(col).lower()
+        if "notes" in col_lower or "ملاحظات" in col_lower:
+            c_notes = col
+            break
     
     # --- Worker Column Names ---
     w_name_col = next((c for c in workers_df.columns if "full name" in c.lower()), None)
@@ -5552,6 +5660,80 @@ def render_order_processing_content():
 
             # Close the White Neon Glow Frame integrated
             st.markdown("</div>", unsafe_allow_html=True)
+
+            # --- Follow-up Notes Section ---
+            if user_role != "viewer":
+                st.markdown("---")
+                st.markdown(f"#### 📝 {'ملاحظات المتابعة' if lang == 'ar' else 'Follow-up Notes'}")
+                
+                # Get current follow-up notes from session state (language-specific)
+                follow_up_key = f"follow_up_{idx}_{lang}"
+                
+                # If not in session state, try to extract from Google Sheets data
+                if follow_up_key not in st.session_state:
+                    raw_notes = str(customer_row.get(c_notes, ""))
+                    # Extract language-specific notes from combined format
+                    if "AR:" in raw_notes and "EN:" in raw_notes:
+                        # Parse combined format: "AR: ... | EN: ..."
+                        try:
+                            parts = raw_notes.split(" | ")
+                            ar_part = [p for p in parts if p.startswith("AR:")]
+                            en_part = [p for p in parts if p.startswith("EN:")]
+                            
+                            if ar_part:
+                                ar_notes = ar_part[0].replace("AR:", "").strip()
+                                st.session_state[f"follow_up_{idx}_ar"] = ar_notes
+                            if en_part:
+                                en_notes = en_part[0].replace("EN:", "").strip()
+                                st.session_state[f"follow_up_{idx}_en"] = en_notes
+                        except:
+                            pass
+                    elif raw_notes:
+                        # Legacy format - save to both languages
+                        st.session_state[f"follow_up_{idx}_ar"] = raw_notes
+                        st.session_state[f"follow_up_{idx}_en"] = raw_notes
+                
+                current_notes = st.session_state.get(follow_up_key, "")
+                
+                # Text area for notes
+                new_notes = st.text_area(
+                    "اكتب ملاحظاتك هنا..." if lang == 'ar' else "Write your notes here...",
+                    value=current_notes,
+                    height=100,
+                    key=f"notes_input_{idx}_{lang}",
+                    placeholder="مثال: تواصلت مع العميل يوم 14/07/2026، مهتم بالعمال، طلب إرسال السير الذاتية..." if lang == 'ar' else "Example: Contacted client on 14/07/2026, interested in workers, requested CVs..."
+                )
+                
+                # Save button
+                col_save, col_clear = st.columns([1, 1])
+                with col_save:
+                    if st.button("💾 حفظ الملاحظات" if lang == 'ar' else "💾 Save Notes", key=f"save_notes_{idx}_{lang}", type="primary"):
+                        # Update session state (language-specific)
+                        st.session_state[follow_up_key] = new_notes
+                        
+                        # Update Google Sheets (save both languages in the same cell with separator)
+                        row_num = customer_row.get('__sheet_row')
+                        if row_num and c_notes:
+                            # Get notes from both languages
+                            ar_notes = st.session_state.get(f"follow_up_{idx}_ar", "")
+                            en_notes = st.session_state.get(f"follow_up_{idx}_en", "")
+                            
+                            # Combine both notes with separator
+                            combined_notes = f"AR: {ar_notes} | EN: {en_notes}" if ar_notes or en_notes else ""
+                            
+                            url = "https://docs.google.com/spreadsheets/d/1ZlLGXqbFSnKrr2J-PRnxRhxykwrNOgOE6Mb34Zei_FU/edit"
+                            success, msg = st.session_state.db.update_row(row_num, c_notes, combined_notes, url=url)
+                            if success:
+                                st.toast("✅ تم حفظ الملاحظات" if lang == 'ar' else "✅ Notes saved successfully")
+                            else:
+                                st.error(f"❌ {msg}")
+                        else:
+                            st.warning("⚠️ تعذر حفظ الملاحظات في Google Sheets" if lang == 'ar' else "⚠️ Could not save notes to Google Sheets")
+                
+                with col_clear:
+                    if st.button("🗑️ مسح الملاحظات" if lang == 'ar' else "🗑️ Clear Notes", key=f"clear_notes_{idx}_{lang}"):
+                        st.session_state[follow_up_key] = ""
+                        st.rerun()
 
             # --- Workers ---
             matches, scores, city_count, region_count = find_matching_workers(customer_row)
@@ -6260,6 +6442,93 @@ def render_bengali_supply_content():
 # IMMEDIATE UI CLEANUP: Hide login screen elements the millisecond we are authenticated
 if st.session_state.get('user'):
     st.markdown("<style>#login-container-wrapper { display: none !important; }</style>", unsafe_allow_html=True)
+
+# ========== 🕑 نظام الخروج التلقائي بعد 30 دقيقة من عدم الاستخدام (JavaScript-based) ==========
+# يعتمد على JavaScript لتتبع نشاط المستخدم وإعادة التحميل عند الخمول
+if st.session_state.get('user'):
+    is_wa_running = str(st.session_state.get('wa_running', False)).lower()
+    st.markdown(f"""
+    <script>
+    (function() {{
+        var INACTIVITY_TIMEOUT = 30 * 60 * 1000; // 30 دقيقة بالمليثاني
+        var WARNING_TIME = 2 * 60 * 1000;        // تحذير قبل دقيقتين
+        var IS_SENDING = {is_wa_running};         // هل الإرسال جارٍ
+        
+        // لا تشغيل المؤقّت أثناء إرسال واتساب
+        if (IS_SENDING) return;
+        
+        var lastActivity = Date.now();
+        var warningShown = false;
+        var warningDiv = null;
+        
+        // تتبع نشاط المستخدم
+        function resetActivity() {{
+            lastActivity = Date.now();
+            warningShown = false;
+            if (warningDiv) {{
+                warningDiv.style.display = 'none';
+            }}
+        }}
+        
+        ['mousemove','keydown','mousedown','touchstart','scroll','click'].forEach(function(ev) {{
+            document.addEventListener(ev, resetActivity, {{passive: true}});
+        }});
+        
+        // إنشاء مربع التحذير
+        function createWarningDiv() {{
+            if (warningDiv) return;
+            warningDiv = document.createElement('div');
+            warningDiv.id = 'wa-inactivity-warning';
+            warningDiv.style.cssText = [
+                'position:fixed', 'bottom:20px', 'right:20px', 'z-index:2147483647',
+                'background:linear-gradient(135deg,#1a0000,#2d0000)',
+                'border:2px solid rgba(255,100,0,0.9)',
+                'border-radius:15px', 'padding:15px 22px',
+                'box-shadow:0 0 30px rgba(255,100,0,0.6)',
+                'text-align:center', 'direction:rtl',
+                'min-width:220px', 'display:none'
+            ].join(';');
+            warningDiv.innerHTML = [
+                '<div style="color:#FF6600;font-weight:800;font-size:1rem">⚠️ سيتم الخروج تلقائياً</div>',
+                '<div id="wa-countdown" style="color:#FFD700;font-size:1.6rem;font-weight:900;margin:5px 0">2:00</div>',
+                '<div style="color:#aaa;font-size:0.78rem">تحرّك أي شيء لاستمرار الجلسة</div>'
+            ].join('');
+            document.body.appendChild(warningDiv);
+        }}
+        
+        // تحقّق من حالة الخمول كل ثانية
+        setInterval(function() {{
+            var now = Date.now();
+            var elapsed = now - lastActivity;
+            var remaining = INACTIVITY_TIMEOUT - elapsed;
+            
+            // تحقّق من جديد إذا بدأ الإرسال (من Streamlit state)
+            if (window.__wa_is_sending) return;
+            
+            if (remaining <= 0) {{
+                // انتهت المدة - خروج تلقائي
+                window.location.href = window.location.pathname + '?logout=inactive';
+                return;
+            }}
+            
+            if (remaining <= WARNING_TIME) {{
+                // عرض التحذير
+                createWarningDiv();
+                if (warningDiv) {{
+                    warningDiv.style.display = 'block';
+                    var secsLeft = Math.ceil(remaining / 1000);
+                    var m = Math.floor(secsLeft / 60);
+                    var s = secsLeft % 60;
+                    var countEl = document.getElementById('wa-countdown');
+                    if (countEl) {{
+                        countEl.textContent = m + ':' + (s < 10 ? '0' : '') + s;
+                    }}
+                }}
+            }}
+        }}, 1000);
+    }})();
+    </script>
+    """, unsafe_allow_html=True)
 
 # Using st.empty container to ensure the screen is fully cleared between login and dashboard states
 main_container = st.empty()

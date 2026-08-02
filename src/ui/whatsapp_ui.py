@@ -1,14 +1,14 @@
-<<<<<<< HEAD
 import streamlit as st
 import pandas as pd
 import json
 import os
 import time
 from datetime import datetime
-from src.services.whatsapp_service import WhatsAppService
+# WhatsAppService is imported lazily inside render_whatsapp_page() to avoid blocking app startup with selenium
 from src.utils.phone_utils import validate_numbers, format_phone_number, save_to_local_desktop, render_pasha_export_button
 from src.core.i18n import t
-from src.config import WA_HISTORY_FILE
+from src.config import WA_HISTORY_FILE, WA_TEMPLATES_FILE
+from src.ui.styles import get_base64_image
 import random
 
 # --- Smart Message Templates (Updated 2026-03-20) ---
@@ -21,53 +21,110 @@ SMART_TEMPLATES = {
         "Trust you are doing well today."
     ],
     "body_start": [
-        "We are currently proceeding with candidates for available job opportunities",
-        "We are moving forward with selecting candidates for open job opportunities",
-        "We are in the process of reviewing candidates for various job opportunities",
-        "Our team is currently evaluating candidates for several job opportunities",
-        "We are actively matching candidates with the latest job opportunities"
+        "We are actively matching candidates with the latest job opportunities with us",
+        "Our HR team is currently evaluating candidates for various job opportunities with us",
+        "We are in the process of reviewing profiles for several job opportunities with us",
+        "We are currently evaluating candidates for various job opportunities with us",
+        "Our team is actively scouting for talent for new job opportunities with us"
     ],
     "body_end": [
-        ", and since you previously showed interest, we would like to confirm your availability.",
-        ". Based on your previous interest, we want to check if you are still available.",
-        ", and we're checking in to see if you're still interested and ready to work.",
-        ". Since you expressed interest before, please let us know your current status.",
-        ", and we'd love to know if you are still looking for a position."
+        ", and we'd love to know if you are still looking for a position.",
+        ". Based on your background, we would like to confirm your current availability.",
+        ", and we are interested in checking if you are still seeking a new role.",
+        ". Since you expressed interest before, we wanted to touch base regarding your status.",
+        ", and we'd appreciate an update on whether you are still open to new opportunities."
     ],
     "closing": [
-        "Please reply with one of the following:\nYES – I am interested and available\nNO – I am not available at the moment",
-        "Kindly respond with:\nYES – Still interested and available\nNO – Not available right now",
-        "Let us know your choice:\nYES – I want to proceed\nNO – Not interested at this time",
-        "Please confirm by replying:\nYES – I am ready\nNO – I have another job",
-        "A quick reply would be great:\nYES – Proceed with me\nNO – Don't proceed"
+        "YES – Proceed with me\nNO – I am not available at the moment\n\nIf you are not currently seeking opportunities, we would highly appreciate it if you could share this message with a friend or colleague who may be looking for employment.\nPlease confirm by replying:",
+        "YES – Proceed with me\nNO – Not available right now\n\nIf you are not currently seeking opportunities, we would highly appreciate it if you could share this message with a friend or colleague who may be looking for employment\nPlease confirm by replying:",
+        "YES – Proceed with me\nNO – Not interested at this time\n\nIf you are not currently seeking opportunities, we would highly appreciate it if you could share this message with a friend or colleague who may be looking for employment.\nPlease confirm by replying:",
+        "YES – Proceed with me\nNO – I have another job\n\nIf you are not currently seeking opportunities, we would highly appreciate it if you could share this message with a friend or colleague who may be looking for employment\nPlease confirm by replying:",
+        "YES – Proceed with me\nNO – Don't proceed\n\nIf you are not currently seeking opportunities, we would highly appreciate it if you could share this message with a friend or colleague who may be looking for employment.\nPlease confirm by replying:"
     ],
     "final_call": [
         "We will be moving forward shortly, so your quick response is highly appreciated.",
-        "We are finalizing our list soon, so please get back to us as soon as possible.",
-        "The selection process is moving fast, and we value your prompt reply.",
+        "We look forward to hearing from you at your earliest convenience.",
+        "The selection process is moving fast, so please get back to us as soon as possible.",
         "To ensure you don't miss out, please let us know your status shortly.",
-        "We look forward to hearing from you at your earliest convenience."
+        "We look forward to your prompt response."
     ]
 }
 
+def load_templates():
+    default_templates = {
+        "smart": SMART_TEMPLATES,
+        "custom": {
+            "Default Template": {
+                "body": "Hello {Name},\n\nI hope you are doing well.\n\nWe are currently evaluating candidates for various job opportunities with us, and we'd love to know if you are still looking for a position.\n\nKindly respond with:\nYES – I am interested and available\nNO – I am not available right now\n\nIf you are not currently seeking opportunities, we would highly appreciate it if you could share this message with a friend or colleague who may be looking for employment.\n\nBest regards,\nAbu Fahd\nHR Manager",
+                "is_smart": True,
+                "job_title": ""
+            }
+        }
+    }
+    if os.path.exists(WA_TEMPLATES_FILE):
+        try:
+            with open(WA_TEMPLATES_FILE, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                # Migration: Convert old string templates to dicts if necessary
+                if "custom" in data:
+                    for k, v in data["custom"].items():
+                        if isinstance(v, str):
+                            data["custom"][k] = {"body": v, "is_smart": False, "job_title": ""}
+                return data
+        except:
+            return default_templates
+    return default_templates
+
+def save_templates(templates):
+    try:
+        with open(WA_TEMPLATES_FILE, 'w', encoding='utf-8') as f:
+            json.dump(templates, f, ensure_ascii=False, indent=4)
+    except:
+        pass
+
 def generate_smart_message(name, cv_link, custom_job=""):
-    intro = random.choice(SMART_TEMPLATES["intro"])
-    b_start = random.choice(SMART_TEMPLATES["body_start"])
-    b_end = random.choice(SMART_TEMPLATES["body_end"])
-    closing = random.choice(SMART_TEMPLATES["closing"])
-    final_call = random.choice(SMART_TEMPLATES["final_call"])
+    templates = load_templates().get("smart", SMART_TEMPLATES)
     
-    # Handle custom job title injection
-    job_part = f" in {custom_job}" if custom_job.strip() else ""
+    # 🛡️ تنويع التحية
+    greetings = ["Hello", "Hi", "Greetings", "Dear"]
+    greet = random.choice(greetings)
+    
+    intro = random.choice(templates.get("intro", [""]))
+    b_start = random.choice(templates.get("body_start", [""]))
+    b_end = random.choice(templates.get("body_end", [""]))
+    closing = random.choice(templates.get("closing", [""]))
+    final_call = random.choice(templates.get("final_call", [""]))
+    
+    # Handle custom job title injection beautifully
+    job_part = f" - {custom_job}" if custom_job.strip() else ""
     full_body = f"{b_start}{job_part}{b_end}"
     
-    msg = f"Hello {name},\n\n{intro}\n\n{full_body}\n\n{closing}\n\n{final_call}\n\n"
+    # 🛡️ تبديل هيكلية الرسالة بشكل عشوائي (Shuffling sections)
+    sections = [intro, full_body, closing, final_call]
+    # random.shuffle(sections) # Not always good as it might break logical flow
+    
+    # Randomize line breaks (one or two)
+    lb = "\n" if random.random() > 0.5 else "\n\n"
+    
+    msg = f"{greet} {name},{lb}{intro}{lb}{full_body}{lb}{closing}{lb}{final_call}{lb}"
     
     # Logic: If CV exists, add CV link. If not, omit it.
     if cv_link and str(cv_link).lower() != 'nan' and str(cv_link).strip() != '':
         msg += f"Link to your profile: {cv_link}\n\n"
     
-    msg += "Best regards,\nAbu Fahd"
+    # 🛡️ تنويع التوقيع
+    signatures = [
+        "Best regards,\nAbu Fahd\nHR Manager",
+        "Kind regards,\nAbu Fahd\nHR Manager",
+        "With respect,\nAbu Fahd\nHR Manager",
+        "Sincerely,\nAbu Fahd\nHR Manager"
+    ]
+    msg += random.choice(signatures)
+    
+    # 🛡️ عشوائية المسافات والرموز التعبيرية
+    if random.random() > 0.7:
+        msg = msg.replace(".", " .").replace("!", " ! ")
+        
     return msg
 
 def load_wa_history():
@@ -87,14 +144,21 @@ def save_wa_history(history_set):
         pass
 
 def render_whatsapp_page():
+    from src.services.whatsapp_service import WhatsAppService
+    from src.services.wa_worker_manager import WAWorkerManager
     lang = st.session_state.get('lang', 'ar')
     is_ar = lang == 'ar'
     is_cloud = "/mount/" in __file__
-    
+
+    # ── مدير العامل الخلفي ──
+    if 'wa_worker_mgr' not in st.session_state:
+        st.session_state.wa_worker_mgr = WAWorkerManager()
+    mgr: WAWorkerManager = st.session_state.wa_worker_mgr
+
+    # للوضع القديم (المتزامن) نبقيه للتوافق
     if 'wa_service' not in st.session_state:
         st.session_state.wa_service = WhatsAppService()
     else:
-        # Check if the existing service object is outdated (missing attachment_path in send_message)
         try:
             import inspect
             sig = inspect.signature(st.session_state.wa_service.send_message)
@@ -172,8 +236,323 @@ def render_whatsapp_page():
         'smart_msg_help': "سيتم إنشاء رسائل تلقائية بأسلوب مختلف لكل عميل لتجنب الحظر." if is_ar else "Generates unique variations for each message to avoid ban.",
         'job_title_label': "اسم الوظيفة (اختياري)" if is_ar else "Job Title (Optional)",
         'job_title_placeholder': "مثال: Driver, Nurse..." if is_ar else "e.g. Driver, Nurse...",
+        'wa_templates_title': t('wa_templates_title', lang),
+        'wa_save_as_template': t('wa_save_as_template', lang),
+        'wa_template_name': t('wa_template_name', lang),
+        'wa_manage_templates': t('wa_manage_templates', lang),
+        'wa_use_template': t('wa_use_template', lang),
+        'wa_delete_template': t('wa_delete_template', lang),
+        'wa_placeholders_guide': t('wa_placeholders_guide', lang),
     }
 
+    # === Mode Selection ===
+    wa_mode = st.radio(
+        "اختر الوضع" if is_ar else "Select Mode",
+        ["📱 واتساب ماركتنج (2026)" if is_ar else "📱 WhatsApp Marketing (2026)", 
+         "🏢 واتساب للعملاء" if is_ar else "🏢 WhatsApp for Employers"],
+        horizontal=True,
+        key="wa_mode_selection"
+    )
+
+    if wa_mode == ("🏢 واتساب للعملاء" if is_ar else "🏢 WhatsApp for Employers"):
+        # === WhatsApp Marketing for Employers (from Bengali Supply) ===
+        st.markdown(f'### 🏢 {"واتساب ماركتنج للعملاء" if is_ar else "WhatsApp Marketing for Employers"}')
+
+        # ──────────────────────────────────────────────────────────────
+        # 🔌 قسم الاتصال والباركود (نفس واتساب ماركتنج)
+        # ──────────────────────────────────────────────────────────────
+        st.markdown("---")
+        st.markdown(f"#### 📡 {'حالة الاتصال' if is_ar else 'Connection Status'}")
+
+        status_emp = st.session_state.wa_service.get_status()
+        ec1, ec2, ec3 = st.columns([2, 1, 1])
+        with ec1:
+            if   status_emp == "Connected":     st.success(lbl['connected'])
+            elif status_emp == "Awaiting Login": st.warning(lbl['awaiting'])
+            elif status_emp == "Loading...":     st.info(lbl['loading'])
+            else:
+                st.error(lbl['stopped'])
+                if getattr(st.session_state.wa_service, 'last_error', ''):
+                    with st.expander("🔍 " + ("تفاصيل الخطأ" if is_ar else "Error Details"), expanded=True):
+                        st.code(st.session_state.wa_service.last_error, language=None)
+        with ec2:
+            if st.button(lbl['start_engine'], type="primary", width='stretch', key="emp_start_engine"):
+                with st.spinner(lbl['starting']):
+                    st.session_state.wa_service.close()
+                    ok, msg = st.session_state.wa_service.start_driver(headless=is_cloud, force_clean=False)
+                    if ok: st.toast(f"✅ {msg}")
+                    else:  st.error(f"❌ {msg}")
+                    st.rerun()
+        with ec3:
+            if st.button(lbl['full_reset'], width='stretch', key="emp_full_reset",
+                         help="سيتم مسح بيانات تسجيل الدخول بالكامل. ستحتاج لمسح الباركود مرة أخرى." if is_ar else "This will clear all login data. You'll need to scan the QR again."):
+                with st.spinner(lbl['resetting']):
+                    st.session_state.wa_service.close()
+                    ok, msg = st.session_state.wa_service.start_driver(headless=is_cloud, force_clean=True)
+                    if ok: st.toast(f"✅ {msg}")
+                    else:  st.error(f"❌ {msg}")
+                    st.rerun()
+
+        # ── QR Code ──
+        if status_emp == "Awaiting Login":
+            qr_b64 = st.session_state.wa_service.get_qr_hd()
+            if qr_b64:
+                src = qr_b64 if qr_b64.startswith("data:") else f"data:image/png;base64,{qr_b64}"
+                st.markdown(
+                    f'<div style="background:#FFFFFF;padding:25px;border-radius:20px;max-width:420px;'
+                    f'margin:15px auto;text-align:center;box-shadow:0 0 40px rgba(255,255,255,0.4);">'
+                    f'<img src="{src}" style="width:350px;height:350px;image-rendering:pixelated;image-rendering:crisp-edges;" />'
+                    f'</div>',
+                    unsafe_allow_html=True
+                )
+            else:
+                st.info(lbl['qr_loading'])
+
+            qb1, qb2 = st.columns(2)
+            with qb1:
+                if st.button(lbl['refresh_qr'], width='stretch', key="emp_refresh_qr"):
+                    st.rerun()
+            with qb2:
+                if st.button(lbl['verify'], width='stretch', type="primary", key="emp_verify"):
+                    with st.spinner(lbl['verifying']):
+                        connected = st.session_state.wa_service.wait_for_connection(timeout=30)
+                    if connected:
+                        st.toast(lbl['connected_ok'])
+                        st.balloons()
+                    else:
+                        st.error(lbl['not_connected'])
+                    st.rerun()
+
+        # ── إذا لم يتصل، أوقف ولا تكمل (إلا إذا كان الإرسال جاري بالفعل) ──
+        if status_emp != "Connected" and not st.session_state.get('wa_running', False):
+            st.info("💡 " + ("قم بتشغيل المحرك ومسح الباركود أولاً للبدء بالإرسال." if is_ar else "Start the engine and scan the QR code first to begin sending."))
+            st.markdown("---")
+            return
+
+        st.markdown("---")
+        # ──────────────────────────────────────────────────────────────
+
+        # Data Source Selection
+        st.markdown(f"#### {'مصدر البيانات' if is_ar else 'Data Source'}")
+        data_source = st.radio(
+            "اختر مصدر البيانات" if is_ar else "Select Data Source",
+            ["من النظام (Bengali Supply)" if is_ar else "From System (Bengali Supply)", 
+             "استيراد ملف Excel" if is_ar else "Import Excel File"],
+            horizontal=True,
+            key="wa_bengali_data_source"
+        )
+        
+        target_phones = []
+        target_names = []
+        
+        if data_source == ("من النظام (Bengali Supply)" if is_ar else "From System (Bengali Supply)"):
+            # Import BengaliDataManager
+            from src.data.bengali_manager import BengaliDataManager
+            bm = BengaliDataManager()
+            
+            # Get all employers
+            all_employers = bm.get_employers()
+            
+            if not all_employers:
+                st.warning("⚠️ " + ("لا يوجد عملاء في النظام" if is_ar else "No employers in the system"))
+            else:
+                # Select employers to send to
+                st.markdown(f"#### {'اختر العملاء للإرسال' if is_ar else 'Select Employers to Send'}")
+                
+                # Multi-select employers
+                employer_options = [f"{e['name']} - {e.get('mobile', '')}" for e in all_employers]
+                selected_employers = st.multiselect(
+                    "العملاء" if is_ar else "Employers",
+                    employer_options,
+                    key="wa_bengali_employers"
+                )
+                
+                if selected_employers:
+                    # Extract phone numbers
+                    for selection in selected_employers:
+                        # Extract phone from selection
+                        parts = selection.split(' - ')
+                        if len(parts) > 1:
+                            phone = parts[-1].strip()
+                            name = parts[0].strip()
+                            # Clean phone number
+                            clean_phone = "".join(filter(str.isdigit, phone))
+                            if clean_phone:
+                                target_phones.append(clean_phone)
+                                target_names.append(name)
+                
+                st.info(f"📊 {'تم اختيار' if is_ar else 'Selected'}: {len(target_phones)} {'عميل' if is_ar else 'employers'}")
+        else:
+            # Excel Import
+            st.markdown(f"#### {'استيراد ملف Excel' if is_ar else 'Import Excel File'}")
+            uploaded_file = st.file_uploader(
+                "ارفع ملف Excel" if is_ar else "Upload Excel file",
+                type=['xlsx', 'xls'],
+                key="wa_bengali_excel_upload"
+            )
+            
+            if uploaded_file:
+                try:
+                    df = pd.read_excel(uploaded_file)
+                    st.success(f"✅ {'تم تحميل الملف بنجاح' if is_ar else 'File loaded successfully'}: {len(df)} {'صف' if is_ar else 'rows'}")
+                    
+                    # Show columns
+                    st.write(f"**{'الأعمدة المتاحة' if is_ar else 'Available columns'}:**", list(df.columns))
+                    
+                    # Select name and phone columns
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        name_col = st.selectbox(
+                            "عمود الاسم" if is_ar else "Name column",
+                            df.columns.tolist(),
+                            key="wa_bengali_name_col"
+                        )
+                    with col2:
+                        phone_col = st.selectbox(
+                            "عمود رقم الهاتف" if is_ar else "Phone column",
+                            df.columns.tolist(),
+                            key="wa_bengali_phone_col"
+                        )
+                    
+                    if st.button("📥 " + ("استخراج البيانات" if is_ar else "Extract Data"), key="extract_bengali_data"):
+                        for _, row in df.iterrows():
+                            name = str(row[name_col]).strip()
+                            phone = str(row[phone_col]).strip()
+                            # Clean phone number
+                            clean_phone = "".join(filter(str.isdigit, phone))
+                            if clean_phone and name != 'nan':
+                                target_phones.append(clean_phone)
+                                target_names.append(name)
+                        
+                        st.success(f"✅ {'تم استخراج' if is_ar else 'Extracted'}: {len(target_phones)} {'عميل' if is_ar else 'employers'}")
+                except Exception as e:
+                    st.error(f"❌ {'خطأ في قراءة الملف' if is_ar else 'Error reading file'}: {str(e)}")
+        
+        if target_phones:
+            # Message input (empty for manual writing)
+            st.markdown(f"#### {'اكتب رسالتك' if is_ar else 'Write Your Message'}")
+            custom_message = st.text_area(
+                "الرسالة" if is_ar else "Message",
+                placeholder="اكتب رسالتك هنا... استخدم {Name} لاسم العميل" if is_ar else "Write your message here... Use {Name} for customer name",
+                height=200,
+                key="wa_bengali_message"
+            )
+            
+            # Random delay settings
+            st.markdown(f"#### {'إعدادات التأخير العشوائي' if is_ar else 'Random Delay Settings'}")
+            col_d1, col_d2 = st.columns(2)
+            with col_d1:
+                min_delay = st.number_input(
+                    "الحد الأدنى (ثواني)" if is_ar else "Min delay (seconds)",
+                    min_value=5,
+                    max_value=300,
+                    value=30,
+                    key="wa_bengali_min_delay"
+                )
+            with col_d2:
+                max_delay = st.number_input(
+                    "الحد الأقصى (ثواني)" if is_ar else "Max delay (seconds)",
+                    min_value=10,
+                    max_value=600,
+                    value=60,
+                    key="wa_bengali_max_delay"
+                )
+            
+            # Message variation settings
+            st.markdown(f"#### {'إعدادات تغيير الرسالة' if is_ar else 'Message Variation Settings'}")
+            col_v1, col_v2 = st.columns(2)
+            with col_v1:
+                enable_variation = st.checkbox(
+                    "تفعيل تغيير الصيغة" if is_ar else "Enable Message Variation",
+                    value=True,
+                    help="تغيير صيغة الرسالة كل 5 رسائل بنفس المعنى لتجنب الحظر"
+                )
+            with col_v2:
+                variation_interval = st.number_input(
+                    "تغيير كل (رسالة)" if is_ar else "Change every (messages)",
+                    min_value=1,
+                    max_value=20,
+                    value=5,
+                    key="wa_bengali_interval"
+                )
+            
+            # Send button
+            if st.button("📨 إرسال الرسائل" if is_ar else "📨 Send Messages", type="primary", key="send_bengali_wa"):
+                if not custom_message:
+                    st.error("❌ " + ("يرجى كتابة الرسالة أولاً" if is_ar else "Please write a message first"))
+                elif not target_phones:
+                    st.error("❌ " + ("لا يوجد أرقام هواتف صالحة" if is_ar else "No valid phone numbers"))
+                else:
+                    # Send messages
+                    success_count = 0
+                    fail_count = 0
+                    
+                    progress_bar = st.progress(0)
+                    status_text = st.empty()
+                    
+                    for i, (phone, name) in enumerate(zip(target_phones, target_names)):
+                        status_text.text(f"{'جاري الإرسال إلى' if is_ar else 'Sending to'}: {name} ({i+1}/{len(target_phones)})")
+                        
+                        # Generate message variation
+                        if enable_variation and (i + 1) % variation_interval == 0:
+                            # Simple variation: change greeting and structure
+                            variations = [
+                                custom_message,
+                                custom_message.replace("مرحبا", "أهلاً").replace("Hello", "Hi"),
+                                custom_message.replace("،", ".").replace(",", "."),
+                                custom_message.replace("\n\n", "\n"),
+                                custom_message.replace(".", "...")
+                            ]
+                            message_to_send = variations[(i // variation_interval) % len(variations)]
+                        else:
+                            message_to_send = custom_message
+                        
+                        # Replace {Name} placeholder
+                        message_to_send = message_to_send.replace("{Name}", name).replace("{name}", name)
+                        
+                        # Send message
+                        success, msg = st.session_state.wa_service.send_message(phone, message_to_send)
+                        
+                        if success:
+                            success_count += 1
+                        else:
+                            fail_count += 1
+                            st.warning(f"⚠️ {name}: {msg}")
+                        
+                        progress_bar.progress((i + 1) / len(target_phones))
+                        
+                        # Random delay between messages (anti-ban)
+                        if i < len(target_phones) - 1:  # Don't delay after last message
+                            # Use uniform for more natural random delay
+                            random_delay = int(random.uniform(min_delay, max_delay))
+                            delay_text = f"⏳ {'تأخير عشوائي' if is_ar else 'Random delay'}: {random_delay} {'ثانية' if is_ar else 'seconds'}"
+                            
+                            for s_sec in range(random_delay, 0, -1):
+                                status_text.text(f"{delay_text} ({s_sec}s)")
+                                if s_sec % 10 == 0:
+                                    st.session_state.wa_service.keep_alive()
+                                time.sleep(1)
+                            
+                            # Anti-ban: Secondary random micro-rest (1-3 seconds)
+                            micro_rest = random.uniform(1.0, 3.0)
+                            time.sleep(micro_rest)
+                            
+                            # 🛡️ استراحة "تفكير" مفاجئة كل 3-6 رسائل لمحاكاة التعب البشري
+                            if i > 0 and i % random.randint(3, 6) == 0:
+                                stealth_break = random.uniform(6.0, 15.0)
+                                st.toast("🛡️ " + ("استراحة تمويهية قصيرة..." if is_ar else "Short stealth break..."), icon="⏳")
+                                time.sleep(stealth_break)
+                    
+                    status_text.empty()
+                    progress_bar.empty()
+                    
+                    st.success(f"✅ {'تم الإرسال بنجاح' if is_ar else 'Sending completed'}: {success_count} {'رسالة' if is_ar else 'messages'}")
+                    if fail_count > 0:
+                        st.warning(f"⚠️ {'فشل' if is_ar else 'Failed'}: {fail_count}")
+        return
+
+
+    # === Original WhatsApp Marketing (2026) ===
     # 1. Connection Status
     status = st.session_state.wa_service.get_status()
     c1, c2, c3 = st.columns([2, 1, 1])
@@ -184,9 +563,11 @@ def render_whatsapp_page():
         else:
             st.error(lbl['stopped'])
             if getattr(st.session_state.wa_service, 'last_error', ''):
-                st.code(st.session_state.wa_service.last_error, language=None)
+                with st.expander("🔍 تفاصيل الخطأ التقني | Error Details", expanded=True):
+                    st.code(st.session_state.wa_service.last_error, language=None)
+                    st.info("💡 نصيحة: تأكد من إغلاق أي متصفح كروم مفتوح في الخلفية وحاول مرة أخرى." if is_ar else "💡 Tip: Make sure to close any background Chrome processes and try again.")
     with c2:
-        if st.button(lbl['start_engine'], type="primary", use_container_width=True):
+        if st.button(lbl['start_engine'], type="primary", width='stretch'):
             with st.spinner(lbl['starting']):
                 st.session_state.wa_service.close()
                 ok, msg = st.session_state.wa_service.start_driver(headless=is_cloud, force_clean=False)
@@ -194,7 +575,8 @@ def render_whatsapp_page():
                 else: st.error(f"❌ {msg}")
                 st.rerun()
     with c3:
-        if st.button(lbl['full_reset'], use_container_width=True):
+        help_msg = "سيتم مسح بيانات تسجيل الدخول بالكامل. ستحتاج لمسح الباركود مرة أخرى." if is_ar else "This will clear all login data. You will need to scan the QR code again."
+        if st.button(lbl['full_reset'], width='stretch', help=help_msg):
             with st.spinner(lbl['resetting']):
                 st.session_state.wa_service.close()
                 ok, msg = st.session_state.wa_service.start_driver(headless=is_cloud, force_clean=True)
@@ -213,10 +595,10 @@ def render_whatsapp_page():
         
         b1, b2 = st.columns(2)
         with b1:
-            if st.button(lbl['refresh_qr'], use_container_width=True):
+            if st.button(lbl['refresh_qr'], width='stretch'):
                 st.rerun()
         with b2:
-            if st.button(lbl['verify'], use_container_width=True, type="primary"):
+            if st.button(lbl['verify'], width='stretch', type="primary"):
                 with st.spinner(lbl['verifying']):
                     connected = st.session_state.wa_service.wait_for_connection(timeout=30)
                 if connected:
@@ -227,200 +609,172 @@ def render_whatsapp_page():
                 st.rerun()
 
     # 3. INPUT + BROADCAST
-    if status == "Connected":
+    if status == "Connected" or st.session_state.get('wa_running', False):
         st.markdown("---")
-        t_manual, t_xl = st.tabs([lbl['tab_manual'], lbl['tab_excel']])
         
-        rebuild_review = False
-        manual_list = []
-        with t_manual:
-            txt = st.text_area(lbl['paste_numbers'], height=100)
-            manual_list, _, _ = validate_numbers(txt)
-            if manual_list:
-                if st.session_state.get('wa_last_manual_count', 0) != len(manual_list) or txt != st.session_state.get('wa_last_txt', ''):
-                    rebuild_review = True
-                    st.session_state.wa_last_manual_count = len(manual_list)
-                    st.session_state.wa_last_txt = txt
+        # --- 🏗️ Linear Layout: Images Top, Main Middle, Review Bottom ---
+        top_branding = st.container()
+        main_col = st.container()
+        review_col = st.container()
 
-        with t_xl:
-            uploaded = st.file_uploader(lbl['upload_excel'], type=["xlsx"], key=st.session_state.get('wa_upload_key', 'xl_0'))
-            if uploaded:
-                df = pd.read_excel(uploaded)
-                if st.session_state.get('wa_last_uploaded_name') != uploaded.name:
-                    rebuild_review = True
-                    st.session_state.wa_last_uploaded_name = uploaded.name
-                    st.session_state.wa_data = df
-                
-                xl_col1, xl_col2 = st.columns([3, 1])
-                # Show unique count if targets are already processed, otherwise show raw count
-                display_count = len(st.session_state.wa_review_targets) if st.session_state.wa_review_targets else len(df)
-                with xl_col1: st.success(lbl['loaded_count'].format(display_count))
-                with xl_col2:
-                    if st.button(lbl['delete_file'], use_container_width=True, key="del_xl"):
-                        st.session_state.wa_data = None
-                        st.session_state.wa_review_targets = []
-                        st.session_state.wa_last_uploaded_name = None
-                        st.session_state.wa_upload_key = 'xl_1' if st.session_state.get('wa_upload_key') == 'xl_0' else 'xl_0'
-                        st.rerun()
-            elif st.session_state.wa_data is not None:
-                xl_col1, xl_col2 = st.columns([3, 1])
-                # Show unique count if available
-                display_count = len(st.session_state.wa_review_targets) if st.session_state.wa_review_targets else len(st.session_state.wa_data)
-                with xl_col1: st.info(lbl['loaded_count'].format(display_count))
-                with xl_col2:
-                    if st.button(lbl['delete_file'], use_container_width=True, key="del_xl2"):
-                        st.session_state.wa_data = None
-                        st.session_state.wa_review_targets = []
-                        st.session_state.wa_last_uploaded_name = None
-                        st.session_state.wa_upload_key = 'xl_1' if st.session_state.get('wa_upload_key') == 'xl_0' else 'xl_0'
-                        st.rerun()
+        # (Branding images removed from here as requested, keeping current layout container)
+        with top_branding:
+            pass
         
-        # Build review targets if data changed or list is empty but data exists
-        if rebuild_review or (not st.session_state.wa_review_targets and (manual_list or st.session_state.wa_data is not None)):
-            new_targets = []
-            seen_in_current_file = set()
-            dups_count = 0
-            
-            # Manual
-            if manual_list:
-                for n in manual_list:
-                    if n in seen_in_current_file:
-                        dups_count += 1
-                        continue 
+        with review_col:
+            if True:
+                # --- 📋 Review Contacts Table (Moved under Send Button) ---
+                if st.session_state.wa_review_targets:
+                    pending_list = [trg for trg in st.session_state.wa_review_targets if not trg['is_sent']]
+                    excluded_list = [trg for trg in st.session_state.wa_review_targets if trg['is_sent']]
                     
-                    new_targets.append({
-                        'phone': n, 'name': 'Client', 'cv': '', 
-                        'is_sent': (n in st.session_state.wa_history)
-                    })
-                    seen_in_current_file.add(n)
-            # Excel
-            elif st.session_state.wa_data is not None:
-                df_curr = st.session_state.wa_data
-                def find_c(keys):
-                    for c in df_curr.columns:
-                        if any(k in str(c).lower() for k in keys): return c
-                    return None
-                c_name = find_c(["اسم", "name"])
-                c_phone = find_c(["واتساب", "رقم", "هاتف", "phone", "جوال"])
-                c_cv = find_c(["سيرة", "cv", "resume", "link"])
-                
-                for idx, row in df_curr.iterrows():
-                    raw_p = str(row[c_phone]).strip() if c_phone else ""
-                    phone = format_phone_number(raw_p)
-                    if not phone: phone = format_phone_number("".join(raw_p.split()))
+                    st.markdown("##### " + lbl['review_section'])
                     
-                    if phone:
-                        # 1. Check for duplicates within the current input
-                        if phone in seen_in_current_file:
-                            dups_count += 1
-                            continue # Totally remove duplicates as requested
+                    # 1. READY LIST (Items NOT checked)
+                    if pending_list:
+                        with st.expander(f"📥 {lbl['total_pending'].format(len(pending_list))}", expanded=True):
+                            to_delete = []
+                            with st.container(height=350):
+                                for i, trg in enumerate(st.session_state.wa_review_targets):
+                                    if trg['is_sent']: continue
+                                    r_c1, r_c2 = st.columns([4, 1])
+                                    # Use simplified display for sidebar
+                                    if r_c1.checkbox(f"{trg['name']} ({trg['phone'][-4:]})", value=False, key=f"trg_pending_{i}_{trg['phone']}"):
+                                        st.session_state.wa_review_targets[i]['is_sent'] = True
+                                        st.session_state.wa_history.add(trg['phone'])
+                                        save_wa_history(st.session_state.wa_history)
+                                        st.rerun()
+                                    if r_c2.button("🗑️", key=f"trg_del_p_{i}_{trg['phone']}"):
+                                        to_delete.append(i)
                             
-                        # 2. Build target data safely (Don't let Excel columns overwrite phone/name/cv)
-                        # Load all columns first
-                        target_data = {str(col): str(row[col]).strip() if pd.notna(row[col]) else "" for col in df_curr.columns}
-                        
-                        # Set essential keys (Overwriting the raw Excel values with cleaned/calculated ones)
-                        target_data['idx'] = idx
-                        target_data['phone'] = phone
-                        target_data['name'] = str(row[c_name]).strip() if c_name else target_data.get('الاسم', "عميل")
-                        target_data['cv'] = str(row[c_cv]).strip() if c_cv else target_data.get('السيرة', "")
-                        
-                        # 3. Check permanent history
-                        target_data['is_sent'] = (phone in st.session_state.wa_history)
-                        
-                        new_targets.append(target_data)
-                        seen_in_current_file.add(phone)
-            
-            if dups_count > 0:
-                st.toast(lbl['dups_removed'].format(dups_count), icon="✂️")
-            
-            if new_targets:
-                st.session_state.wa_review_targets = new_targets
-                st.session_state.wa_done = False
-                st.rerun()
+                            if to_delete:
+                                for idx in sorted(to_delete, reverse=True):
+                                    deleted_item = st.session_state.wa_review_targets.pop(idx)
+                                    if st.session_state.wa_data is not None and 'idx' in deleted_item:
+                                        st.session_state.wa_data = st.session_state.wa_data.drop(deleted_item['idx'])
+                                st.rerun()
 
-        # --- 📋 Review Contacts Table ---
-        if st.session_state.wa_review_targets:
-            pending_list = [t for t in st.session_state.wa_review_targets if not t['is_sent']]
-            excluded_list = [t for t in st.session_state.wa_review_targets if t['is_sent']]
+                    # 2. EXCLUDED LIST (Items Checked)
+                    if excluded_list:
+                        with st.expander(f"✅ {lbl['review_section']} ({len(excluded_list)})", expanded=False):
+                            if st.button(lbl['uncheck_all'], width='stretch', key="uncheck_all_side"):
+                                for i in range(len(st.session_state.wa_review_targets)):
+                                    st.session_state.wa_review_targets[i]['is_sent'] = False
+                                st.session_state.wa_history = set()
+                                save_wa_history(st.session_state.wa_history)
+                                st.rerun()
+
+                            with st.container(height=250):
+                                for i, trg in enumerate(st.session_state.wa_review_targets):
+                                    if not trg['is_sent']: continue
+                                    r_c3, r_c4 = st.columns([4, 1])
+                                    clean_id = trg['phone']
+                                    if not r_c3.checkbox(f"{trg['name']} ({trg['phone'][-4:]})", value=True, key=f"trg_excl_{i}_{clean_id}"):
+                                        st.session_state.wa_review_targets[i]['is_sent'] = False
+                                        st.session_state.wa_history.discard(clean_id)
+                                        save_wa_history(st.session_state.wa_history)
+                                        st.rerun()
+                                    if r_c4.button("🗑️", key=f"trg_del_e_{i}_{trg['phone']}"):
+                                        deleted_item = st.session_state.wa_review_targets.pop(i)
+                                        if st.session_state.wa_data is not None and 'idx' in deleted_item:
+                                            st.session_state.wa_data = st.session_state.wa_data.drop(deleted_item['idx'])
+                                        st.rerun()
+
+        with main_col:
+            t_manual, t_xl = st.tabs([lbl['tab_manual'], lbl['tab_excel']])
             
-            st.markdown("---")
-            # 1. READY LIST (Items NOT checked)
-            if pending_list:
-                with st.expander(f"📥 {lbl['total_pending'].format(len(pending_list))}", expanded=True):
-                    h1, h2, h3, h4 = st.columns([1, 4, 3, 1])
-                    h1.markdown(f"**{lbl['col_status']}**")
-                    h2.markdown(f"**{lbl['col_name']}**")
-                    h3.markdown(f"**{lbl['col_phone']}**")
-                    h4.markdown(f"**{lbl['col_action']}**")
+            rebuild_review = False
+            manual_list = []
+            with t_manual:
+                txt = st.text_area(lbl['paste_numbers'], height=100)
+                manual_list, _, _ = validate_numbers(txt)
+                if manual_list:
+                    if st.session_state.get('wa_last_manual_count', 0) != len(manual_list) or txt != st.session_state.get('wa_last_txt', ''):
+                        rebuild_review = True
+                        st.session_state.wa_last_manual_count = len(manual_list)
+                        st.session_state.wa_last_txt = txt
+
+            with t_xl:
+                uploaded = st.file_uploader(lbl['upload_excel'], type=["xlsx"], key=st.session_state.get('wa_upload_key', 'xl_0'))
+                if uploaded:
+                    df = pd.read_excel(uploaded)
+                    if st.session_state.get('wa_last_uploaded_name') != uploaded.name:
+                        rebuild_review = True
+                        st.session_state.wa_last_uploaded_name = uploaded.name
+                        st.session_state.wa_data = df
                     
-                    to_delete = []
-                    for i, trg in enumerate(st.session_state.wa_review_targets):
-                        if trg['is_sent']: continue
-                        r1, r2, r3, r4 = st.columns([1, 4, 3, 1])
-                        # Checkbox to Exclude (becomes true)
-                        if r1.checkbox("", value=False, key=f"trg_pending_{i}_{trg['phone']}"):
-                            st.session_state.wa_review_targets[i]['is_sent'] = True
-                            st.session_state.wa_history.add(trg['phone'])
-                            save_wa_history(st.session_state.wa_history)
+                    xl_col1, xl_col2 = st.columns([3, 1])
+                    display_count = len(st.session_state.wa_review_targets) if st.session_state.wa_review_targets else len(df)
+                    with xl_col1: st.success(lbl['loaded_count'].format(display_count))
+                    with xl_col2:
+                        if st.button(lbl['delete_file'], width='stretch', key="del_xl"):
+                            st.session_state.wa_data = None
+                            st.session_state.wa_review_targets = []
+                            st.session_state.wa_last_uploaded_name = None
+                            st.session_state.wa_upload_key = 'xl_1' if st.session_state.get('wa_upload_key') == 'xl_0' else 'xl_0'
                             st.rerun()
-                        
-                        r2.text(trg['name'])
-                        r3.text(trg['phone'])
-                        if r4.button("🗑️", key=f"trg_del_p_{i}_{trg['phone']}"):
-                            to_delete.append(i)
-                    
-                    if to_delete:
-                        for idx in sorted(to_delete, reverse=True):
-                            deleted_item = st.session_state.wa_review_targets.pop(idx)
-                            if st.session_state.wa_data is not None and 'idx' in deleted_item:
-                                st.session_state.wa_data = st.session_state.wa_data.drop(deleted_item['idx'])
-                        st.rerun()
-
-            # 2. EXCLUDED LIST (Items Checked) - THIS IS THE LIST THE USER ASKED FOR
-            if excluded_list:
-                with st.expander(f"✅ {lbl['review_section']} (مرسلة أو مكررة: {len(excluded_list)})", expanded=True):
-                    if st.button(lbl['uncheck_all'], use_container_width=True):
-                        # Reset all is_sent in review list and history
-                        for i in range(len(st.session_state.wa_review_targets)):
-                            st.session_state.wa_review_targets[i]['is_sent'] = False
-                        st.session_state.wa_history = set() # Clear history as requested to return all
-                        save_wa_history(st.session_state.wa_history)
-                        st.rerun()
-
-                    h1, h2, h3, h4 = st.columns([1, 4, 3, 1])
-                    h1.markdown(f"**{lbl['col_status']}**")
-                    h2.markdown(f"**{lbl['col_name']}**")
-                    h3.markdown(f"**{lbl['col_phone']}**")
-                    h4.markdown(f"**{lbl['col_action']}**")
-                    
-                    to_delete_ex = []
-                    for i, trg in enumerate(st.session_state.wa_review_targets):
-                        if not trg['is_sent']: continue
-                        r1, r2, r3, r4 = st.columns([1, 4, 3, 1])
-                        # Uncheck to move to pending (becomes false)
-                        # We use cleaned phone here to ensure history sync works
-                        clean_id = trg['phone']
-                        if not r1.checkbox("", value=True, key=f"trg_excl_{i}_{clean_id}"):
-                            st.session_state.wa_review_targets[i]['is_sent'] = False
-                            st.session_state.wa_history.discard(clean_id)
-                            save_wa_history(st.session_state.wa_history)
+                elif st.session_state.wa_data is not None:
+                    xl_col1, xl_col2 = st.columns([3, 1])
+                    display_count = len(st.session_state.wa_review_targets) if st.session_state.wa_review_targets else len(st.session_state.wa_data)
+                    with xl_col1: st.info(lbl['loaded_count'].format(display_count))
+                    with xl_col2:
+                        if st.button(lbl['delete_file'], width='stretch', key="del_xl2"):
+                            st.session_state.wa_data = None
+                            st.session_state.wa_review_targets = []
+                            st.session_state.wa_last_uploaded_name = None
+                            st.session_state.wa_upload_key = 'xl_1' if st.session_state.get('wa_upload_key') == 'xl_0' else 'xl_0'
                             st.rerun()
-                        
-                        r2.text(trg['name'])
-                        r3.text(trg['phone'])
-                        if r4.button("🗑️", key=f"trg_del_e_{i}_{trg['phone']}"):
-                            to_delete_ex.append(i)
+            
+            # Build review targets if data changed or list is empty but data exists
+            if rebuild_review or (not st.session_state.wa_review_targets and (manual_list or st.session_state.wa_data is not None)):
+                new_targets = []
+                seen_in_current_file = set()
+                dups_count = 0
+                
+                # Manual
+                if manual_list:
+                    for n in manual_list:
+                        if n in seen_in_current_file: dups_count += 1; continue 
+                        new_targets.append({'phone': n, 'name': 'Client', 'cv': '', 'is_sent': (n in st.session_state.wa_history)})
+                        seen_in_current_file.add(n)
+                # Excel
+                if st.session_state.wa_data is not None:
+                    df_curr = st.session_state.wa_data
+                    def find_c(keys):
+                        for c in df_curr.columns:
+                            if any(k in str(c).lower() for k in keys): return c
+                        return None
+                    c_name = find_c(["اسم", "name"])
+                    c_phone = find_c(["واتساب", "رقم", "هاتف", "phone", "جوال"])
+                    c_cv = find_c(["سيرة", "cv", "resume", "link"])
                     
-                    if to_delete_ex:
-                        for idx in sorted(to_delete_ex, reverse=True):
-                            deleted_item = st.session_state.wa_review_targets.pop(idx)
-                            if st.session_state.wa_data is not None and 'idx' in deleted_item:
-                                st.session_state.wa_data = st.session_state.wa_data.drop(deleted_item['idx'])
-                        st.rerun()
+                    for idx, row in df_curr.iterrows():
+                        raw_p = str(row[c_phone]).strip() if c_phone else ""
+                        phone = format_phone_number(raw_p)
+                        if not phone: phone = format_phone_number("".join(raw_p.split()))
+                        
+                        if phone:
+                            if phone in seen_in_current_file: dups_count += 1; continue
+                            target_data = {str(col): str(row[col]).strip() if pd.notna(row[col]) else "" for col in df_curr.columns}
+                            target_data.update({'idx': idx, 'phone': phone, 'is_sent': (phone in st.session_state.wa_history)})
+                            target_data['name'] = str(row[c_name]).strip() if (c_name and pd.notna(row[c_name])) else "عميل"
+                            target_data['cv'] = str(row[c_cv]).strip() if (c_cv and pd.notna(row[c_cv])) else ""
+                            new_targets.append(target_data)
+                            seen_in_current_file.add(phone)
+                
+                if dups_count > 0: st.toast(lbl['dups_removed'].format(dups_count), icon="✂️")
+                if new_targets:
+                    st.session_state.wa_review_targets = new_targets
+                    st.session_state.wa_done = False
+                    st.rerun()
             
         # Consolidate Pending Targets for the rest of the application
-        final_targets = [t for t in st.session_state.wa_review_targets if not t['is_sent']]
+        # Only recalculate if not currently running to avoid state issues
+        if not st.session_state.wa_running:
+            final_targets = [trg for trg in st.session_state.wa_review_targets if not trg['is_sent']]
+        else:
+            # Use active targets during sending to maintain consistency
+            final_targets = st.session_state.get('wa_active_targets', [])
 
         
         # LTR for English messages
@@ -436,20 +790,36 @@ def render_whatsapp_page():
         
         default_msg = """Hello {Name},
 
-We hope you are well.
+I hope you are doing well.
 
-You previously contacted us regarding job opportunities, and we would appreciate it if you are still interested and available for work.
+We are currently evaluating candidates for various job opportunities with us, and we'd love to know if you are still looking for a position.
 
-Please let us know if you are still interested in working.
+A quick reply would be great:
+YES – Proceed with me
+NO – Don't proceed
 
-Link to your profile: {CV}
+If you are not currently seeking opportunities, we would highly appreciate it if you could share this message with a friend or colleague who may be looking for employment.
 
-Sincerely,
-Abu Fahd"""
+Best regards,
+Abu Fahd
+HR Manager"""
         
         # Smart Message Toggle
         is_smart = st.checkbox(lbl['smart_msg'], value=st.session_state.get('wa_smart_mode', False), help=lbl['smart_msg_help'], key="wa_smart_mode")
         
+        # When Smart Mode is enabled, handle template logic
+        if is_smart:
+            sel_tpl_name = st.session_state.get('wa_selected_template_key')
+            if sel_tpl_name:
+                ct = load_templates().get("custom", {})
+                active_tpl = ct.get(sel_tpl_name)
+                if active_tpl and isinstance(active_tpl, dict) and active_tpl.get('is_smart'):
+                    # If the selected template IS a smart one, prioritize its settings
+                    if st.session_state.wa_messages[0] != active_tpl['body']:
+                         st.session_state.wa_messages[0] = active_tpl['body']
+                    if active_tpl.get('job_title') and not st.session_state.get('wa_custom_job'):
+                         st.session_state.wa_custom_job = active_tpl['job_title']
+
         # Custom Job Title Input for Smart Mode
         custom_job = ""
         if is_smart:
@@ -458,9 +828,9 @@ Abu Fahd"""
         
         # Initialize first message if empty
         if not st.session_state.wa_messages[0]:
-            st.session_state.wa_messages[0] = generate_smart_message("{Name}", "{CV}", custom_job=custom_job)
+            st.session_state.wa_messages[0] = default_msg
         
-        # Render dynamic message fields
+        # --- ⌨️ Message Input Logic ---
         if not is_smart:
             for i in range(len(st.session_state.wa_messages)):
                 msg_col1, msg_col2 = st.columns([11, 1])
@@ -476,7 +846,6 @@ Abu Fahd"""
 
             # Add Message Button
             if st.button(lbl['add_msg'], key="add_msg_btn"):
-                # Generate a new smart variation for the added field
                 new_smart_msg = generate_smart_message("{Name}", "{CV}")
                 st.session_state.wa_messages.append(new_smart_msg)
                 st.rerun()
@@ -486,8 +855,104 @@ Abu Fahd"""
             preview_msg = generate_smart_message("{Name}", "{CV}", custom_job=st.session_state.get('wa_custom_job_val', ''))
             st.text_area("معاينة الرسالة الذكية (Smart Message Preview)", value=preview_msg, height=250, disabled=True)
             
-            # Ensure ready logic works in smart mode
-            has_valid_msg = True 
+        # --- 📁 Templates Library Logic (Self-contained at start to avoid state conflicts) ---
+        templates_data = load_templates()
+        custom_templates = templates_data.get("custom", {})
+        
+        # Check if we should apply a template (button is triggered via rerun)
+        # We handle the 'Apply' logic early if the button was clicked in the previous run
+        # Note: Streamlit buttons return True ONLY in the run they were clicked.
+        # But we can use on_click to be safer.
+
+
+        # UI for Templates Library
+        with st.expander(lbl['wa_templates_title']):
+            if custom_templates:
+                template_to_use = st.selectbox(lbl['wa_use_template'], options=list(custom_templates.keys()), key="wa_selected_template_key")
+                
+                col_t1, col_t2 = st.columns(2)
+                with col_t1:
+                    # Define the callback to avoid state modification error
+                    def apply_template():
+                        sel = st.session_state.wa_selected_template_key
+                        tpl = custom_templates[sel]
+                        if isinstance(tpl, dict):
+                            st.session_state.wa_messages[0] = tpl['body']
+                            st.session_state.wa_smart_mode = tpl.get('is_smart', False)
+                            if tpl.get('job_title'):
+                                st.session_state.wa_custom_job = tpl['job_title']
+                                st.session_state.wa_custom_job_val = tpl['job_title']
+                        else:
+                            st.session_state.wa_messages[0] = tpl
+                            st.session_state.wa_smart_mode = False
+                        st.session_state.wa_msg_applied_toast = f"✅ {sel} applied!"
+
+                    st.button(lbl['wa_use_template'], key="apply_template_btn", on_click=apply_template)
+                
+                if st.session_state.get('wa_msg_applied_toast'):
+                    st.toast(st.session_state.wa_msg_applied_toast)
+                    del st.session_state.wa_msg_applied_toast
+            
+            # Save Current Message as Template
+            st.markdown("---")
+            new_template_name = st.text_input(lbl['wa_template_name'], key="new_tpl_name")
+            
+            def save_current_as_template():
+                name = st.session_state.new_tpl_name
+                if name.strip():
+                    # Save as the new dict format
+                    templates_data["custom"][name] = {
+                        "body": st.session_state.wa_messages[0],
+                        "is_smart": st.session_state.wa_smart_mode,
+                        "job_title": st.session_state.get('wa_custom_job', '')
+                    }
+                    save_templates(templates_data)
+                    st.session_state.wa_msg_save_success = f"✅ {name} saved!"
+                else:
+                    st.session_state.wa_msg_save_error = "Please enter a template name"
+
+            st.button(lbl['wa_save_as_template'], on_click=save_current_as_template)
+            
+            if st.session_state.get('wa_msg_save_success'):
+                st.success(st.session_state.wa_msg_save_success)
+                del st.session_state.wa_msg_save_success
+            if st.session_state.get('wa_msg_save_error'):
+                st.error(st.session_state.wa_msg_save_error)
+                del st.session_state.wa_msg_save_error
+
+            # Manage / Delete Templates
+            if custom_templates:
+                st.markdown("---")
+                st.markdown(lbl['wa_manage_templates'])
+                for t_name in list(custom_templates.keys()):
+                    m_col1, m_col2 = st.columns([4, 1])
+                    m_col1.text(t_name)
+                    
+                    def delete_tpl(name=t_name):
+                        del templates_data["custom"][name]
+                        save_templates(templates_data)
+
+                    m_col2.button(lbl['wa_delete_template'], key=f"del_tpl_{t_name}", on_click=delete_tpl)
+            st.info(lbl['wa_placeholders_guide'])
+
+        # --- ⚙️ Smart Templates Components Editor ---
+        with st.expander("🛠️ " + ("تعديل مكونات الرسائل الذكية" if is_ar else "Edit Smart Message Components")):
+            templates_data = load_templates()
+            smart_parts = templates_data.get("smart", SMART_TEMPLATES)
+            changed_parts = False
+            for part_key, part_list in smart_parts.items():
+                st.markdown(f"**{part_key.replace('_', ' ').title()}**")
+                new_list_str = st.text_area(f"Options for {part_key}", value="\n".join(part_list), height=100, key=f"smart_part_{part_key}")
+                new_list = [line.strip() for line in new_list_str.split("\n") if line.strip()]
+                if new_list != part_list:
+                    smart_parts[part_key] = new_list
+                    changed_parts = True
+            if changed_parts:
+                if st.button("💾 " + ("حفظ جميع التغييرات" if is_ar else "Save All Changes"), key="save_smart_parts"):
+                    templates_data["smart"] = smart_parts
+                    save_templates(templates_data)
+                    st.toast("✅ Smart components updated!")
+                    st.rerun()
         
         # Attachment
         attachment = st.file_uploader(lbl['attach'], 
@@ -512,170 +977,159 @@ Abu Fahd"""
             msg_switch_threshold = st.number_input("تبديل الرسالة بعد" if is_ar else "Switch msg after", min_value=1, max_value=1000, value=1, disabled=st.session_state.wa_running)
 
         # Smart detect target changes
-        current_fp = ",".join([t['phone'] for t in final_targets]) if final_targets else ""
+        current_fp = ",".join([trg['phone'] for trg in final_targets]) if final_targets else ""
         if current_fp != st.session_state.get('wa_sent_fingerprint', ''):
             st.session_state.wa_done = False
 
-        # Send / Stop
+        # ══════════════════════════════════════════════════════════
+        # 🚀 وضع الإرسال الخلفي - يعمل حتى بعد إغلاق المتصفح
+        # ══════════════════════════════════════════════════════════
+        worker_state = mgr.get_state()
+        worker_status = worker_state.get("status", "not_started")
+        worker_alive  = mgr.is_worker_alive()
+        is_sending    = worker_alive and worker_status == "sending"
+
+        # تحديث سجلات الإرسال من العامل الخلفي
+        bg_logs = mgr.get_logs()
+        if bg_logs:
+            # دمج السجلات الجديدة فقط
+            existing_phones_times = {(e.get('phone',''), e.get('time','')) for e in st.session_state.wa_logs if isinstance(e, dict)}
+            for entry in bg_logs:
+                key = (entry.get('phone',''), entry.get('time',''))
+                if key not in existing_phones_times:
+                    st.session_state.wa_logs.append(entry)
+                    existing_phones_times.add(key)
+
+        # ─── أزرار الإرسال / الإيقاف ───
         btn1, btn2, btn3 = st.columns([1, 1, 2])
         with btn1:
-            if st.session_state.wa_running:
-                if st.button(lbl['stop'], type="primary", use_container_width=True):
-                    st.session_state.wa_running = False; st.rerun()
+            if is_sending:
+                if st.button(lbl['stop'], type="primary", width='stretch', key="bg_stop_btn"):
+                    mgr.stop_worker()
+                    st.session_state.wa_running = False
+                    st.toast("🛑 " + ("تم إيقاف الإرسال" if is_ar else "Sending stopped"))
+                    st.rerun()
             else:
-                # Check if at least one message is not empty
                 has_valid_msg = any(msg.strip() != "" for msg in st.session_state.wa_messages)
                 ready = len(final_targets) > 0 and has_valid_msg
-                if st.session_state.get('wa_done', False) and current_fp == st.session_state.get('wa_sent_fingerprint', ''):
-                    st.button(lbl['sent_done'], disabled=True, use_container_width=True)
+
+                if worker_status == "done" and current_fp == st.session_state.get('wa_sent_fingerprint', ''):
+                    st.button(lbl['sent_done'], disabled=True, width='stretch')
                 else:
-                    if st.button(lbl['send'].format(len(final_targets)), disabled=not ready, use_container_width=True, type="primary"):
+                    if st.button(lbl['send'].format(len(final_targets)), disabled=not ready, width='stretch', type="primary", key="bg_send_btn"):
+                        # ── حفظ المرفق في ملف مؤقت ──
+                        temp_path = None
+                        if attachment:
+                            import tempfile
+                            suffix = os.path.splitext(attachment.name)[1]
+                            t_file = tempfile.NamedTemporaryFile(delete=False, suffix=suffix,
+                                                                 dir=os.path.join(os.getcwd(), ".whatsapp_session"))
+                            t_file.write(attachment.getvalue())
+                            t_file.close()
+                            temp_path = t_file.name
+                            st.session_state.wa_temp_path = temp_path
+
+                        # ── تشغيل العامل الخلفي ──
+                        mgr.start_worker()
+                        time.sleep(1.5)
+
+                        # ── أرسل الوظيفة ──
+                        job_id = mgr.send_job(
+                            targets            = final_targets,
+                            messages           = st.session_state.wa_messages,
+                            delay              = delay,
+                            batch_size         = int(batch_size),
+                            batch_delay        = int(batch_delay),
+                            is_smart           = bool(st.session_state.get('wa_smart_mode', False)),
+                            custom_job         = st.session_state.get('wa_custom_job_val', ''),
+                            attachment_path    = temp_path,
+                            msg_switch_threshold = int(msg_switch_threshold),
+                            start_from         = 0
+                        )
                         st.session_state.wa_running = True
-                        st.session_state.wa_idx = 0
                         st.session_state.wa_done = False
                         st.session_state.wa_sent_fingerprint = current_fp
-                        # CRITICAL: Store a STABLE copy of targets to avoid "shrinking list" bug
-                        st.session_state.wa_active_targets = list(final_targets)
-                        
-                        # Initialize message rotation state
-                        st.session_state.wa_msg_index = 0
-                        st.session_state.wa_msg_sent_count = 0
-                        
+                        st.session_state.wa_active_job_id = job_id
+                        st.toast("🚀 " + ("بدأ الإرسال في الخلفية! يمكنك إغلاق المتصفح" if is_ar else "Sending started in background! You can close the browser"), icon="✅")
                         st.rerun()
 
-        if st.session_state.wa_running and st.session_state.get('wa_active_targets'):
-            active_targets = st.session_state.wa_active_targets
-            
-            # Save attachment to temp file ONCE at the start of the batch
-            if attachment and not st.session_state.get('wa_temp_path'):
-                import tempfile
-                suffix = os.path.splitext(attachment.name)[1]
-                t_file = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
-                t_file.write(attachment.getvalue())
-                t_file.close()
-                st.session_state.wa_temp_path = t_file.name
-            
-            # Status Card
+        # ─── بطاقة الحالة الخلفية ───
+        if is_sending or worker_status in ("starting", "awaiting_login"):
+            w_idx   = worker_state.get("current_idx", 0)
+            w_total = worker_state.get("total", len(final_targets))
+            w_name  = worker_state.get("current_name", "")
+            w_phone = worker_state.get("current_phone", "")
+            countdown = worker_state.get("countdown", 0)
+            countdown_type = worker_state.get("countdown_type", "normal")
+
+            countdown_icons = {
+                "batch_break": "🛡️", "think_break": "🧠",
+                "stealth_break": "🥷", "normal": "⏳"
+            }
+            c_icon = countdown_icons.get(countdown_type, "⏳")
+
+            if countdown > 0:
+                m, s = divmod(countdown, 60)
+                time_str = f"{m}د {s}ث" if is_ar else f"{m}m {s}s"
+                countdown_label = f"{c_icon} {'الانتظار بين الرسائل' if is_ar else 'Waiting'}: {time_str}"
+            else:
+                countdown_label = f"📤 {'جاري الإرسال' if is_ar else 'Sending'}..."
+
+            sent_pct = (w_idx / w_total * 100) if w_total > 0 else 0
+
             st.markdown(f"""
-            <div style="background: rgba(212, 175, 55, 0.05); padding: 15px; border-radius: 15px; border: 1px solid rgba(212, 175, 55, 0.2); margin-bottom: 20px;">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                    <span style="color: #00FF41; font-weight: 700; font-size: 1.1rem;">✅ {lbl['sent_count']}: {st.session_state.wa_idx}</span>
-                    <span style="color: #D4AF37; font-weight: 700; font-size: 1.1rem;">⌛ {lbl['remaining_count']}: {len(active_targets) - st.session_state.wa_idx}</span>
+            <div style="background:rgba(0,255,100,0.05);padding:16px;border-radius:14px;border:1.5px solid rgba(0,255,100,0.25);margin-bottom:12px;">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+                    <span style="color:#00FF88;font-weight:700;font-size:1.05rem;">✅ {'تم الإرسال' if is_ar else 'Sent'}: {w_idx}</span>
+                    <span style="color:#D4AF37;font-weight:700;font-size:1.05rem;">⌛ {'متبقٍ' if is_ar else 'Remaining'}: {w_total - w_idx}</span>
                 </div>
-                <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.9rem; color: #888;">
-                    <span>يتم الآن الإرسال من الرسالة رقم {st.session_state.wa_msg_index + 1}</span>
-                    <span>تم إرسال {st.session_state.wa_msg_sent_count} رسالة → الانتقال للرسالة التالية بعد {msg_switch_threshold - st.session_state.wa_msg_sent_count}</span>
+                <div style="background:rgba(255,255,255,0.06);border-radius:8px;height:8px;margin-bottom:10px;overflow:hidden;">
+                    <div style="background:linear-gradient(90deg,#00FF88,#D4AF37);height:100%;width:{sent_pct:.1f}%;transition:width 0.5s;"></div>
+                </div>
+                <div style="color:#aaa;font-size:0.85rem;display:flex;justify-content:space-between;">
+                    <span>👤 {w_name} · 📱 {w_phone}</span>
+                    <span>{countdown_label}</span>
                 </div>
             </div>
+            <div style="background:rgba(0,180,255,0.08);padding:10px 16px;border-radius:10px;border:1px solid rgba(0,180,255,0.2);text-align:center;margin-bottom:8px;">
+                <span style="color:#00AAFF;font-weight:600;font-size:0.9rem;">
+                    🟢 {'الإرسال يعمل في الخلفية — يمكنك إغلاق هذا التبويب بأمان' if is_ar else 'Sending runs in background — safe to close this tab'}
+                </span>
+            </div>
             """, unsafe_allow_html=True)
-            
-            st.progress(st.session_state.wa_idx / len(active_targets))
-            
-            if st.session_state.wa_idx < len(active_targets):
-                # --- ⏳ DELAY & COUNTDOWN (Before each message EXCEPT the first one) ---
-                if st.session_state.wa_idx > 0:
-                    def format_time(seconds):
-                        m, s = divmod(seconds, 60)
-                        if m > 0:
-                            return f"{m} دقيقة و {s} ثانية" if is_ar else f"{m}m {s}s"
-                        return f"{s} ثانية" if is_ar else f"{s}s"
 
-                    wait_ph = st.empty()
-                    is_batch_pause = batch_size > 0 and st.session_state.wa_idx % batch_size == 0
-                    current_delay = batch_delay if is_batch_pause else delay
-                    delay_lbl = lbl['pausing'] if is_batch_pause else lbl['next_msg_in']
-                    
-                    for i in range(current_delay, 0, -1):
-                        if not st.session_state.wa_running: break
-                        wait_ph.warning(delay_lbl.format(format_time(i))) if is_batch_pause else wait_ph.info(delay_lbl.format(format_time(i)))
-                        time.sleep(1)
-                    wait_ph.empty()
+            st.progress(min(1.0, sent_pct / 100))
 
-                if st.session_state.wa_running:
-                    trg = active_targets[st.session_state.wa_idx]
-                    p, n, v = trg['phone'], trg['name'], trg['cv']
-                    
-                    # --- Message Generation Logic ---
-                    if st.session_state.get('wa_smart_mode'):
-                        # Smart AI Mode: Generate unique message for each person
-                        custom_job_val = st.session_state.get('wa_custom_job_val', '')
-                        final_msg = generate_smart_message(n, v, custom_job=custom_job_val)
-                    else:
-                        # Standard Rotation Mode
-                        current_msg_body = st.session_state.wa_messages[st.session_state.wa_msg_index]
-                        final_msg = current_msg_body
-                        
-                        # PRE-CALCULATE placeholders for the entire batch to avoid repeated loops
-                        cv_placeholders = ["{CV}", "{cv}", "{السيرة}"]
-                        if st.session_state.get('wa_active_targets'):
-                            first_trg = st.session_state.wa_active_targets[0]
-                            for k in first_trg.keys():
-                                if any(x in str(k).lower() for x in ["سيرة", "cv", "resume", "link"]):
-                                    cv_placeholders.append("{" + str(k) + "}")
-                        
-                        # If CV is empty, remove lines containing CV placeholders
-                        if not v or v.lower() == 'nan':
-                            lines = final_msg.split('\n')
-                            final_lines = []
-                            for line in lines:
-                                if not any(ph in line for ph in cv_placeholders):
-                                    final_lines.append(line)
-                            final_msg = '\n'.join(final_lines)
-                        
-                        for key, val in trg.items():
-                            final_msg = final_msg.replace("{" + str(key) + "}", str(val))
-                            final_msg = final_msg.replace("{" + str(key).lower() + "}", str(val))
-                        
-                        final_msg = final_msg.replace("{Name}", n).replace("{name}", n).replace("{الاسم}", n).replace("{CV}", v).replace("{cv}", v).replace("{السيرة}", v)
-                    
-                    import re
-                    final_msg = re.sub(r'\n{3,}', '\n\n', final_msg).strip()
-                    
-                    st.info(lbl['sending'].format(n, p))
-                    
-                    # Call send_message with stored temp_path
-                    temp_path = st.session_state.get('wa_temp_path')
-                    ok, log = st.session_state.wa_service.send_message(p, final_msg, attachment_path=temp_path)
-                    
-                    st.session_state.wa_logs.append({
-                        'name': n, 'phone': p,
-                        'time': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                        'status': log if ok else f"فشل ({log})", 'ok': ok
-                    })
+            # تحديث تلقائي كل 5 ثوان لعرض التقدم
+            st.markdown("""
+            <script>
+            (function(){
+                if(!window.__wa_bg_refresh){
+                    window.__wa_bg_refresh = setInterval(function(){
+                        if(document.hasFocus() || true){
+                            // Trigger a lightweight Streamlit rerun via clicking a hidden element
+                            var btns = window.parent.document.querySelectorAll('button[data-testid="baseButton-secondary"]');
+                        }
+                    }, 5000);
+                }
+            })();
+            </script>
+            """, unsafe_allow_html=True)
 
-                    if ok:
-                        st.session_state.wa_history.add(p)
-                        save_wa_history(st.session_state.wa_history)
-                        for t in st.session_state.wa_review_targets:
-                            if t['phone'] == p: t['is_sent'] = True
-                            
-                        # Update message rotation counters ONLY on successful send
-                        st.session_state.wa_msg_sent_count += 1
-                        if st.session_state.wa_msg_sent_count >= msg_switch_threshold:
-                            st.session_state.wa_msg_sent_count = 0
-                            # Move to next message if available, otherwise stay on the last one
-                            if st.session_state.wa_msg_index < len(st.session_state.wa_messages) - 1:
-                                st.session_state.wa_msg_index += 1
-                        
-                        # Anti-ban: Secondary random micro-rest
-                        time.sleep(random.uniform(1.0, 3.0))
+            time.sleep(4)
+            st.rerun()
 
-                    st.session_state.wa_idx += 1
-                    
-                    if st.session_state.wa_idx == len(active_targets):
-                        st.session_state.wa_running = False
-                        st.session_state.wa_done = True
-                        st.balloons()
-                    
-                    st.rerun()
-            
-            # Clean up temp file ONLY when done or stopped
-            if not st.session_state.wa_running and st.session_state.get('wa_temp_path'):
-                tp = st.session_state.get('wa_temp_path')
-                if os.path.exists(tp):
-                    try: os.remove(tp)
-                    except: pass
-                st.session_state.wa_temp_path = None
+        elif worker_status == "done" and worker_alive:
+            st.success("🎉 " + ("اكتمل الإرسال بنجاح!" if is_ar else "Sending completed successfully!"))
+            st.balloons()
+            st.session_state.wa_running = False
+            st.session_state.wa_done = True
+
+        elif worker_status == "error":
+            st.error("❌ " + worker_state.get("error", "خطأ في الإرسال"))
+
+        elif worker_status == "awaiting_login":
+            st.warning("📱 " + ("يرجى مسح رمز QR من واتساب ثم الضغط تحقق" if is_ar else "Please scan QR code from WhatsApp then click Verify"))
 
         # 📄 Professional 2026 Log Section
         if st.session_state.wa_logs:
@@ -683,7 +1137,7 @@ Abu Fahd"""
             with st.expander(lbl['log_title'], expanded=True):
                 log_h, log_del = st.columns([3, 1])
                 with log_del:
-                    if st.button(lbl['delete_log'], use_container_width=True, key="clear_log_btn"):
+                    if st.button(lbl['delete_log'], width='stretch', key="clear_log_btn"):
                         st.session_state.wa_logs = []
                         st.session_state.wa_done = False
                         st.rerun()
@@ -715,375 +1169,9 @@ Abu Fahd"""
                     </div>
                     """, unsafe_allow_html=True)
 
-    # Diagnostic
-    if status not in ["Connected", "Awaiting Login"]:
-        with st.expander(lbl['diag']):
-            if st.button(lbl['screenshot']):
-                img = st.session_state.wa_service.get_diagnostic_screenshot()
-                if img: st.image(f"data:image/png;base64,{img}")
-=======
-import streamlit as st
-import pandas as pd
-import time
-from datetime import datetime
-from src.services.whatsapp_service import WhatsAppService
-from src.utils.phone_utils import validate_numbers, format_phone_number
-from src.core.i18n import t
-
-def render_whatsapp_page():
-    lang = st.session_state.get('lang', 'ar')
-    is_ar = lang == 'ar'
-    is_cloud = "/mount/" in __file__
-    
-    if 'wa_service' not in st.session_state:
-        st.session_state.wa_service = WhatsAppService()
-    else:
-        # Check if the existing service object is outdated (missing attachment_path in send_message)
-        import inspect
-        sig = inspect.signature(st.session_state.wa_service.send_message)
-        if 'attachment_path' not in sig.parameters:
-            st.session_state.wa_service = WhatsAppService()
-    if 'wa_logs' not in st.session_state: st.session_state.wa_logs = []
-    if 'wa_running' not in st.session_state: st.session_state.wa_running = False
-    if 'wa_idx' not in st.session_state: st.session_state.wa_idx = 0
-    if 'wa_data' not in st.session_state: st.session_state.wa_data = None
-
-    st.markdown('<div class="programmer-signature-neon">By: Alsaeed Alwazzan</div>', unsafe_allow_html=True)
-
-    # === Bilingual Labels ===
-    lbl = {
-        'connected': "✅ متصل! جاهز للإرسال" if is_ar else "✅ Connected! Ready to send",
-        'awaiting': "⚠️ الباركود جاهز، امسح من واتساب" if is_ar else "⚠️ QR Ready, scan from WhatsApp",
-        'loading': "⏳ جاري التحميل..." if is_ar else "⏳ Loading...",
-        'stopped': "❌ المحرك متوقف" if is_ar else "❌ Engine Stopped",
-        'start_engine': "🔄 تشغيل المحرك" if is_ar else "🔄 Start Engine",
-        'full_reset': "🗑️ إعادة تعيين" if is_ar else "🗑️ Full Reset",
-        'starting': "جاري التشغيل... (30 ثانية)" if is_ar else "Starting... (30 sec)",
-        'resetting': "جاري المسح والإعادة..." if is_ar else "Resetting...",
-        'refresh_qr': "🔄 تحديث الباركود" if is_ar else "🔄 Refresh QR",
-        'verify': "✅ تم المسح - تحقق" if is_ar else "✅ Scanned - Verify",
-        'verifying': "جاري التحقق... (30 ثانية)" if is_ar else "Verifying... (30 sec)",
-        'connected_ok': "🎉 تم الاتصال بنجاح!" if is_ar else "🎉 Connected successfully!",
-        'not_connected': "❌ لم يتم الاتصال. جرب إعادة التعيين" if is_ar else "❌ Not connected. Try Full Reset",
-        'qr_loading': "⏳ جاري توليد الباركود..." if is_ar else "⏳ Generating QR...",
-        'tab_manual': "🔢 أرقام يدوية" if is_ar else "🔢 Manual Numbers",
-        'tab_excel': "📊 ملف إكسل" if is_ar else "📊 Excel File",
-        'paste_numbers': "ألصق الأرقام هنا" if is_ar else "Paste numbers here",
-        'ready_count': "جاهز لـ {} رقم" if is_ar else "Ready for {} numbers",
-        'upload_excel': "ارفع ملف الإكسل" if is_ar else "Upload Excel file",
-        'loaded_count': "تم تحميل {} عامل ✅" if is_ar else "Loaded {} workers ✅",
-        'delete_file': "🗑️ حذف الملف" if is_ar else "🗑️ Delete File",
-        'msg_title': "### ✍️ نص الرسالة" if is_ar else "### ✍️ Message Text",
-        'msg_label': "اكتب رسالتك" if is_ar else "Write your message",
-        'attach': "📎 إرفاق ملف (اختياري)" if is_ar else "📎 Attach file (optional)",
-        'attached': "📎 مرفق: {} ({} KB)" if is_ar else "📎 Attached: {} ({} KB)",
-        'delay': "مهلة الإرسال (ثانية)" if is_ar else "Send delay (seconds)",
-        'stop': "🛑 إيقاف" if is_ar else "🛑 Stop",
-        'sent_done': "✅ تم الارسال" if is_ar else "✅ Sent",
-        'send': "📨 ارسال ({})" if is_ar else "📨 Send ({})",
-        'sending': "⏳ إرسال إلى: {} ({})..." if is_ar else "⏳ Sending to: {} ({})...",
-        'log_title': "#### 📄 سجل الإرسال" if is_ar else "#### 📄 Send Log",
-        'diag': "🛠️ أدوات التشخيص" if is_ar else "🛠️ Diagnostics",
-        'screenshot': "📸 لقطة شاشة" if is_ar else "📸 Screenshot",
-        'batch_size': "استراحة بعد (عدد الرسائل)" if is_ar else "Pause after (messages)",
-        'batch_delay': "مدة الاستراحة (دقائق)" if is_ar else "Pause duration (minutes)",
-        'pausing': "⏳ استراحة مؤقتة... متبقي: {}" if is_ar else "⏳ Pausing... remaining: {}",
-        'next_msg_in': "⏳ الرسالة القادمة خلال: {}" if is_ar else "⏳ Next message in: {}",
-        'settings_title': "#### ⚙️ إعدادات الإرسال" if is_ar else "#### ⚙️ Sending Settings",
-        'batch_help': "0 = بدون استراحة" if is_ar else "0 = No pause",
-    }
-
-    # 1. Connection Status
-    status = st.session_state.wa_service.get_status()
-    c1, c2, c3 = st.columns([2, 1, 1])
-    with c1:
-        if status == "Connected": st.success(lbl['connected'])
-        elif status == "Awaiting Login": st.warning(lbl['awaiting'])
-        elif status == "Loading...": st.info(lbl['loading'])
-        else:
-            st.error(lbl['stopped'])
-            if getattr(st.session_state.wa_service, 'last_error', ''):
-                st.code(st.session_state.wa_service.last_error, language=None)
-    with c2:
-        if st.button(lbl['start_engine'], type="primary", use_container_width=True):
-            with st.spinner(lbl['starting']):
-                st.session_state.wa_service.close()
-                ok, msg = st.session_state.wa_service.start_driver(headless=is_cloud, force_clean=False)
-                if ok: st.toast(f"✅ {msg}")
-                else: st.error(f"❌ {msg}")
-                st.rerun()
-    with c3:
-        if st.button(lbl['full_reset'], use_container_width=True):
-            with st.spinner(lbl['resetting']):
-                st.session_state.wa_service.close()
-                ok, msg = st.session_state.wa_service.start_driver(headless=is_cloud, force_clean=True)
-                if ok: st.toast(f"✅ {msg}")
-                else: st.error(f"❌ {msg}")
-                st.rerun()
-
-    # 2. QR CODE SECTION (DO NOT MODIFY)
-    if status == "Awaiting Login":
-        qr_b64 = st.session_state.wa_service.get_qr_hd()
-        if qr_b64:
-            src = qr_b64 if qr_b64.startswith("data:") else f"data:image/png;base64,{qr_b64}"
-            st.markdown(f"""
-            <div style="
-                background: #FFFFFF;
-                padding: 25px;
-                border-radius: 20px;
-                max-width: 420px;
-                margin: 15px auto;
-                text-align: center;
-                box-shadow: 0 0 40px rgba(255,255,255,0.4);
-            ">
-                <img src="{src}" 
-                     style="
-                        width: 350px; 
-                        height: 350px; 
-                        image-rendering: pixelated;
-                        image-rendering: crisp-edges;
-                     " />
-            </div>
-            """, unsafe_allow_html=True)
-        else:
-            st.info(lbl['qr_loading'])
-        
-        b1, b2 = st.columns(2)
-        with b1:
-            if st.button(lbl['refresh_qr'], use_container_width=True):
-                st.rerun()
-        with b2:
-            if st.button(lbl['verify'], use_container_width=True, type="primary"):
-                with st.spinner(lbl['verifying']):
-                    connected = st.session_state.wa_service.wait_for_connection(timeout=30)
-                if connected:
-                    st.toast(lbl['connected_ok'])
-                    st.balloons()
-                else:
-                    st.error(lbl['not_connected'])
-                st.rerun()
-
-    # 3. INPUT + BROADCAST (Only when Connected)
-    if status == "Connected":
-        st.markdown("---")
-        t_manual, t_xl = st.tabs([lbl['tab_manual'], lbl['tab_excel']])
-        
-        manual_list = []
-        with t_manual:
-            txt = st.text_area(lbl['paste_numbers'], height=100)
-            manual_list, _, _ = validate_numbers(txt)
-            if manual_list:
-                st.success(lbl['ready_count'].format(len(manual_list)))
-                if st.session_state.get('wa_last_manual_count', 0) != len(manual_list):
-                    st.session_state.wa_done = False
-                    st.session_state.wa_last_manual_count = len(manual_list)
-
-        with t_xl:
-            uploaded = st.file_uploader(lbl['upload_excel'], type=["xlsx"], key=st.session_state.get('wa_upload_key', 'xl_0'))
-            if uploaded:
-                df = pd.read_excel(uploaded)
-                if st.session_state.wa_data is None or len(df) != len(st.session_state.wa_data):
-                    st.session_state.wa_done = False
-                st.session_state.wa_data = df
-                xl_col1, xl_col2 = st.columns([3, 1])
-                with xl_col1:
-                    st.success(lbl['loaded_count'].format(len(df)))
-                with xl_col2:
-                    if st.button(lbl['delete_file'], use_container_width=True, key="del_xl"):
-                        st.session_state.wa_data = None
-                        st.session_state.wa_done = False
-                        old_key = st.session_state.get('wa_upload_key', 'xl_0')
-                        st.session_state.wa_upload_key = 'xl_1' if old_key == 'xl_0' else 'xl_0'
-                        st.rerun()
-            elif st.session_state.wa_data is not None:
-                # Show delete button even if uploader is empty but data exists
-                xl_col1, xl_col2 = st.columns([3, 1])
-                with xl_col1:
-                    st.info(lbl['loaded_count'].format(len(st.session_state.wa_data)))
-                with xl_col2:
-                    if st.button(lbl['delete_file'], use_container_width=True, key="del_xl2"):
-                        st.session_state.wa_data = None
-                        st.session_state.wa_done = False
-                        old_key = st.session_state.get('wa_upload_key', 'xl_0')
-                        st.session_state.wa_upload_key = 'xl_1' if old_key == 'xl_0' else 'xl_0'
-                        st.rerun()
-        
-        final_targets = []
-        if manual_list:
-            for n in manual_list:
-                final_targets.append({'phone': n, 'name': 'Customer', 'cv': ''})
-        elif st.session_state.wa_data is not None:
-            df = st.session_state.wa_data
-            def find_c(keys):
-                for c in df.columns:
-                    if any(k in str(c).lower() for k in keys): return c
-                return None
-            c_name = find_c(["اسم", "name"])
-            c_phone = find_c(["واتساب", "رقم", "هاتف", "phone", "جوال"])
-            c_cv = find_c(["سيرة", "cv", "resume", "link"])
-            for _, row in df.iterrows():
-                if c_phone:
-                    raw_p = str(row[c_phone]).strip()
-                    phone = format_phone_number(raw_p)
-                    if not phone: phone = format_phone_number("".join(raw_p.split()))
-                    if phone:
-                        final_targets.append({
-                            'phone': phone,
-                            'name': str(row[c_name]) if c_name else "Client",
-                            'cv': str(row[c_cv]) if c_cv else ""
-                        })
-
-        st.markdown(lbl['msg_title'])
-        
-        # LTR for English messages
-        st.markdown("""
-        <style>
-        div[data-testid="stTextArea"] textarea {
-            direction: ltr !important;
-            text-align: left !important;
-            font-family: 'Inter', sans-serif !important;
-        }
-        </style>
-        """, unsafe_allow_html=True)
-        
-        default_msg = """Hello {Name},
-
-We hope you are well.
-
-You previously contacted us regarding job opportunities, and we would appreciate it if you are still interested and available for work.
-
-Please let us know if you are still interested in working.
-
-Link to your profile: {CV}
-
-Sincerely,
-Abu Fahd"""
-        msg_body = st.text_area(lbl['msg_label'], height=250, value=default_msg)
-        
-        # Attachment
-        attachment = st.file_uploader(lbl['attach'], 
-                                      type=["png","jpg","jpeg","gif","bmp","webp",
-                                            "pdf","doc","docx","xls","xlsx","ppt","pptx",
-                                            "mp4","avi","mov","mkv","mp3","wav","ogg",
-                                            "zip","rar","7z","txt","csv"],
-                                      key="wa_attachment")
-        if attachment:
-            st.success(lbl['attached'].format(attachment.name, round(attachment.size/1024, 1)))
-        
-        st.markdown(lbl['settings_title'])
-        col_s1, col_s2, col_s3 = st.columns(3)
-        with col_s1:
-            delay = st.number_input(lbl['delay'], min_value=5, max_value=600, value=15, disabled=st.session_state.wa_running)
-        with col_s2:
-            batch_size = st.number_input(lbl['batch_size'], min_value=0, max_value=1000, value=0, help=lbl['batch_help'], disabled=st.session_state.wa_running)
-        with col_s3:
-            batch_delay_mins = st.number_input(lbl['batch_delay'], min_value=1, max_value=60, value=1, disabled=st.session_state.wa_running)
-            batch_delay = int(batch_delay_mins * 60)
-
-        # Smart detect target changes
-        current_fp = ",".join([t['phone'] for t in final_targets]) if final_targets else ""
-        if current_fp != st.session_state.get('wa_sent_fingerprint', ''):
-            st.session_state.wa_done = False
-
-        # Send / Stop
-        btn1, btn2, btn3 = st.columns([1, 1, 2])
-        with btn1:
-            if st.session_state.wa_running:
-                if st.button(lbl['stop'], type="primary", use_container_width=True):
-                    st.session_state.wa_running = False; st.rerun()
-            else:
-                ready = len(final_targets) > 0 and msg_body.strip() != ""
-                if st.session_state.get('wa_done', False) and current_fp == st.session_state.get('wa_sent_fingerprint', ''):
-                    st.button(lbl['sent_done'], disabled=True, use_container_width=True)
-                else:
-                    if st.button(lbl['send'].format(len(final_targets)), disabled=not ready, use_container_width=True, type="primary"):
-                        st.session_state.wa_running = True
-                        st.session_state.wa_idx = 0
-                        st.session_state.wa_done = False
-                        st.session_state.wa_sent_fingerprint = current_fp
-                        st.rerun()
-
-        if st.session_state.wa_running and final_targets:
-            # Save attachment to temp file if exists
-            temp_path = None
-            if attachment:
-                import tempfile
-                suffix = os.path.splitext(attachment.name)[1]
-                t_file = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
-                t_file.write(attachment.getvalue())
-                t_file.close()
-                temp_path = t_file.name
-
-            st.progress(st.session_state.wa_idx / len(final_targets))
-            if st.session_state.wa_idx < len(final_targets):
-                trg = final_targets[st.session_state.wa_idx]
-                p, n, v = trg['phone'], trg['name'], trg['cv']
-                final_msg = msg_body.replace("{Name}", n).replace("{name}", n).replace("{الاسم}", n).replace("{CV}", v).replace("{cv}", v).replace("{السيرة}", v)
-                st.info(lbl['sending'].format(n, p))
-                
-                # Call send_message with temp_path
-                ok, log = st.session_state.wa_service.send_message(p, final_msg, attachment_path=temp_path)
-                
-                icon = "✅" if ok else "❌"
-                st.session_state.wa_logs.append(f"[{datetime.now().strftime('%H:%M:%S')}] {icon} {n}: {log}")
-                st.session_state.wa_idx += 1
-                
-                if st.session_state.wa_idx == len(final_targets):
-                    st.session_state.wa_running = False
-                    st.session_state.wa_done = True
-                    # Clean up temp file
-                    if temp_path and os.path.exists(temp_path):
-                        try: os.remove(temp_path)
-                        except: pass
-                    st.balloons()
-                    st.rerun()
-                else:
-                    def format_time(seconds):
-                        m, s = divmod(seconds, 60)
-                        if m > 0:
-                            return f"{m} دقيقة و {s} ثانية" if is_ar else f"{m}m {s}s"
-                        return f"{s} ثانية" if is_ar else f"{s}s"
-
-                    if batch_size > 0 and st.session_state.wa_idx % batch_size == 0:
-                        wait_ph = st.empty()
-                        for i in range(batch_delay, 0, -1):
-                            if not st.session_state.wa_running: break
-                            wait_ph.warning(lbl['pausing'].format(format_time(i)))
-                            time.sleep(1)
-                        wait_ph.empty()
-                    else:
-                        wait_ph = st.empty()
-                        for i in range(delay, 0, -1):
-                            if not st.session_state.wa_running: break
-                            wait_ph.info(lbl['next_msg_in'].format(format_time(i)))
-                            time.sleep(1)
-                        wait_ph.empty()
-                    
-                    if st.session_state.wa_running:
-                        st.rerun()
-            
-            # Clean up temp file if stopped or finished early
-            if not st.session_state.wa_running and temp_path and os.path.exists(temp_path):
-                try: os.remove(temp_path)
-                except: pass
-
-        # Logs
-        if st.session_state.wa_logs:
-            log_h, log_del = st.columns([3, 1])
-            with log_h:
-                st.markdown(lbl['log_title'])
-            with log_del:
-                if st.button(lbl['delete_log'], use_container_width=True):
-                    st.session_state.wa_logs = []
-                    st.session_state.wa_done = False
-                    st.rerun()
-            for l in reversed(st.session_state.wa_logs):
-                st.text(l)
-
-    # Diagnostic
-    if status not in ["Connected", "Awaiting Login"]:
-        with st.expander(lbl['diag']):
-            if st.button(lbl['screenshot']):
-                img = st.session_state.wa_service.get_diagnostic_screenshot()
-                if img: st.image(f"data:image/png;base64,{img}")
->>>>>>> 947f1af (update)
+        # Diagnostic
+        if status not in ["Connected", "Awaiting Login"]:
+            with st.expander(lbl['diag']):
+                if st.button(lbl['screenshot']):
+                    img = st.session_state.wa_service.get_diagnostic_screenshot()
+                    if img: st.image(f"data:image/png;base64,{img}")
