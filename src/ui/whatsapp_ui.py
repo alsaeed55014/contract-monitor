@@ -145,14 +145,20 @@ def save_wa_history(history_set):
 
 def render_whatsapp_page():
     from src.services.whatsapp_service import WhatsAppService
+    from src.services.wa_worker_manager import WAWorkerManager
     lang = st.session_state.get('lang', 'ar')
     is_ar = lang == 'ar'
     is_cloud = "/mount/" in __file__
-    
+
+    # ── مدير العامل الخلفي ──
+    if 'wa_worker_mgr' not in st.session_state:
+        st.session_state.wa_worker_mgr = WAWorkerManager()
+    mgr: WAWorkerManager = st.session_state.wa_worker_mgr
+
+    # للوضع القديم (المتزامن) نبقيه للتوافق
     if 'wa_service' not in st.session_state:
         st.session_state.wa_service = WhatsAppService()
     else:
-        # Check if the existing service object is outdated (missing attachment_path in send_message)
         try:
             import inspect
             sig = inspect.signature(st.session_state.wa_service.send_message)
@@ -975,253 +981,155 @@ HR Manager"""
         if current_fp != st.session_state.get('wa_sent_fingerprint', ''):
             st.session_state.wa_done = False
 
-        # Send / Stop
+        # ══════════════════════════════════════════════════════════
+        # 🚀 وضع الإرسال الخلفي - يعمل حتى بعد إغلاق المتصفح
+        # ══════════════════════════════════════════════════════════
+        worker_state = mgr.get_state()
+        worker_status = worker_state.get("status", "not_started")
+        worker_alive  = mgr.is_worker_alive()
+        is_sending    = worker_alive and worker_status == "sending"
+
+        # تحديث سجلات الإرسال من العامل الخلفي
+        bg_logs = mgr.get_logs()
+        if bg_logs:
+            # دمج السجلات الجديدة فقط
+            existing_phones_times = {(e.get('phone',''), e.get('time','')) for e in st.session_state.wa_logs if isinstance(e, dict)}
+            for entry in bg_logs:
+                key = (entry.get('phone',''), entry.get('time',''))
+                if key not in existing_phones_times:
+                    st.session_state.wa_logs.append(entry)
+                    existing_phones_times.add(key)
+
+        # ─── أزرار الإرسال / الإيقاف ───
         btn1, btn2, btn3 = st.columns([1, 1, 2])
         with btn1:
-            if st.session_state.wa_running:
-                if st.button(lbl['stop'], type="primary", width='stretch'):
-                    st.session_state.wa_running = False; st.rerun()
+            if is_sending:
+                if st.button(lbl['stop'], type="primary", width='stretch', key="bg_stop_btn"):
+                    mgr.stop_worker()
+                    st.session_state.wa_running = False
+                    st.toast("🛑 " + ("تم إيقاف الإرسال" if is_ar else "Sending stopped"))
+                    st.rerun()
             else:
-                # Check if at least one message is not empty
                 has_valid_msg = any(msg.strip() != "" for msg in st.session_state.wa_messages)
                 ready = len(final_targets) > 0 and has_valid_msg
-                if st.session_state.get('wa_done', False) and current_fp == st.session_state.get('wa_sent_fingerprint', ''):
+
+                if worker_status == "done" and current_fp == st.session_state.get('wa_sent_fingerprint', ''):
                     st.button(lbl['sent_done'], disabled=True, width='stretch')
                 else:
-                    if st.button(lbl['send'].format(len(final_targets)), disabled=not ready, width='stretch', type="primary"):
+                    if st.button(lbl['send'].format(len(final_targets)), disabled=not ready, width='stretch', type="primary", key="bg_send_btn"):
+                        # ── حفظ المرفق في ملف مؤقت ──
+                        temp_path = None
+                        if attachment:
+                            import tempfile
+                            suffix = os.path.splitext(attachment.name)[1]
+                            t_file = tempfile.NamedTemporaryFile(delete=False, suffix=suffix,
+                                                                 dir=os.path.join(os.getcwd(), ".whatsapp_session"))
+                            t_file.write(attachment.getvalue())
+                            t_file.close()
+                            temp_path = t_file.name
+                            st.session_state.wa_temp_path = temp_path
+
+                        # ── تشغيل العامل الخلفي ──
+                        mgr.start_worker()
+                        time.sleep(1.5)
+
+                        # ── أرسل الوظيفة ──
+                        job_id = mgr.send_job(
+                            targets            = final_targets,
+                            messages           = st.session_state.wa_messages,
+                            delay              = delay,
+                            batch_size         = int(batch_size),
+                            batch_delay        = int(batch_delay),
+                            is_smart           = bool(st.session_state.get('wa_smart_mode', False)),
+                            custom_job         = st.session_state.get('wa_custom_job_val', ''),
+                            attachment_path    = temp_path,
+                            msg_switch_threshold = int(msg_switch_threshold),
+                            start_from         = 0
+                        )
                         st.session_state.wa_running = True
-                        st.session_state.wa_idx = 0
                         st.session_state.wa_done = False
                         st.session_state.wa_sent_fingerprint = current_fp
-                        # CRITICAL: Store a STABLE copy of targets to avoid "shrinking list" bug
-                        st.session_state.wa_active_targets = list(final_targets)
-                        
-                        # Initialize message rotation state
-                        st.session_state.wa_msg_index = 0
-                        st.session_state.wa_msg_sent_count = 0
-                        
+                        st.session_state.wa_active_job_id = job_id
+                        st.toast("🚀 " + ("بدأ الإرسال في الخلفية! يمكنك إغلاق المتصفح" if is_ar else "Sending started in background! You can close the browser"), icon="✅")
                         st.rerun()
 
-        if st.session_state.wa_running and st.session_state.get('wa_active_targets'):
-            active_targets = st.session_state.wa_active_targets
-            
-            # Ensure wa_idx is within bounds
-            if st.session_state.wa_idx >= len(active_targets):
-                st.session_state.wa_running = False
-                st.session_state.wa_done = True
-                st.rerun()
-            
-            # 🛡️ Prevent browser close/refresh while sending - ENHANCED LOCK
+        # ─── بطاقة الحالة الخلفية ───
+        if is_sending or worker_status in ("starting", "awaiting_login"):
+            w_idx   = worker_state.get("current_idx", 0)
+            w_total = worker_state.get("total", len(final_targets))
+            w_name  = worker_state.get("current_name", "")
+            w_phone = worker_state.get("current_phone", "")
+            countdown = worker_state.get("countdown", 0)
+            countdown_type = worker_state.get("countdown_type", "normal")
+
+            countdown_icons = {
+                "batch_break": "🛡️", "think_break": "🧠",
+                "stealth_break": "🥷", "normal": "⏳"
+            }
+            c_icon = countdown_icons.get(countdown_type, "⏳")
+
+            if countdown > 0:
+                m, s = divmod(countdown, 60)
+                time_str = f"{m}د {s}ث" if is_ar else f"{m}m {s}s"
+                countdown_label = f"{c_icon} {'الانتظار بين الرسائل' if is_ar else 'Waiting'}: {time_str}"
+            else:
+                countdown_label = f"📤 {'جاري الإرسال' if is_ar else 'Sending'}..."
+
+            sent_pct = (w_idx / w_total * 100) if w_total > 0 else 0
+
+            st.markdown(f"""
+            <div style="background:rgba(0,255,100,0.05);padding:16px;border-radius:14px;border:1.5px solid rgba(0,255,100,0.25);margin-bottom:12px;">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+                    <span style="color:#00FF88;font-weight:700;font-size:1.05rem;">✅ {'تم الإرسال' if is_ar else 'Sent'}: {w_idx}</span>
+                    <span style="color:#D4AF37;font-weight:700;font-size:1.05rem;">⌛ {'متبقٍ' if is_ar else 'Remaining'}: {w_total - w_idx}</span>
+                </div>
+                <div style="background:rgba(255,255,255,0.06);border-radius:8px;height:8px;margin-bottom:10px;overflow:hidden;">
+                    <div style="background:linear-gradient(90deg,#00FF88,#D4AF37);height:100%;width:{sent_pct:.1f}%;transition:width 0.5s;"></div>
+                </div>
+                <div style="color:#aaa;font-size:0.85rem;display:flex;justify-content:space-between;">
+                    <span>👤 {w_name} · 📱 {w_phone}</span>
+                    <span>{countdown_label}</span>
+                </div>
+            </div>
+            <div style="background:rgba(0,180,255,0.08);padding:10px 16px;border-radius:10px;border:1px solid rgba(0,180,255,0.2);text-align:center;margin-bottom:8px;">
+                <span style="color:#00AAFF;font-weight:600;font-size:0.9rem;">
+                    🟢 {'الإرسال يعمل في الخلفية — يمكنك إغلاق هذا التبويب بأمان' if is_ar else 'Sending runs in background — safe to close this tab'}
+                </span>
+            </div>
+            """, unsafe_allow_html=True)
+
+            st.progress(min(1.0, sent_pct / 100))
+
+            # تحديث تلقائي كل 5 ثوان لعرض التقدم
             st.markdown("""
             <script>
-            (function() {
-                // Remove any old guard first
-                if (window.__wa_sending_guard) {
-                    window.removeEventListener('beforeunload', window.__wa_sending_guard);
+            (function(){
+                if(!window.__wa_bg_refresh){
+                    window.__wa_bg_refresh = setInterval(function(){
+                        if(document.hasFocus() || true){
+                            // Trigger a lightweight Streamlit rerun via clicking a hidden element
+                            var btns = window.parent.document.querySelectorAll('button[data-testid="baseButton-secondary"]');
+                        }
+                    }, 5000);
                 }
-                // Create a strong guard that always fires
-                window.__wa_sending_guard = function(e) {
-                    e.preventDefault();
-                    e.stopImmediatePropagation();
-                    var msg = '⚠️ الإرسال جارٍ... هل أنت متأكد من الإغلاق؟ سيتوقف الإرسال!';
-                    e.returnValue = msg;
-                    return msg;
-                };
-                // Register with capture=true so it fires even if other handlers call stopPropagation
-                window.addEventListener('beforeunload', window.__wa_sending_guard, true);
-                window.addEventListener('beforeunload', window.__wa_sending_guard, false);
-                // Also intercept visibilitychange to warn on tab hide
-                document.addEventListener('visibilitychange', function() {
-                    if (document.visibilityState === 'hidden' && window.__wa_is_sending) {
-                        // Can't block tab switch, but log it
-                        console.warn('Tab hidden while WhatsApp sending is in progress!');
-                    }
-                });
-                window.__wa_is_sending = true;
             })();
             </script>
-            <div style="background: linear-gradient(90deg, rgba(255,0,0,0.25), rgba(255,100,0,0.15)); padding: 12px 20px; border-radius: 12px; border: 2px solid rgba(255,0,0,0.5); margin-bottom: 10px; text-align: center; direction: rtl; animation: pulse-border 1.5s infinite;">
-                <div style="color: #FF4444; font-weight: 800; font-size: 1rem; text-shadow: 0 0 10px rgba(255,68,68,0.6);">🔒 الإرسال جارٍ... لا تغلق المتصفح أو التبويب!</div>
-                <div style="color: #FF8C00; font-size: 0.82rem; margin-top: 4px;">Do not close browser or tab — sending in progress</div>
-            </div>
-            <style>
-            @keyframes pulse-border {{
-                0%   {{ box-shadow: 0 0 5px rgba(255,0,0,0.4); }}
-                50%  {{ box-shadow: 0 0 20px rgba(255,0,0,0.8); }}
-                100% {{ box-shadow: 0 0 5px rgba(255,0,0,0.4); }}
-            }}
-            </style>
             """, unsafe_allow_html=True)
-            
-            # Save attachment to temp file ONCE at the start of the batch
-            if attachment and not st.session_state.get('wa_temp_path'):
-                import tempfile
-                suffix = os.path.splitext(attachment.name)[1]
-                t_file = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
-                t_file.write(attachment.getvalue())
-                t_file.close()
-                st.session_state.wa_temp_path = t_file.name
-            
-            # Status Card
-            st.markdown(f"""
-            <div style="background: rgba(212, 175, 55, 0.05); padding: 15px; border-radius: 15px; border: 1px solid rgba(212, 175, 55, 0.2); margin-bottom: 20px;">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                    <span style="color: #00FF41; font-weight: 700; font-size: 1.1rem;">✅ {lbl['sent_count']}: {st.session_state.wa_idx}</span>
-                    <span style="color: #D4AF37; font-weight: 700; font-size: 1.1rem;">⌛ {lbl['remaining_count']}: {len(active_targets) - st.session_state.wa_idx}</span>
-                </div>
-                <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.9rem; color: #888;">
-                    <span>يتم الآن الإرسال من الرسالة رقم {st.session_state.wa_msg_index + 1}</span>
-                    <span>تم إرسال {st.session_state.wa_msg_sent_count} رسالة → الانتقال للرسالة التالية بعد {msg_switch_threshold - st.session_state.wa_msg_sent_count}</span>
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
-            
-            st.progress(st.session_state.wa_idx / len(active_targets))
-            
-            if st.session_state.wa_idx < len(active_targets):
-                # --- ⏳ DELAY & COUNTDOWN (Before each message EXCEPT the first one) ---
-                if st.session_state.wa_idx > 0:
-                    def format_time(seconds):
-                        m, s = divmod(seconds, 60)
-                        if m > 0:
-                            return f"{m} دقيقة و {s} ثانية" if is_ar else f"{m}m {s}s"
-                        return f"{s} ثانية" if is_ar else f"{s}s"
 
-                    is_batch_pause = batch_size > 0 and st.session_state.wa_idx % batch_size == 0
-                    
-                    # 2026 Advanced Anti-Pattern: Jittered Delay (Randomized intervals)
-                    if is_batch_pause:
-                        current_delay = int(random.uniform(batch_delay * 0.9, batch_delay * 1.3))
-                        prefix = "🛡️ " + ("استراحة تمويهية عشوائية" if is_ar else "Randomized Anti-Ban Pause")
-                    else:
-                        # Allow variance from the base delay to look human
-                        current_delay = int(random.uniform(delay * 0.85, delay * 1.5))
-                        prefix = "🛡️ " + ("مهلة عشوائية" if is_ar else "Randomized Delay")
-                        
-                    delay_lbl = lbl['pausing'] if is_batch_pause else lbl['next_msg_in']
-                    
-                    wait_ph = st.empty()
-                    for i in range(current_delay, 0, -1):
-                        if not st.session_state.wa_running: 
-                            wait_ph.empty()
-                            break
-                        # Displaying the current countdown + total randomized time to show it's working
-                        status_text = f"{prefix}: {format_time(i)} / {format_time(current_delay)}"
-                        if is_batch_pause:
-                            wait_ph.warning(status_text)
-                        else:
-                            wait_ph.info(status_text)
-                        
-                        # 🛡️ Keep-Alive Heartbeat every 10s to keep Chrome active & prevent tab sleeping
-                        if i % 10 == 0:
-                            st.session_state.wa_service.keep_alive()
+            time.sleep(4)
+            st.rerun()
 
-                        time.sleep(1)
-                    wait_ph.empty()
+        elif worker_status == "done" and worker_alive:
+            st.success("🎉 " + ("اكتمل الإرسال بنجاح!" if is_ar else "Sending completed successfully!"))
+            st.balloons()
+            st.session_state.wa_running = False
+            st.session_state.wa_done = True
 
-                if st.session_state.wa_running:
-                    trg = active_targets[st.session_state.wa_idx]
-                    p, n, v = trg['phone'], trg['name'], trg['cv']
-                    
-                    # --- Message Generation Logic ---
-                    if st.session_state.get('wa_smart_mode'):
-                        # Smart AI Mode: Generate unique message for each person
-                        custom_job_val = st.session_state.get('wa_custom_job_val', '')
-                        final_msg = generate_smart_message(n, v, custom_job=custom_job_val)
-                    else:
-                        # Standard Rotation Mode
-                        current_msg_body = st.session_state.wa_messages[st.session_state.wa_msg_index]
-                        final_msg = current_msg_body
-                        
-                        # PRE-CALCULATE placeholders for the entire batch to avoid repeated loops
-                        cv_placeholders = ["{CV}", "{cv}", "{السيرة}"]
-                        if st.session_state.get('wa_active_targets'):
-                            first_trg = st.session_state.wa_active_targets[0]
-                            for k in first_trg.keys():
-                                if any(x in str(k).lower() for x in ["سيرة", "cv", "resume", "link"]):
-                                    cv_placeholders.append("{" + str(k) + "}")
-                        
-                        # If CV is empty, remove lines containing CV placeholders
-                        if not v or v.lower() == 'nan':
-                            lines = final_msg.split('\n')
-                            final_lines = []
-                            for line in lines:
-                                if not any(ph in line for ph in cv_placeholders):
-                                    final_lines.append(line)
-                            final_msg = '\n'.join(final_lines)
-                        
-                        for key, val in trg.items():
-                            final_msg = final_msg.replace("{" + str(key) + "}", str(val))
-                            final_msg = final_msg.replace("{" + str(key).lower() + "}", str(val))
-                        
-                        final_msg = final_msg.replace("{Name}", n).replace("{name}", n).replace("{الاسم}", n).replace("{CV}", v).replace("{cv}", v).replace("{السيرة}", v)
-                    
-                    import re
-                    final_msg = re.sub(r'\n{3,}', '\n\n', final_msg).strip()
-                    
-                    st.info(lbl['sending'].format(n, p))
-                    
-                    # Call send_message with stored temp_path
-                    temp_path = st.session_state.get('wa_temp_path')
-                    ok, log = st.session_state.wa_service.send_message(p, final_msg, attachment_path=temp_path)
-                    
-                    st.session_state.wa_logs.append({
-                        'name': n, 'phone': p,
-                        'time': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                        'status': log if ok else f"فشل ({log})", 'ok': ok
-                    })
+        elif worker_status == "error":
+            st.error("❌ " + worker_state.get("error", "خطأ في الإرسال"))
 
-                    if ok:
-                        st.session_state.wa_history.add(p)
-                        save_wa_history(st.session_state.wa_history)
-                        for trg in st.session_state.wa_review_targets:
-                            if trg['phone'] == p: trg['is_sent'] = True
-                            
-                        # Update message rotation counters ONLY on successful send
-                        st.session_state.wa_msg_sent_count += 1
-                        if st.session_state.wa_msg_sent_count >= msg_switch_threshold:
-                            st.session_state.wa_msg_sent_count = 0
-                            # Move to next message if available, otherwise stay on the last one
-                            if st.session_state.wa_msg_index < len(st.session_state.wa_messages) - 1:
-                                st.session_state.wa_msg_index += 1
-                        
-                        # Anti-ban: Secondary random micro-rest
-                        time.sleep(random.uniform(1.0, 3.0))
-                        
-                        # 🛡️ استراحة "تفكير" مفاجئة كل 3-6 رسائل لمحاكاة التعب البشري
-                        if st.session_state.wa_idx > 0 and st.session_state.wa_idx % random.randint(3, 6) == 0:
-                            st.toast("🛡️ " + ("استراحة تمويهية قصيرة..." if is_ar else "Short stealth break..."), icon="⏳")
-                            time.sleep(random.uniform(6.0, 15.0))
-
-                    st.session_state.wa_idx += 1
-                    
-                    if st.session_state.wa_idx == len(active_targets):
-                        st.session_state.wa_running = False
-                        st.session_state.wa_done = True
-                        st.balloons()
-                    
-                    st.rerun()
-            
-            # Clean up temp file and browser guard ONLY when done or stopped
-            if not st.session_state.wa_running:
-                # Remove JS Guard - both capture and bubble phase
-                st.markdown("""
-                <script>
-                window.__wa_is_sending = false;
-                if (window.__wa_sending_guard) {
-                    window.removeEventListener('beforeunload', window.__wa_sending_guard, true);
-                    window.removeEventListener('beforeunload', window.__wa_sending_guard, false);
-                    window.__wa_sending_guard = null;
-                }
-                </script>
-                """, unsafe_allow_html=True)
-                
-                if st.session_state.get('wa_temp_path'):
-                    tp = st.session_state.get('wa_temp_path')
-                    if os.path.exists(tp):
-                        try: os.remove(tp)
-                        except: pass
-                    st.session_state.wa_temp_path = None
+        elif worker_status == "awaiting_login":
+            st.warning("📱 " + ("يرجى مسح رمز QR من واتساب ثم الضغط تحقق" if is_ar else "Please scan QR code from WhatsApp then click Verify"))
 
         # 📄 Professional 2026 Log Section
         if st.session_state.wa_logs:
