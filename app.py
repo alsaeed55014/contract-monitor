@@ -48,82 +48,7 @@ except ImportError:
     from core.matcher import CandidateMatcher, format_match_result, _find_city_region, _fuzzy_match, REGION_PROXIMITY, REGION_MAP
     print(">>> DEBUG: Project modules (core.*) imported successfully via fallback")
 
-# 2. Active Users Tracking
-ACTIVE_USERS_FILE = os.path.join(BASE_DIR, "src", "active_users.json")
-HEARTBEAT_TIMEOUT = 120  # seconds - consider user inactive after this time (2 minutes)
-
-def load_active_users():
-    if os.path.exists(ACTIVE_USERS_FILE):
-        try:
-            with open(ACTIVE_USERS_FILE, 'r', encoding='utf-8') as f:
-                return json.load(f)
-        except Exception as e:
-            # If file is corrupted, backup and return empty
-            print(f"[WARN] Corrupted active_users.json detected: {e}")
-            try:
-                backup_path = ACTIVE_USERS_FILE + f".corrupted.{datetime.now().strftime('%Y%m%d_%H%M%S')}.bak"
-                import shutil
-                shutil.copy2(ACTIVE_USERS_FILE, backup_path)
-                # Remove the corrupted file so it's recreated fresh
-                os.remove(ACTIVE_USERS_FILE)
-            except Exception as be:
-                print(f"[ERROR] Failed to backup/clean active_users.json: {be}")
-            return {}
-    return {}
-
-def save_active_users(active_users):
-    try:
-        # ATOMIC WRITE for active_users.json too!
-        import tempfile
-        temp_dir = os.path.dirname(ACTIVE_USERS_FILE) or "."
-        with tempfile.NamedTemporaryFile(
-            mode='w',
-            encoding='utf-8',
-            dir=temp_dir,
-            delete=False,
-            suffix='.tmp',
-            prefix='active_users_save_'
-        ) as tmp_f:
-            json.dump(active_users, tmp_f, ensure_ascii=False, indent=4)
-            tmp_path = tmp_f.name
-        os.replace(tmp_path, ACTIVE_USERS_FILE)
-    except Exception as e:
-        print(f"Error saving active users: {e}")
-
-def update_user_heartbeat(username):
-    active_users = load_active_users()
-    active_users[username] = {
-        "last_seen": datetime.now(SAUDI_TZ).isoformat()
-    }
-    save_active_users(active_users)
-
-def get_active_users():
-    active_users = load_active_users()
-    current_time = datetime.now(SAUDI_TZ)
-    # Filter out inactive users
-    filtered_users = {}
-    for username, data in active_users.items():
-        try:
-            last_seen = datetime.fromisoformat(data["last_seen"])
-            # Timezone-aware comparison
-            if last_seen.tzinfo is None:
-                last_seen = SAUDI_TZ.localize(last_seen)
-            if (current_time - last_seen).total_seconds() < HEARTBEAT_TIMEOUT:
-                filtered_users[username] = data
-        except:
-            pass
-    # Clean up the file (remove inactive users)
-    if len(filtered_users) != len(active_users):
-        save_active_users(filtered_users)
-    return filtered_users
-
-def remove_user_from_active(username):
-    active_users = load_active_users()
-    if username in active_users:
-        del active_users[username]
-        save_active_users(active_users)
-
-# 3. Local Auth Class to prevent Import/Sync Errors
+# 2. Local Auth Class to prevent Import/Sync Errors
 class AuthManager:
     def __init__(self, users_file_path):
         self.users_file = users_file_path
@@ -131,51 +56,18 @@ class AuthManager:
         self.is_bilingual = True # Version marker for session refresh
         self.load_users()
 
-    def get_default_user(self):
-        # Return all default fields for a user
-        return {
-            "password": "",
-            "role": "viewer",
-            "first_name_ar": "",
-            "father_name_ar": "",
-            "first_name_en": "",
-            "father_name_en": "",
-            "permissions": [],
-            "avatar": None
-        }
-
     def load_users(self):
-        default_user = self.get_default_user()
-        
         if os.path.exists(self.users_file):
             try:
                 with open(self.users_file, 'r', encoding='utf-8') as f:
                     data = json.load(f)
                     self.users = data.get("users", {})
-                
-                # Apply default fields to existing users (preserve old data)
-                for username, user_data in self.users.items():
-                    # For each default field, if it's missing in user_data, add it
-                    for key, default_value in default_user.items():
-                        if key not in user_data:
-                            user_data[key] = default_value
-                            
             except Exception as e:
                 # Store error for UI feedback
                 self.load_error = str(e)
-                print(f"[WARN] Corrupted users.json detected: {e}")
-                # Create backup of corrupted file
-                try:
-                    backup_path = self.users_file + f".corrupted.{datetime.now().strftime('%Y%m%d_%H%M%S')}.bak"
-                    import shutil
-                    shutil.copy2(self.users_file, backup_path)
-                    print(f"[INFO] Corrupted users.json backed up to: {backup_path}")
-                except Exception as be:
-                    print(f"[ERROR] Failed to backup corrupted users.json: {be}")
-                # Reset users to empty to start fresh
                 self.users = {}
         
-        # Ensure Default Admin (only if not exists)
+        # Ensure Default Admin
         if "admin" not in self.users:
             self.users["admin"] = {
                 "password": self.hash_password("266519111"), # User's preferred password
@@ -184,37 +76,14 @@ class AuthManager:
                 "father_name_ar": "الوزان",
                 "first_name_en": "Alsaeed",
                 "father_name_en": "Alwazzan",
-                "permissions": ["all"],
-                "avatar": None
+                "permissions": ["all"]
             }
-            self.save_users()
-        else:
-            # If admin exists, make sure it has all default fields too!
-            admin_data = self.users["admin"]
-            for key, default_value in default_user.items():
-                if key not in admin_data:
-                    admin_data[key] = default_value
             self.save_users()
 
     def save_users(self):
         try:
-            # ATOMIC WRITE: Write to temp file FIRST, then rename!
-            # (Prevents users.json corruption if server crashes/reboots during write)
-            import tempfile
-            temp_dir = os.path.dirname(self.users_file) or "."
-            # Create temp file in SAME directory as users.json (so rename is atomic)
-            with tempfile.NamedTemporaryFile(
-                mode='w',
-                encoding='utf-8',
-                dir=temp_dir,
-                delete=False,
-                suffix='.tmp',
-                prefix='users_save_'
-            ) as tmp_f:
-                json.dump({"users": self.users}, tmp_f, ensure_ascii=False, indent=2)
-                tmp_path = tmp_f.name
-            # Atomic rename - replaces old file in ONE operation (OS-level safe)
-            os.replace(tmp_path, self.users_file)
+            with open(self.users_file, 'w', encoding='utf-8') as f:
+                json.dump({"users": self.users}, f, ensure_ascii=False, indent=4)
         except Exception as e:
             print(f"Error saving users: {e}")
 
@@ -233,15 +102,13 @@ class AuthManager:
         username = username.lower().strip()
         if username in self.users:
             return False, "User already exists"
-        new_user = self.get_default_user()
-        new_user["password"] = self.hash_password(password)
-        new_user["role"] = role
-        new_user["first_name_ar"] = f_ar
-        new_user["father_name_ar"] = fa_ar
-        new_user["first_name_en"] = f_en
-        new_user["father_name_en"] = fa_en
-        new_user["permissions"] = ["all"] if role == "admin" else []
-        self.users[username] = new_user
+        self.users[username] = {
+            "password": self.hash_password(password),
+            "role": role,
+            "first_name_ar": f_ar, "father_name_ar": fa_ar,
+            "first_name_en": f_en, "father_name_en": fa_en,
+            "permissions": ["all"] if role == "admin" else []
+        }
         self.save_users()
         return True, "User added successfully"
 
@@ -333,16 +200,28 @@ class AuthManager:
         return self.users.get(target, {}).get("avatar", None)
 
 def load_saved_credentials():
-    # Do NOT load credentials from server to avoid sharing between users
+    if os.path.exists(PERSIST_FILE):
+        try:
+            with open(PERSIST_FILE, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except:
+            return None
     return None
 
 def save_credentials(u, p):
-    # Do NOT save credentials to server to avoid sharing between users
-    pass
+    try:
+        os.makedirs(os.path.dirname(PERSIST_FILE), exist_ok=True)
+        with open(PERSIST_FILE, 'w', encoding='utf-8') as f:
+            json.dump({"u": u, "p": p}, f)
+    except Exception as e:
+        print(f"Error saving credentials: {e}")
 
 def clear_credentials():
-    # Do nothing, since we don't save credentials anymore
-    pass
+    if os.path.exists(PERSIST_FILE):
+        try:
+            os.remove(PERSIST_FILE)
+        except:
+            pass
 
 @st.cache_data(ttl=3600, show_spinner=False)
 def get_base64_image(image_path):
@@ -1699,109 +1578,6 @@ def render_table_translator(df, key_prefix="table"):
         code_counts  = df_nat_codes.value_counts()
         valid_items  = [(code, int(cnt)) for code, cnt in code_counts.items() if code]
 
-        # =======================================================
-        # 🌍 Full Country Names mapping: 2-letter code → (Arabic, English)
-        # =======================================================
-        COUNTRY_NAMES = {
-            "PH": ("الفلبينية", "Filipino"),
-            "NG": ("نيجيريا", "Nigeria"),
-            "LK": ("سريلانكا", "Sri Lanka"),
-            "NP": ("نيبال", "Nepal"),
-            "ET": ("إثيوبيا", "Ethiopia"),
-            "ID": ("إندونيسيا", "Indonesia"),
-            "KE": ("كينيا", "Kenya"),
-            "UG": ("أوغندا", "Uganda"),
-            "IN": ("الهند", "India"),
-            "PK": ("باكستان", "Pakistan"),
-            "BD": ("بنجلاديش", "Bangladesh"),
-            "EG": ("مصر", "Egypt"),
-            "SA": ("السعودية", "Saudi Arabia"),
-            "AE": ("الإمارات", "UAE"),
-            "QA": ("قطر", "Qatar"),
-            "KW": ("الكويت", "Kuwait"),
-            "BH": ("البحرين", "Bahrain"),
-            "OM": ("عُمان", "Oman"),
-            "JO": ("الأردن", "Jordan"),
-            "LB": ("لبنان", "Lebanon"),
-            "SY": ("سوريا", "Syria"),
-            "IQ": ("العراق", "Iraq"),
-            "YE": ("اليمن", "Yemen"),
-            "MA": ("المغرب", "Morocco"),
-            "DZ": ("الجزائر", "Algeria"),
-            "TN": ("تونس", "Tunisia"),
-            "LY": ("ليبيا", "Libya"),
-            "SD": ("السودان", "Sudan"),
-            "TR": ("تركيا", "Turkey"),
-            "IR": ("إيران", "Iran"),
-            "AF": ("أفغانستان", "Afghanistan"),
-            "VN": ("فيتنام", "Vietnam"),
-            "TH": ("تايلاند", "Thailand"),
-            "MY": ("ماليزيا", "Malaysia"),
-            "SG": ("سنغافورة", "Singapore"),
-            "KH": ("كمبوديا", "Cambodia"),
-            "MM": ("ميانمار", "Myanmar"),
-            "JP": ("اليابان", "Japan"),
-            "KR": ("كوريا الجنوبية", "South Korea"),
-            "CN": ("الصين", "China"),
-            "TW": ("تايوان", "Taiwan"),
-            "HK": ("هونغ كونغ", "Hong Kong"),
-            "RU": ("روسيا", "Russia"),
-            "UA": ("أوكرانيا", "Ukraine"),
-            "US": ("الولايات المتحدة", "USA"),
-            "CA": ("كندا", "Canada"),
-            "MX": ("المكسيك", "Mexico"),
-            "BR": ("البرازيل", "Brazil"),
-            "AR": ("الأرجنتين", "Argentina"),
-            "CO": ("كولومبيا", "Colombia"),
-            "PE": ("بيرو", "Peru"),
-            "CL": ("تشيلي", "Chile"),
-            "VE": ("فنزويلا", "Venezuela"),
-            "GB": ("بريطانيا", "UK"),
-            "FR": ("فرنسا", "France"),
-            "DE": ("ألمانيا", "Germany"),
-            "ES": ("إسبانيا", "Spain"),
-            "IT": ("إيطاليا", "Italy"),
-            "PT": ("البرتغال", "Portugal"),
-            "NL": ("هولندا", "Netherlands"),
-            "BE": ("بلجيكا", "Belgium"),
-            "CH": ("سويسرا", "Switzerland"),
-            "AT": ("النمسا", "Austria"),
-            "SE": ("السويد", "Sweden"),
-            "NO": ("النرويج", "Norway"),
-            "DK": ("الدنمارك", "Denmark"),
-            "FI": ("فنلندا", "Finland"),
-            "PL": ("بولندا", "Poland"),
-            "GR": ("اليونان", "Greece"),
-            "AU": ("أستراليا", "Australia"),
-            "NZ": ("نيوزيلندا", "New Zealand"),
-            "ZA": ("جنوب أفريقيا", "South Africa"),
-            "TZ": ("تنزانيا", "Tanzania"),
-            "RW": ("رواندا", "Rwanda"),
-            "ZM": ("زامبيا", "Zambia"),
-            "ZW": ("زيمبابوي", "Zimbabwe"),
-            "MZ": ("موزمبيق", "Mozambique"),
-            "MG": ("مدغشقر", "Madagascar"),
-            "CI": ("ساحل العاج", "Ivory Coast"),
-            "GH": ("غانا", "Ghana"),
-            "CM": ("الكاميرون", "Cameroon"),
-            "SN": ("السنغال", "Senegal"),
-            "NG": ("نيجيريا", "Nigeria"),
-            "NE": ("النيجر", "Niger"),
-            "ML": ("مالي", "Mali"),
-            "BF": ("بوركينا فاسو", "Burkina Faso"),
-            "TD": ("تشاد", "Chad"),
-            "CF": ("جمهورية أفريقيا الوسطى", "CAR"),
-            "GA": ("الغابون", "Gabon"),
-            "CG": ("الكونغو", "Congo"),
-            "CD": ("كونغو الديمقراطية", "DR Congo"),
-            "AO": ("أنغولا", "Angola"),
-            "NA": ("ناميبيا", "Namibia"),
-            "BW": ("بوتسوانا", "Botswana"),
-            "LS": ("ليسوتو", "Lesotho"),
-            "SZ": ("إيسواتيني", "Eswatini"),
-            "MW": ("مالاوي", "Malawi"),
-        }
-
         if valid_items:
             active_code = st.session_state.get(f"selected_nat_{key_prefix}")
             has_clear   = bool(active_code)
@@ -1837,11 +1613,11 @@ div[data-testid="stHorizontalBlock"]:has(.nat-flag-badge)::-webkit-scrollbar-thu
     background: rgba(212,175,55,0.6) !important;
 }
 
-/* Style each column as a premium card — WIDER to fit full country names */
+/* Style each column as a premium card */
 div[data-testid="stHorizontalBlock"]:has(.nat-flag-badge) > div[data-testid="column"] {
     flex: 0 0 auto !important;
-    width: 125px !important;
-    min-width: 125px !important;
+    width: 95px !important;
+    min-width: 95px !important;
     background: rgba(255,255,255,0.03) !important;
     border: 1px solid rgba(212,175,55,0.2) !important;
     border-radius: 12px !important;
@@ -1850,7 +1626,7 @@ div[data-testid="stHorizontalBlock"]:has(.nat-flag-badge) > div[data-testid="col
     flex-direction: column !important;
     align-items: center !important;
     justify-content: space-between !important;
-    height: 110px !important;
+    height: 100px !important;
     margin: 0 !important;
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
     box-shadow: 0 4px 10px rgba(0,0,0,0.3) !important;
@@ -1892,28 +1668,26 @@ div[data-testid="stHorizontalBlock"]:has(.nat-flag-badge) div[data-testid="stIma
     margin: 0 !important;
 }
 
-/* Badge button style (inside the card column) — Adjusted for long full country names */
+/* Badge button style (inside the card column) */
 div[data-testid="stHorizontalBlock"]:has(.nat-flag-badge) .stButton button {
     background-color: transparent !important;
     color: #FFF !important;
-    font-weight: 700 !important;
-    font-size: 0.75rem !important;
+    font-weight: 800 !important;
+    font-size: 0.95rem !important;
     font-family: 'Inter', 'Cairo', sans-serif !important;
     border: none !important;
-    height: 42px !important;
-    min-height: 42px !important;
+    height: 32px !important;
+    min-height: 32px !important;
     width: 100% !important;
-    padding: 2px 4px !important;
+    padding: 0 !important;
     margin: 0 !important;
     cursor: pointer !important;
     transition: all 0.2s ease !important;
-    white-space: normal !important;
-    word-wrap: break-word !important;
-    line-height: 1.1 !important;
+    white-space: nowrap !important;
     display: flex !important;
     align-items: center !important;
     justify-content: center !important;
-    text-align: center !important;
+    direction: ltr !important;
     box-shadow: none !important;
 }
 
@@ -1928,7 +1702,7 @@ div[data-testid="stHorizontalBlock"]:has(.nat-flag-badge) .stButton button:hover
 /* Clear button column container */
 div[data-testid="stHorizontalBlock"]:has(.nat-flag-badge) > div[data-testid="column"]:has(.nat-clear-badge) {
     justify-content: center !important;
-    height: 110px !important;
+    height: 100px !important;
     background: rgba(255,75,75,0.03) !important;
     border: 1px solid rgba(255,75,75,0.2) !important;
     display: flex !important;
@@ -1980,21 +1754,7 @@ div[data-testid="stHorizontalBlock"]:has(.nat-flag-badge) .nat-clear-badge .stBu
                     st.markdown(f'<div class="{div_cls}" style="text-align:center;"></div>', unsafe_allow_html=True)
                     st.image(flag_url, width=32)
                     
-                    # Get full country name based on language
-                    code_upper = code.upper()
-                    if code_upper in COUNTRY_NAMES:
-                        name_ar, name_en = COUNTRY_NAMES[code_upper]
-                        country_name = name_ar if lang == 'ar' else name_en
-                    else:
-                        country_name = code_upper  # Fallback to code if unknown
-                    
-                    # Show count on top line, country name on second line (button CSS allows wrapping)
-                    # For Arabic, place count after name; English count before name
-                    if lang == 'ar':
-                        button_label = f"{country_name} ({cnt})"
-                    else:
-                        button_label = f"{cnt} {country_name}"
-                    
+                    button_label = f"{cnt} {code.upper()}"
                     if st.button(button_label, key="nbadge_v2_" + key_prefix + "_" + code, use_container_width=True):
                         st.session_state["selected_nat_" + key_prefix] = None if is_sel else code
                         st.rerun()
@@ -2304,9 +2064,6 @@ if 'force_logout_inactive' not in st.session_state:
 # Handle forced logout from inactivity (triggered by JS reload with ?logout=inactive)
 query_params = st.query_params
 if query_params.get('logout') == 'inactive':
-    # Remove user from active users list
-    if 'username' in st.session_state:
-        remove_user_from_active(st.session_state.username)
     st.session_state.user = None
     st.session_state.force_logout_inactive = False
     clear_credentials()
@@ -2808,8 +2565,22 @@ if ('Notification' in window && Notification.permission === 'default') {
     st.markdown(f'<div id="login-container-wrapper"><div class="luxury-main-title">{title_text}</div>', unsafe_allow_html=True)
     
     def render_login_box(suffix):
+        saved = load_saved_credentials()
+        saved_u = saved.get("u", "") if saved else ""
+        saved_p = saved.get("p", "") if saved else ""
+        
         user_key = f"user_{suffix}"
         pass_key = f"pass_{suffix}"
+        persist_key = f"persist_{suffix}"
+        
+        # Pre-fill session state keys if saved credentials exist
+        if saved:
+            if user_key not in st.session_state:
+                st.session_state[user_key] = saved_u
+            if pass_key not in st.session_state:
+                st.session_state[pass_key] = saved_p
+            if persist_key not in st.session_state:
+                st.session_state[persist_key] = True
         
         with st.form(f"login_form_{suffix}"):
             # Row 1: Profile Image next to Welcome Text
@@ -2822,9 +2593,13 @@ if ('Notification' in window && Notification.permission === 'default') {
                     b64 = get_base64_image(IMG_PATH)
                     st.markdown(f'<div style="text-align:right;"><img src="data:image/jpeg;base64,{b64}" class="profile-img-circular" style="width:80px; height:80px; border:2px solid #FFF; box-shadow: 0 0 15px #FFF;"></div>', unsafe_allow_html=True)
             
-            # Inputs - NO pre-filled credentials
-            u = st.text_input(t("username", lang), value="", label_visibility="collapsed", placeholder=t("username", lang), key=user_key)
-            p = st.text_input(t("password", lang), value="", type="password", label_visibility="collapsed", placeholder=t("password", lang), key=pass_key)
+            # Inputs - Pre-fill with saved credentials
+            u = st.text_input(t("username", lang), value=saved_u, label_visibility="collapsed", placeholder=t("username", lang), key=user_key)
+            p = st.text_input(t("password", lang), value=saved_p, type="password", label_visibility="collapsed", placeholder=t("password", lang), key=pass_key)
+            
+            # Persistent check - White Neon Label
+            persist_txt = "هل تريد حفظ الدخول" if lang == 'ar' else "Do you want to stay logged in?"
+            st.checkbox(persist_txt, value=(True if saved else False), key=persist_key)
             
             submit = st.form_submit_button(t("login_btn", lang), width='stretch')
             lang_toggle = st.form_submit_button("En" if lang == "ar" else "عربي", width='stretch')
@@ -2837,10 +2612,15 @@ if ('Notification' in window && Notification.permission === 'default') {
                     user = st.session_state.auth.authenticate(u, p.strip())
                     login_loader.empty()
                     if user:
-                        uname = u.lower().strip()
-                        user['username'] = uname
+                        # Handle Persistence Logic
+                        should_persist = st.session_state.get(persist_key, False)
+                        if should_persist:
+                            save_credentials(u, p.strip())
+                        else:
+                            clear_credentials()
+                            
+                        user['username'] = u.lower().strip()
                         st.session_state.user = user
-                        st.session_state.username = uname  # Explicitly set username for tracking!
                         st.session_state.last_login_time = time.time()
                         st.session_state.show_welcome = True
                         
@@ -3148,6 +2928,91 @@ def check_notifications():
     except Exception as e:
         print(f"[ERROR] Notification check failed: {e}")
 
+def update_user_heartbeat(username, user_info=None):
+    """Tracks active user sessions with last seen timestamp."""
+    try:
+        active_file = os.path.join(BASE_DIR, "online_users.json")
+        data = {}
+        if os.path.exists(active_file):
+            try:
+                with open(active_file, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+            except:
+                data = {}
+        
+        now_ts = time.time()
+        data = {u: info for u, info in data.items() if isinstance(info, dict) and now_ts - info.get("last_seen", 0) < 300}
+        
+        if username:
+            u_clean = str(username).lower().strip()
+            display_name = u_clean
+            if user_info and isinstance(user_info, dict):
+                fn_ar = user_info.get("first_name_ar", "")
+                fa_ar = user_info.get("father_name_ar", "")
+                fn_en = user_info.get("first_name_en", "")
+                fa_en = user_info.get("father_name_en", "")
+                if fn_ar or fa_ar: display_name = f"{fn_ar} {fa_ar}".strip()
+                elif fn_en or fa_en: display_name = f"{fn_en} {fa_en}".strip()
+            
+            data[u_clean] = {
+                "username": u_clean,
+                "display_name": display_name,
+                "last_seen": now_ts
+            }
+        
+        with open(active_file, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        pass
+
+def get_online_users_html(auth_manager, current_user, lang='ar'):
+    """Generates clean HTML badges for online connected users."""
+    try:
+        active_file = os.path.join(BASE_DIR, "online_users.json")
+        data = {}
+        now_ts = time.time()
+        if os.path.exists(active_file):
+            try:
+                with open(active_file, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+            except:
+                data = {}
+        
+        active_users = []
+        for u, info in data.items():
+            if isinstance(info, dict) and now_ts - info.get("last_seen", 0) < 300:
+                active_users.append(info)
+        
+        curr_uname = current_user.get("username", "user").lower().strip() if isinstance(current_user, dict) else str(current_user).lower().strip()
+        if not any(u.get("username") == curr_uname for u in active_users):
+            fn_ar = current_user.get("first_name_ar", "") if isinstance(current_user, dict) else ""
+            fa_ar = current_user.get("father_name_ar", "") if isinstance(current_user, dict) else ""
+            disp = f"{fn_ar} {fa_ar}".strip() if (fn_ar or fa_ar) else curr_uname
+            active_users.append({"username": curr_uname, "display_name": disp, "last_seen": now_ts})
+            
+        label = "المستخدمون المتصلون:" if lang == 'ar' else "Online Users:"
+        
+        user_badges = []
+        for u_info in active_users:
+            uname = u_info.get("username", "user")
+            disp_name = u_info.get("display_name", uname)
+            
+            av_val = auth_manager.get_avatar(uname) if auth_manager and hasattr(auth_manager, 'get_avatar') else None
+            if av_val:
+                av_src = av_val if str(av_val).startswith('data:') else f"data:image/png;base64,{av_val}"
+                img_html = f'<img src="{av_src}" style="width:22px;height:22px;border-radius:50%;object-fit:cover;border:1px solid #D4AF37;" />'
+            else:
+                img_html = '<div style="width:22px;height:22px;border-radius:50%;background:linear-gradient(135deg,#D4AF37,#8B7520);display:flex;align-items:center;justify-content:center;font-size:12px;color:#fff;">👤</div>'
+                
+            badge = f'''<div style="display: flex; align-items: center; gap: 8px; background: rgba(212,175,55,0.1); padding: 5px 10px; border-radius: 20px; border: 1px solid rgba(212,175,55,0.3);">{img_html}<span style="color: #FFFFFF; font-size: 0.8rem; font-weight: 600; font-family: 'Cairo', sans-serif;">{disp_name}</span><span style="width: 8px; height: 8px; background-color: #22c55e; border-radius: 50%; display: inline-block; box-shadow: 0 0 6px #22c55e;"></span></div>'''
+            user_badges.append(badge)
+            
+        all_badges_html = "".join(user_badges)
+        
+        return f'''<div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 5px;"><span style="color: rgba(255,255,255,0.8); font-size: 0.8rem; font-weight: 600; margin-right: 5px; font-family: 'Cairo', sans-serif;">{label}</span>{all_badges_html}</div>'''
+    except Exception as e:
+        return ""
+
 def render_top_banner():
     """renders a persistent top banner with user image and welcome message."""
     user = st.session_state.user
@@ -3155,8 +3020,8 @@ def render_top_banner():
     notifs = st.session_state.get('notifications', [])
     notif_count = len(notifs)
 
-    # 1. Global Audio/Push Notifications handled by background fragment for instant response.
-    # No longer needed here to avoid double-triggers.
+    if user:
+        update_user_heartbeat(user.get('username', ''), user)
 
     # 2. Styling and Content
     if lang == 'ar':
@@ -3176,13 +3041,9 @@ def render_top_banner():
     with st.container():
         # Language-aware column ordering to keep Bell on the Far Left
         if lang == 'ar':
-            # In RTL: Index 0 is Right, Index 3 is Left. 
-            # We assign c4(Date) to 0, c3(Spacer) to 1, c2(Profile) to 2, c1(Bell) to 3.
             cols = st.columns([2, 4.7, 2.5, 0.8])
             c4, c3, c2, c1 = cols[0], cols[1], cols[2], cols[3]
         else:
-            # In LTR: Index 0 is Left, Index 3 is Right.
-            # We assign c1(Bell) to 0, c2(Profile) to 1, c3(Spacer) to 2, c4(Date) to 3.
             cols = st.columns([0.8, 2.5, 4.7, 2])
             c1, c2, c3, c4 = cols[0], cols[1], cols[2], cols[3]
         
@@ -3197,7 +3058,12 @@ def render_top_banner():
         with c2: # Profile
             st.markdown(f'<div style="display:flex; align-items:center; gap:15px; margin-top:5px;">{avatar_html}<div><p style="margin:0; font-weight:700; color:white;">{welcome_prefix} {full_name}</p><p style="margin:0; font-size:0.75rem; color:#D4AF37;">{program_name}</p></div></div>', unsafe_allow_html=True)
         
-        with c3: st.write("") # Spacer
+        with c3:
+            online_html = get_online_users_html(st.session_state.auth, user, lang)
+            if online_html:
+                st.markdown(online_html, unsafe_allow_html=True)
+            else:
+                st.write("")
             
         with c4: # Date/Log at absolute right
             now = get_saudi_time()
@@ -3283,66 +3149,9 @@ if ('Notification' in window) {
 </script>
 """)
 
-        # Update user heartbeat safely
-        current_username = st.session_state.get('username', '') or st.session_state.user.get('username', '')
-        # Ensure st.session_state.username is always set for consistency!
-        if current_username and not st.session_state.get('username'):
-            st.session_state.username = current_username
-        if current_username:
-            update_user_heartbeat(current_username)
-        
-        # Build active users section if admin
-        active_users_section = ""
-        if st.session_state.user.get('role') == 'admin':
-            active_users = get_active_users()
-            if active_users:
-                user_cards = []
-                for username in active_users.keys():
-                    user_data = st.session_state.auth.users.get(username, {})
-                    # Get user's name
-                    user_name = ""
-                    if lang == 'ar':
-                        user_name = f"{user_data.get('first_name_ar', '')} {user_data.get('father_name_ar', '')}".strip()
-                    else:
-                        user_name = f"{user_data.get('first_name_en', '')} {user_data.get('father_name_en', '')}".strip()
-                    if not user_name:
-                        user_name = username
-                    # Get user's avatar
-                    user_avatar = user_data.get('avatar')
-                    if user_avatar:
-                        # Fix double data:image/png;base64, prefix + strip whitespace
-                        user_avatar_clean = str(user_avatar).strip().replace("\n", "").replace("\r", "")
-                        if user_avatar_clean.startswith('data:image'):
-                            av_src = user_avatar_clean
-                        else:
-                            av_src = f'data:image/png;base64,{user_avatar_clean}'
-                        # onerror: if image fails to load, replace with a generic placeholder div
-                        initial = user_name[0].upper() if user_name else "U"
-                        user_avatar_html = f'''<img 
-                            src="{av_src}" 
-                            class="banner-avatar" 
-                            onerror="this.outerHTML='<div style=\\'width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,#D4AF37,#8B7300);display:flex;align-items:center;justify-content:center;border:2px solid #D4AF37;font-size:16px;font-weight:bold;color:#000;\\'>{initial}</div>'"
-                            style="width:40px; height:40px; border-radius:50%; border:2px solid #D4AF37; object-fit:cover; box-shadow:0 0 8px rgba(212,175,55,0.3);">'''
-                    else:
-                        user_avatar_html = f'<div style="width:40px; height:40px; border-radius:50%; background: linear-gradient(135deg, #D4AF37, #8B7300); display:flex; align-items:center; justify-content:center; border:2px solid #D4AF37; box-shadow:0 0 10px rgba(212,175,55,0.3);"><span style="font-size:16px; color:#000; font-weight:bold;">{user_name[0].upper() if user_name else "U"}</span></div>'
-                    # Create user card
-                    user_cards.append(f"""
-                        <div style="display: flex; align-items: center; gap: 8px; background: rgba(212,175,55,0.1); padding: 5px 10px; border-radius: 20px; border: 1px solid rgba(212,175,55,0.3);">
-                            {user_avatar_html}
-                            <span style="color: #FFF; font-size: 0.8rem; font-weight: 500;">{user_name}</span>
-                            <span style="width:8px; height:8px; border-radius:50%; background: #00FF41; box-shadow:0 0 10px rgba(0,255,65,0.8);"></span>
-                        </div>
-                    """)
-                active_users_section = f"""
-                <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
-                    <span style="color: rgba(255,255,255,0.8); font-size: 0.8rem; font-weight: 600; margin-right: 5px;">{"المستخدمون المتصلون" if lang == 'ar' else "Active Users"}:</span>
-                    {"".join(user_cards)}
-                </div>
-                """
-        
         st.markdown(f"""
     <div class="persistent-top-banner">
-        <div style="display: flex; align-items: center; gap: 20px; flex-wrap: wrap;">
+        <div style="display: flex; align-items: center; gap: 20px;">
              <div class="banner-user-info">
                 {avatar_html}
             </div>
@@ -3350,7 +3159,6 @@ if ('Notification' in window) {
                 <p class="banner-welcome-msg">{welcome_prefix} {full_name}</p>
                 <p class="banner-subtext">{program_name}</p>
             </div>
-            {active_users_section}
         </div>
         <div style="display: flex; align-items: center; gap: 15px;">
             <div style="text-align: right;">
@@ -3364,55 +3172,6 @@ if ('Notification' in window) {
 def dashboard():
     user = st.session_state.user
     lang = st.session_state.lang
-
-    # ---------- CRITICAL: ACTIVE USER HEARTBEAT (EARLY UPDATE) ----------
-    # 1. Force early heartbeat update BEFORE anything else
-    current_username = st.session_state.get('username', '') or user.get('username', '')
-    if current_username and not st.session_state.get('username'):
-        st.session_state.username = current_username
-    if current_username:
-        update_user_heartbeat(current_username)
-
-    # 2. SMART Auto-Refresh page every 35 seconds BUT ONLY IF USER IS NOT TYPING!
-    # (Prevents breaking form submissions / password input / OTP input!)
-    st.components.v1.html("""
-<script>
-(function() {
-    const REFRESH_INTERVAL = 35000; // 35 seconds
-    function isUserTyping() {
-        const active = document.activeElement;
-        if (!active) return false;
-        // Skip refresh if user is in any input field (password, text, number, textarea)
-        const tag = active.tagName.toLowerCase();
-        if (tag === 'input' || tag === 'textarea' || tag === 'select') {
-            return true;
-        }
-        // Also skip if any modal is open
-        if (document.querySelector('[role="dialog"]')) {
-            return true;
-        }
-        return false;
-    }
-    function scheduleRefresh() {
-        setTimeout(function() {
-            if (isUserTyping()) {
-                // User is busy - wait 5 more seconds and check again
-                setTimeout(scheduleRefresh, 5000);
-            } else {
-                // Safe to refresh - reload page
-                window.location.reload();
-            }
-        }, REFRESH_INTERVAL);
-    }
-    // Start the schedule after page loads
-    if (document.readyState === 'complete' || document.readyState === 'interactive') {
-        scheduleRefresh();
-    } else {
-        window.addEventListener('DOMContentLoaded', scheduleRefresh);
-    }
-})();
-</script>
-""", height=0, width=0)
 
     # --- 1. Ready for Welcome Animation ---
     
@@ -3431,22 +3190,15 @@ def dashboard():
         if not full_name: full_name = user.get('username', 'User')
         greeting = "أهلاً،" if lang == 'ar' else "Hello,"
 
-        # Get user avatar if exists - Universal Format Detection + Robust Handling
+        # Get user avatar if exists - Universal Format Detection
         username_key = user.get('username', '')
         avatar_val = st.session_state.auth.get_avatar(username_key)
         if avatar_val:
-            av_clean = str(avatar_val).strip().replace("\n", "").replace("\r", "")
-            if av_clean.startswith('data:'):
-                av_src = av_clean
-            elif av_clean.startswith('data:image'):
-                av_src = av_clean
+            if str(avatar_val).startswith('data:'):
+                avatar_html = f'<img src="{avatar_val}" style="width:80px;height:80px;border-radius:50%;object-fit:cover;border:2px solid #D4AF37;" />'
             else:
-                av_src = f'data:image/png;base64,{av_clean}'
-            # onerror fallback to placeholder with icon
-            avatar_html = f'''<img 
-                src="{av_src}" 
-                onerror="this.outerHTML='<div style=\\'width:80px;height:80px;border-radius:50%;background:linear-gradient(135deg,#D4AF37,#8B7520);display:flex;align-items:center;justify-content:center;border:2px solid #D4AF37;font-size:36px;\\'>👤</div>'"
-                style="width:80px;height:80px;border-radius:50%;object-fit:cover;border:2px solid #D4AF37;box-shadow:0 0 12px rgba(212,175,55,0.3);" />'''
+                # Legacy fallback
+                avatar_html = f'<img src="data:image/png;base64,{avatar_val}" style="width:80px;height:80px;border-radius:50%;object-fit:cover;border:2px solid #D4AF37;" />'
         else:
             avatar_html = '<div style="width:80px;height:80px;border-radius:50%;background:linear-gradient(135deg,#D4AF37,#8B7520);display:flex;align-items:center;justify-content:center;font-size:36px;">👤</div>'
 
@@ -3679,81 +3431,10 @@ def dashboard():
             if st.session_state.get('_notif_refresh'):
                 typ, msg = st.session_state.pop('_notif_refresh')
                 show_toast(msg, typ, container=refresh_notif)
-            
-            # 🟢 Active Users Section (Dedicated for Admin in Sidebar)
-            st.sidebar.divider()
-            active_users_expander_title = "🟢 " + ("المستخدمون المتصلون الآن" if lang == 'ar' else "Users Online Now")
-            with st.sidebar.expander(active_users_expander_title, expanded=True):
-                # Refresh active users
-                active_users = get_active_users()
-                if not active_users:
-                    st.info("ℹ️ " + ("لا يوجد مستخدمون متصلون حالياً" if lang == 'ar' else "No users online right now"))
-                else:
-                    st.success(f"✅ " + (f"عدد المتصلين: {len(active_users)}" if lang == 'ar' else f"Online users: {len(active_users)}"))
-                    for username in sorted(active_users.keys()):
-                        user_data = st.session_state.auth.users.get(username, {})
-                        # Get name
-                        if lang == 'ar':
-                            display_name = f"{user_data.get('first_name_ar', '')} {user_data.get('father_name_ar', '')}".strip()
-                        else:
-                            display_name = f"{user_data.get('first_name_en', '')} {user_data.get('father_name_en', '')}".strip()
-                        if not display_name:
-                            display_name = username
-                        # Get avatar
-                        u_avatar = user_data.get('avatar')
-                        if u_avatar:
-                            # Fix double prefix + strip whitespace/newlines (common corruption)
-                            u_avatar_clean = str(u_avatar).strip().replace("\n", "").replace("\r", "")
-                            if u_avatar_clean.startswith('data:image'):
-                                av_src = u_avatar_clean
-                            else:
-                                av_src = f'data:image/png;base64,{u_avatar_clean}'
-                            # onerror fallback
-                            initial = display_name[0].upper() if display_name else "U"
-                            av_html = f'''<img 
-                                src="{av_src}" 
-                                onerror="this.outerHTML='<div style=\\'width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#D4AF37,#8B7300);display:flex;align-items:center;justify-content:center;border:2px solid #D4AF37;font-size:16px;font-weight:bold;color:#000;\\'>{initial}</div>'"
-                                style="width:36px;height:36px;border-radius:50%;border:2px solid #D4AF37;object-fit:cover;box-shadow:0 0 6px rgba(212,175,55,0.3);">'''
-                        else:
-                            initial = display_name[0].upper() if display_name else "U"
-                            av_html = f'<div style="width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#D4AF37,#8B7300);display:flex;align-items:center;justify-content:center;border:2px solid #D4AF37;font-size:16px;font-weight:bold;color:#000;">{initial}</div>'
-                        # Get last seen time
-                        last_seen_str = ""
-                        try:
-                            last_seen_dt = datetime.fromisoformat(active_users[username]["last_seen"])
-                            if last_seen_dt.tzinfo is None:
-                                last_seen_dt = SAUDI_TZ.localize(last_seen_dt)
-                            time_diff = (datetime.now(SAUDI_TZ) - last_seen_dt).total_seconds()
-                            if time_diff < 60:
-                                last_seen_str = "الآن" if lang == 'ar' else "Now"
-                            elif time_diff < 3600:
-                                mins = int(time_diff // 60)
-                                last_seen_str = f"منذ {mins} دقيقة" if lang == 'ar' else f"{mins} min ago"
-                            else:
-                                hrs = int(time_diff // 3600)
-                                last_seen_str = f"منذ {hrs} ساعة" if lang == 'ar' else f"{hrs} hours ago"
-                        except:
-                            last_seen_str = ""
-                        # Render user row
-                        st.markdown(f"""
-                        <div style="display:flex;align-items:center;gap:10px;padding:8px;background:rgba(212,175,55,0.08);border-radius:10px;margin-bottom:6px;border:1px solid rgba(212,175,55,0.2);">
-                            {av_html}
-                            <div style="flex-grow:1;min-width:0;">
-                                <div style="color:#FFF;font-weight:600;font-size:0.9rem;display:flex;align-items:center;gap:6px;">
-                                    {display_name}
-                                    <span style="width:8px;height:8px;border-radius:50%;background:#00FF41;box-shadow:0 0 8px rgba(0,255,65,0.8);flex-shrink:0;"></span>
-                                </div>
-                                <div style="color:rgba(255,255,255,0.6);font-size:0.7rem;">@{username}</div>
-                            </div>
-                        </div>
-                        """, unsafe_allow_html=True)
         
         st.markdown("<div style='margin: 15px 0;'></div>", unsafe_allow_html=True)
         
         if st.button(t("logout", lang), type="primary", width='stretch'):
-            # Remove user from active users list
-            if 'username' in st.session_state:
-                remove_user_from_active(st.session_state.username)
             st.session_state.user = None
             st.rerun()
         

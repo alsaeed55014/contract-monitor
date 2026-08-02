@@ -387,6 +387,10 @@ def login_screen(auth_manager, t, toggle_lang, load_saved_credentials, save_cred
     
     col1, col2, col3 = st.columns([0.5, 2, 0.5]) 
     with col2:
+        saved = load_saved_credentials()
+        saved_u = saved.get("u", "") if saved else ""
+        saved_p = saved.get("p", "") if saved else ""
+        
         with st.form(f"login_form_main"):
             head_col1, head_col2 = st.columns([1, 2])
             with head_col2:
@@ -399,8 +403,11 @@ def login_screen(auth_manager, t, toggle_lang, load_saved_credentials, save_cred
                     b64 = get_base64_image(img_path)
                     st.markdown(f'<div style="text-align:right;"><img src="data:image/jpeg;base64,{b64}" class="profile-img-circular" style="width:80px; height:80px; border:2px solid #FFF; box-shadow: 0 0 15px #FFF;"></div>', unsafe_allow_html=True)
             
-            u = st.text_input(t("username", lang), value="", label_visibility="collapsed", placeholder=t("username", lang))
-            p = st.text_input(t("password", lang), value="", type="password", label_visibility="collapsed", placeholder=t("password", lang))
+            u = st.text_input(t("username", lang), value=saved_u, label_visibility="collapsed", placeholder=t("username", lang))
+            p = st.text_input(t("password", lang), value=saved_p, type="password", label_visibility="collapsed", placeholder=t("password", lang))
+            
+            persist_txt = "هل تريد حفظ الدخول" if lang == 'ar' else "Do you want to stay logged in?"
+            persist = st.checkbox(persist_txt, value=(True if saved else False))
             
             submit = st.form_submit_button(t("login_btn", lang), use_container_width=True)
             lang_toggle = st.form_submit_button("En" if lang == "ar" else "عربي", use_container_width=True)
@@ -413,10 +420,13 @@ def login_screen(auth_manager, t, toggle_lang, load_saved_credentials, save_cred
                     user = auth_manager.authenticate(u, p.strip())
                     login_loader.empty()
                     if user:
-                        uname = u.lower().strip()
-                        user['username'] = uname
+                        if persist:
+                            save_credentials(u, p.strip())
+                        else:
+                            clear_credentials()
+                            
+                        user['username'] = u.lower().strip()
                         st.session_state.user = user
-                        st.session_state.username = uname  # Explicitly set username for tracking!
                         st.session_state.show_welcome = True
                         st.markdown("<style>div[data-testid='stForm'] { display: none !important; }</style>", unsafe_allow_html=True)
                         st.success("جاري الدخول... | Loading..." if lang == 'ar' else "Loading... | Entering")

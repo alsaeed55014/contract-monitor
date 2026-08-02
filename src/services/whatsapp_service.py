@@ -83,24 +83,12 @@ class WhatsAppService:
             o.add_argument("--disable-browser-side-navigation")
             o.add_argument("--disable-features=IsolateOrigins,site-per-process")
             o.add_argument("--password-store=basic")
-            # 🛡️ 2026 Enhanced Anti-Sleep & Memory Keep-Alive Arguments
+            # 🛡️ 2026 Anti-Sleep & Memory Keep-Alive Arguments (Prevent Engine Shutdown & Tab Sleeping)
             o.add_argument("--disable-background-timer-throttling")
             o.add_argument("--disable-backgrounding-occluded-windows")
             o.add_argument("--disable-renderer-backgrounding")
             o.add_argument("--memory-pressure-off")
             o.add_argument("--js-flags=--max-old-space-size=4096")
-            o.add_argument("--disable-hang-monitor")
-            o.add_argument("--disable-client-side-phishing-detection")
-            o.add_argument("--disable-component-update")
-            o.add_argument("--disable-domain-reliability")
-            o.add_argument("--disable-sync")
-            o.add_argument("--disable-translate")
-            o.add_argument("--metrics-recording-only")
-            o.add_argument("--no-first-run")
-            o.add_argument("--safebrowsing-disable-auto-update")
-            o.add_argument("--enable-automation=false")
-            o.add_argument("--autoplay-policy=no-user-gesture-required")
-            o.add_argument("--disable-features=VizDisplayCompositor")
             if not is_uc:
                 o.add_argument(f"--user-data-dir={self.session_path}")
 
@@ -236,17 +224,10 @@ class WhatsAppService:
 
 
     def keep_alive(self):
-        """Enhanced keep-alive to prevent tab sleeping, renderer suspension, and DevTools timeout"""
+        """Pings Chrome JavaScript engine to prevent tab sleeping, renderer suspension, and DevTools timeout"""
         if not self.driver: return False
         try:
-            # Run multiple small JS commands to keep the renderer active
-            self.driver.execute_script("""
-                // Keep the page active
-                document.hasFocus();
-                // Touch the DOM to prevent optimizations
-                document.body.classList.toggle('keep-alive-dummy');
-                document.body.classList.toggle('keep-alive-dummy');
-            """)
+            self.driver.execute_script("return document.readyState;")
             return True
         except Exception as e:
             print(f"[{time.strftime('%H:%M:%S')}] Keep-alive check failed: {e}")
@@ -257,12 +238,11 @@ class WhatsAppService:
         import streamlit as st
         if not self.driver: return "Disconnected"
         try:
-            # Verify browser window process is responsive (don't kill driver on failure!)
+            # Verify browser window process is responsive
             _ = self.driver.window_handles
-        except Exception as e:
-            print(f"[{time.strftime('%H:%M:%S')}] Window handles check failed: {e}")
-            # Don't set self.driver = None here, just note the issue
-            pass
+        except:
+            self.driver = None
+            return "Disconnected"
 
         try:
             # Check for active WhatsApp DOM elements
@@ -279,12 +259,10 @@ class WhatsAppService:
                 return "Connected"
 
             return "Loading..."
-        except Exception as e:
-            print(f"[{time.strftime('%H:%M:%S')}] DOM check failed: {e}")
+        except:
             if st.session_state.get('wa_running', False) and self.driver:
                 return "Connected"
-            # Don't return Disconnected immediately, maybe temporary!
-            return "Loading..."
+            return "Disconnected"
 
     def wait_for_connection(self, timeout=30):
         from selenium.webdriver.common.by import By
@@ -365,259 +343,113 @@ class WhatsAppService:
         from selenium.webdriver.support.ui import WebDriverWait
         from selenium.webdriver.support import expected_conditions as EC
         from selenium.webdriver.common.keys import Keys
-        from selenium.common.exceptions import StaleElementReferenceException, TimeoutException
         if not self.driver: return False, "Engine Offline"
-        
-        # Try up to 2 times for transient issues (like stale element or timeout)
-        max_attempts = 2
-        for attempt in range(max_attempts):
+        try:
+            from selenium.webdriver.common.action_chains import ActionChains
+            
+            clean_phone = "".join(filter(str.isdigit, str(phone)))
+            
+            # 1. Length Validation
+            if len(clean_phone) < 8:
+                return False, "رقم قصير جداً" 
+            
+            # Open the chat window with a brief random wait
+            # محاكاة التفكير قبل الفتح
+            time.sleep(random.uniform(2.0, 5.0))
+            url = f"https://web.whatsapp.com/send?phone={clean_phone}"
+            self.driver.get(url)
+            
+            # محاكاة حركة الماوس العشوائية والتمرير (Human Focus)
             try:
-                from selenium.webdriver.common.action_chains import ActionChains
-                
-                clean_phone = "".join(filter(str.isdigit, str(phone)))
-                
-                # 1. Length Validation
-                if len(clean_phone) < 8:
-                    return False, "رقم قصير جداً" 
-                
-                # Open the chat window with a brief random wait
-                time.sleep(random.uniform(2.0, 5.0))
-                url = f"https://web.whatsapp.com/send?phone={clean_phone}"
-                self.driver.get(url)
-                
-                # محاكاة حركة الماوس العشوائية والتمرير
-                try:
-                    actions = ActionChains(self.driver)
-                    for _ in range(random.randint(2, 4)):
-                        actions.move_by_offset(random.randint(-50, 50), random.randint(-50, 50)).perform()
-                        time.sleep(random.uniform(0.1, 0.3))
-                    self.driver.execute_script(f"window.scrollBy(0, {random.randint(100, 300)})")
-                    time.sleep(random.uniform(0.5, 1.0))
-                    self.driver.execute_script(f"window.scrollBy(0, -{random.randint(50, 150)})")
-                except: pass
-
-                # ==============================================================
-                # 🟢 IMPROVED: Smart validity check + multiple selectors + retry
-                # ==============================================================
-                wait = WebDriverWait(self.driver, 60)  # Increased from 45s to 60s
-                msg_input = None
-                invalid_detected = False
-                
-                # First, quickly check if WhatsApp shows an invalid number popup (2026 UI)
-                try:
-                    quick_src = self.driver.page_source.lower()
-                    # Only mark as INVALID if we find CONCRETE evidence, NOT just the word "invalid" in other contexts!
-                    # Look for WhatsApp's specific invalid-number dialog elements:
-                    if (
-                        ('"invalid number"' in quick_src or "'invalid number'" in quick_src) and
-                        ('ok' in quick_src)  # OK button on dialog
-                    ):
-                        invalid_detected = True
-                    # Also check Arabic UI
-                    if (
-                        ('الرقم الذي أدخلته غير صالح' in quick_src or 'الرقم غير صالح' in quick_src or 'رقم غير صحيح' in quick_src) and
-                        ('موافق' in quick_src or 'ok' in quick_src)
-                    ):
-                        invalid_detected = True
-                except:
-                    pass
-
-                if not invalid_detected:
-                    # Try MULTIPLE selectors for the message input box (WhatsApp changes UI often!)
-                    selectors_to_try = [
-                        # Most recent (2025-2026)
-                        (By.XPATH, '//div[@contenteditable="true"][@data-tab="10"]'),
-                        # Slightly older
-                        (By.XPATH, '//div[@contenteditable="true"][@role="textbox"]'),
-                        # Fallback: any contenteditable inside footer
-                        (By.CSS_SELECTOR, 'footer div[contenteditable="true"]'),
-                        # Another fallback
-                        (By.XPATH, '//div[@contenteditable="true" and contains(@class, "copyable-text")]'),
-                    ]
-                    for selector in selectors_to_try:
-                        try:
-                            msg_input = wait.until(EC.presence_of_element_located(selector))
-                            # Verify element is visible and usable
-                            if msg_input and msg_input.is_displayed():
-                                break
-                        except TimeoutException:
-                            continue
-                        except StaleElementReferenceException:
-                            continue
-                        except:
-                            continue
-
-                # Final check: if msg_input not found, do deeper validity check
-                if msg_input is None and not invalid_detected:
-                    # Do a slow, careful check - wait a bit more and look for chat panel
-                    try:
-                        time.sleep(5)
-                        final_src = self.driver.page_source.lower()
-                        # Strong indicators of INVALID number
-                        strong_invalid_indicators = [
-                            ('"invalid number"' in final_src and '"ok"' in final_src),
-                            ("the phone number shared via url is invalid" in final_src),
-                            ('رقم غير صحيح' in final_src and 'موافق' in final_src),
-                            ('الرقم الذي أدخلته غير صالح' in final_src and 'موافق' in final_src),
-                        ]
-                        if any(strong_invalid_indicators):
-                            invalid_detected = True
-                        else:
-                            # Last-ditch: try to find the message input one more time with longer wait
-                            try:
-                                wait2 = WebDriverWait(self.driver, 30)
-                                msg_input = wait2.until(EC.presence_of_element_located(
-                                    (By.XPATH, '//div[@contenteditable="true"][@role="textbox"] | //div[@contenteditable="true"][@data-tab="10"]')
-                                ))
-                            except:
-                                # If we can't find anything after all this, assume invalid to avoid false positives? 
-                                # No—assume LOAD FAILURE because we had successful sends on same numbers before!
-                                if attempt < max_attempts - 1:
-                                    time.sleep(2)
-                                    continue  # Retry!
-                                return False, "فشل في التحميل"
-                    except:
-                        if attempt < max_attempts - 1:
-                            continue
-                            return False, "فشل في التحميل"
-
-                if invalid_detected:
+                actions = ActionChains(self.driver)
+                for _ in range(random.randint(2, 4)):
+                    actions.move_by_offset(random.randint(-50, 50), random.randint(-50, 50)).perform()
+                    time.sleep(random.uniform(0.1, 0.3))
+                # تمرير بسيط للأسفل والأعلى ليبدو كأن المستخدم يقرأ
+                self.driver.execute_script(f"window.scrollBy(0, {random.randint(100, 300)})")
+                time.sleep(random.uniform(0.5, 1.0))
+                self.driver.execute_script(f"window.scrollBy(0, -{random.randint(50, 150)})")
+            except: pass
+            
+            wait = WebDriverWait(self.driver, 45)
+            
+            # Wait for text box
+            try:
+                msg_input = wait.until(EC.presence_of_element_located(
+                    (By.XPATH, '//div[@contenteditable="true"][@data-tab="10"]')
+                ))
+            except:
+                src = self.driver.page_source.lower()
+                if "invalid" in src or "غير صحيح" in src:
                     return False, "رقم غير مسجل في الواتساب"
+                return False, "فشل في التحميل"
 
-                # ================== END OF IMPROVED CHECK ====================
+            time.sleep(random.uniform(1.5, 3.0)) # Human-like pause after loading
 
-                time.sleep(random.uniform(1.5, 3.0)) # Human-like pause after loading
+            if attachment_path and os.path.exists(attachment_path):
+                # 🛡️ تمويه اسم الملف: نسخ الملف لاسم عشوائي قبل الإرسال لتجنب البصمة المتكررة
+                temp_dir = os.path.join(self.session_path, "temp_uploads")
+                os.makedirs(temp_dir, exist_ok=True)
+                
+                original_ext = os.path.splitext(attachment_path)[1]
+                random_filename = f"DOC_{datetime.now().strftime('%H%M%S')}_{random.randint(1000, 9999)}{original_ext}"
+                obfuscated_path = os.path.join(temp_dir, random_filename)
+                shutil.copy2(attachment_path, obfuscated_path)
 
-                if attachment_path and os.path.exists(attachment_path):
-                    # 🛡️ تمويه اسم الملف
-                    temp_dir = os.path.join(self.session_path, "temp_uploads")
-                    os.makedirs(temp_dir, exist_ok=True)
+                # Attach file
+                attach_btn = wait.until(EC.element_to_be_clickable(
+                    (By.XPATH, '//div[@title="Attach"] | //span[@data-icon="plus"] | //span[@data-icon="attach-menu-plus"]')
+                ))
+                time.sleep(random.uniform(1.2, 2.5)) # تفكير قبل الضغط
+                attach_btn.click()
+                time.sleep(random.uniform(1.0, 2.0))
+
+                file_input = self.driver.find_element(By.XPATH, '//input[@type="file"]')
+                file_input.send_keys(obfuscated_path)
+                
+                caption_input = wait.until(EC.presence_of_element_located(
+                    (By.XPATH, '//div[@contenteditable="true"][@data-tab="10"] | //div[@contenteditable="true" and contains(@class, "copyable-text")]')
+                ))
+                
+                if message:
+                    time.sleep(random.uniform(1.0, 2.5))
+                    actions = ActionChains(self.driver)
+                    actions.move_to_element(caption_input).click().perform()
                     
-                    original_ext = os.path.splitext(attachment_path)[1]
-                    random_filename = f"DOC_{datetime.now().strftime('%H%M%S')}_{random.randint(1000, 9999)}{original_ext}"
-                    obfuscated_path = os.path.join(temp_dir, random_filename)
-                    shutil.copy2(attachment_path, obfuscated_path)
-
-                    # Attach file - multiple selectors
-                    attach_btn = None
-                    attach_selectors = [
-                        (By.XPATH, '//div[@title="Attach"] | //span[@data-icon="plus"] | //span[@data-icon="attach-menu-plus"]'),
-                        (By.CSS_SELECTOR, 'span[data-icon="plus"], div[title="Attach"]'),
-                    ]
-                    for sel in attach_selectors:
-                        try:
-                            attach_btn = wait.until(EC.element_to_be_clickable(sel))
-                            if attach_btn: break
-                        except:
-                            continue
+                    # استخدام دالة الكتابة البشرية لتجنب تكرار الكود
+                    self._type_human_like(caption_input, message)
+                    time.sleep(random.uniform(0.8, 1.5))
+                
+                # Natural pause before ENTER / Click
+                time.sleep(random.uniform(0.5, 1.2))
+                try:
+                    # 4. Click the Send Button instead of Keys.ENTER
+                    send_btn = self.driver.find_element(By.XPATH, '//span[@data-icon="send"]')
+                    actions = ActionChains(self.driver)
+                    actions.move_to_element(send_btn).pause(random.uniform(0.2, 0.5)).click().perform()
+                except:
+                    caption_input.send_keys(Keys.ENTER)
+            else:
+                # Simple text message
+                if message:
+                    # استخدام دالة الكتابة البشرية لتجنب تكرار الكود
+                    self._type_human_like(msg_input, message)
                     
                     time.sleep(random.uniform(1.2, 2.5))
-                    if attach_btn:
-                        try:
-                            attach_btn.click()
-                        except:
-                            try:
-                                self.driver.execute_script("arguments[0].click();", attach_btn)
-                            except:
-                                pass
-                    time.sleep(random.uniform(1.0, 2.0))
-
-                    try:
-                        file_input = self.driver.find_element(By.XPATH, '//input[@type="file"]')
-                        file_input.send_keys(obfuscated_path)
-                    except:
-                        pass
-                    
-                    # Find caption input - multiple selectors
-                    caption_input = None
-                    caption_selectors = [
-                        (By.XPATH, '//div[@contenteditable="true"][@data-tab="10"] | //div[@contenteditable="true" and contains(@class, "copyable-text")]'),
-                        (By.XPATH, '//div[@contenteditable="true"][@role="textbox"]'),
-                    ]
-                    for sel in caption_selectors:
-                        try:
-                            caption_input = wait.until(EC.presence_of_element_located(sel))
-                            if caption_input: break
-                        except:
-                            continue
-                    if caption_input is None:
-                        caption_input = msg_input
-                    
-                    if message and caption_input:
-                        time.sleep(random.uniform(1.0, 2.5))
-                        try:
-                            actions = ActionChains(self.driver)
-                            actions.move_to_element(caption_input).click().perform()
-                        except:
-                            try:
-                                self.driver.execute_script("arguments[0].click();", caption_input)
-                            except:
-                                pass
-                        
-                        self._type_human_like(caption_input, message)
-                        time.sleep(random.uniform(0.8, 1.5))
-                    
+                    # Natural pause before ENTER
                     time.sleep(random.uniform(0.5, 1.2))
-                    send_success = False
                     try:
+                        # 4. Click the Send Button instead of Keys.ENTER
                         send_btn = self.driver.find_element(By.XPATH, '//span[@data-icon="send"]')
-                        if send_btn:
-                            actions = ActionChains(self.driver)
-                            actions.move_to_element(send_btn).pause(random.uniform(0.2, 0.5)).click().perform()
-                            send_success = True
+                        actions = ActionChains(self.driver)
+                        actions.move_to_element(send_btn).pause(random.uniform(0.2, 0.5)).click().perform()
                     except:
-                        if caption_input:
-                            try:
-                                caption_input.send_keys(Keys.ENTER)
-                                send_success = True
-                            except:
-                                pass
-                    if not send_success and attempt < max_attempts - 1:
-                        continue
-                else:
-                    # Simple text message
-                    if message and msg_input:
-                        self._type_human_like(msg_input, message)
-                        
-                        time.sleep(random.uniform(1.2, 2.5))
-                        time.sleep(random.uniform(0.5, 1.2))
-                        send_success = False
-                        try:
-                            send_btn = self.driver.find_element(By.XPATH, '//span[@data-icon="send"]')
-                            if send_btn:
-                                actions = ActionChains(self.driver)
-                                actions.move_to_element(send_btn).pause(random.uniform(0.2, 0.5)).click().perform()
-                                send_success = True
-                        except:
-                            try:
-                                msg_input.send_keys(Keys.ENTER)
-                                send_success = True
-                            except:
-                                pass
-                        if not send_success and attempt < max_attempts - 1:
-                            continue
-                
-                time.sleep(random.uniform(2.0, 4.0)) # Wait for send
-                return True, "Done"
-                
-            except StaleElementReferenceException:
-                if attempt < max_attempts - 1:
-                    time.sleep(1.5)
-                    continue
-                return False, "Err: stale element reference"
-            except TimeoutException:
-                if attempt < max_attempts - 1:
-                    time.sleep(1.5)
-                    continue
-                return False, "فشل في التحميل"
-            except Exception as e:
-                if attempt < max_attempts - 1:
-                    time.sleep(1.0)
-                    continue
-                return False, f"Err: {str(e)[:60]}"
-        
-        # If we exit loop without returning
-        return False, "فشل بعد إعادة المحاولة"
+                        msg_input.send_keys(Keys.ENTER)
+            
+            time.sleep(random.uniform(2.0, 4.0)) # Wait for send
+            return True, "Done"
+        except Exception as e:
+            return False, f"Err: {str(e)[:40]}"
 
 
     def close(self):
