@@ -338,6 +338,39 @@ class WhatsAppService:
                 time.sleep(random.uniform(0.05, 0.2))
 
 
+def parse_spintax(text: str) -> str:
+    """تحليل Spintax مثل {مرحباً|أهلاً|السلام عليكم} واختيار إحدى الخيارات عشوائياً"""
+    if not text: return ""
+    pattern = r'\{([^{}]+)\}'
+    while re.search(pattern, text):
+        def repl(match):
+            options = match.group(1).split('|')
+            return random.choice(options)
+        text = re.sub(pattern, repl, text)
+    return text
+
+def inject_zero_width_spaces(text: str) -> str:
+    """حقن الرموز المخفية (Zero-Width Space \u200B) لتغيير التوقيع الرقمي للرسالة بدون تغيير الشكل الظاهري"""
+    if not text: return ""
+    words = text.split(' ')
+    obfuscated_words = []
+    for word in words:
+        if len(word) > 3 and random.random() < 0.4:
+            idx = random.randint(1, len(word) - 1)
+            word = word[:idx] + '\u200b' + word[idx:]
+        obfuscated_words.append(word)
+    res = ' '.join(obfuscated_words)
+    if random.random() < 0.5:
+        res = res.replace('.', '.\u200b').replace('!', '!\u200b')
+    return res
+
+def obfuscate_message(text: str) -> str:
+    """تطبيق محرك التمويه المزدوج (Spintax + Zero-Width Fingerprinting)"""
+    if not text: return ""
+    text = parse_spintax(text)
+    text = inject_zero_width_spaces(text)
+    return text
+
     def send_message(self, phone, message, attachment_path=None):
         from selenium.webdriver.common.by import By
         from selenium.webdriver.support.ui import WebDriverWait
@@ -349,6 +382,10 @@ class WhatsAppService:
             
             clean_phone = "".join(filter(str.isdigit, str(phone)))
             
+            # 🛡️ 2026 Anti-Ban: Apply Double Obfuscation Engine (Spintax + Zero-Width Fingerprint)
+            if message:
+                message = obfuscate_message(message)
+
             # 1. Length Validation
             if len(clean_phone) < 8:
                 return False, "رقم قصير جداً" 

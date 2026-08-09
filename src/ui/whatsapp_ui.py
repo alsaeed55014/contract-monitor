@@ -681,6 +681,28 @@ def render_whatsapp_page():
                                         st.rerun()
 
         with main_col:
+            # 🛡️ 2026 Anti-Ban Shield Guidance Banner
+            with st.expander("🛡️ " + ("درع الحماية التلقائي وتجنب الحظر (Anti-Ban Shield 2026)" if is_ar else "Anti-Ban Shield & Safety Guide"), expanded=False):
+                st.markdown("""
+                <div style="background: rgba(0, 255, 136, 0.07); padding: 15px; border-radius: 12px; border: 1px solid rgba(0, 255, 136, 0.3); color: #e0e0e0;">
+                    <h5 style="color: #00FF88; margin-top: 0;">✅ التقنيات المفعّلة حمايتها تلقائياً في النظام:</h5>
+                    <ul style="font-size: 0.9rem; line-height: 1.6;">
+                        <li><b>حقن الرموز غير المرئية (Zero-Width Fingerprinting):</b> يتم تغيير التوقيع المشفر لكل رسالة تلقائياً لمنع خوارزميات واتساب من اكتشاف التكرار.</li>
+                        <li><b>دعم الـ Spintax:</b> يمكنك كتابة <code>{مرحباً|أهلاً|السلام عليكم}</code> وسيتم اختيار خيار عشوائي لكل مستلم.</li>
+                        <li><b>الطباعة البشرية وتفاعل الماوس:</b> تحاكي حركة الماوس والتأخيرات البشرية العشوائية أثناء الكتابة.</li>
+                        <li><b>تمويه أسماء المرفقات:</b> يتم تغيير اسم أي ملف مرفق تلقائياً لمنع اكتشاف بصمة الملفات المتكررة.</li>
+                    </ul>
+                    <hr style="border-color: rgba(255,255,255,0.1);">
+                    <h5 style="color: #FFD700; margin-top: 5px;">⚠️ إرشادات هامة جداً لمنع حظر رقمك:</h5>
+                    <ol style="font-size: 0.9rem; line-height: 1.6;">
+                        <li><b>مهلة الإرسال:</b> احرص أن تكون المهلة بين <b>30 إلى 60 ثانية</b> على الأقل.</li>
+                        <li><b>الاستراحة بين الدفعات:</b> فعّل استراحة (مثلاً: توقف 10 دقائق بعد كل 10 رسائل).</li>
+                        <li><b>تدرج الإرسال (Warming Up):</b> للأرقام الجديدة، لا ترسل أكثر من 30-50 رسالة يومياً في البداية.</li>
+                        <li><b>تجنب بلاغات السبام:</b> أضف في نهاية رسالتك جملة مثل: <i>(إذا كنت لا ترغب بتلقي الرسائل أرسل إلغاء)</i> لتجنب قيام المستلم بالضغط على زر "إبلاغ وحظر".</li>
+                    </ol>
+                </div>
+                """, unsafe_allow_html=True)
+
             t_manual, t_xl = st.tabs([lbl['tab_manual'], lbl['tab_excel']])
             
             rebuild_review = False
