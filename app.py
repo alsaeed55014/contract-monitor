@@ -1423,6 +1423,32 @@ def _country_code_to_emoji(code):
     return chr(ord(code[0]) + 0x1F1E6 - 0x41) + chr(ord(code[1]) + 0x1F1E6 - 0x41)
 
 
+def get_filtered_df_by_nationality(df, key_prefix):
+    """
+    Applies the active nationality filter selected via country flag badges to the DataFrame if active.
+    """
+    if df is None or not isinstance(df, pd.DataFrame) or df.empty:
+        return df
+    active_code = st.session_state.get(f"selected_nat_{key_prefix}")
+    if not active_code:
+        return df
+    
+    nat_col = None
+    for c in df.columns:
+        c_str = str(c).lower()
+        if "nationality" in c_str or "الجنسية" in c_str or "جنسية" in c_str:
+            nat_col = c
+            break
+            
+    if nat_col is not None and not df.empty:
+        df_nat_codes = df[nat_col].apply(_get_nationality_code)
+        filtered = df[df_nat_codes == active_code.lower()]
+        if not filtered.empty:
+            return filtered
+    return df
+
+
+
 def style_df(df):
     """
     Applies custom styling to DataFrames (Optimized for 2026 Speed).
@@ -3849,8 +3875,9 @@ def render_dashboard_content():
 
         c_exp_1, c_exp_2 = st.columns([4, 1])
         with c_exp_2:
-            # 2. Use the filtered data for Export
-            xl_data = create_pasha_whatsapp_excel(d_urgent, lang=lang)
+            # 2. Apply active nationality filter badge if selected
+            d_urgent_export = get_filtered_df_by_nationality(d_urgent, "dash_urgent")
+            xl_data = create_pasha_whatsapp_excel(d_urgent_export, lang=lang)
             if xl_data:
                 xl_buf, xl_df = xl_data
                 btn_text = "💬 " + ("تصدير للواتساب" if lang == 'ar' else "Export to WhatsApp")
@@ -3868,8 +3895,9 @@ def render_dashboard_content():
 
         c_exp_1, c_exp_2 = st.columns([4, 1])
         with c_exp_2:
-            # 2. Use the filtered data for Export
-            xl_data = create_pasha_whatsapp_excel(d_expired, lang=lang)
+            # 2. Apply active nationality filter badge if selected
+            d_expired_export = get_filtered_df_by_nationality(d_expired, "dash_expired")
+            xl_data = create_pasha_whatsapp_excel(d_expired_export, lang=lang)
             if xl_data:
                 xl_buf, xl_df = xl_data
                 btn_text = "💬 " + ("تصدير للواتساب" if lang == 'ar' else "Export to WhatsApp")
@@ -3887,8 +3915,9 @@ def render_dashboard_content():
 
         c_exp_1, c_exp_2 = st.columns([4, 1])
         with c_exp_2:
-            # 2. Use the filtered data for Export
-            xl_data = create_pasha_whatsapp_excel(d_active, lang=lang)
+            # 2. Apply active nationality filter badge if selected
+            d_active_export = get_filtered_df_by_nationality(d_active, "dash_active")
+            xl_data = create_pasha_whatsapp_excel(d_active_export, lang=lang)
             if xl_data:
                 xl_buf, xl_df = xl_data
                 render_pasha_export_button(xl_df, "💬 تصدير للواتساب", "Active_WhatsApp.xlsx", "المرشحين_الفواعل", key="btn_exp_active")
@@ -4158,9 +4187,9 @@ def render_search_content():
             # --- 1. PREPARE EXPORT DATA FIRST (Using clean, non-renamed 'res') ---
             c_s_1, c_s_2 = st.columns([4, 1])
             with c_s_2:
-                # IMPORTANT: We use 'res' here BEFORE any renaming or column dropping for display
-                # This ensures create_pasha_whatsapp_excel finds the original column names
-                xl_result_search = create_pasha_whatsapp_excel(res, lang=lang)
+                # Apply nationality filter if active for search results
+                res_export = get_filtered_df_by_nationality(res, "search_res")
+                xl_result_search = create_pasha_whatsapp_excel(res_export, lang=lang)
                 if xl_result_search:
                     xl_buf_search, xl_df_search = xl_result_search
                     btn_text = "💬 " + ("تصدير للواتساب" if lang == 'ar' else "Export to WhatsApp")
@@ -5762,7 +5791,8 @@ def render_order_processing_content():
                         # Export
                         c_op_2 = st.columns([4, 1])[1]
                         with c_op_2:
-                            xl_data_op = create_pasha_whatsapp_excel(city_df, lang=lang)
+                            city_df_export = get_filtered_df_by_nationality(city_df, f"op_city_{idx}")
+                            xl_data_op = create_pasha_whatsapp_excel(city_df_export, lang=lang)
                             if xl_data_op:
                                 _, xl_df_op = xl_data_op
                                 btn_exp = "💬 " + ("تصدير للواتساب" if lang == 'ar' else "Export to WhatsApp")
@@ -5806,7 +5836,8 @@ def render_order_processing_content():
                     if not reg_df.empty:
                         c_reg_2 = st.columns([4, 1])[1]
                         with c_reg_2:
-                            xl_reg = create_pasha_whatsapp_excel(reg_df, lang=lang)
+                            reg_df_export = get_filtered_df_by_nationality(reg_df, f"op_reg_{idx}")
+                            xl_reg = create_pasha_whatsapp_excel(reg_df_export, lang=lang)
                             if xl_reg:
                                 _, xl_df_reg = xl_reg
                                 btn_exp = "💬 " + ("تصدير للواتساب" if lang == 'ar' else "Export to WhatsApp")
@@ -5860,7 +5891,8 @@ def render_order_processing_content():
                         # Export Section
                         exp_oth_col = st.columns([4, 1])[1]
                         with exp_oth_col:
-                            xl_oth_data = create_pasha_whatsapp_excel(other_df, lang=lang)
+                            other_df_export = get_filtered_df_by_nationality(other_df, f"op_other_{idx}")
+                            xl_oth_data = create_pasha_whatsapp_excel(other_df_export, lang=lang)
                             if xl_oth_data:
                                 _, xl_oth_df = xl_oth_data
                                 btn_exp_lbl = "💬 " + ("تصدير للواتساب" if lang == 'ar' else "Export to WhatsApp")
