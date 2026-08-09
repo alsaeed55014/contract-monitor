@@ -1423,6 +1423,45 @@ def _country_code_to_emoji(code):
     return chr(ord(code[0]) + 0x1F1E6 - 0x41) + chr(ord(code[1]) + 0x1F1E6 - 0x41)
 
 
+COUNTRY_NAMES_DISPLAY = {
+    "ph": {"ar": "الفلبين", "en": "Filipinos"},
+    "bd": {"ar": "بنجلاديش", "en": "Bangladeshi"},
+    "np": {"ar": "نيبال", "en": "Nepali"},
+    "pk": {"ar": "باكستان", "en": "Pakistani"},
+    "ke": {"ar": "كينيا", "en": "Kenyan"},
+    "id": {"ar": "اندونيسيا", "en": "Indonesian"},
+    "ug": {"ar": "اوغندا", "en": "Ugandan"},
+    "in": {"ar": "الهند", "en": "Indian"},
+    "eg": {"ar": "مصر", "en": "Egyptian"},
+    "sd": {"ar": "السودان", "en": "Sudanese"},
+    "lk": {"ar": "سيريلانكا", "en": "Sri Lankan"},
+    "et": {"ar": "اثيوبيا", "en": "Ethiopian"},
+    "ma": {"ar": "المغرب", "en": "Moroccan"},
+    "ye": {"ar": "اليمن", "en": "Yemeni"},
+    "rw": {"ar": "رواندا", "en": "Rwandan"},
+    "af": {"ar": "افغانستان", "en": "Afghan"},
+    "ng": {"ar": "نيجيريا", "en": "Nigerian"},
+    "gh": {"ar": "غانا", "en": "Ghanaian"},
+    "vn": {"ar": "فيتنام", "en": "Vietnamese"},
+    "sl": {"ar": "سيراليون", "en": "Sierra Leonean"},
+    "bi": {"ar": "بوروندي", "en": "Burundian"},
+    "sa": {"ar": "السعودية", "en": "Saudi"}
+}
+
+def get_country_display_name(code, lang='ar'):
+    """
+    Returns full nationality/country display name for country code.
+    """
+    if not code:
+        return ""
+    code_lower = str(code).strip().lower()
+    entry = COUNTRY_NAMES_DISPLAY.get(code_lower)
+    if entry:
+        return entry.get('ar' if lang == 'ar' else 'en', code.upper())
+    return code.upper()
+
+
+
 def get_filtered_df_by_nationality(df, key_prefix):
     """
     Applies the active nationality filter selected via country flag badges to the DataFrame if active.
@@ -1642,12 +1681,12 @@ div[data-testid="stHorizontalBlock"]:has(.nat-flag-badge)::-webkit-scrollbar-thu
 /* Style each column as a premium card */
 div[data-testid="stHorizontalBlock"]:has(.nat-flag-badge) > div[data-testid="column"] {
     flex: 0 0 auto !important;
-    width: 95px !important;
-    min-width: 95px !important;
+    width: auto !important;
+    min-width: 110px !important;
     background: rgba(255,255,255,0.03) !important;
     border: 1px solid rgba(212,175,55,0.2) !important;
     border-radius: 12px !important;
-    padding: 10px 6px !important;
+    padding: 10px 8px !important;
     display: flex !important;
     flex-direction: column !important;
     align-items: center !important;
@@ -1780,7 +1819,8 @@ div[data-testid="stHorizontalBlock"]:has(.nat-flag-badge) .nat-clear-badge .stBu
                     st.markdown(f'<div class="{div_cls}" style="text-align:center;"></div>', unsafe_allow_html=True)
                     st.image(flag_url, width=32)
                     
-                    button_label = f"{cnt} {code.upper()}"
+                    country_name = get_country_display_name(code, lang)
+                    button_label = f"{cnt} {country_name}"
                     if st.button(button_label, key="nbadge_v2_" + key_prefix + "_" + code, use_container_width=True):
                         st.session_state["selected_nat_" + key_prefix] = None if is_sel else code
                         st.rerun()
