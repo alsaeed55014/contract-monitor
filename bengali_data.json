@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 {
     "suppliers": [
         {
@@ -137,34 +136,4 @@
             "worker_uuid": "52a217f9-be1"
         }
     ]
-=======
-{
-    "suppliers": [
-        {
-            "name": "عطا الرحمن ",
-            "phone": "⁦+966 50 828 7726⁩"
-        }
-    ],
-    "employers": [
-        {
-            "name": "ابو صقر",
-            "cafe": "حفر الباطن",
-            "mobile": "0566964681",
-            "city": "حفر الباطن"
-        }
-    ],
-    "workers": [
-        {
-            "name": "بنقالي",
-            "mobile": "",
-            "id": "",
-            "supplier": "عطا الرحمن  (⁦+966 50 828 7726⁩)",
-            "employer": "ابو صقر - حفر الباطن (حفر الباطن)",
-            "file_notes": "",
-            "general_notes": "",
-            "timestamp": "2026-03-03 23:13:01",
-            "worker_uuid": "993caa93"
-        }
-    ]
->>>>>>> 8795180 (Update Bengali search table to add vertical and horizontal scrolling and search on enter)
 }

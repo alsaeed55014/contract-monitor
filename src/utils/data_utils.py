@@ -112,10 +112,10 @@ def style_df(df):
                     if len(key) <= 3:
                         pattern = r'(?:^|[\s,:;.\-/])' + re.escape(key) + r'(?:[\s,:;.\-/]|$)'
                         if re.search(pattern, s_val):
-                            return f"https://flagsapi.com/{code.upper()}/flat/64.png"
+                            return f"https://cdn.jsdelivr.net/gh/lipis/flag-icons@7.2.0/flags/4x3/{code.lower()}.svg"
                     else:
                         if key in s_val:
-                            return f"https://flagsapi.com/{code.upper()}/flat/64.png"
+                            return f"https://cdn.jsdelivr.net/gh/lipis/flag-icons@7.2.0/flags/4x3/{code.lower()}.svg"
                 return None
             
             idx = list(styled_df.columns).index(col)
@@ -139,13 +139,18 @@ def style_df(df):
 
     def apply_colors(val):
         s_val = str(val).lower()
-        if any(k in s_val for k in ["🚹", "ذكر", "male"]):
-            return "color: #3498db; font-weight: bold;" 
         if any(k in s_val for k in ["🚺", "أنثى", "female"]):
             return "color: #e91e63; font-weight: bold;"
+        if any(k in s_val for k in ["🚹", "ذكر", "male"]):
+            return "color: #3498db; font-weight: bold;" 
         return "color: #4CAF50;"
 
-    return styled_df.style.map(apply_colors, subset=[c for c in styled_df.columns if not str(c).startswith("🚩_")])
+    return styled_df.style.format(
+        precision=2, 
+        thousands="", 
+        na_rep="",
+        subset=[c for c in styled_df.columns if styled_df[c].dtype in ['float64', 'int64']]
+    ).map(apply_colors, subset=[c for c in styled_df.columns if not str(c).startswith("🚩_")])
 
 def clean_date_display(df):
     if not isinstance(df, pd.DataFrame) or df.empty:

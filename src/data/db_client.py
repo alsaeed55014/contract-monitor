@@ -6,16 +6,15 @@ import time
 import streamlit as st
 import hashlib
 
+WORKERS_SHEET_URL = "https://docs.google.com/spreadsheets/d/1u87sScIve_-xT_jDG56EKFMXegzAxOqwVJCh3Irerrw/edit"
+CUSTOMER_SHEET_URL = "https://docs.google.com/spreadsheets/d/1ZlLGXqbFSnKrr2J-PRnxRhxykwrNOgOE6Mb34Zei_FU/edit"
+
 class DBClient:
     _instance = None
     _data_caches = {}
     _last_fetches = {}
-<<<<<<< HEAD
     CACHE_DURATION = 300  # Increased to 5 Minutes for better performance
     NOTIF_CACHE_DURATION = 30  # Increased to 30s for background checks
-=======
-    CACHE_DURATION = 300  # 5 Minutes
->>>>>>> 947f1af (update)
 
     def __new__(cls):
         if cls._instance is None:
@@ -29,7 +28,6 @@ class DBClient:
         self.client = None
         
         # 1. Try connecting via Streamlit Secrets (Recommended for Cloud)
-<<<<<<< HEAD
         # Try multiple possible key names
         secret_keys = ["gcp_service_account", "google_credentials", "google"]
         for key in secret_keys:
@@ -42,16 +40,6 @@ class DBClient:
             except Exception as e:
                 print(f"[DEBUG] Failed with key '{key}': {e}")
                 continue
-=======
-        try:
-            if hasattr(st, "secrets") and "gcp_service_account" in st.secrets:
-                key_dict = dict(st.secrets["gcp_service_account"])
-                self.client = gspread.service_account_from_dict(key_dict)
-                print("[DEBUG] Connected via Streamlit Secrets")
-                return
-        except Exception as e:
-            print(f"[DEBUG] st.secrets check skipped or failed: {e}")
->>>>>>> 947f1af (update)
         
         # 2. Fallback to local file (Recommended for Local Dev)
         try:
@@ -72,11 +60,7 @@ class DBClient:
             self._error_msg = f"Local file auth failed: {e}"
             print(f"[ERROR] {self._error_msg}")
 
-<<<<<<< HEAD
     def fetch_data(self, url=None, force=False, retries=3, is_notif_check=False):
-=======
-    def fetch_data(self, url=None, force=False, retries=3):
->>>>>>> 947f1af (update)
         """Fetches data from Google Sheets with caching and automatic retries."""
         if url is None:
             url = "https://docs.google.com/spreadsheets/d/1u87sScIve_-xT_jDG56EKFMXegzAxOqwVJCh3Irerrw/edit"
@@ -90,17 +74,11 @@ class DBClient:
         if not hasattr(self, '_last_fetches'): self._last_fetches = {}
 
         # Cache check
-<<<<<<< HEAD
         effective_duration = self.NOTIF_CACHE_DURATION if is_notif_check else self.CACHE_DURATION
         
         if not force and cache_key in self._data_caches:
             if (current_time - self._last_fetches.get(last_fetch_key, 0) < effective_duration):
                 print(f"[DEBUG] Cache Hit ({'Notif' if is_notif_check else 'Main'}) for {url[:30]}...")
-=======
-        if not force and cache_key in self._data_caches:
-            if (current_time - self._last_fetches.get(last_fetch_key, 0) < self.CACHE_DURATION):
-                print(f"[DEBUG] Cache Hit for {url[:30]}...")
->>>>>>> 947f1af (update)
                 return self._data_caches[cache_key]
 
         if not self.client:
@@ -152,17 +130,10 @@ class DBClient:
                 print(f"[ERROR] Spreadsheets API Error for {url[:30]}: {e}")
                 raise e
 
-<<<<<<< HEAD
     def fetch_customer_requests(self, force=False, is_notif_check=False):
         """Specifically fetches the Customer Requests sheet."""
         url = "https://docs.google.com/spreadsheets/d/1ZlLGXqbFSnKrr2J-PRnxRhxykwrNOgOE6Mb34Zei_FU/edit"
         return self.fetch_data(url=url, force=force, is_notif_check=is_notif_check)
-=======
-    def fetch_customer_requests(self, force=False):
-        """Specifically fetches the Customer Requests sheet."""
-        url = "https://docs.google.com/spreadsheets/d/1ZlLGXqbFSnKrr2J-PRnxRhxykwrNOgOE6Mb34Zei_FU/edit"
-        return self.fetch_data(url=url, force=force)
->>>>>>> 947f1af (update)
 
     def find_row_by_data(self, worker_name, phone="", url=None):
         """Tries to find the row index by matching name and optionally phone."""
@@ -226,6 +197,53 @@ class DBClient:
         except Exception as e:
             print(f"[ERROR] Failed to append row: {e}")
             return False, str(e)
+
+    def update_row(self, row_number, column_name, new_value, url=None):
+        """Updates a specific cell in a row in Google Sheets with retry logic."""
+        if url is None:
+            url = "https://docs.google.com/spreadsheets/d/1u87sScIve_-xT_jDG56EKFMXegzAxOqwVJCh3Irerrw/edit"
+
+        if not self.client:
+            self.connect()
+        
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                sheet = self.client.open_by_url(url).sheet1
+                
+                # Get headers to find column index
+                headers = sheet.row_values(1)
+                print(f"[DEBUG] Available headers: {headers}")
+                print(f"[DEBUG] Looking for column: '{column_name}'")
+                
+                # Try to find the column by partial match
+                col_index = None
+                for i, header in enumerate(headers):
+                    if str(column_name).lower() in str(header).lower() or str(header).lower() in str(column_name).lower():
+                        col_index = i + 1  # 1-based index
+                        print(f"[DEBUG] Found column at index {col_index}: '{header}'")
+                        break
+                
+                if col_index is None:
+                    return False, f"Column '{column_name}' not found. Available: {headers}"
+                
+                # Update the cell
+                sheet.update_cell(row_number, col_index, new_value)
+                
+                # Clear cache
+                cache_key = f"cache_{hashlib.md5(url.encode()).hexdigest()}"
+                if cache_key in self._data_caches:
+                    del self._data_caches[cache_key]
+                
+                return True, "Updated successfully"
+            except Exception as e:
+                print(f"[ERROR] Failed to update row (attempt {attempt + 1}/{max_retries}): {e}")
+                if attempt < max_retries - 1:
+                    # Reconnect and retry
+                    time.sleep(2)
+                    self.connect()
+                else:
+                    return False, f"Failed after {max_retries} attempts: {str(e)}"
 
     def get_headers(self, url=None):
         """Returns the list of headers for the current data."""

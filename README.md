@@ -1,33 +1,33 @@
-# تعليمات رفع البرنامج على الإنترنت 🌐
+# WhatsApp Automation & Contract Monitor (2026 Edition)
 
-لقد قمت بتجهيز مجلد `non` على سطح المكتب يحتوي على كافة الملفات. لرفع البرنامج وجعله متاحاً أونلاين، اتبع إحدى الطرق التالية:
+This is a premium WhatsApp automation and candidate matching system built with Streamlit and Selenium.
 
-## الخيار الأول: استخدام Streamlit Cloud (الأفضل والأسرع لهذا البرنامج) ✨
+## 🚀 Local Deployment (Windows)
 
-1. قم برفع المجلد إلى حسابك في **GitHub**.
-2. اذهب إلى [share.streamlit.io](https://share.streamlit.io).
-3. اختر المستودع (Repository) واضغط على **Deploy**.
-هذا الموقع مخصص تماماً لبرامج بايثون وستريم ليت.
+1. **Install Dependencies**:
+   ```bash
+   pip install -r requirements.txt
+   ```
 
-## الخيار الثاني: استخدام Replit 🚀
+2. **Run the App**:
+   ```bash
+   streamlit run app.py
+   ```
 
-1. اذهب إلى [Replit.com](https://replit.com).
-2. أنشئ حساباً جديداً ثم اضغط على **Create Repl**.
-3. اختر لغة البرمجة **Python**.
-4. قم بسحب وإسقاط كافة الملفات من مجلد `non` إلى متصفح ريبليت.
-5. في ملف `requirements.txt` تأكد من وجود المكتبات اللازمة.
-6. قم بتغيير أمر التشغيل إلى: `streamlit run app.py`.
+## ☁️ Cloud Deployment (GitHub/Streamlit Cloud)
 
-## ⚠️ ملاحظة بخصوص Netlify
+1. **Push to GitHub**:
+   - The `.gitignore` file will ensure your private WhatsApp sessions and login credentials are not uploaded.
+   - The `requirements.txt` and `packages.txt` files are included for automatic environment setup on Streamlit Cloud.
 
-موقع Netlify مخصص لاستضافة المواقع الثابتة (Static Sites) مثل HTML و CSS. بما أن برنامجك يعتمد على نظام بايثون (Python) للاتصال بجوجل شيت، فإن Netlify لا يدعمه بشكل مباشر وسهل مثل المواقع الأخرى المذكورة أعلاه. **لذالك أنصحك بشدة باستخدام Streamlit Cloud أو Render.**
+2. **Streamlit Cloud Setup**:
+   - Connect your repository to [Streamlit Cloud](https://share.streamlit.io/).
+   - The system will automatically detect and install Chrome via `packages.txt`.
 
-## ملاحظات هامة
-
-- تأكد أن ملف `credentials.json` موجود داخل المجلد ليتمكن البرنامج من الاتصال بجوجل شيت.
-- ملف `app.py` هو النسخة المخصصة للعمل "على النت" كمتصفح، وهو يدعم اللغتين العربية والإنجليزية.
-- البرنامج مصمم ليعمل بكفاءة على جميع الشاشات (كمبيوتر، تابلت، جوال).
-- ملف `gui_monitor.py` هو النسخة التي تعمل على الكمبيوتر (سطح المكتب).
+## 🛡️ Anti-Ban Security Features
+- **Dynamic User-Agents**: Mimics different browsers.
+- **Human-Like Interaction**: Random delays, mouse movements, and typing simulations.
+- **Session Persistence**: Keeps you logged in safely across restarts (when using a persistent disk).
 
 ---
-برمجة وتجهيز: السعيد الوزان
+*Developed for Alsaeed Alwazzan*

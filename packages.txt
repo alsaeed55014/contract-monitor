@@ -1,9 +1,2 @@
-<<<<<<< HEAD
 chromium
 chromium-driver
-tesseract-ocr
-libtesseract-dev
-=======
-chromium
-chromium-driver
->>>>>>> 947f1af (update)

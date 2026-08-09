@@ -1,0 +1,52 @@
+{
+    "smart": {
+        "header": [
+            "Hello {Name},"
+        ],
+        "intro": [
+            "I hope you are doing well.",
+            "I hope this message finds you in good health.",
+            "Wishing you a productive day ahead.",
+            "Hope you're having a great start to your day.",
+            "Trust you are doing well today."
+        ],
+        "body_start": [
+            "We are actively matching candidates with the latest job opportunities.",
+            "Our HR team is currently identifying suitable candidates for recent job openings.",
+            "We are in the process of reviewing candidates for several new roles.",
+            "We are currently evaluating candidates for various job opportunities with us.",
+            "Our team is actively scouting for talent to fill our latest vacancies."
+        ],
+        "body_end": [
+            ", and we'd love to know if you are still looking for a position.",
+            ". Based on your background, we would like to confirm your current availability.",
+            ", and we are interested in checking if you are still seeking a new role.",
+            ". Since you expressed interest before, we wanted to touch base regarding your status.",
+            ", and we'd appreciate an update on whether you are still open to new opportunities."
+        ],
+        "closing": [
+            "YES – Proceed with me\nNO – I am not available at the moment\n\nIf you are not currently seeking opportunities, we would highly appreciate it if you could share this message with a friend or colleague who may be looking for employment.\nPlease confirm by replying:",
+            "YES – Proceed with me\nNO – Not available right now\n\nIf you are not currently seeking opportunities, we would highly appreciate it if you could share this message with a friend or colleague who may be looking for employment\nPlease confirm by replying:",
+            "YES – Proceed with me\nNO – Not interested at this time\n\nIf you are not currently seeking opportunities, we would highly appreciate it if you could share this message with a friend or colleague who may be looking for employment.\nPlease confirm by replying:",
+            "YES – Proceed with me\nNO – I have another job\n\nIf you are not currently seeking opportunities, we would highly appreciate it if you could share this message with a friend or colleague who may be looking for employment\nPlease confirm by replying:",
+            "YES – Proceed with me\nNO – Don't proceed\n\nIf you are not currently seeking opportunities, we would highly appreciate it if you could share this message with a friend or colleague who may be looking for employment.\nPlease confirm by replying:"
+        ],
+        "final_call": [
+            "We will be moving forward shortly, so your quick response is highly appreciated.",
+            "We look forward to hearing from you at your earliest convenience.",
+            "The selection process is moving fast, so please get back to us as soon as possible.",
+            "To ensure you don't miss out, please let us know your status shortly.",
+            "We look forward to your prompt response."
+        ],
+        "signature": [
+            "Best regards,\nAbu Fahd\nHR Manager"
+        ]
+    },
+    "custom": {
+        "Default Template": {
+            "body": "Hello {Name},\n\nI hope you are doing well.\n\nWe are actively matching candidates with the latest job opportunities., and we'd love to know if you are still looking for a position.\n\nKindly respond with:\nYES – I am interested and available\nNO – I am not available right now\n\nIf you are not currently seeking opportunities, we would highly appreciate it if you could share this message with a friend or colleague who may be looking for employment.\n\nBest regards,\nAbu Fahd\nHR Manager",
+            "is_smart": true,
+            "job_title": ""
+        }
+    }
+}

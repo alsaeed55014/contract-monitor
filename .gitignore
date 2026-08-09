@@ -1,24 +1,31 @@
-# Credentials (NEVER upload to GitHub)
-credentials.json
-
 # Python
 __pycache__/
-*.pyc
-*.pyo
-.env
+*.py[cod]
+*$py.class
+.venv/
+env/
+venv/
+ENV/
 
-# IDE
-.vscode/
-.idea/
+# Streamlit
+.streamlit/config.toml
+!.streamlit/themes/
+*.log
+st_logs.txt
+st_output.txt
+
+# Project Specific & Secrets
+.whatsapp_session/
+src/.persist_login.json
+whatsapp_history.json
+credentials.json
+service_account.json
+brain/
+scratch/
+data/*.xlsx
+data/*.csv
+!data/candidates_sample.xlsx
 
 # OS
-Thumbs.db
 .DS_Store
-
-# Local files
-gui_monitor.py
-monitor.py
-users.json
-app_icon.ico
-profile.jpg
-image/
+Thumbs.db
