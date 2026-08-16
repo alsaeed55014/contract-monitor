@@ -63,11 +63,12 @@ class WhatsAppService:
         
         # --- Stealth & Environment Setup ---
         is_cloud = "/mount/" in __file__.replace("\\", "/")
+        use_headless = headless or is_cloud
         ver = self._get_chrome_version()
         ua = self._get_random_ua(ver)
 
         def apply_stealth_args(o, is_uc=False):
-            if not is_uc:
+            if use_headless:
                 o.add_argument("--headless=new")
             o.add_argument("--no-sandbox")
             o.add_argument("--disable-dev-shm-usage")
@@ -124,13 +125,13 @@ class WhatsAppService:
                 opts = uc.ChromeOptions()
                 apply_stealth_args(opts, is_uc=True)
                 
-                print(f"[{time.strftime('%H:%M:%S')}] Initializing UC (Ver: {ver}, Binary: {binary})...")
+                print(f"[{time.strftime('%H:%M:%S')}] Initializing UC (Ver: {ver}, Binary: {binary}, Headless: {use_headless})...")
                 self.driver = uc.Chrome(
                     options=opts, 
                     user_data_dir=self.session_path,
                     browser_executable_path=binary,
-                    use_subprocess=False, # Changed to False for better stability in restricted environments
-                    headless=False, 
+                    use_subprocess=True,
+                    headless=use_headless, 
                     version_main=ver
                 )
                 

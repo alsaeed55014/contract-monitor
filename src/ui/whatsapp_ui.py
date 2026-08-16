@@ -284,9 +284,11 @@ def render_whatsapp_page():
                         try: st.session_state.wa_service.close()
                         except Exception: pass
                     ok, msg = st.session_state.wa_service.start_driver(headless=is_cloud, force_clean=False)
-                    if ok: st.toast(f"✅ {msg}")
-                    else:  st.error(f"❌ {msg}")
-                    st.rerun()
+                    if ok:
+                        st.toast(f"✅ {msg}")
+                        st.rerun()
+                    else:
+                        st.error(f"❌ {msg}")
         with ec3:
             if st.button(lbl['full_reset'], width='stretch', key="emp_full_reset",
                          help="سيتم مسح بيانات تسجيل الدخول بالكامل. ستحتاج لمسح الباركود مرة أخرى." if is_ar else "This will clear all login data. You'll need to scan the QR again."):
@@ -297,9 +299,11 @@ def render_whatsapp_page():
                         try: st.session_state.wa_service.close()
                         except Exception: pass
                     ok, msg = st.session_state.wa_service.start_driver(headless=is_cloud, force_clean=True)
-                    if ok: st.toast(f"✅ {msg}")
-                    else:  st.error(f"❌ {msg}")
-                    st.rerun()
+                    if ok:
+                        st.toast(f"✅ {msg}")
+                        st.rerun()
+                    else:
+                        st.error(f"❌ {msg}")
 
         # ── QR Code ──
         if status_emp == "Awaiting Login":
@@ -583,9 +587,11 @@ def render_whatsapp_page():
                     try: st.session_state.wa_service.close()
                     except Exception: pass
                 ok, msg = st.session_state.wa_service.start_driver(headless=is_cloud, force_clean=False)
-                if ok: st.toast(f"✅ {msg}")
-                else: st.error(f"❌ {msg}")
-                st.rerun()
+                if ok:
+                    st.toast(f"✅ {msg}")
+                    st.rerun()
+                else:
+                    st.error(f"❌ {msg}")
     with c3:
         help_msg = "سيتم مسح بيانات تسجيل الدخول بالكامل. ستحتاج لمسح الباركود مرة أخرى." if is_ar else "This will clear all login data. You will need to scan the QR code again."
         if st.button(lbl['full_reset'], width='stretch', help=help_msg):
@@ -596,9 +602,11 @@ def render_whatsapp_page():
                     try: st.session_state.wa_service.close()
                     except Exception: pass
                 ok, msg = st.session_state.wa_service.start_driver(headless=is_cloud, force_clean=True)
-                if ok: st.toast(f"✅ {msg}")
-                else: st.error(f"❌ {msg}")
-                st.rerun()
+                if ok:
+                    st.toast(f"✅ {msg}")
+                    st.rerun()
+                else:
+                    st.error(f"❌ {msg}")
 
     # 2. QR CODE SECTION
     if status == "Awaiting Login":
