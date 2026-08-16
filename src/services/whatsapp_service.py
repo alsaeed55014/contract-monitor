@@ -61,13 +61,16 @@ class WhatsAppService:
                 if os.path.exists(p): os.remove(p)
             except: pass
         
-        # --- STREAMLIT CLOUD & LINUX CONTAINER HANDLER ---
+        # --- Stealth & Environment Setup ---
         is_cloud = "/mount/" in __file__.replace("\\", "/") or os.path.exists("/mount")
         use_headless = headless or is_cloud
         ver = self._get_chrome_version()
         ua = self._get_random_ua(ver)
+        binary = self._find_chrome_binary()
 
-        def apply_stealth_args(o, is_uc=False):
+        def create_chrome_options(with_user_dir=True):
+            from selenium.webdriver.chrome.options import Options as StdOptions
+            o = StdOptions()
             if use_headless:
                 o.add_argument("--headless=new")
             o.add_argument("--no-sandbox")
@@ -89,130 +92,85 @@ class WhatsAppService:
             o.add_argument("--disable-renderer-backgrounding")
             o.add_argument("--memory-pressure-off")
             o.add_argument("--js-flags=--max-old-space-size=4096")
-            if not is_uc:
+            if with_user_dir:
                 o.add_argument(f"--user-data-dir={self.session_path}")
+            if binary:
+                o.binary_location = binary
+            return o
 
-        binary = self._find_chrome_binary()
-
-        # 🚀 Direct Standard Selenium Engine for Streamlit Cloud & Linux (Rock Solid Stability)
-        if is_cloud:
-            try:
-                print(f"[{time.strftime('%H:%M:%S')}] Launching Cloud Selenium Engine (Binary: {binary})...")
-                from selenium import webdriver
-                from selenium.webdriver.chrome.options import Options as StdOptions
-                from selenium_stealth import stealth
-                
-                std_opts = StdOptions()
-                apply_stealth_args(std_opts, is_uc=False)
-                if binary:
-                    std_opts.binary_location = binary
-                
-                self.driver = webdriver.Chrome(options=std_opts)
-                stealth(self.driver,
-                    languages=["en-US", "en"],
-                    vendor="Google Inc.",
-                    platform="Win32",
-                    webgl_vendor="Intel Inc.",
-                    renderer="Intel Iris OpenGL Engine",
-                    fix_hairline=True,
-                )
-                self.driver.get("https://web.whatsapp.com")
-                self._wait_for_qr_or_login(timeout=15)
-                print(f"[{time.strftime('%H:%M:%S')}] Cloud Engine Ready!")
-                return True, "Ready (Cloud Engine)"
-            except Exception as e_cloud:
-                print(f"[{time.strftime('%H:%M:%S')}] Cloud Engine Error: {e_cloud}")
-                self.last_error = f"Cloud Engine Err: {str(e_cloud)[:120]}"
-
-        # --- Local Desktop Engine (UC Multi-Session with Fallback) ---
-        # --- STREAMLIT CLOUD PYTHON 3.12/3.13 DISTUTILS PATCH ---
-        import sys
+        # 🚀 ATTEMPT 1: Standard Stealth Selenium (Fastest & 100% Reliable across Cloud & Local)
         try:
-            import distutils.version
-        except ImportError:
-            import types
-            distutils = types.ModuleType("distutils")
-            sys.modules["distutils"] = distutils
-            distutils_version = types.ModuleType("distutils.version")
-            distutils.version = distutils_version
-            sys.modules["distutils.version"] = distutils_version
+            print(f"[{time.strftime('%H:%M:%S')}] Launching Primary Stealth Engine (Headless: {use_headless})...")
+            from selenium import webdriver
+            from selenium_stealth import stealth
             
-            class MockLooseVersion:
-                def __init__(self, vstring):
-                    self.vstring = vstring or "0.0.0"
-                def __eq__(self, other):
-                    return str(self.vstring) == str(getattr(other, 'vstring', other))
-                def __lt__(self, other):
-                    return str(self.vstring) < str(getattr(other, 'vstring', other))
-                def __repr__(self):
-                    return f"LooseVersion('{self.vstring}')"
-                    
-            distutils_version.LooseVersion = MockLooseVersion
+            std_opts = create_chrome_options(with_user_dir=True)
+            self.driver = webdriver.Chrome(options=std_opts)
+            
+            stealth(self.driver,
+                languages=["en-US", "en"],
+                vendor="Google Inc.",
+                platform="Win32",
+                webgl_vendor="Intel Inc.",
+                renderer="Intel Iris OpenGL Engine",
+                fix_hairline=True,
+            )
+            
+            self.driver.get("https://web.whatsapp.com")
+            self._wait_for_qr_or_login(timeout=15)
+            print(f"[{time.strftime('%H:%M:%S')}] Engine Ready!")
+            return True, "Ready (Stealth Engine)"
+        except Exception as e1:
+            print(f"[{time.strftime('%H:%M:%S')}] Attempt 1 Error: {e1}")
+            self.last_error = f"Primary Engine Err: {str(e1)[:120]}"
 
-        import undetected_chromedriver as uc
+        # 🚀 ATTEMPT 2: Fresh Session Cleanup & Retry
+        try:
+            print(f"[{time.strftime('%H:%M:%S')}] Retrying with fresh session...")
+            self._kill_zombies()
+            shutil.rmtree(self.session_path, ignore_errors=True)
+            os.makedirs(self.session_path, exist_ok=True)
+            
+            from selenium import webdriver
+            from selenium_stealth import stealth
+            
+            std_opts = create_chrome_options(with_user_dir=True)
+            self.driver = webdriver.Chrome(options=std_opts)
+            
+            stealth(self.driver,
+                languages=["en-US", "en"],
+                vendor="Google Inc.",
+                platform="Win32",
+                webgl_vendor="Intel Inc.",
+                renderer="Intel Iris OpenGL Engine",
+                fix_hairline=True,
+            )
+            self.driver.get("https://web.whatsapp.com")
+            self._wait_for_qr_or_login(timeout=15)
+            return True, "Ready (Fresh Session Engine)"
+        except Exception as e2:
+            print(f"[{time.strftime('%H:%M:%S')}] Attempt 2 Error: {e2}")
+            self.last_error += f" | Attempt 2 Err: {str(e2)[:100]}"
 
-        for attempt in range(2):
-            try:
-                opts = uc.ChromeOptions()
-                apply_stealth_args(opts, is_uc=True)
-                
-                print(f"[{time.strftime('%H:%M:%S')}] Initializing UC (Ver: {ver}, Binary: {binary}, Headless: {use_headless})...")
-                self.driver = uc.Chrome(
-                    options=opts, 
-                    user_data_dir=self.session_path,
-                    browser_executable_path=binary,
-                    headless=use_headless, 
-                    version_main=ver
-                )
-                
-                print(f"[{time.strftime('%H:%M:%S')}] Navigating to WhatsApp Web...")
-                self.driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
-                self.driver.get("https://web.whatsapp.com")
-                self._wait_for_qr_or_login(timeout=15)
-                print(f"[{time.strftime('%H:%M:%S')}] Ready!")
-                return True, "Ready (Powered by UC Multi-Session)"
-            except Exception as e:
-                err_msg = str(e).lower()
-                print(f"[{time.strftime('%H:%M:%S')}] Error: {str(e)[:150]}")
-                self.last_error = f"UC Error: {str(e)[:120]}"
-                
-                if attempt == 0:
-                    print(f"[{time.strftime('%H:%M:%S')}] Retrying with fresh session...")
-                    self._kill_zombies()
-                    try: shutil.rmtree(self.session_path, ignore_errors=True)
-                    except: pass
-                    time.sleep(2)
-                    continue 
-
-                # Final Fallback to standard Selenium with Stealth
-                try:
-                    print(f"[{time.strftime('%H:%M:%S')}] Final Fallback to Standard Selenium + Stealth...")
-                    from selenium import webdriver
-                    from selenium.webdriver.chrome.options import Options as StdOptions
-                    from selenium_stealth import stealth
-                    
-                    std_opts = StdOptions()
-                    apply_stealth_args(std_opts, is_uc=False)
-                    if binary:
-                        std_opts.binary_location = binary
-                    self.driver = webdriver.Chrome(options=std_opts)
-                    
-                    stealth(self.driver,
-                        languages=["en-US", "en"],
-                        vendor="Google Inc.",
-                        platform="Win32",
-                        webgl_vendor="Intel Inc.",
-                        renderer="Intel Iris OpenGL Engine",
-                        fix_hairline=True,
-                    )
-                    
-                    self.driver.get("https://web.whatsapp.com")
-                    self._wait_for_qr_or_login(timeout=15)
-                    return True, "Ready (Safe Fallback + Stealth)"
-                except Exception as e2:
-                    print(f"[{time.strftime('%H:%M:%S')}] Critical Failure: {str(e2)[:100]}")
-                    self.last_error += f" | Final Error: {str(e2)[:60]}"
-                    return False, self.last_error
+        # 🚀 ATTEMPT 3: Undetected Chromedriver (UC) Fallback
+        try:
+            import undetected_chromedriver as uc
+            print(f"[{time.strftime('%H:%M:%S')}] UC Fallback Engine...")
+            opts = create_chrome_options(with_user_dir=False)
+            self.driver = uc.Chrome(
+                options=opts,
+                user_data_dir=self.session_path,
+                browser_executable_path=binary,
+                headless=use_headless,
+                version_main=ver
+            )
+            self.driver.get("https://web.whatsapp.com")
+            self._wait_for_qr_or_login(timeout=15)
+            return True, "Ready (UC Engine)"
+        except Exception as e3:
+            print(f"[{time.strftime('%H:%M:%S')}] UC Fallback Error: {e3}")
+            self.last_error += f" | UC Err: {str(e3)[:100]}"
+            return False, self.last_error
 
     def _wait_for_qr_or_login(self, timeout=12):
         """انتظار تحميل الباركود أو تسجيل الدخول في المتصفح لضمان الجاهزية الفورية"""
