@@ -306,7 +306,7 @@ def render_whatsapp_page():
                         st.error(f"❌ {msg}")
 
         # ── QR Code ──
-        if status_emp == "Awaiting Login":
+        if (status_emp in ["Awaiting Login", "Loading..."]) and st.session_state.wa_service.driver:
             qr_b64 = st.session_state.wa_service.get_qr_hd()
             if qr_b64:
                 src = qr_b64 if qr_b64.startswith("data:") else f"data:image/png;base64,{qr_b64}"
@@ -319,6 +319,8 @@ def render_whatsapp_page():
                 )
             else:
                 st.info(lbl['qr_loading'])
+                time.sleep(1)
+                st.rerun()
 
             qb1, qb2 = st.columns(2)
             with qb1:
@@ -609,13 +611,15 @@ def render_whatsapp_page():
                     st.error(f"❌ {msg}")
 
     # 2. QR CODE SECTION
-    if status == "Awaiting Login":
+    if (status in ["Awaiting Login", "Loading..."]) and st.session_state.wa_service.driver:
         qr_b64 = st.session_state.wa_service.get_qr_hd()
         if qr_b64:
             src = qr_b64 if qr_b64.startswith("data:") else f"data:image/png;base64,{qr_b64}"
             st.markdown(f'<div style="background: #FFFFFF; padding: 25px; border-radius: 20px; max-width: 420px; margin: 15px auto; text-align: center; box-shadow: 0 0 40px rgba(255,255,255,0.4);"><img src="{src}" style="width: 350px; height: 350px; image-rendering: pixelated; image-rendering: crisp-edges;" /></div>', unsafe_allow_html=True)
         else:
             st.info(lbl['qr_loading'])
+            time.sleep(1)
+            st.rerun()
         
         b1, b2 = st.columns(2)
         with b1:

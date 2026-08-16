@@ -61,8 +61,8 @@ class WhatsAppService:
                 if os.path.exists(p): os.remove(p)
             except: pass
         
-        # --- Stealth & Environment Setup ---
-        is_cloud = "/mount/" in __file__.replace("\\", "/")
+        # --- STREAMLIT CLOUD & LINUX CONTAINER HANDLER ---
+        is_cloud = "/mount/" in __file__.replace("\\", "/") or os.path.exists("/mount")
         use_headless = headless or is_cloud
         ver = self._get_chrome_version()
         ua = self._get_random_ua(ver)
@@ -84,7 +84,6 @@ class WhatsAppService:
             o.add_argument("--disable-browser-side-navigation")
             o.add_argument("--disable-features=IsolateOrigins,site-per-process")
             o.add_argument("--password-store=basic")
-            # 🛡️ 2026 Anti-Sleep & Memory Keep-Alive Arguments (Prevent Engine Shutdown & Tab Sleeping)
             o.add_argument("--disable-background-timer-throttling")
             o.add_argument("--disable-backgrounding-occluded-windows")
             o.add_argument("--disable-renderer-backgrounding")
@@ -93,6 +92,39 @@ class WhatsAppService:
             if not is_uc:
                 o.add_argument(f"--user-data-dir={self.session_path}")
 
+        binary = self._find_chrome_binary()
+
+        # 🚀 Direct Standard Selenium Engine for Streamlit Cloud & Linux (Rock Solid Stability)
+        if is_cloud:
+            try:
+                print(f"[{time.strftime('%H:%M:%S')}] Launching Cloud Selenium Engine (Binary: {binary})...")
+                from selenium import webdriver
+                from selenium.webdriver.chrome.options import Options as StdOptions
+                from selenium_stealth import stealth
+                
+                std_opts = StdOptions()
+                apply_stealth_args(std_opts, is_uc=False)
+                if binary:
+                    std_opts.binary_location = binary
+                
+                self.driver = webdriver.Chrome(options=std_opts)
+                stealth(self.driver,
+                    languages=["en-US", "en"],
+                    vendor="Google Inc.",
+                    platform="Win32",
+                    webgl_vendor="Intel Inc.",
+                    renderer="Intel Iris OpenGL Engine",
+                    fix_hairline=True,
+                )
+                self.driver.get("https://web.whatsapp.com")
+                self._wait_for_qr_or_login(timeout=15)
+                print(f"[{time.strftime('%H:%M:%S')}] Cloud Engine Ready!")
+                return True, "Ready (Cloud Engine)"
+            except Exception as e_cloud:
+                print(f"[{time.strftime('%H:%M:%S')}] Cloud Engine Error: {e_cloud}")
+                self.last_error = f"Cloud Engine Err: {str(e_cloud)[:120]}"
+
+        # --- Local Desktop Engine (UC Multi-Session with Fallback) ---
         # --- STREAMLIT CLOUD PYTHON 3.12/3.13 DISTUTILS PATCH ---
         import sys
         try:
@@ -118,7 +150,6 @@ class WhatsAppService:
             distutils_version.LooseVersion = MockLooseVersion
 
         import undetected_chromedriver as uc
-        binary = self._find_chrome_binary()
 
         for attempt in range(2):
             try:
@@ -130,7 +161,6 @@ class WhatsAppService:
                     options=opts, 
                     user_data_dir=self.session_path,
                     browser_executable_path=binary,
-                    use_subprocess=True,
                     headless=use_headless, 
                     version_main=ver
                 )
@@ -138,7 +168,7 @@ class WhatsAppService:
                 print(f"[{time.strftime('%H:%M:%S')}] Navigating to WhatsApp Web...")
                 self.driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
                 self.driver.get("https://web.whatsapp.com")
-                self._wait_for_qr_or_login(timeout=12)
+                self._wait_for_qr_or_login(timeout=15)
                 print(f"[{time.strftime('%H:%M:%S')}] Ready!")
                 return True, "Ready (Powered by UC Multi-Session)"
             except Exception as e:
@@ -163,9 +193,10 @@ class WhatsAppService:
                     
                     std_opts = StdOptions()
                     apply_stealth_args(std_opts, is_uc=False)
+                    if binary:
+                        std_opts.binary_location = binary
                     self.driver = webdriver.Chrome(options=std_opts)
                     
-                    # Apply manual stealth for 2026
                     stealth(self.driver,
                         languages=["en-US", "en"],
                         vendor="Google Inc.",
@@ -176,7 +207,7 @@ class WhatsAppService:
                     )
                     
                     self.driver.get("https://web.whatsapp.com")
-                    self._wait_for_qr_or_login(timeout=12)
+                    self._wait_for_qr_or_login(timeout=15)
                     return True, "Ready (Safe Fallback + Stealth)"
                 except Exception as e2:
                     print(f"[{time.strftime('%H:%M:%S')}] Critical Failure: {str(e2)[:100]}")
