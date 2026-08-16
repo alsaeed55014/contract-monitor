@@ -156,7 +156,7 @@ def render_whatsapp_page():
     mgr: WAWorkerManager = st.session_state.wa_worker_mgr
 
     # للوضع القديم (المتزامن) نبقيه للتوافق
-    if 'wa_service' not in st.session_state:
+    if 'wa_service' not in st.session_state or st.session_state.wa_service is None:
         st.session_state.wa_service = WhatsAppService()
     else:
         try:
@@ -164,8 +164,8 @@ def render_whatsapp_page():
             sig = inspect.signature(st.session_state.wa_service.send_message)
             if 'attachment_path' not in sig.parameters:
                 st.session_state.wa_service = WhatsAppService()
-        except:
-            pass
+        except Exception:
+            st.session_state.wa_service = WhatsAppService()
 
     if 'wa_logs' not in st.session_state: st.session_state.wa_logs = []
     if 'wa_running' not in st.session_state: st.session_state.wa_running = False
@@ -278,7 +278,11 @@ def render_whatsapp_page():
         with ec2:
             if st.button(lbl['start_engine'], type="primary", width='stretch', key="emp_start_engine"):
                 with st.spinner(lbl['starting']):
-                    st.session_state.wa_service.close()
+                    if st.session_state.wa_service is None:
+                        st.session_state.wa_service = WhatsAppService()
+                    if hasattr(st.session_state.wa_service, 'close'):
+                        try: st.session_state.wa_service.close()
+                        except Exception: pass
                     ok, msg = st.session_state.wa_service.start_driver(headless=is_cloud, force_clean=False)
                     if ok: st.toast(f"✅ {msg}")
                     else:  st.error(f"❌ {msg}")
@@ -287,7 +291,11 @@ def render_whatsapp_page():
             if st.button(lbl['full_reset'], width='stretch', key="emp_full_reset",
                          help="سيتم مسح بيانات تسجيل الدخول بالكامل. ستحتاج لمسح الباركود مرة أخرى." if is_ar else "This will clear all login data. You'll need to scan the QR again."):
                 with st.spinner(lbl['resetting']):
-                    st.session_state.wa_service.close()
+                    if st.session_state.wa_service is None:
+                        st.session_state.wa_service = WhatsAppService()
+                    if hasattr(st.session_state.wa_service, 'close'):
+                        try: st.session_state.wa_service.close()
+                        except Exception: pass
                     ok, msg = st.session_state.wa_service.start_driver(headless=is_cloud, force_clean=True)
                     if ok: st.toast(f"✅ {msg}")
                     else:  st.error(f"❌ {msg}")
@@ -569,7 +577,11 @@ def render_whatsapp_page():
     with c2:
         if st.button(lbl['start_engine'], type="primary", width='stretch'):
             with st.spinner(lbl['starting']):
-                st.session_state.wa_service.close()
+                if st.session_state.wa_service is None:
+                    st.session_state.wa_service = WhatsAppService()
+                if hasattr(st.session_state.wa_service, 'close'):
+                    try: st.session_state.wa_service.close()
+                    except Exception: pass
                 ok, msg = st.session_state.wa_service.start_driver(headless=is_cloud, force_clean=False)
                 if ok: st.toast(f"✅ {msg}")
                 else: st.error(f"❌ {msg}")
@@ -578,7 +590,11 @@ def render_whatsapp_page():
         help_msg = "سيتم مسح بيانات تسجيل الدخول بالكامل. ستحتاج لمسح الباركود مرة أخرى." if is_ar else "This will clear all login data. You will need to scan the QR code again."
         if st.button(lbl['full_reset'], width='stretch', help=help_msg):
             with st.spinner(lbl['resetting']):
-                st.session_state.wa_service.close()
+                if st.session_state.wa_service is None:
+                    st.session_state.wa_service = WhatsAppService()
+                if hasattr(st.session_state.wa_service, 'close'):
+                    try: st.session_state.wa_service.close()
+                    except Exception: pass
                 ok, msg = st.session_state.wa_service.start_driver(headless=is_cloud, force_clean=True)
                 if ok: st.toast(f"✅ {msg}")
                 else: st.error(f"❌ {msg}")

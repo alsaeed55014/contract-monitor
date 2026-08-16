@@ -68,43 +68,52 @@ def save_history(history_set):
 # ─── نظام مكافحة الحظر المتقدم ─────────────────────────────────
 
 class AntiBanEngine:
-    """محرك مكافحة حظر واتساب 2026"""
+    """محرك مكافحة حظر واتساب المتقدم 2026"""
 
     def __init__(self):
         self.sent_count_session = 0
         self.session_start = time.time()
 
-    def get_delay(self, base_delay: int, batch_size: int, idx: int, batch_delay: int) -> tuple[int, str]:
-        """احسب التأخير الذكي لكل رسالة"""
-        is_batch_break = batch_size > 0 and idx > 0 and idx % batch_size == 0
+    def get_delay(self, base_delay: int, batch_size: int, idx: int, batch_delay: int, start_from: int = 0) -> tuple[int, str]:
+        """احسب التأخير الذكي لكل رسالة مع حماية التدفئة الاستباقية كالأشخاص الحقيقيين"""
+        effective_batch = min(batch_size, 20) if batch_size > 0 else 15
+        effective_batch_delay = max(batch_delay, 300) # لا يقل عن 5 دقائق بين الدفعات
+
+        processed_in_job = idx - start_from
+        is_batch_break = effective_batch > 0 and processed_in_job > 0 and processed_in_job % effective_batch == 0
 
         if is_batch_break:
             # استراحة طويلة بين الدفعات (تشبه البشر)
-            delay = int(random.gauss(batch_delay, batch_delay * 0.2))
-            delay = max(batch_delay // 2, delay)
+            delay = int(random.gauss(effective_batch_delay, effective_batch_delay * 0.15))
+            delay = max(effective_batch_delay, delay)
             return delay, "batch_break"
 
-        # تأخير أساسي مع ضوضاء غاوسية للطبيعية
-        jitter = random.gauss(0, base_delay * 0.3)
-        delay = int(base_delay + jitter)
-        delay = max(5, delay)  # لا يقل عن 5 ثواني
+        # 🛡️ 2026 Warm-Up Pace: البداية بحذر في أول 5 رسائل للحساب
+        safe_base = max(15, base_delay)
+        if processed_in_job < 5:
+            safe_base = int(safe_base * random.uniform(1.4, 1.8))
 
-        # استراحة تفكير مفاجئة كل 3-7 رسائل
-        think_break_chance = 1.0 / random.randint(3, 7)
+        # تأخير أساسي مع ضوضاء غاوسية للطبيعية
+        jitter = random.gauss(0, safe_base * 0.25)
+        delay = int(safe_base + jitter)
+        delay = max(15, delay)  # 🛡️ حد أدنى أمان 15 ثانية لمنع الحظر السريع
+
+        # استراحة تفكير مفاجئة كل 3-6 رسائل
+        think_break_chance = 1.0 / random.randint(3, 6)
         if random.random() < think_break_chance:
-            extra = int(random.uniform(8, 20))
+            extra = int(random.uniform(10, 25))
             delay += extra
             return delay, "think_break"
 
         return delay, "normal"
 
     def should_stealth_break(self, idx: int) -> bool:
-        """تقرر إذا كانت استراحة تمويهية مطلوبة"""
-        return idx > 0 and idx % random.randint(15, 25) == 0
+        """تقرر إذا كانت استراحة تمويهية مطلوبة كل 15-20 رسالة"""
+        return idx > 0 and idx % random.randint(15, 20) == 0
 
     def get_stealth_break_duration(self) -> int:
-        """مدة الاستراحة التمويهية (تشبه الإنسان الذي توقف مؤقتاً)"""
-        return int(random.uniform(120, 300))  # 2-5 دقائق
+        """مدة الاستراحة التمويهية (تشبه الإنسان الذي توقف مؤقتاً 3-6 دقائق)"""
+        return int(random.uniform(180, 360))
 
 
 def run_worker():
@@ -207,6 +216,20 @@ def run_worker():
                     name  = trg.get("name", "Client")
                     cv    = trg.get("cv", "")
 
+                    # 🛡️ 2026 Pre-Send Phone Validation
+                    clean_p = "".join(filter(str.isdigit, str(phone)))
+                    if len(clean_p) < 8:
+                        print(f"[{time.strftime('%H:%M:%S')}] ⚠️ Skipped invalid phone: {phone}")
+                        append_log({
+                            "idx": i,
+                            "name": name,
+                            "phone": phone,
+                            "status": "رقم قصير أو غير صالح",
+                            "ok": False,
+                            "time": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                        })
+                        continue
+
                     update_state("sending", current_idx=i, total=total,
                                  current_name=name, current_phone=phone)
 
@@ -226,7 +249,7 @@ def run_worker():
 
                     # ── إرسال التأخير (ما عدا الأولى) ──
                     if i > start_from:
-                        wait_secs, break_type = anti_ban.get_delay(base_delay, batch_size, i, batch_delay)
+                        wait_secs, break_type = anti_ban.get_delay(base_delay, batch_size, i, batch_delay, start_from=start_from)
                         print(f"[{time.strftime('%H:%M:%S')}] ⏳ Waiting {wait_secs}s ({break_type})")
 
                         # حدّث الحالة مع العد التنازلي

@@ -317,25 +317,31 @@ class WhatsAppService:
         except: return None
 
     def _type_human_like(self, element, text):
-        """يحاكي الطباعة البشرية مع أخطاء مطبعية نادرة وفواصل زمنية عشوائية لتجنب الحظر"""
+        """محاكاة كتابة بشرية واقعية جداً مع تنوع سرعتها حسب نوع الحرف وأخاطء عشوائية بسيطة لتجنب الحظر"""
         from selenium.webdriver.common.keys import Keys
         for char in text:
             element.send_keys(char)
-            # 1. Random mini pauses
-            if random.random() > 0.85:
-                time.sleep(random.uniform(0.02, 0.15))
-            # 2. Random thinking pauses
-            elif random.random() > 0.98:
-                time.sleep(random.uniform(0.5, 1.2))
+            # 1. Base human typing speed (30ms - 110ms per character)
+            base_delay = random.uniform(0.03, 0.11)
             
-            # 3. Simulate making a typo and correcting it (very rare, ~0.5% chance)
-            if random.random() > 0.995:
-                # Type a random letter
+            # 2. Longer pauses for spaces, newlines, and punctuation
+            if char in [" ", "\n", ".", ",", "!", "?", "،", "؛"]:
+                base_delay += random.uniform(0.12, 0.40)
+            elif char.isupper():
+                base_delay += random.uniform(0.06, 0.18)
+                
+            time.sleep(base_delay)
+            
+            # 3. Occasional thinking micro-pause (2% chance)
+            if random.random() < 0.02:
+                time.sleep(random.uniform(0.4, 1.1))
+            
+            # 4. Very rare typo & backspace correction (~0.3% chance)
+            if random.random() < 0.003:
                 element.send_keys(random.choice("abcdefghijklmnopqrstuvwxyz"))
-                time.sleep(random.uniform(0.1, 0.4))
-                # Delete it
+                time.sleep(random.uniform(0.10, 0.30))
                 element.send_keys(Keys.BACKSPACE)
-                time.sleep(random.uniform(0.05, 0.2))
+                time.sleep(random.uniform(0.07, 0.20))
 
 
 def parse_spintax(text: str) -> str:
@@ -350,25 +356,29 @@ def parse_spintax(text: str) -> str:
     return text
 
 def inject_zero_width_spaces(text: str) -> str:
-    """حقن الرموز المخفية (Zero-Width Space \u200B) لتغيير التوقيع الرقمي للرسالة بدون تغيير الشكل الظاهري"""
+    """حقن الرموز المخفية (Zero-Width Space \u200B \u200C \u200D \uFEFF) لتغيير التوقيع الرقمي للرسالة بدون تغيير الشكل الظاهري"""
     if not text: return ""
+    zero_width_chars = ['\u200b', '\u200c', '\u200d', '\ufeff']
     words = text.split(' ')
     obfuscated_words = []
     for word in words:
-        if len(word) > 3 and random.random() < 0.4:
+        if len(word) > 2 and random.random() < 0.45:
             idx = random.randint(1, len(word) - 1)
-            word = word[:idx] + '\u200b' + word[idx:]
+            char_to_insert = random.choice(zero_width_chars)
+            word = word[:idx] + char_to_insert + word[idx:]
         obfuscated_words.append(word)
     res = ' '.join(obfuscated_words)
     if random.random() < 0.5:
-        res = res.replace('.', '.\u200b').replace('!', '!\u200b')
+        res = res.replace('.', '.\u200b').replace('!', '!\u200b').replace('؟', '؟\u200b')
     return res
 
 def obfuscate_message(text: str) -> str:
-    """تطبيق محرك التمويه المزدوج (Spintax + Zero-Width Fingerprinting)"""
+    """تطبيق محرك التمويه المزدوج والذكي (Spintax + Zero-Width Fingerprinting + Random Whitespace)"""
     if not text: return ""
     text = parse_spintax(text)
     text = inject_zero_width_spaces(text)
+    if random.random() < 0.5:
+        text += random.choice([' ', '  ', '\u200b', ''])
     return text
 
     def send_message(self, phone, message, attachment_path=None):
@@ -390,11 +400,33 @@ def obfuscate_message(text: str) -> str:
             if len(clean_phone) < 8:
                 return False, "رقم قصير جداً" 
             
-            # Open the chat window with a brief random wait
-            # محاكاة التفكير قبل الفتح
-            time.sleep(random.uniform(2.0, 5.0))
-            url = f"https://web.whatsapp.com/send?phone={clean_phone}"
-            self.driver.get(url)
+            # 🛡️ 2026 Anti-Ban Navigation: Try human search bar first, fallback to URL parameter
+            time.sleep(random.uniform(1.5, 3.5))
+            chat_opened = False
+            try:
+                search_boxes = self.driver.find_elements(By.XPATH, '//div[@contenteditable="true"][@data-tab="3"] | //div[@title="Search input box"]')
+                if search_boxes and random.random() < 0.7:  # 70% human search bar interaction
+                    sbox = search_boxes[0]
+                    sbox.click()
+                    time.sleep(random.uniform(0.4, 0.8))
+                    sbox.send_keys(Keys.CONTROL + "a")
+                    sbox.send_keys(Keys.BACKSPACE)
+                    time.sleep(random.uniform(0.2, 0.5))
+                    self._type_human_like(sbox, clean_phone)
+                    time.sleep(random.uniform(1.2, 2.5))
+                    sbox.send_keys(Keys.ENTER)
+                    time.sleep(random.uniform(1.5, 3.0))
+                    
+                    # Verify chat box opened
+                    chat_inputs = self.driver.find_elements(By.XPATH, '//div[@contenteditable="true"][@data-tab="10"]')
+                    if chat_inputs:
+                        chat_opened = True
+            except Exception:
+                chat_opened = False
+
+            if not chat_opened:
+                url = f"https://web.whatsapp.com/send?phone={clean_phone}"
+                self.driver.get(url)
             
             # محاكاة حركة الماوس العشوائية والتمرير (Human Focus)
             try:
@@ -424,14 +456,21 @@ def obfuscate_message(text: str) -> str:
             time.sleep(random.uniform(1.5, 3.0)) # Human-like pause after loading
 
             if attachment_path and os.path.exists(attachment_path):
-                # 🛡️ تمويه اسم الملف: نسخ الملف لاسم عشوائي قبل الإرسال لتجنب البصمة المتكررة
+                # 🛡️ تمويه اسم الملف والبصمة الرقمية (MD5/SHA256 Hash Obfuscation):
+                # نسخ الملف لاسم عشوائي وإضافة بايتات عشوائية مخفية في نهايته لتغيير التوقيع الرقمي للملف
                 temp_dir = os.path.join(self.session_path, "temp_uploads")
                 os.makedirs(temp_dir, exist_ok=True)
                 
                 original_ext = os.path.splitext(attachment_path)[1]
                 random_filename = f"DOC_{datetime.now().strftime('%H%M%S')}_{random.randint(1000, 9999)}{original_ext}"
                 obfuscated_path = os.path.join(temp_dir, random_filename)
+                
                 shutil.copy2(attachment_path, obfuscated_path)
+                try:
+                    with open(obfuscated_path, "ab") as f:
+                        f.write(os.urandom(random.randint(16, 64)))
+                except Exception:
+                    pass
 
                 # Attach file
                 attach_btn = wait.until(EC.element_to_be_clickable(
