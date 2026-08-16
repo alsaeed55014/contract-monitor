@@ -137,6 +137,7 @@ class WhatsAppService:
                 print(f"[{time.strftime('%H:%M:%S')}] Navigating to WhatsApp Web...")
                 self.driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
                 self.driver.get("https://web.whatsapp.com")
+                self._wait_for_qr_or_login(timeout=12)
                 print(f"[{time.strftime('%H:%M:%S')}] Ready!")
                 return True, "Ready (Powered by UC Multi-Session)"
             except Exception as e:
@@ -174,11 +175,27 @@ class WhatsAppService:
                     )
                     
                     self.driver.get("https://web.whatsapp.com")
+                    self._wait_for_qr_or_login(timeout=12)
                     return True, "Ready (Safe Fallback + Stealth)"
                 except Exception as e2:
                     print(f"[{time.strftime('%H:%M:%S')}] Critical Failure: {str(e2)[:100]}")
                     self.last_error += f" | Final Error: {str(e2)[:60]}"
                     return False, self.last_error
+
+    def _wait_for_qr_or_login(self, timeout=12):
+        """انتظار تحميل الباركود أو تسجيل الدخول في المتصفح لضمان الجاهزية الفورية"""
+        from selenium.webdriver.common.by import By
+        start_t = time.time()
+        while time.time() - start_t < timeout:
+            try:
+                if not self.driver: break
+                elements = self.driver.find_elements(By.XPATH, '//*[@id="side"] | //div[@id="main"] | //div[@contenteditable="true"]')
+                canvas = self.driver.find_elements(By.CSS_SELECTOR, "canvas")
+                if elements or canvas:
+                    return True
+            except: pass
+            time.sleep(0.4)
+        return False
 
     def _find_chrome_binary(self):
         if os.name == 'nt':
@@ -279,37 +296,42 @@ class WhatsAppService:
 
     def get_qr_hd(self):
         if not self.driver: return None
-        try:
-            from PIL import Image
-            data_url = self.driver.execute_script(
-                "return document.querySelector('canvas').toDataURL('image/png')"
-            )
-            if not data_url: return None
-            header, b64data = data_url.split(",", 1)
-            raw_bytes = base64.b64decode(b64data)
-            img = Image.open(io.BytesIO(raw_bytes))
-            
-            # 2026 QR Enhancement: Higher contrast and sharper edges
-            from PIL import ImageOps
-            img = img.convert("L") # Greyscale
-            img = ImageOps.autocontrast(img, cutoff=2)
-            
-            new_size = (img.width * 4, img.height * 4)
-            img_big = img.resize(new_size, Image.NEAREST)
-            border = 30
-            final = Image.new("RGB", (img_big.width + border*2, img_big.height + border*2), "white")
-            final.paste(img_big, (border, border))
-            buf = io.BytesIO()
-            final.save(buf, format="PNG", optimize=True)
-            buf.seek(0)
-            return base64.b64encode(buf.read()).decode()
-        except:
+        from selenium.webdriver.common.by import By
+        from PIL import Image, ImageOps
+        for _ in range(5):
             try:
-                return self.driver.execute_script(
-                    "return document.querySelector('canvas').toDataURL('image/png')"
+                data_url = self.driver.execute_script(
+                    "return document.querySelector('canvas') ? document.querySelector('canvas').toDataURL('image/png') : null"
                 )
-            except:
-                return None
+                if data_url and len(data_url) > 100:
+                    header, b64data = data_url.split(",", 1)
+                    raw_bytes = base64.b64decode(b64data)
+                    img = Image.open(io.BytesIO(raw_bytes))
+                    
+                    img = img.convert("L") # Greyscale
+                    img = ImageOps.autocontrast(img, cutoff=2)
+                    
+                    new_size = (img.width * 4, img.height * 4)
+                    img_big = img.resize(new_size, Image.NEAREST)
+                    border = 30
+                    final = Image.new("RGB", (img_big.width + border*2, img_big.height + border*2), "white")
+                    final.paste(img_big, (border, border))
+                    buf = io.BytesIO()
+                    final.save(buf, format="PNG", optimize=True)
+                    buf.seek(0)
+                    return base64.b64encode(buf.read()).decode()
+            except Exception: pass
+            
+            # Fallback to direct element screenshot if toDataURL fails
+            try:
+                canvas_elems = self.driver.find_elements(By.CSS_SELECTOR, "canvas")
+                if canvas_elems:
+                    b64_str = canvas_elems[0].screenshot_as_base64
+                    if b64_str and len(b64_str) > 100:
+                        return b64_str
+            except Exception: pass
+            time.sleep(0.5)
+        return None
 
     def get_diagnostic_screenshot(self):
         if not self.driver: return None
