@@ -156,7 +156,7 @@ def render_whatsapp_page():
     mgr: WAWorkerManager = st.session_state.wa_worker_mgr
 
     # للوضع القديم (المتزامن) نبقيه للتوافق
-    if 'wa_service' not in st.session_state:
+    if 'wa_service' not in st.session_state or st.session_state.wa_service is None:
         st.session_state.wa_service = WhatsAppService()
     else:
         try:
@@ -164,8 +164,8 @@ def render_whatsapp_page():
             sig = inspect.signature(st.session_state.wa_service.send_message)
             if 'attachment_path' not in sig.parameters:
                 st.session_state.wa_service = WhatsAppService()
-        except:
-            pass
+        except Exception:
+            st.session_state.wa_service = WhatsAppService()
 
     if 'wa_logs' not in st.session_state: st.session_state.wa_logs = []
     if 'wa_running' not in st.session_state: st.session_state.wa_running = False
@@ -278,35 +278,53 @@ def render_whatsapp_page():
         with ec2:
             if st.button(lbl['start_engine'], type="primary", width='stretch', key="emp_start_engine"):
                 with st.spinner(lbl['starting']):
-                    st.session_state.wa_service.close()
+                    if st.session_state.wa_service is None:
+                        st.session_state.wa_service = WhatsAppService()
+                    if hasattr(st.session_state.wa_service, 'close'):
+                        try: st.session_state.wa_service.close()
+                        except Exception: pass
                     ok, msg = st.session_state.wa_service.start_driver(headless=is_cloud, force_clean=False)
-                    if ok: st.toast(f"✅ {msg}")
-                    else:  st.error(f"❌ {msg}")
-                    st.rerun()
+                    if ok:
+                        st.toast(f"✅ {msg}")
+                        st.rerun()
+                    else:
+                        st.error(f"❌ {msg}")
         with ec3:
             if st.button(lbl['full_reset'], width='stretch', key="emp_full_reset",
                          help="سيتم مسح بيانات تسجيل الدخول بالكامل. ستحتاج لمسح الباركود مرة أخرى." if is_ar else "This will clear all login data. You'll need to scan the QR again."):
                 with st.spinner(lbl['resetting']):
-                    st.session_state.wa_service.close()
+                    if st.session_state.wa_service is None:
+                        st.session_state.wa_service = WhatsAppService()
+                    if hasattr(st.session_state.wa_service, 'close'):
+                        try: st.session_state.wa_service.close()
+                        except Exception: pass
                     ok, msg = st.session_state.wa_service.start_driver(headless=is_cloud, force_clean=True)
-                    if ok: st.toast(f"✅ {msg}")
-                    else:  st.error(f"❌ {msg}")
-                    st.rerun()
+                    if ok:
+                        st.toast(f"✅ {msg}")
+                        st.rerun()
+                    else:
+                        st.error(f"❌ {msg}")
 
         # ── QR Code ──
-        if status_emp == "Awaiting Login":
+        if (status_emp in ["Awaiting Login", "Loading..."]) and st.session_state.wa_service and st.session_state.wa_service.driver:
+            st.markdown(f'<div style="text-align:center; padding:10px 0;"><h4 style="color:#00FF88;">📱 {lbl["wa_scan_msg"]}</h4></div>', unsafe_allow_html=True)
             qr_b64 = st.session_state.wa_service.get_qr_hd()
             if qr_b64:
                 src = qr_b64 if qr_b64.startswith("data:") else f"data:image/png;base64,{qr_b64}"
                 st.markdown(
                     f'<div style="background:#FFFFFF;padding:25px;border-radius:20px;max-width:420px;'
-                    f'margin:15px auto;text-align:center;box-shadow:0 0 40px rgba(255,255,255,0.4);">'
+                    f'margin:15px auto;text-align:center;box-shadow:0 0 40px rgba(0,255,136,0.3);border:2px solid #00FF88;">'
                     f'<img src="{src}" style="width:350px;height:350px;image-rendering:pixelated;image-rendering:crisp-edges;" />'
                     f'</div>',
                     unsafe_allow_html=True
                 )
             else:
-                st.info(lbl['qr_loading'])
+                st.warning("⏳ " + ("جاري تحضير رمز الباركود من واتساب..." if is_ar else "Preparing QR code from WhatsApp..."))
+                diag_b64 = st.session_state.wa_service.get_diagnostic_screenshot()
+                if diag_b64:
+                    d_src = diag_b64 if diag_b64.startswith("data:") else f"data:image/png;base64,{diag_b64}"
+                    with st.expander("📸 " + ("لقطة شاشة تشخيصية من المتصفح" if is_ar else "Diagnostic Browser Screenshot"), expanded=True):
+                        st.image(d_src, caption="Browser Screen State", use_container_width=True)
 
             qb1, qb2 = st.columns(2)
             with qb1:
@@ -569,36 +587,54 @@ def render_whatsapp_page():
     with c2:
         if st.button(lbl['start_engine'], type="primary", width='stretch'):
             with st.spinner(lbl['starting']):
-                st.session_state.wa_service.close()
+                if st.session_state.wa_service is None:
+                    st.session_state.wa_service = WhatsAppService()
+                if hasattr(st.session_state.wa_service, 'close'):
+                    try: st.session_state.wa_service.close()
+                    except Exception: pass
                 ok, msg = st.session_state.wa_service.start_driver(headless=is_cloud, force_clean=False)
-                if ok: st.toast(f"✅ {msg}")
-                else: st.error(f"❌ {msg}")
-                st.rerun()
+                if ok:
+                    st.toast(f"✅ {msg}")
+                    st.rerun()
+                else:
+                    st.error(f"❌ {msg}")
     with c3:
         help_msg = "سيتم مسح بيانات تسجيل الدخول بالكامل. ستحتاج لمسح الباركود مرة أخرى." if is_ar else "This will clear all login data. You will need to scan the QR code again."
         if st.button(lbl['full_reset'], width='stretch', help=help_msg):
             with st.spinner(lbl['resetting']):
-                st.session_state.wa_service.close()
+                if st.session_state.wa_service is None:
+                    st.session_state.wa_service = WhatsAppService()
+                if hasattr(st.session_state.wa_service, 'close'):
+                    try: st.session_state.wa_service.close()
+                    except Exception: pass
                 ok, msg = st.session_state.wa_service.start_driver(headless=is_cloud, force_clean=True)
-                if ok: st.toast(f"✅ {msg}")
-                else: st.error(f"❌ {msg}")
-                st.rerun()
+                if ok:
+                    st.toast(f"✅ {msg}")
+                    st.rerun()
+                else:
+                    st.error(f"❌ {msg}")
 
     # 2. QR CODE SECTION
-    if status == "Awaiting Login":
+    if (status in ["Awaiting Login", "Loading..."]) and st.session_state.wa_service and st.session_state.wa_service.driver:
+        st.markdown(f'<div style="text-align:center; padding:10px 0;"><h4 style="color:#00FF88;">📱 {lbl["wa_scan_msg"]}</h4></div>', unsafe_allow_html=True)
         qr_b64 = st.session_state.wa_service.get_qr_hd()
         if qr_b64:
             src = qr_b64 if qr_b64.startswith("data:") else f"data:image/png;base64,{qr_b64}"
-            st.markdown(f'<div style="background: #FFFFFF; padding: 25px; border-radius: 20px; max-width: 420px; margin: 15px auto; text-align: center; box-shadow: 0 0 40px rgba(255,255,255,0.4);"><img src="{src}" style="width: 350px; height: 350px; image-rendering: pixelated; image-rendering: crisp-edges;" /></div>', unsafe_allow_html=True)
+            st.markdown(f'<div style="background: #FFFFFF; padding: 25px; border-radius: 20px; max-width: 420px; margin: 15px auto; text-align: center; box-shadow: 0 0 40px rgba(0,255,136,0.3); border: 2px solid #00FF88;"><img src="{src}" style="width: 350px; height: 350px; image-rendering: pixelated; image-rendering: crisp-edges;" /></div>', unsafe_allow_html=True)
         else:
-            st.info(lbl['qr_loading'])
+            st.warning("⏳ " + ("جاري تحضير رمز الباركود من واتساب..." if is_ar else "Preparing QR code from WhatsApp..."))
+            diag_b64 = st.session_state.wa_service.get_diagnostic_screenshot()
+            if diag_b64:
+                d_src = diag_b64 if diag_b64.startswith("data:") else f"data:image/png;base64,{diag_b64}"
+                with st.expander("📸 " + ("لقطة شاشة تشخيصية من المتصفح" if is_ar else "Diagnostic Browser Screenshot"), expanded=True):
+                    st.image(d_src, caption="Browser Screen State", use_container_width=True)
         
         b1, b2 = st.columns(2)
         with b1:
-            if st.button(lbl['refresh_qr'], width='stretch'):
+            if st.button(lbl['refresh_qr'], width='stretch', key="refresh_qr_main"):
                 st.rerun()
         with b2:
-            if st.button(lbl['verify'], width='stretch', type="primary"):
+            if st.button(lbl['verify'], width='stretch', type="primary", key="verify_qr_main"):
                 with st.spinner(lbl['verifying']):
                     connected = st.session_state.wa_service.wait_for_connection(timeout=30)
                 if connected:
