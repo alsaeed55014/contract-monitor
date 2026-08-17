@@ -243,6 +243,7 @@ def render_whatsapp_page():
         'wa_use_template': t('wa_use_template', lang),
         'wa_delete_template': t('wa_delete_template', lang),
         'wa_placeholders_guide': t('wa_placeholders_guide', lang),
+        'wa_scan_msg': t('wa_scan_msg', lang),
     }
 
     # === Mode Selection ===
@@ -307,7 +308,8 @@ def render_whatsapp_page():
 
         # ── QR Code ──
         if (status_emp in ["Awaiting Login", "Loading..."]) and st.session_state.wa_service and st.session_state.wa_service.driver:
-            st.markdown(f'<div style="text-align:center; padding:10px 0;"><h4 style="color:#00FF88;">📱 {lbl["wa_scan_msg"]}</h4></div>', unsafe_allow_html=True)
+            scan_title = lbl.get('wa_scan_msg', "امسح الكود باستخدام الواتساب في جوالك" if is_ar else "Scan with WhatsApp on your phone")
+            st.markdown(f'<div style="text-align:center; padding:10px 0;"><h4 style="color:#00FF88;">📱 {scan_title}</h4></div>', unsafe_allow_html=True)
             qr_b64 = st.session_state.wa_service.get_qr_hd()
             if qr_b64:
                 src = qr_b64 if qr_b64.startswith("data:") else f"data:image/png;base64,{qr_b64}"
@@ -616,7 +618,8 @@ def render_whatsapp_page():
 
     # 2. QR CODE SECTION
     if (status in ["Awaiting Login", "Loading..."]) and st.session_state.wa_service and st.session_state.wa_service.driver:
-        st.markdown(f'<div style="text-align:center; padding:10px 0;"><h4 style="color:#00FF88;">📱 {lbl["wa_scan_msg"]}</h4></div>', unsafe_allow_html=True)
+        scan_title = lbl.get('wa_scan_msg', "امسح الكود باستخدام الواتساب في جوالك" if is_ar else "Scan with WhatsApp on your phone")
+        st.markdown(f'<div style="text-align:center; padding:10px 0;"><h4 style="color:#00FF88;">📱 {scan_title}</h4></div>', unsafe_allow_html=True)
         qr_b64 = st.session_state.wa_service.get_qr_hd()
         if qr_b64:
             src = qr_b64 if qr_b64.startswith("data:") else f"data:image/png;base64,{qr_b64}"
