@@ -306,21 +306,25 @@ def render_whatsapp_page():
                         st.error(f"❌ {msg}")
 
         # ── QR Code ──
-        if (status_emp in ["Awaiting Login", "Loading..."]) and st.session_state.wa_service.driver:
+        if (status_emp in ["Awaiting Login", "Loading..."]) and st.session_state.wa_service and st.session_state.wa_service.driver:
+            st.markdown(f'<div style="text-align:center; padding:10px 0;"><h4 style="color:#00FF88;">📱 {lbl["wa_scan_msg"]}</h4></div>', unsafe_allow_html=True)
             qr_b64 = st.session_state.wa_service.get_qr_hd()
             if qr_b64:
                 src = qr_b64 if qr_b64.startswith("data:") else f"data:image/png;base64,{qr_b64}"
                 st.markdown(
                     f'<div style="background:#FFFFFF;padding:25px;border-radius:20px;max-width:420px;'
-                    f'margin:15px auto;text-align:center;box-shadow:0 0 40px rgba(255,255,255,0.4);">'
+                    f'margin:15px auto;text-align:center;box-shadow:0 0 40px rgba(0,255,136,0.3);border:2px solid #00FF88;">'
                     f'<img src="{src}" style="width:350px;height:350px;image-rendering:pixelated;image-rendering:crisp-edges;" />'
                     f'</div>',
                     unsafe_allow_html=True
                 )
             else:
-                st.info(lbl['qr_loading'])
-                time.sleep(1)
-                st.rerun()
+                st.warning("⏳ " + ("جاري تحضير رمز الباركود من واتساب..." if is_ar else "Preparing QR code from WhatsApp..."))
+                diag_b64 = st.session_state.wa_service.get_diagnostic_screenshot()
+                if diag_b64:
+                    d_src = diag_b64 if diag_b64.startswith("data:") else f"data:image/png;base64,{diag_b64}"
+                    with st.expander("📸 " + ("لقطة شاشة تشخيصية من المتصفح" if is_ar else "Diagnostic Browser Screenshot"), expanded=True):
+                        st.image(d_src, caption="Browser Screen State", use_container_width=True)
 
             qb1, qb2 = st.columns(2)
             with qb1:
@@ -611,22 +615,26 @@ def render_whatsapp_page():
                     st.error(f"❌ {msg}")
 
     # 2. QR CODE SECTION
-    if (status in ["Awaiting Login", "Loading..."]) and st.session_state.wa_service.driver:
+    if (status in ["Awaiting Login", "Loading..."]) and st.session_state.wa_service and st.session_state.wa_service.driver:
+        st.markdown(f'<div style="text-align:center; padding:10px 0;"><h4 style="color:#00FF88;">📱 {lbl["wa_scan_msg"]}</h4></div>', unsafe_allow_html=True)
         qr_b64 = st.session_state.wa_service.get_qr_hd()
         if qr_b64:
             src = qr_b64 if qr_b64.startswith("data:") else f"data:image/png;base64,{qr_b64}"
-            st.markdown(f'<div style="background: #FFFFFF; padding: 25px; border-radius: 20px; max-width: 420px; margin: 15px auto; text-align: center; box-shadow: 0 0 40px rgba(255,255,255,0.4);"><img src="{src}" style="width: 350px; height: 350px; image-rendering: pixelated; image-rendering: crisp-edges;" /></div>', unsafe_allow_html=True)
+            st.markdown(f'<div style="background: #FFFFFF; padding: 25px; border-radius: 20px; max-width: 420px; margin: 15px auto; text-align: center; box-shadow: 0 0 40px rgba(0,255,136,0.3); border: 2px solid #00FF88;"><img src="{src}" style="width: 350px; height: 350px; image-rendering: pixelated; image-rendering: crisp-edges;" /></div>', unsafe_allow_html=True)
         else:
-            st.info(lbl['qr_loading'])
-            time.sleep(1)
-            st.rerun()
+            st.warning("⏳ " + ("جاري تحضير رمز الباركود من واتساب..." if is_ar else "Preparing QR code from WhatsApp..."))
+            diag_b64 = st.session_state.wa_service.get_diagnostic_screenshot()
+            if diag_b64:
+                d_src = diag_b64 if diag_b64.startswith("data:") else f"data:image/png;base64,{diag_b64}"
+                with st.expander("📸 " + ("لقطة شاشة تشخيصية من المتصفح" if is_ar else "Diagnostic Browser Screenshot"), expanded=True):
+                    st.image(d_src, caption="Browser Screen State", use_container_width=True)
         
         b1, b2 = st.columns(2)
         with b1:
-            if st.button(lbl['refresh_qr'], width='stretch'):
+            if st.button(lbl['refresh_qr'], width='stretch', key="refresh_qr_main"):
                 st.rerun()
         with b2:
-            if st.button(lbl['verify'], width='stretch', type="primary"):
+            if st.button(lbl['verify'], width='stretch', type="primary", key="verify_qr_main"):
                 with st.spinner(lbl['verifying']):
                     connected = st.session_state.wa_service.wait_for_connection(timeout=30)
                 if connected:

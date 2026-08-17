@@ -8,7 +8,44 @@ import subprocess
 import re
 from datetime import datetime
 
-# Selenium imports are done lazily in methods to avoid blocking app startup
+# --- Helper obfuscation functions (Module-level) ---
+def parse_spintax(text: str) -> str:
+    """تحليل Spintax مثل {مرحباً|أهلاً|السلام عليكم} واختيار إحدى الخيارات عشوائياً"""
+    if not text: return ""
+    pattern = r'\{([^{}]+)\}'
+    while re.search(pattern, text):
+        def repl(match):
+            options = match.group(1).split('|')
+            return random.choice(options)
+        text = re.sub(pattern, repl, text)
+    return text
+
+def inject_zero_width_spaces(text: str) -> str:
+    """حقن الرموز المخفية (Zero-Width Space \u200B \u200C \u200D \uFEFF) لتغيير التوقيع الرقمي للرسالة بدون تغيير الشكل الظاهري"""
+    if not text: return ""
+    zero_width_chars = ['\u200b', '\u200c', '\u200d', '\ufeff']
+    words = text.split(' ')
+    obfuscated_words = []
+    for word in words:
+        if len(word) > 2 and random.random() < 0.45:
+            idx = random.randint(1, len(word) - 1)
+            char_to_insert = random.choice(zero_width_chars)
+            word = word[:idx] + char_to_insert + word[idx:]
+        obfuscated_words.append(word)
+    res = ' '.join(obfuscated_words)
+    if random.random() < 0.5:
+        res = res.replace('.', '.\u200b').replace('!', '!\u200b').replace('؟', '؟\u200b')
+    return res
+
+def obfuscate_message(text: str) -> str:
+    """تطبيق محرك التمويه المزدوج والذكي (Spintax + Zero-Width Fingerprinting + Random Whitespace)"""
+    if not text: return ""
+    text = parse_spintax(text)
+    text = inject_zero_width_spaces(text)
+    if random.random() < 0.5:
+        text += random.choice([' ', '  ', '\u200b', ''])
+    return text
+
 
 class WhatsAppService:
     def __init__(self, session_id="wa_pasha_stable"):
@@ -172,16 +209,16 @@ class WhatsAppService:
             self.last_error += f" | UC Err: {str(e3)[:100]}"
             return False, self.last_error
 
-    def _wait_for_qr_or_login(self, timeout=12):
+    def _wait_for_qr_or_login(self, timeout=15):
         """انتظار تحميل الباركود أو تسجيل الدخول في المتصفح لضمان الجاهزية الفورية"""
         from selenium.webdriver.common.by import By
         start_t = time.time()
         while time.time() - start_t < timeout:
             try:
                 if not self.driver: break
-                elements = self.driver.find_elements(By.XPATH, '//*[@id="side"] | //div[@id="main"] | //div[@contenteditable="true"]')
-                canvas = self.driver.find_elements(By.CSS_SELECTOR, "canvas")
-                if elements or canvas:
+                elements = self.driver.find_elements(By.XPATH, '//*[@id="side"] | //div[@id="main"] | //div[@contenteditable="true"] | //div[@data-tab="3"]')
+                qr_elements = self.driver.find_elements(By.XPATH, '//canvas | //*[@data-ref] | //*[contains(@data-testid, "qr")] | //*[contains(@aria-label, "QR")] | //*[contains(@aria-label, "Scan")]')
+                if elements or qr_elements:
                     return True
             except: pass
             time.sleep(0.4)
@@ -197,7 +234,6 @@ class WhatsAppService:
             for b in win_paths:
                 if os.path.exists(b): return b
         else:
-            # Common Linux Paths (for Streamlit Cloud/GitHub)
             linux_paths = [
                 "/usr/bin/google-chrome",
                 "/usr/bin/chromium",
@@ -206,8 +242,6 @@ class WhatsAppService:
             ]
             for b in linux_paths:
                 if os.path.exists(b): return b
-            
-            # Try to find from 'which' command
             try:
                 import subprocess
                 for cmd in ['google-chrome', 'chromium', 'google-chrome-stable']:
@@ -221,14 +255,11 @@ class WhatsAppService:
         try:
             if os.name == 'nt':
                 os.system('taskkill /F /IM chromedriver.exe /T >nul 2>&1')
-                # Kill only headless chromes that might be locking the profile
                 os.system('taskkill /F /IM chrome.exe /FI "WINDOWTITLE eq chrome*" /FI "MEMUSAGE gt 1" >nul 2>&1')
             else:
-                # Portable Linux cleanup
                 os.system('pkill -f chromedriver > /dev/null 2>&1')
                 os.system('pkill -f chrome > /dev/null 2>&1')
         except: pass
-
 
     def keep_alive(self):
         """Pings Chrome JavaScript engine to prevent tab sleeping, renderer suspension, and DevTools timeout"""
@@ -245,25 +276,29 @@ class WhatsAppService:
         import streamlit as st
         if not self.driver: return "Disconnected"
         try:
-            # Verify browser window process is responsive
             _ = self.driver.window_handles
         except:
             self.driver = None
             return "Disconnected"
 
         try:
-            # Check for active WhatsApp DOM elements
-            elements = self.driver.find_elements(By.XPATH, '//*[@id="side"] | //div[@id="main"] | //div[@contenteditable="true"]')
+            # Check for active WhatsApp DOM elements (Logged in)
+            elements = self.driver.find_elements(By.XPATH, '//*[@id="side"] | //div[@id="main"] | //div[@contenteditable="true"] | //div[@data-tab="3"]')
             if elements:
                 return "Connected"
             
-            canvas = self.driver.find_elements(By.CSS_SELECTOR, "canvas")
-            if canvas:
+            # Check for QR / Login elements
+            qr_elements = self.driver.find_elements(By.XPATH, '//canvas | //*[@data-ref] | //*[contains(@data-testid, "qr")] | //*[contains(@aria-label, "QR")] | //*[contains(@aria-label, "Scan")]')
+            if qr_elements:
                 return "Awaiting Login"
 
-            # If sending loop is running, maintain Connected status so UI does not drop during page navigation
+            # If sending loop is running, maintain Connected status
             if st.session_state.get('wa_running', False):
                 return "Connected"
+
+            # Fallback for loading state on WhatsApp URL
+            if self.driver.current_url and "web.whatsapp.com" in self.driver.current_url.lower():
+                return "Awaiting Login"
 
             return "Loading..."
         except:
@@ -278,20 +313,52 @@ class WhatsAppService:
         if not self.driver: return False
         try:
             WebDriverWait(self.driver, timeout).until(
-                EC.presence_of_element_located((By.XPATH, '//*[@id="side"]'))
+                EC.presence_of_element_located((By.XPATH, '//*[@id="side"] | //div[@id="main"]'))
             )
             return True
         except:
             return False
 
+    def _auto_click_qr_reload(self):
+        """تفريغ التنبيه والتثبيت بالنقر التلقائي على زر إعادة تحميل الباركود إذا انتهت صلاحيته"""
+        if not self.driver: return
+        from selenium.webdriver.common.by import By
+        try:
+            reload_btns = self.driver.find_elements(
+                By.XPATH, 
+                '//button[contains(., "Reload") or contains(., "إعادة") or contains(., "انقر")] | '
+                '//span[@data-icon="refresh"] | '
+                '//div[contains(@class, "qr")]//button | '
+                '//div[@data-ref]//button'
+            )
+            if reload_btns:
+                print(f"[{time.strftime('%H:%M:%S')}] Auto-clicking QR reload button...")
+                reload_btns[0].click()
+                time.sleep(1.0)
+        except Exception: pass
+
     def get_qr_hd(self):
         if not self.driver: return None
         from selenium.webdriver.common.by import By
         from PIL import Image, ImageOps
-        for _ in range(5):
+
+        # Check & auto-click QR reload button if expired
+        self._auto_click_qr_reload()
+
+        for _ in range(3):
+            # --- Method 1: JS Canvas dataURL ---
             try:
                 data_url = self.driver.execute_script(
-                    "return document.querySelector('canvas') ? document.querySelector('canvas').toDataURL('image/png') : null"
+                    """
+                    let c = document.querySelector('canvas');
+                    if (c) return c.toDataURL('image/png');
+                    let container = document.querySelector('div[data-ref], div[data-testid="qrcode"], [aria-label*="QR"], [aria-label*="Scan"]');
+                    if (container) {
+                        let c2 = container.querySelector('canvas');
+                        if (c2) return c2.toDataURL('image/png');
+                    }
+                    return null;
+                    """
                 )
                 if data_url and len(data_url) > 100:
                     header, b64data = data_url.split(",", 1)
@@ -312,15 +379,25 @@ class WhatsAppService:
                     return base64.b64encode(buf.read()).decode()
             except Exception: pass
             
-            # Fallback to direct element screenshot if toDataURL fails
+            # --- Method 2: Element Screenshot ---
             try:
-                canvas_elems = self.driver.find_elements(By.CSS_SELECTOR, "canvas")
-                if canvas_elems:
-                    b64_str = canvas_elems[0].screenshot_as_base64
+                elements = self.driver.find_elements(
+                    By.XPATH,
+                    '//canvas | //div[@data-ref] | //div[contains(@data-testid, "qr")] | //*[contains(@aria-label, "QR")] | //*[contains(@aria-label, "Scan")]'
+                )
+                for elem in elements:
+                    b64_str = elem.screenshot_as_base64
                     if b64_str and len(b64_str) > 100:
                         return b64_str
             except Exception: pass
-            time.sleep(0.5)
+
+            time.sleep(0.4)
+
+        # --- Method 3: Full Page Diagnostic Screenshot Fallback ---
+        try:
+            return self.get_diagnostic_screenshot()
+        except Exception: pass
+
         return None
 
     def get_diagnostic_screenshot(self):
@@ -329,14 +406,11 @@ class WhatsAppService:
         except: return None
 
     def _type_human_like(self, element, text):
-        """محاكاة كتابة بشرية واقعية جداً مع تنوع سرعتها حسب نوع الحرف وأخاطء عشوائية بسيطة لتجنب الحظر"""
+        """محاكاة كتابة بشرية واقعية جداً مع تنوع سرعتها حسب نوع الحرف وأخطاء عشوائية بسيطة لتجنب الحظر"""
         from selenium.webdriver.common.keys import Keys
         for char in text:
             element.send_keys(char)
-            # 1. Base human typing speed (30ms - 110ms per character)
             base_delay = random.uniform(0.03, 0.11)
-            
-            # 2. Longer pauses for spaces, newlines, and punctuation
             if char in [" ", "\n", ".", ",", "!", "?", "،", "؛"]:
                 base_delay += random.uniform(0.12, 0.40)
             elif char.isupper():
@@ -344,54 +418,14 @@ class WhatsAppService:
                 
             time.sleep(base_delay)
             
-            # 3. Occasional thinking micro-pause (2% chance)
             if random.random() < 0.02:
                 time.sleep(random.uniform(0.4, 1.1))
             
-            # 4. Very rare typo & backspace correction (~0.3% chance)
             if random.random() < 0.003:
                 element.send_keys(random.choice("abcdefghijklmnopqrstuvwxyz"))
                 time.sleep(random.uniform(0.10, 0.30))
                 element.send_keys(Keys.BACKSPACE)
                 time.sleep(random.uniform(0.07, 0.20))
-
-
-def parse_spintax(text: str) -> str:
-    """تحليل Spintax مثل {مرحباً|أهلاً|السلام عليكم} واختيار إحدى الخيارات عشوائياً"""
-    if not text: return ""
-    pattern = r'\{([^{}]+)\}'
-    while re.search(pattern, text):
-        def repl(match):
-            options = match.group(1).split('|')
-            return random.choice(options)
-        text = re.sub(pattern, repl, text)
-    return text
-
-def inject_zero_width_spaces(text: str) -> str:
-    """حقن الرموز المخفية (Zero-Width Space \u200B \u200C \u200D \uFEFF) لتغيير التوقيع الرقمي للرسالة بدون تغيير الشكل الظاهري"""
-    if not text: return ""
-    zero_width_chars = ['\u200b', '\u200c', '\u200d', '\ufeff']
-    words = text.split(' ')
-    obfuscated_words = []
-    for word in words:
-        if len(word) > 2 and random.random() < 0.45:
-            idx = random.randint(1, len(word) - 1)
-            char_to_insert = random.choice(zero_width_chars)
-            word = word[:idx] + char_to_insert + word[idx:]
-        obfuscated_words.append(word)
-    res = ' '.join(obfuscated_words)
-    if random.random() < 0.5:
-        res = res.replace('.', '.\u200b').replace('!', '!\u200b').replace('؟', '؟\u200b')
-    return res
-
-def obfuscate_message(text: str) -> str:
-    """تطبيق محرك التمويه المزدوج والذكي (Spintax + Zero-Width Fingerprinting + Random Whitespace)"""
-    if not text: return ""
-    text = parse_spintax(text)
-    text = inject_zero_width_spaces(text)
-    if random.random() < 0.5:
-        text += random.choice([' ', '  ', '\u200b', ''])
-    return text
 
     def send_message(self, phone, message, attachment_path=None):
         from selenium.webdriver.common.by import By
@@ -404,20 +438,17 @@ def obfuscate_message(text: str) -> str:
             
             clean_phone = "".join(filter(str.isdigit, str(phone)))
             
-            # 🛡️ 2026 Anti-Ban: Apply Double Obfuscation Engine (Spintax + Zero-Width Fingerprint)
             if message:
                 message = obfuscate_message(message)
 
-            # 1. Length Validation
             if len(clean_phone) < 8:
                 return False, "رقم قصير جداً" 
             
-            # 🛡️ 2026 Anti-Ban Navigation: Try human search bar first, fallback to URL parameter
             time.sleep(random.uniform(1.5, 3.5))
             chat_opened = False
             try:
                 search_boxes = self.driver.find_elements(By.XPATH, '//div[@contenteditable="true"][@data-tab="3"] | //div[@title="Search input box"]')
-                if search_boxes and random.random() < 0.7:  # 70% human search bar interaction
+                if search_boxes and random.random() < 0.7:
                     sbox = search_boxes[0]
                     sbox.click()
                     time.sleep(random.uniform(0.4, 0.8))
@@ -429,7 +460,6 @@ def obfuscate_message(text: str) -> str:
                     sbox.send_keys(Keys.ENTER)
                     time.sleep(random.uniform(1.5, 3.0))
                     
-                    # Verify chat box opened
                     chat_inputs = self.driver.find_elements(By.XPATH, '//div[@contenteditable="true"][@data-tab="10"]')
                     if chat_inputs:
                         chat_opened = True
@@ -440,13 +470,11 @@ def obfuscate_message(text: str) -> str:
                 url = f"https://web.whatsapp.com/send?phone={clean_phone}"
                 self.driver.get(url)
             
-            # محاكاة حركة الماوس العشوائية والتمرير (Human Focus)
             try:
                 actions = ActionChains(self.driver)
                 for _ in range(random.randint(2, 4)):
                     actions.move_by_offset(random.randint(-50, 50), random.randint(-50, 50)).perform()
                     time.sleep(random.uniform(0.1, 0.3))
-                # تمرير بسيط للأسفل والأعلى ليبدو كأن المستخدم يقرأ
                 self.driver.execute_script(f"window.scrollBy(0, {random.randint(100, 300)})")
                 time.sleep(random.uniform(0.5, 1.0))
                 self.driver.execute_script(f"window.scrollBy(0, -{random.randint(50, 150)})")
@@ -454,7 +482,6 @@ def obfuscate_message(text: str) -> str:
             
             wait = WebDriverWait(self.driver, 45)
             
-            # Wait for text box
             try:
                 msg_input = wait.until(EC.presence_of_element_located(
                     (By.XPATH, '//div[@contenteditable="true"][@data-tab="10"]')
@@ -465,11 +492,9 @@ def obfuscate_message(text: str) -> str:
                     return False, "رقم غير مسجل في الواتساب"
                 return False, "فشل في التحميل"
 
-            time.sleep(random.uniform(1.5, 3.0)) # Human-like pause after loading
+            time.sleep(random.uniform(1.5, 3.0))
 
             if attachment_path and os.path.exists(attachment_path):
-                # 🛡️ تمويه اسم الملف والبصمة الرقمية (MD5/SHA256 Hash Obfuscation):
-                # نسخ الملف لاسم عشوائي وإضافة بايتات عشوائية مخفية في نهايته لتغيير التوقيع الرقمي للملف
                 temp_dir = os.path.join(self.session_path, "temp_uploads")
                 os.makedirs(temp_dir, exist_ok=True)
                 
@@ -484,11 +509,10 @@ def obfuscate_message(text: str) -> str:
                 except Exception:
                     pass
 
-                # Attach file
                 attach_btn = wait.until(EC.element_to_be_clickable(
                     (By.XPATH, '//div[@title="Attach"] | //span[@data-icon="plus"] | //span[@data-icon="attach-menu-plus"]')
                 ))
-                time.sleep(random.uniform(1.2, 2.5)) # تفكير قبل الضغط
+                time.sleep(random.uniform(1.2, 2.5))
                 attach_btn.click()
                 time.sleep(random.uniform(1.0, 2.0))
 
@@ -504,41 +528,33 @@ def obfuscate_message(text: str) -> str:
                     actions = ActionChains(self.driver)
                     actions.move_to_element(caption_input).click().perform()
                     
-                    # استخدام دالة الكتابة البشرية لتجنب تكرار الكود
                     self._type_human_like(caption_input, message)
                     time.sleep(random.uniform(0.8, 1.5))
                 
-                # Natural pause before ENTER / Click
                 time.sleep(random.uniform(0.5, 1.2))
                 try:
-                    # 4. Click the Send Button instead of Keys.ENTER
                     send_btn = self.driver.find_element(By.XPATH, '//span[@data-icon="send"]')
                     actions = ActionChains(self.driver)
                     actions.move_to_element(send_btn).pause(random.uniform(0.2, 0.5)).click().perform()
                 except:
                     caption_input.send_keys(Keys.ENTER)
             else:
-                # Simple text message
                 if message:
-                    # استخدام دالة الكتابة البشرية لتجنب تكرار الكود
                     self._type_human_like(msg_input, message)
                     
                     time.sleep(random.uniform(1.2, 2.5))
-                    # Natural pause before ENTER
                     time.sleep(random.uniform(0.5, 1.2))
                     try:
-                        # 4. Click the Send Button instead of Keys.ENTER
                         send_btn = self.driver.find_element(By.XPATH, '//span[@data-icon="send"]')
                         actions = ActionChains(self.driver)
                         actions.move_to_element(send_btn).pause(random.uniform(0.2, 0.5)).click().perform()
                     except:
                         msg_input.send_keys(Keys.ENTER)
             
-            time.sleep(random.uniform(2.0, 4.0)) # Wait for send
+            time.sleep(random.uniform(2.0, 4.0))
             return True, "Done"
         except Exception as e:
             return False, f"Err: {str(e)[:40]}"
-
 
     def close(self):
         if self.driver:
