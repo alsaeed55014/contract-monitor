@@ -17,10 +17,18 @@ from datetime import datetime
 
 # ─── مسارات الملفات المشتركة ───────────────────────────────────
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, BASE_DIR)  # ✅ Inserté TOUT EN HAUT avant les imports locaux
+
+# ✅ IMPORT DES LIMITES ANTI-BAN DÉFINIES DANS whatsapp_service.py (même référentiel)
+from src.services.whatsapp_service import ANTIBAN
+# ✅ Utilisation des MEMES FICHIERS que whatsapp_ui.py via src/config
+from src.config import WA_HISTORY_FILE as CONFIG_WA_HISTORY_FILE
+
 WA_WORKER_JOB_FILE  = os.path.join(BASE_DIR, "wa_worker_job.json")    # الأوامر من Streamlit للعامل
 WA_WORKER_STATE_FILE = os.path.join(BASE_DIR, "wa_worker_state.json") # حالة العامل لـ Streamlit
 WA_WORKER_LOG_FILE   = os.path.join(BASE_DIR, "wa_worker_log.json")   # سجل الإرسال
-WA_HISTORY_FILE      = os.path.join(BASE_DIR, "wa_history.json")      # سجل الأرقام المرسلة
+# ✅ MÊME fichier historique que l'UI — PAS wa_history.json (mauvais nom!)
+WA_HISTORY_FILE      = CONFIG_WA_HISTORY_FILE
 
 def load_json(path, default=None):
     try:
@@ -68,52 +76,66 @@ def save_history(history_set):
 # ─── نظام مكافحة الحظر المتقدم ─────────────────────────────────
 
 class AntiBanEngine:
-    """محرك مكافحة حظر واتساب المتقدم 2026"""
+    """محرك مكافحة حظر واتساب المتقدم 2026 — يقرأ حدود الأمان من ANTIBAN GLOBAL"""
 
     def __init__(self):
         self.sent_count_session = 0
         self.session_start = time.time()
 
     def get_delay(self, base_delay: int, batch_size: int, idx: int, batch_delay: int, start_from: int = 0) -> tuple[int, str]:
-        """احسب التأخير الذكي لكل رسالة مع حماية التدفئة الاستباقية كالأشخاص الحقيقيين"""
-        effective_batch = min(batch_size, 20) if batch_size > 0 else 15
-        effective_batch_delay = max(batch_delay, 300) # لا يقل عن 5 دقائق بين الدفعات
+        """احسب التأخير الذكي لكل رسالة — باستخدام الحدود GLOBALES de ANTIBAN (même référentiel)"""
+        # ============================================================
+        # 🛡️ PLANCHER DE SÉCURITÉ (même si l'utilisateur force une valeur inférieure)
+        # ============================================================
+        MIN_SEC = ANTIBAN["MIN_INTER_MESSAGE_SEC"]        # 20 secondes minimum
+        MIN_BATCH_MSG = ANTIBAN["MIN_MESSAGES_BEFORE_BREAK"]  # 5 messages minimum avant pause
+        MIN_BATCH_SEC = ANTIBAN["MIN_BATCH_BREAK_SEC"]    # 300 secondes minimum entre pauses
+
+        # Appliquer les planchers durs
+        safe_base_delay = max(MIN_SEC, int(base_delay))
+        safe_batch_size = max(MIN_BATCH_MSG, int(batch_size)) if batch_size > 0 else MIN_BATCH_MSG
+        safe_batch_delay = max(MIN_BATCH_SEC, int(batch_delay))
+
+        effective_batch = min(safe_batch_size, 20)
+        effective_batch_delay = safe_batch_delay
 
         processed_in_job = idx - start_from
-        is_batch_break = effective_batch > 0 and processed_in_job > 0 and processed_in_job % effective_batch == 0
+        is_batch_break = processed_in_job > 0 and processed_in_job % effective_batch == 0
 
         if is_batch_break:
-            # استراحة طويلة بين الدفعات (تشبه البشر)
+            # استراحة طويلة بين الدفعات (تشبه البشر) + gauss
             delay = int(random.gauss(effective_batch_delay, effective_batch_delay * 0.15))
             delay = max(effective_batch_delay, delay)
             return delay, "batch_break"
 
         # 🛡️ 2026 Warm-Up Pace: البداية بحذر في أول 5 رسائل للحساب
-        safe_base = max(15, base_delay)
+        safe_base = safe_base_delay
         if processed_in_job < 5:
-            safe_base = int(safe_base * random.uniform(1.4, 1.8))
+            safe_base = int(safe_base * random.uniform(1.6, 2.2))  # PLUS LENT au démarrage
+        elif processed_in_job < 15:
+            safe_base = int(safe_base * random.uniform(1.2, 1.6))  # Lent encore
 
         # تأخير أساسي مع ضوضاء غاوسية للطبيعية
-        jitter = random.gauss(0, safe_base * 0.25)
+        jitter = random.gauss(0, safe_base * 0.30)
         delay = int(safe_base + jitter)
-        delay = max(15, delay)  # 🛡️ حد أدنى أمان 15 ثانية لمنع الحظر السريع
+        delay = max(MIN_SEC, delay)
 
         # استراحة تفكير مفاجئة كل 3-6 رسائل
         think_break_chance = 1.0 / random.randint(3, 6)
         if random.random() < think_break_chance:
-            extra = int(random.uniform(10, 25))
+            extra = int(random.uniform(12, 30))
             delay += extra
             return delay, "think_break"
 
         return delay, "normal"
 
     def should_stealth_break(self, idx: int) -> bool:
-        """تقرر إذا كانت استراحة تمويهية مطلوبة كل 15-20 رسالة"""
-        return idx > 0 and idx % random.randint(15, 20) == 0
+        """🛡️ قرار استراحة تمويهية كل 12-18 رسالة (moins souvent pour éviter pattern suspect)"""
+        return idx > 0 and idx % random.randint(12, 18) == 0
 
     def get_stealth_break_duration(self) -> int:
-        """مدة الاستراحة التمويهية (تشبه الإنسان الذي توقف مؤقتاً 3-6 دقائق)"""
-        return int(random.uniform(180, 360))
+        """مدة الاستراحة التمويهية — 4-8 دقائق (un peu plus long et réaliste)"""
+        return int(random.uniform(240, 480))
 
 
 def run_worker():
@@ -122,7 +144,7 @@ def run_worker():
     update_state("idle")
 
     # ── استيراد الخدمة ──
-    sys.path.insert(0, BASE_DIR)
+    # (sys.path déjà inséré tout en haut du fichier)
     from src.services.whatsapp_service import WhatsAppService
 
     wa = None
@@ -164,15 +186,36 @@ def run_worker():
                 total = len(targets)
 
                 print(f"[{time.strftime('%H:%M:%S')}] 📨 New job: {total} targets, delay={base_delay}s")
+                print(f"[{time.strftime('%H:%M:%S')}] 🛡️ Planchers appliqués: min {ANTIBAN['MIN_INTER_MESSAGE_SEC']}s inter-message, {ANTIBAN['DAILY_HARD_LIMIT_ESTABLISHED']} msg/jour max")
                 update_state("starting", current_idx=start_from, total=total)
 
                 # ── تشغيل المحرك إذا لم يكن يعمل ──
                 if wa is None:
                     wa = WhatsAppService()
 
-                driver_ok, driver_msg = wa.start_driver(headless=False, force_clean=False)
+                # 🛡️ Worker = BACKGROUND → headless OBLIGATOIRE par défaut (évite crash sans écran)
+                is_cloud_env = ("/mount/" in BASE_DIR.replace("\\", "/")
+                                or os.path.exists("/mount")
+                                or (not os.environ.get("DISPLAY", "") and os.name != "nt"))
+                run_headless = True
+                driver_ok, driver_msg = wa.start_driver(headless=run_headless, force_clean=False)
+                if not driver_ok:
+                    # Retry avec la valeur opposée (rarement nécessaire)
+                    print(f"[{time.strftime('%H:%M:%S')}] ⚠️  Headless={run_headless} échoué, retry avec {not run_headless}...")
+                    if wa:
+                        try: wa.close()
+                        except: pass
+                        wa = WhatsAppService()
+                    driver_ok, driver_msg = wa.start_driver(headless=(not run_headless), force_clean=False)
+
                 if not driver_ok:
                     update_state("error", error=f"فشل تشغيل المحرك: {driver_msg}")
+                    append_log({
+                        "idx": -1, "name": "SYSTEM", "phone": "-",
+                        "status": f"فشل تشغيل المتصفح: {driver_msg}",
+                        "ok": False,
+                        "time": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    })
                     save_json(WA_WORKER_JOB_FILE, {"command": "idle"})
                     time.sleep(5)
                     continue
@@ -199,6 +242,8 @@ def run_worker():
                 msg_sent_count = 0
                 anti_ban = AntiBanEngine()
                 history = load_history()
+                anti_ban_triggered = False
+                anti_ban_reason = ""
 
                 update_state("sending", current_idx=start_from, total=total)
 
@@ -210,6 +255,17 @@ def run_worker():
                         update_state("stopped", current_idx=i, total=total)
                         save_json(WA_WORKER_JOB_FILE, {"command": "idle"})
                         break
+
+                    # 🛡️ Si une protection anti-ban a déjà déclenché, on arrête TOUTE la campagne
+                    if anti_ban_triggered:
+                        update_state("error", error=f"🛑 أمان: {anti_ban_reason}")
+                        append_log({
+                            "idx": i, "name": name, "phone": "-",
+                            "status": f"STOPPÉ - {anti_ban_reason}",
+                            "ok": False,
+                            "time": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                        })
+                        continue
 
                     trg = targets[i]
                     phone = trg.get("phone", "")
@@ -304,6 +360,14 @@ def run_worker():
                     }
                     append_log(entry)
 
+                    # 🛡️ DÉTECTION D'UN BLOCAGE ANTI-BAN → arrêt de la campagne ENTIÈRE
+                    if not ok and str(log_msg).startswith("🛑"):
+                        anti_ban_triggered = True
+                        anti_ban_reason = str(log_msg)
+                        print(f"[{time.strftime('%H:%M:%S')}] 🚫 PROTECTION ANTI-BAN DÉCLENCHÉE → {anti_ban_reason}")
+                        update_state("error", error=anti_ban_reason)
+                        # On ne sort pas de la boucle, les itérations suivantes seront skipées
+
                     if ok:
                         history.add(phone)
                         save_history(history)
@@ -316,11 +380,15 @@ def run_worker():
                         print(f"[{time.strftime('%H:%M:%S')}] ❌ Failed: {log_msg}")
 
                     # اثنين ثانية استراحة صغيرة بعد الإرسال دائماً
-                    time.sleep(random.uniform(1.5, 3.5))
+                    time.sleep(random.uniform(1.8, 4.0))
 
                 else:
                     # انتهى الإرسال
-                    update_state("done", current_idx=total, total=total)
+                    if anti_ban_triggered:
+                        # On garde le status error défini plus haut
+                        pass
+                    else:
+                        update_state("done", current_idx=total, total=total)
                     print(f"[{time.strftime('%H:%M:%S')}] ✅ All {total} targets processed")
                     save_json(WA_WORKER_JOB_FILE, {"command": "idle"})
                     continue

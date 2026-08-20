@@ -462,19 +462,22 @@ def render_whatsapp_page():
             st.markdown(f"#### {'إعدادات التأخير العشوائي' if is_ar else 'Random Delay Settings'}")
             col_d1, col_d2 = st.columns(2)
             with col_d1:
+                # 🛡️ حد أدنى 25 ثانية (كان 5 ثواني — كارثة الحظر!)
                 min_delay = st.number_input(
                     "الحد الأدنى (ثواني)" if is_ar else "Min delay (seconds)",
-                    min_value=5,
+                    min_value=25,
                     max_value=300,
-                    value=30,
+                    value=45,
+                    help=("🛡️ الحد الأدنى الآمن 25 ثانية (يوصى 45-90)" if is_ar else "🛡️ Safe minimum 25s (recommended 45–90s)"),
                     key="wa_bengali_min_delay"
                 )
             with col_d2:
+                # 🛡️ حد أدنى لـ max_delay = 35 (كان 10 ثواني!)
                 max_delay = st.number_input(
                     "الحد الأقصى (ثواني)" if is_ar else "Max delay (seconds)",
-                    min_value=10,
+                    min_value=35,
                     max_value=600,
-                    value=60,
+                    value=90,
                     key="wa_bengali_max_delay"
                 )
             
@@ -502,73 +505,111 @@ def render_whatsapp_page():
                     st.error("❌ " + ("يرجى كتابة الرسالة أولاً" if is_ar else "Please write a message first"))
                 elif not target_phones:
                     st.error("❌ " + ("لا يوجد أرقام هواتف صالحة" if is_ar else "No valid phone numbers"))
+                elif not st.session_state.wa_service or st.session_state.wa_service.get_status() != "Connected":
+                    st.error("❌ " + ("واتساب غير متصل! ابدأ المحرك أولاً في الصفحة الرئيسية" if is_ar else "WhatsApp not connected! Start engine first on home page"))
                 else:
-                    # Send messages
-                    success_count = 0
-                    fail_count = 0
-                    
-                    progress_bar = st.progress(0)
-                    status_text = st.empty()
-                    
-                    for i, (phone, name) in enumerate(zip(target_phones, target_names)):
-                        status_text.text(f"{'جاري الإرسال إلى' if is_ar else 'Sending to'}: {name} ({i+1}/{len(target_phones)})")
+                    # 🛡️ VÉRIFICATION PRÉALABLES LIMITE QUOTIDIENNE
+                    allowed_ok, allowed_msg = st.session_state.wa_service.check_send_allowed()
+                    if not allowed_ok:
+                        st.error(f"🛑 {'محظور مؤقتاً لحماية الحساب: ' if is_ar else 'Temporarily blocked for account safety: '}{allowed_msg}")
+                    else:
+                        # Send messages
+                        success_count = 0
+                        fail_count = 0
+                        # 🛡️ PLANCHER DUR: 20 secondes minimum (même si min_delay < 20, impossible via UI mais on se protège)
+                        effective_min = max(20, int(min_delay))
+                        effective_max = max(effective_min + 10, int(max_delay))
                         
-                        # Generate message variation
-                        if enable_variation and (i + 1) % variation_interval == 0:
-                            # Simple variation: change greeting and structure
-                            variations = [
-                                custom_message,
-                                custom_message.replace("مرحبا", "أهلاً").replace("Hello", "Hi"),
-                                custom_message.replace("،", ".").replace(",", "."),
-                                custom_message.replace("\n\n", "\n"),
-                                custom_message.replace(".", "...")
-                            ]
-                            message_to_send = variations[(i // variation_interval) % len(variations)]
-                        else:
-                            message_to_send = custom_message
+                        progress_bar = st.progress(0)
+                        status_text = st.empty()
+                        anti_ban_triggered = False
+                        anti_ban_reason = ""
+
+                        st.info(f"🛡️ {'تم تطبيق حدود الحماية: تأخير بين الرسائل ' if is_ar else '🛡️ Protections applied: inter-message delay '}"
+                                f"{effective_min}-{effective_max}s — {allowed_msg}")
                         
-                        # Replace {Name} placeholder
-                        message_to_send = message_to_send.replace("{Name}", name).replace("{name}", name)
-                        
-                        # Send message
-                        success, msg = st.session_state.wa_service.send_message(phone, message_to_send)
-                        
-                        if success:
-                            success_count += 1
-                        else:
-                            fail_count += 1
-                            st.warning(f"⚠️ {name}: {msg}")
-                        
-                        progress_bar.progress((i + 1) / len(target_phones))
-                        
-                        # Random delay between messages (anti-ban)
-                        if i < len(target_phones) - 1:  # Don't delay after last message
-                            # Use uniform for more natural random delay
-                            random_delay = int(random.uniform(min_delay, max_delay))
-                            delay_text = f"⏳ {'تأخير عشوائي' if is_ar else 'Random delay'}: {random_delay} {'ثانية' if is_ar else 'seconds'}"
+                        for i, (phone, name) in enumerate(zip(target_phones, target_names)):
+                            # 🛡️ Si anti-ban déjà déclenché, on skip tout le reste
+                            if anti_ban_triggered:
+                                status_text.text(f"🛑 {'تم إيقاف الحملة: ' if is_ar else 'Campaign stopped: '}{anti_ban_reason}")
+                                st.warning(f"🛑 {anti_ban_reason}")
+                                break
+                                
+                            status_text.text(f"{'جاري الإرسال إلى' if is_ar else 'Sending to'}: {name} ({i+1}/{len(target_phones)})")
                             
-                            for s_sec in range(random_delay, 0, -1):
-                                status_text.text(f"{delay_text} ({s_sec}s)")
-                                if s_sec % 10 == 0:
-                                    st.session_state.wa_service.keep_alive()
-                                time.sleep(1)
+                            # 🛡️ VÉRIFICATION LIMITE ANTI-BAN AVANT CHAQUE MESSAGE
+                            allowed_ok, allowed_msg = st.session_state.wa_service.check_send_allowed()
+                            if not allowed_ok:
+                                anti_ban_triggered = True
+                                anti_ban_reason = allowed_msg
+                                fail_count += (len(target_phones) - i)
+                                continue
                             
-                            # Anti-ban: Secondary random micro-rest (1-3 seconds)
-                            micro_rest = random.uniform(1.0, 3.0)
-                            time.sleep(micro_rest)
+                            # Generate message variation
+                            if enable_variation and (i + 1) % variation_interval == 0:
+                                # Simple variation: change greeting and structure
+                                variations = [
+                                    custom_message,
+                                    custom_message.replace("مرحبا", "أهلاً").replace("Hello", "Hi"),
+                                    custom_message.replace("،", ".").replace(",", "."),
+                                    custom_message.replace("\n\n", "\n"),
+                                    custom_message.replace(".", "...")
+                                ]
+                                message_to_send = variations[(i // variation_interval) % len(variations)]
+                            else:
+                                message_to_send = custom_message
                             
-                            # 🛡️ استراحة "تفكير" مفاجئة كل 3-6 رسائل لمحاكاة التعب البشري
-                            if i > 0 and i % random.randint(3, 6) == 0:
-                                stealth_break = random.uniform(6.0, 15.0)
-                                st.toast("🛡️ " + ("استراحة تمويهية قصيرة..." if is_ar else "Short stealth break..."), icon="⏳")
-                                time.sleep(stealth_break)
+                            # Replace {Name} placeholder
+                            message_to_send = message_to_send.replace("{Name}", name).replace("{name}", name)
+                            
+                            # Send message
+                            success, msg = st.session_state.wa_service.send_message(phone, message_to_send)
+                            
+                            if success:
+                                success_count += 1
+                            else:
+                                fail_count += 1
+                                st.warning(f"⚠️ {name}: {msg}")
+                                # 🛡️ Si c'est une protection ANTI-BAN, arrêter la campagne ENTIÈRE
+                                if str(msg).startswith("🛑"):
+                                    anti_ban_triggered = True
+                                    anti_ban_reason = str(msg)
+                                    break
+                            
+                            progress_bar.progress((i + 1) / len(target_phones))
+                            
+                            # Random delay between messages (anti-ban)
+                            if i < len(target_phones) - 1 and not anti_ban_triggered:
+                                # Utilise uniform + floor sécurité
+                                random_delay = int(random.uniform(effective_min, effective_max))
+                                # Micro-jitter
+                                random_delay += random.randint(-3, 5)
+                                random_delay = max(effective_min, random_delay)
+                                
+                                delay_text = f"⏳ {'تأخير عشوائي' if is_ar else 'Random delay'}: {random_delay} {'ثانية' if is_ar else 'seconds'}"
+                                
+                                for s_sec in range(random_delay, 0, -1):
+                                    status_text.text(f"{delay_text} ({s_sec}s)")
+                                    if s_sec % 10 == 0:
+                                        st.session_state.wa_service.keep_alive()
+                                    time.sleep(1)
+                                
+                                # 🛡️ Anti-ban: Secondary random micro-rest (2-5 seconds maintenant un peu plus long)
+                                micro_rest = random.uniform(2.0, 5.0)
+                                time.sleep(micro_rest)
+                                
+                                # 🛡️ استراحة "تفكير" مفاجئة كل 3-6 رسائل لمحاكاة التعب البشري (5-15 secondes)
+                                if i > 0 and i % random.randint(3, 6) == 0:
+                                    stealth_break = random.uniform(8.0, 20.0)
+                                    st.toast("🛡️ " + ("استراحة تمويهية قصيرة..." if is_ar else "Short stealth break..."), icon="⏳")
+                                    time.sleep(stealth_break)
                     
-                    status_text.empty()
-                    progress_bar.empty()
-                    
-                    st.success(f"✅ {'تم الإرسال بنجاح' if is_ar else 'Sending completed'}: {success_count} {'رسالة' if is_ar else 'messages'}")
-                    if fail_count > 0:
-                        st.warning(f"⚠️ {'فشل' if is_ar else 'Failed'}: {fail_count}")
+                        status_text.empty()
+                        progress_bar.empty()
+                        
+                        st.success(f"✅ {'تم الإرسال بنجاح' if is_ar else 'Sending completed'}: {success_count} {'رسالة' if is_ar else 'messages'}")
+                        if fail_count > 0:
+                            st.warning(f"⚠️ {'فشل' if is_ar else 'Failed'}: {fail_count}")
         return
 
 
@@ -1028,14 +1069,19 @@ HR Manager"""
         st.markdown(lbl['settings_title'])
         col_s1, col_s2, col_s3, col_s4 = st.columns(4)
         with col_s1:
-            delay = st.number_input(lbl['delay'], min_value=5, max_value=600, value=60, disabled=st.session_state.wa_running)
+            # 🛡️ حد أدنى 25 ثانية — أي شيء أقل يسبب حظر سريع
+            delay = st.number_input(lbl['delay'], min_value=25, max_value=600, value=60, disabled=st.session_state.wa_running,
+                                    help=("🛡️ الحد الأدنى الآمن 25 ثانية (يوصى 45-90 ثانية)" if is_ar else "🛡️ Min safe value 25s (recommended 45–90s)"))
         with col_s2:
-            batch_size = st.number_input(lbl['batch_size'], min_value=0, max_value=1000, value=10, help=lbl['batch_help'], disabled=st.session_state.wa_running)
+            # 🛡️ min_value = 5 على الأقل — ممنوع الصفر (كان يسمح بإلغاء الاستراحة تماماً)
+            batch_size = st.number_input(lbl['batch_size'], min_value=5, max_value=100, value=10, help=lbl['batch_help'], disabled=st.session_state.wa_running)
         with col_s3:
-            batch_delay_mins = st.number_input(lbl['batch_delay'], min_value=1, max_value=60, value=10, disabled=st.session_state.wa_running)
+            # 🛡️ min 3 دقائق بدل 1 (يوصى 10 دقائق فما فوق)
+            batch_delay_mins = st.number_input(lbl['batch_delay'], min_value=3, max_value=60, value=10, disabled=st.session_state.wa_running,
+                                               help=("🛡️ 3 دقائق على الأقل بين الدفعات (يوصى 10+)" if is_ar else "🛡️ Min 3 min between batches (recommended 10+)"))
             batch_delay = int(batch_delay_mins * 60)
         with col_s4:
-            msg_switch_threshold = st.number_input("تبديل الرسالة بعد" if is_ar else "Switch msg after", min_value=1, max_value=1000, value=1, disabled=st.session_state.wa_running)
+            msg_switch_threshold = st.number_input("تبديل الرسالة بعد" if is_ar else "Switch msg after", min_value=1, max_value=50, value=2, disabled=st.session_state.wa_running)
 
         # Smart detect target changes
         current_fp = ",".join([trg['phone'] for trg in final_targets]) if final_targets else ""
@@ -1079,16 +1125,30 @@ HR Manager"""
                 else:
                     if st.button(lbl['send'].format(len(final_targets)), disabled=not ready, width='stretch', type="primary", key="bg_send_btn"):
                         # ── حفظ المرفق في ملف مؤقت ──
+                        # 🛡️ نفس منطق WhatsAppService: يدعم whatsapp_session و .whatsapp_session
+                        base_no_dot = os.path.join(os.getcwd(), "whatsapp_session")
+                        base_with_dot = os.path.join(os.getcwd(), ".whatsapp_session")
+                        if os.path.exists(base_no_dot):
+                            temp_dir = base_no_dot
+                        elif os.path.exists(base_with_dot):
+                            temp_dir = base_with_dot
+                        else:
+                            temp_dir = base_no_dot
+                        os.makedirs(temp_dir, exist_ok=True)
+
                         temp_path = None
                         if attachment:
                             import tempfile
                             suffix = os.path.splitext(attachment.name)[1]
-                            t_file = tempfile.NamedTemporaryFile(delete=False, suffix=suffix,
-                                                                 dir=os.path.join(os.getcwd(), ".whatsapp_session"))
-                            t_file.write(attachment.getvalue())
-                            t_file.close()
-                            temp_path = t_file.name
-                            st.session_state.wa_temp_path = temp_path
+                            try:
+                                t_file = tempfile.NamedTemporaryFile(delete=False, suffix=suffix, dir=temp_dir)
+                                t_file.write(attachment.getvalue())
+                                t_file.close()
+                                temp_path = t_file.name
+                                st.session_state.wa_temp_path = temp_path
+                            except Exception as att_err:
+                                st.error(f"❌ {'فشل حفظ الملف المرفق: ' if is_ar else 'Failed to save attachment: '}{str(att_err)}")
+                                temp_path = None
 
                         # ── تشغيل العامل الخلفي ──
                         mgr.start_worker()

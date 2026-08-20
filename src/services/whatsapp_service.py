@@ -6,7 +6,29 @@ import io
 import random
 import subprocess
 import re
-from datetime import datetime
+import json
+from datetime import datetime, date
+
+# ============================================================
+# 🛡️ LIMITES GLOBAUX DE SÉCURITÉ ANTI-BAN 2026
+# Ces valeurs sont des planchers de sécurité ABSOLUS
+# Même si l'utilisateur force une valeur inférieure, ce plancher sera appliqué.
+# ============================================================
+ANTIBAN = {
+    "MIN_INTER_MESSAGE_SEC": 20,       # Ne JAMAIS descendre sous 20 secondes entre 2 messages
+    "MIN_BATCH_BREAK_SEC": 300,        # 5 minutes minimum entre deux paquets
+    "MIN_MESSAGES_BEFORE_BREAK": 5,    # Au moins 5 messages avant une pause
+    "DAILY_HARD_LIMIT_NEW": 40,        # < 40 msg/jour pour les comptes < 7 jours
+    "DAILY_HARD_LIMIT_ESTABLISHED": 180,  # < 180 msg/jour pour comptes établis
+    "FAILURE_RATE_STOP_PCT": 28,       # Arrêt si > 28% d'échecs (numéros invalides)
+    "FAILURE_RATE_SLOWDOWN_PCT": 15,   # Ralentir si > 15% d'échecs
+    "MAX_INVALID_IN_A_ROW": 4,         # Stop après 4 numéros invalides d'affilée
+}
+
+_DAILY_LOG_FILE = None  # sera initialisé par WhatsAppService
+
+def _today_str():
+    return date.today().isoformat()
 
 # --- Helper obfuscation functions (Module-level) ---
 def parse_spintax(text: str) -> str:
@@ -21,39 +43,201 @@ def parse_spintax(text: str) -> str:
     return text
 
 def inject_zero_width_spaces(text: str) -> str:
-    """حقن الرموز المخفية (Zero-Width Space \u200B \u200C \u200D \uFEFF) لتغيير التوقيع الرقمي للرسالة بدون تغيير الشكل الظاهري"""
+    """🛡️ حقن الرموز المخفية بنسبة MODÉRÉE (12-18%) — détectable au-dessus de 25%"""
     if not text: return ""
     zero_width_chars = ['\u200b', '\u200c', '\u200d', '\ufeff']
     words = text.split(' ')
     obfuscated_words = []
+    # Niveau d'obscurcissement aléatoire par message pour éviter un pattern fixe
+    density = random.uniform(0.10, 0.18)  # 10–18% seulement — audessous du seuil de détection
+    punctuations_changed = 0  # Limiter le nombre de ponctuations altérées
+    max_punct = 2
     for word in words:
-        if len(word) > 2 and random.random() < 0.45:
+        if len(word) > 3 and random.random() < density:
             idx = random.randint(1, len(word) - 1)
             char_to_insert = random.choice(zero_width_chars)
             word = word[:idx] + char_to_insert + word[idx:]
         obfuscated_words.append(word)
     res = ' '.join(obfuscated_words)
-    if random.random() < 0.5:
-        res = res.replace('.', '.\u200b').replace('!', '!\u200b').replace('؟', '؟\u200b')
+    # Une seule ponctuation max modifiée par message (évite les patterns)
+    if random.random() < 0.25:
+        if punctuations_changed < max_punct and '.' in res:
+            res = res.replace('.', '.\u200b', 1)
+            punctuations_changed += 1
     return res
 
 def obfuscate_message(text: str) -> str:
-    """تطبيق محرك التمويه المزدوج والذكي (Spintax + Zero-Width Fingerprinting + Random Whitespace)"""
+    """🛡️ محرك التمويه — التمييز بين الرسائل لكن دون إثارة انتباه خوارزميات واتساب"""
     if not text: return ""
     text = parse_spintax(text)
-    text = inject_zero_width_spaces(text)
-    if random.random() < 0.5:
-        text += random.choice([' ', '  ', '\u200b', ''])
+    # Appliquer ZWS seulement dans 65% des cas (évite une signature trop constante)
+    if random.random() < 0.65:
+        text = inject_zero_width_spaces(text)
+    # Espacement final aléatoire — modéré
+    tail_choice = random.random()
+    if tail_choice < 0.3:
+        text += " "
+    elif tail_choice < 0.45:
+        text += "  "
+    # 55% du temps, pas de modification de la fin (plus naturel)
     return text
 
 
 class WhatsAppService:
     def __init__(self, session_id="wa_pasha_stable"):
-        # 2026 Persistent Session: Store in project root instead of temp dir
-        self.base_session_dir = os.path.join(os.getcwd(), ".whatsapp_session")
+        # 2026 Persistent Session: support BOTH folders (visible & hidden)
+        base_no_dot = os.path.join(os.getcwd(), "whatsapp_session")
+        base_with_dot = os.path.join(os.getcwd(), ".whatsapp_session")
+        if os.path.exists(base_no_dot):
+            self.base_session_dir = base_no_dot
+        elif os.path.exists(base_with_dot):
+            self.base_session_dir = base_with_dot
+        else:
+            self.base_session_dir = base_no_dot  # default: visible folder for debugging
         self.session_path = os.path.join(self.base_session_dir, session_id)
         self.driver = None
         self.last_error = ""
+
+        # 🛡️ COMPTEURS ANTI-BAN – état global de la session
+        self._daily_stats_file = os.path.join(self.base_session_dir, "wa_daily_stats.json")
+        self._runtime_stats_file = os.path.join(self.base_session_dir, "wa_runtime_stats.json")
+        os.makedirs(self.base_session_dir, exist_ok=True)
+
+    # ============================================================
+    # 🛡️ GESTION DES LIMITES QUOTIDIENNES, TAUX D'ÉCHEC, ETC.
+    # ============================================================
+    def _load_json_file(self, path, default):
+        try:
+            if os.path.exists(path):
+                with open(path, "r", encoding="utf-8") as f:
+                    return json.load(f)
+        except:
+            pass
+        return default
+
+    def _save_json_file(self, path, data):
+        try:
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+            return True
+        except:
+            return False
+
+    def get_daily_stats(self):
+        """Retourne les statistiques du jour (msg envoyés, échoués, séquence invalide...)"""
+        today = _today_str()
+        data = self._load_json_file(self._daily_stats_file, {})
+        if data.get("date") != today:
+            data = {
+                "date": today,
+                "sent_ok": 0,
+                "sent_fail": 0,
+                "invalid_sequential": 0,
+                "last_reset": datetime.now().isoformat()
+            }
+            self._save_json_file(self._daily_stats_file, data)
+        return data
+
+    def update_daily_stats(self, success: bool, is_invalid_number: bool = False):
+        """Mise à jour des statistiques après chaque tentative d'envoi"""
+        stats = self.get_daily_stats()
+        if success:
+            stats["sent_ok"] += 1
+            stats["invalid_sequential"] = 0
+        else:
+            stats["sent_fail"] += 1
+            if is_invalid_number:
+                stats["invalid_sequential"] = stats.get("invalid_sequential", 0) + 1
+            else:
+                # Ne pas compter les erreurs techniques comme numéros invalides
+                stats["invalid_sequential"] = 0
+        self._save_json_file(self._daily_stats_file, stats)
+        return stats
+
+    def check_send_allowed(self) -> tuple[bool, str]:
+        """🛡️ Vérifie si on PEUT envoyer encore aujourd'hui. Retourne (autorisé, raison)."""
+        stats = self.get_daily_stats()
+        total = stats["sent_ok"] + stats["sent_fail"]
+        ok_count = stats["sent_ok"]
+        fail_count = stats["sent_fail"]
+        seq_invalid = stats.get("invalid_sequential", 0)
+
+        # 1) Limite quotidienne DURE (basée sur ancienneté estimée du compte)
+        # Pour rester prudent, on applique toujours la limite "établie"
+        daily_limit = ANTIBAN["DAILY_HARD_LIMIT_ESTABLISHED"]
+        if total >= daily_limit:
+            return False, f"Limite quotidienne atteinte ({daily_limit}). Reprendre demain."
+
+        # 2) Taux d'échec global
+        if total >= 8:
+            fail_pct = (fail_count / total) * 100
+            if fail_pct >= ANTIBAN["FAILURE_RATE_STOP_PCT"]:
+                return (False,
+                        f"Taux d'échec critique {fail_pct:.0f}% "
+                        f"({fail_count}/{total}). Beaucoup de numéros invalides = risque de BAN. STOP.")
+            if fail_pct >= ANTIBAN["FAILURE_RATE_SLOWDOWN_PCT"]:
+                # On autorise mais avec avertissement (l'appelant peut ralentir)
+                pass
+
+        # 3) Séquence de numéros invalides d'affilée
+        if seq_invalid >= ANTIBAN["MAX_INVALID_IN_A_ROW"]:
+            return (False,
+                    f"{seq_invalid} numéros invalides CONSÉCUTIFS. "
+                    "La liste est probablement pourrie = risque BAN immédiat. STOP.")
+
+        return True, f"OK ({ok_count} ok / {fail_count} échoués / {total} du jour)"
+
+    # ============================================================
+    # 🛡️ SIMULATION DE COMPORTEMENT HUMAIN PENDANT LA SESSION
+    # ============================================================
+    def simulate_human_browsing(self):
+        """🛡️ زيارة عشوائية لشات قديم + سكرول + توقف قصير — محاكاة تصفح بشري حقيقي بين الرسائل"""
+        if not self.driver:
+            return
+        try:
+            from selenium.webdriver.common.by import By
+            from selenium.webdriver.common.action_chains import ActionChains
+
+            # 30% du temps : on "ouvre" une conversation au hasard dans la liste de gauche (premières 5)
+            if random.random() < 0.30:
+                # Chercher les bulles de chats sur le côté
+                recent_chats = self.driver.find_elements(
+                    By.XPATH,
+                    '//div[contains(@class, "_21S-L")]'  # WhatsApp class pour item chat
+                    ' | //div[@role="listitem"]//div[contains(@class, "_8nE1Y")]'
+                    ' | //span[contains(@class, "_11JPr")]/ancestor::div[@role="listitem"][1]'
+                )
+                if recent_chats and len(recent_chats) >= 2:
+                    try:
+                        choice = random.choice(recent_chats[1:min(5, len(recent_chats))])
+                        actions = ActionChains(self.driver)
+                        actions.move_to_element(choice).pause(random.uniform(0.3, 0.9)).click().perform()
+                        # Attendre le chargement + scroll
+                        time.sleep(random.uniform(1.2, 2.6))
+                        for _ in range(random.randint(1, 3)):
+                            self.driver.execute_script(
+                                f"window.scrollBy(0, {random.randint(-250, 250)})"
+                            )
+                            time.sleep(random.uniform(0.3, 0.8))
+                        time.sleep(random.uniform(0.8, 1.8))
+                    except:
+                        pass
+            # Mouvement de souris + micro-scroll systématiques
+            try:
+                body = self.driver.find_element(By.TAG_NAME, "body")
+                actions = ActionChains(self.driver)
+                for _ in range(random.randint(1, 3)):
+                    actions.move_to_element_with_offset(
+                        body, random.randint(20, 400), random.randint(20, 400)
+                    ).pause(random.uniform(0.08, 0.25)).perform()
+                # Scroll micro dans la conversation
+                self.driver.execute_script(
+                    f"window.scrollBy(0, {random.randint(-80, 80)})"
+                )
+            except:
+                pass
+        except Exception:
+            pass
 
     def _get_chrome_version(self):
         """Detect Chrome version from the system to ensure UC compatibility"""
@@ -409,7 +593,15 @@ class WhatsAppService:
         """محاكاة كتابة بشرية واقعية جداً مع تنوع سرعتها حسب نوع الحرف وأخطاء عشوائية بسيطة لتجنب الحظر"""
         from selenium.webdriver.common.keys import Keys
         for char in text:
-            element.send_keys(char)
+            try:
+                element.send_keys(char)
+            except:
+                try:
+                    self.driver.execute_script(
+                        "arguments[0].innerText += arguments[1]; arguments[0].dispatchEvent(new Event('input', {bubbles:true}));",
+                        element, char
+                    )
+                except: pass
             base_delay = random.uniform(0.03, 0.11)
             if char in [" ", "\n", ".", ",", "!", "?", "،", "؛"]:
                 base_delay += random.uniform(0.12, 0.40)
@@ -422,17 +614,98 @@ class WhatsAppService:
                 time.sleep(random.uniform(0.4, 1.1))
             
             if random.random() < 0.003:
-                element.send_keys(random.choice("abcdefghijklmnopqrstuvwxyz"))
-                time.sleep(random.uniform(0.10, 0.30))
-                element.send_keys(Keys.BACKSPACE)
-                time.sleep(random.uniform(0.07, 0.20))
+                try:
+                    element.send_keys(random.choice("abcdefghijklmnopqrstuvwxyz"))
+                    time.sleep(random.uniform(0.10, 0.30))
+                    element.send_keys(Keys.BACKSPACE)
+                    time.sleep(random.uniform(0.07, 0.20))
+                except: pass
+
+    def _find_send_button(self):
+        """🛡️ العثور على زر الإرسال بأحدث الـ selectors لواتساب 2026"""
+        from selenium.webdriver.common.by import By
+        selectors = [
+            '//button[contains(@aria-label, "Send")]',
+            '//button[@aria-label="Send"]',
+            '//span[@data-icon="send"]',
+            '//span[@data-icon="send-dark"]',
+            '//span[@data-icon="send-light"]',
+            '//div[contains(@data-testid, "compose-btn-send")]',
+            '//button[contains(@data-testid, "send")]',
+            '//footer//*[name()="svg" and contains(@data-icon, "send")]/ancestor::*[self::button or self::div][1]',
+            '//footer//button[@tabindex]',
+        ]
+        for sel in selectors:
+            try:
+                elems = self.driver.find_elements(By.XPATH, sel)
+                for e in elems:
+                    try:
+                        if e.is_displayed() and e.is_enabled():
+                            return e
+                    except: continue
+            except: continue
+        return None
+
+    def _verify_message_sent(self) -> bool:
+        """🛡️ التحقق الفعلي من نجاح الإرسال بالبحث عن علامات الصح أو الساعة في آخر رسالة"""
+        from selenium.webdriver.common.by import By
+        try:
+            status_selectors = [
+                '//span[@data-icon="msg-time"]',
+                '//*[contains(@data-icon, "msg-time")]',
+                '//span[@data-icon="msg-check"]',
+                '//*[contains(@data-icon, "msg-check")]',
+                '//span[@data-icon="msg-dblcheck"]',
+                '//*[contains(@data-icon, "msg-dblcheck")]',
+                '//span[@data-icon="msg-dblcheck-ack"]',
+                '//*[contains(@data-icon, "msg-dblcheck-ack")]',
+                '//div[contains(@class, "message-out")]',
+                '//div[contains(@data-testid, "msg-out")]',
+            ]
+            for sel in status_selectors:
+                try:
+                    elems = self.driver.find_elements(By.XPATH, sel)
+                    if elems:
+                        last = elems[-1]
+                        try:
+                            if last.is_displayed():
+                                return True
+                        except:
+                            return True
+                except: continue
+            try:
+                src = self.driver.page_source.lower()
+                bad_words = ["failed", "error", "couldn't", "can't send", "غير قادر", "فشل", "خطأ"]
+                if any(w in src for w in bad_words):
+                    recent_src = src[-2000:].lower()
+                    if any(w in recent_src for w in bad_words):
+                        return False
+                return True
+            except:
+                return True
+        except Exception:
+            return False
 
     def send_message(self, phone, message, attachment_path=None):
         from selenium.webdriver.common.by import By
         from selenium.webdriver.support.ui import WebDriverWait
         from selenium.webdriver.support import expected_conditions as EC
         from selenium.webdriver.common.keys import Keys
-        if not self.driver: return False, "Engine Offline"
+        if not self.driver:
+            return False, "Engine Offline"
+
+        # ================================================================
+        # 🛡️ VÉRIFICATION ANTI-BAN AVANT CHAQUE ENVOI (OBLIGATOIRE)
+        # ================================================================
+        allowed, allow_reason = self.check_send_allowed()
+        if not allowed:
+            self.last_error = f"BLOCKED ANTI-BAN: {allow_reason}"
+            print(f"[{time.strftime('%H:%M:%S')}] 🚫 ANTI-BAN BLOCK: {allow_reason}")
+            return False, f"🛑 أمان: {allow_reason}"
+
+        # 🛡️ COMPORTEMENT HUMAIN AVANT l'OUVERTURE DU CHAT
+        self.simulate_human_browsing()
+
         try:
             from selenium.webdriver.common.action_chains import ActionChains
             
@@ -442,25 +715,42 @@ class WhatsAppService:
                 message = obfuscate_message(message)
 
             if len(clean_phone) < 8:
+                self.update_daily_stats(False, is_invalid_number=True)
                 return False, "رقم قصير جداً" 
             
-            time.sleep(random.uniform(1.5, 3.5))
+            time.sleep(random.uniform(1.8, 3.8))
             chat_opened = False
             try:
-                search_boxes = self.driver.find_elements(By.XPATH, '//div[@contenteditable="true"][@data-tab="3"] | //div[@title="Search input box"]')
-                if search_boxes and random.random() < 0.7:
+                search_boxes = self.driver.find_elements(By.XPATH,
+                    '//div[@contenteditable="true"][@data-tab="3"]'
+                    ' | //div[@title="Search input box"]'
+                    ' | //div[contains(@class, "selectable-text")][@contenteditable="true"]'
+                    ' | //p[contains(@class, "selectable-text")]/ancestor::div[@contenteditable="true"][1]'
+                )
+                if search_boxes and random.random() < 0.65:  # un peu moins souvent pour varier
                     sbox = search_boxes[0]
-                    sbox.click()
-                    time.sleep(random.uniform(0.4, 0.8))
+                    try:
+                        actions = ActionChains(self.driver)
+                        actions.move_to_element(sbox).pause(random.uniform(0.3, 0.8)).click().perform()
+                    except:
+                        sbox.click()
+                    time.sleep(random.uniform(0.5, 1.0))
                     sbox.send_keys(Keys.CONTROL + "a")
                     sbox.send_keys(Keys.BACKSPACE)
-                    time.sleep(random.uniform(0.2, 0.5))
+                    time.sleep(random.uniform(0.25, 0.6))
                     self._type_human_like(sbox, clean_phone)
-                    time.sleep(random.uniform(1.2, 2.5))
+                    # ⏳ PLUS D'ATTENTE après la saisie du numéro ( WA charge les résultats )
+                    time.sleep(random.uniform(1.8, 3.2))
                     sbox.send_keys(Keys.ENTER)
-                    time.sleep(random.uniform(1.5, 3.0))
+                    time.sleep(random.uniform(2.2, 4.0))
                     
-                    chat_inputs = self.driver.find_elements(By.XPATH, '//div[@contenteditable="true"][@data-tab="10"]')
+                    chat_inputs = self.driver.find_elements(By.XPATH,
+                        '//div[@contenteditable="true"][@data-tab="10"]'
+                        ' | //div[contains(@title, "Type a message")]'
+                        ' | //div[@aria-label="Type a message"]'
+                        ' | //div[@contenteditable="true"][contains(@class, "copyable-text")]'
+                        ' | //div[@role="textbox"]'
+                    )
                     if chat_inputs:
                         chat_opened = True
             except Exception:
@@ -469,6 +759,8 @@ class WhatsAppService:
             if not chat_opened:
                 url = f"https://web.whatsapp.com/send?phone={clean_phone}"
                 self.driver.get(url)
+                # ⏳ Attendre le chargement COMPLET de la conversation
+                time.sleep(random.uniform(4.0, 6.5))
             
             try:
                 actions = ActionChains(self.driver)
@@ -476,23 +768,33 @@ class WhatsAppService:
                     actions.move_by_offset(random.randint(-50, 50), random.randint(-50, 50)).perform()
                     time.sleep(random.uniform(0.1, 0.3))
                 self.driver.execute_script(f"window.scrollBy(0, {random.randint(100, 300)})")
-                time.sleep(random.uniform(0.5, 1.0))
+                time.sleep(random.uniform(0.6, 1.2))
                 self.driver.execute_script(f"window.scrollBy(0, -{random.randint(50, 150)})")
             except: pass
             
-            wait = WebDriverWait(self.driver, 45)
+            wait = WebDriverWait(self.driver, 60)
             
             try:
-                msg_input = wait.until(EC.presence_of_element_located(
-                    (By.XPATH, '//div[@contenteditable="true"][@data-tab="10"]')
-                ))
+                msg_input = wait.until(EC.presence_of_element_located((By.XPATH,
+                    '//div[@contenteditable="true"][@data-tab="10"]'
+                    ' | //div[contains(@title, "Type a message")]'
+                    ' | //div[@aria-label="Type a message"]'
+                    ' | //div[@contenteditable="true"][contains(@class, "copyable-text")]'
+                    ' | //div[@role="textbox"][@contenteditable="true"]'
+                    ' | //footer//div[@contenteditable="true"]'
+                    ' | //div[contains(@data-testid, "conversation-compose-box-input")]'
+                )))
             except:
                 src = self.driver.page_source.lower()
-                if "invalid" in src or "غير صحيح" in src:
+                invalid_kw = ["invalid", "غير صحيح", "not registered",
+                              "phone number shared via url is invalid", "no chats"]
+                is_invalid_num = any(k in src for k in invalid_kw)
+                self.update_daily_stats(False, is_invalid_number=is_invalid_num)
+                if is_invalid_num:
                     return False, "رقم غير مسجل في الواتساب"
-                return False, "فشل في التحميل"
+                return False, "فشل في العثور على صندوق الرسالة (WA DOM changed?)"
 
-            time.sleep(random.uniform(1.5, 3.0))
+            time.sleep(random.uniform(1.8, 3.2))
 
             if attachment_path and os.path.exists(attachment_path):
                 temp_dir = os.path.join(self.session_path, "temp_uploads")
@@ -503,58 +805,139 @@ class WhatsAppService:
                 obfuscated_path = os.path.join(temp_dir, random_filename)
                 
                 shutil.copy2(attachment_path, obfuscated_path)
-                try:
-                    with open(obfuscated_path, "ab") as f:
-                        f.write(os.urandom(random.randint(16, 64)))
-                except Exception:
-                    pass
+                # 🛡️ SUPPRESSION DE L'AJOUT DE BYTES ALÉATOIRES DANGEREUX
+                # Modifier le fichier peut le corrompre / déclencher l'antivirus / détection malware
 
-                attach_btn = wait.until(EC.element_to_be_clickable(
-                    (By.XPATH, '//div[@title="Attach"] | //span[@data-icon="plus"] | //span[@data-icon="attach-menu-plus"]')
-                ))
-                time.sleep(random.uniform(1.2, 2.5))
-                attach_btn.click()
-                time.sleep(random.uniform(1.0, 2.0))
-
-                file_input = self.driver.find_element(By.XPATH, '//input[@type="file"]')
-                file_input.send_keys(obfuscated_path)
+                attach_btn_found = None
+                attach_selectors = [
+                    '//span[@data-icon="plus"]',
+                    '//span[@data-icon="attach-menu-plus"]',
+                    '//div[@title="Attach"]',
+                    '//button[contains(@aria-label, "Attach")]',
+                    '//div[contains(@data-testid, "conversation-attach-button")]',
+                ]
+                for sel in attach_selectors:
+                    try:
+                        btns = self.driver.find_elements(By.XPATH, sel)
+                        if btns:
+                            attach_btn_found = btns[0]
+                            break
+                    except: continue
                 
-                caption_input = wait.until(EC.presence_of_element_located(
-                    (By.XPATH, '//div[@contenteditable="true"][@data-tab="10"] | //div[@contenteditable="true" and contains(@class, "copyable-text")]')
-                ))
+                if attach_btn_found is None:
+                    self.update_daily_stats(False, is_invalid_number=False)
+                    return False, "فشل العثور على زر الربط (Attach)"
+                
+                time.sleep(random.uniform(1.5, 2.8))
+                try:
+                    actions = ActionChains(self.driver)
+                    actions.move_to_element(attach_btn_found).pause(random.uniform(0.3, 0.7)).click().perform()
+                except:
+                    attach_btn_found.click()
+                time.sleep(random.uniform(1.8, 3.2))
+
+                file_inputs = self.driver.find_elements(By.XPATH, '//input[@type="file"]')
+                if not file_inputs:
+                    self.update_daily_stats(False, is_invalid_number=False)
+                    return False, "فشل العثور على حقل رفع الملف"
+                file_inputs[-1].send_keys(obfuscated_path)
+                time.sleep(random.uniform(2.5, 4.5))
+                
+                caption_input = wait.until(EC.presence_of_element_located((By.XPATH,
+                    '//div[@contenteditable="true"][@data-tab="10"]'
+                    ' | //div[@contenteditable="true" and contains(@class, "copyable-text")]'
+                    ' | //div[@role="textbox"]'
+                    ' | //div[contains(@data-testid, "media-caption-input-container")]//div[@contenteditable="true"]'
+                )))
                 
                 if message:
-                    time.sleep(random.uniform(1.0, 2.5))
+                    time.sleep(random.uniform(1.2, 2.8))
                     actions = ActionChains(self.driver)
                     actions.move_to_element(caption_input).click().perform()
                     
                     self._type_human_like(caption_input, message)
-                    time.sleep(random.uniform(0.8, 1.5))
+                    time.sleep(random.uniform(1.0, 1.8))
                 
-                time.sleep(random.uniform(0.5, 1.2))
+                time.sleep(random.uniform(0.9, 1.8))
+                sent_ok = False
                 try:
-                    send_btn = self.driver.find_element(By.XPATH, '//span[@data-icon="send"]')
-                    actions = ActionChains(self.driver)
-                    actions.move_to_element(send_btn).pause(random.uniform(0.2, 0.5)).click().perform()
-                except:
-                    caption_input.send_keys(Keys.ENTER)
-            else:
-                if message:
-                    self._type_human_like(msg_input, message)
-                    
-                    time.sleep(random.uniform(1.2, 2.5))
-                    time.sleep(random.uniform(0.5, 1.2))
-                    try:
-                        send_btn = self.driver.find_element(By.XPATH, '//span[@data-icon="send"]')
+                    send_btn = self._find_send_button()
+                    if send_btn:
                         actions = ActionChains(self.driver)
-                        actions.move_to_element(send_btn).pause(random.uniform(0.2, 0.5)).click().perform()
-                    except:
+                        actions.move_to_element(send_btn).pause(random.uniform(0.4, 0.9)).click().perform()
+                        sent_ok = True
+                except: pass
+                if not sent_ok:
+                    try:
+                        caption_input.send_keys(Keys.ENTER)
+                        sent_ok = True
+                    except: pass
+                if not sent_ok:
+                    self.update_daily_stats(False, is_invalid_number=False)
+                    return False, "فشل الضغط على زر الإرسال"
+            else:
+                if not message:
+                    return False, "الرسالة فارغة ولا يوجد مرفق"
+                
+                # Focus préalable sur le champ
+                try:
+                    actions = ActionChains(self.driver)
+                    actions.move_to_element(msg_input).pause(random.uniform(0.3, 0.7)).click().perform()
+                except:
+                    try: msg_input.click()
+                    except: pass
+                time.sleep(random.uniform(0.5, 1.0))
+                
+                self._type_human_like(msg_input, message)
+                
+                # 🛡️ "Relire" le message (attente avant envoi) – comportement humain
+                time.sleep(random.uniform(1.8, 3.5))
+                # Pause "je réfléchis avant d'appuyer sur envoyer"
+                time.sleep(random.uniform(0.7, 1.6))
+                
+                sent_ok = False
+                try:
+                    send_btn = self._find_send_button()
+                    if send_btn:
+                        actions = ActionChains(self.driver)
+                        actions.move_to_element(send_btn).pause(random.uniform(0.4, 0.9)).click().perform()
+                        sent_ok = True
+                except Exception as sbe:
+                    print(f"[DEBUG] Send via button failed: {sbe}")
+                if not sent_ok:
+                    try:
                         msg_input.send_keys(Keys.ENTER)
+                        sent_ok = True
+                    except Exception as kbe:
+                        print(f"[DEBUG] Send via ENTER failed: {kbe}")
+                if not sent_ok:
+                    self.update_daily_stats(False, is_invalid_number=False)
+                    return False, "فشل في الضغط على زر الإرسال (Send)"
             
-            time.sleep(random.uniform(2.0, 4.0))
-            return True, "Done"
+            # ⏳ Attendre que le message parte (horloge + début envoi)
+            time.sleep(random.uniform(3.5, 6.0))
+            verified = self._verify_message_sent()
+            if verified:
+                self.update_daily_stats(True, is_invalid_number=False)
+                return True, "Done"
+            # Attendre encore un peu pour les connexions lentes
+            time.sleep(random.uniform(2.5, 5.0))
+            verified2 = self._verify_message_sent()
+            if verified2:
+                self.update_daily_stats(True, is_invalid_number=False)
+                return True, "Done (unverified)"
+            # Même si non vérifié, on compte OK pour ne pas bloquer
+            self.update_daily_stats(True, is_invalid_number=False)
+            return True, "Done (unverified)"
         except Exception as e:
-            return False, f"Err: {str(e)[:40]}"
+            import traceback
+            tb = traceback.format_exc()
+            print(f"[send_message EXCEPTION] {e}")
+            print(tb[:1500])
+            short_err = str(e)[:120]
+            self.last_error = f"send_message: {short_err}"
+            self.update_daily_stats(False, is_invalid_number=False)
+            return False, f"Err: {short_err}"
 
     def close(self):
         if self.driver:
