@@ -193,14 +193,16 @@ def run_worker():
                 if wa is None:
                     wa = WhatsAppService()
 
-                # 🛡️ Worker = BACKGROUND → headless OBLIGATOIRE par défaut (évite crash sans écran)
+                # 🛡️ Worker headless mode:
+                # - على بيئة السحابة (Linux): headless إلزامي
+                # - على Windows المحلي: headless=False لاستعادة الجلسة بشكل صحيح
                 is_cloud_env = ("/mount/" in BASE_DIR.replace("\\", "/")
                                 or os.path.exists("/mount")
                                 or (not os.environ.get("DISPLAY", "") and os.name != "nt"))
-                run_headless = True
+                run_headless = is_cloud_env  # Windows local = False, Cloud Linux = True
                 driver_ok, driver_msg = wa.start_driver(headless=run_headless, force_clean=False)
                 if not driver_ok:
-                    # Retry avec la valeur opposée (rarement nécessaire)
+                    # Retry avec la valeur opposée
                     print(f"[{time.strftime('%H:%M:%S')}] ⚠️  Headless={run_headless} échoué, retry avec {not run_headless}...")
                     if wa:
                         try: wa.close()

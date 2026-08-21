@@ -871,14 +871,9 @@ def render_whatsapp_page():
                     st.rerun()
             
         # Consolidate Pending Targets for the rest of the application
-        # Only recalculate if not currently running to avoid state issues
-        if not st.session_state.wa_running:
-            final_targets = [trg for trg in st.session_state.wa_review_targets if not trg['is_sent']]
-        else:
-            # Use active targets during sending to maintain consistency
-            final_targets = st.session_state.get('wa_active_targets', [])
+        final_targets = [trg for trg in st.session_state.wa_review_targets if not trg['is_sent']]
 
-        
+
         # LTR for English messages
         st.markdown("""
         <style>
@@ -1096,6 +1091,12 @@ HR Manager"""
         worker_alive  = mgr.is_worker_alive()
         is_sending    = worker_alive and worker_status == "sending"
 
+        # 🛠️ إصلاح: إعادة ضبط wa_running تلقائياً إذا كان العامل متوقفاً أو في حالة خطأ
+        # هذا يمنع مشكلة "إرسال (0)" عند عودة المستخدم بعد انتهاء/فشل العامل
+        if st.session_state.wa_running and not is_sending:
+            if worker_status in ("stopped", "error", "done", "idle", "not_started") or not worker_alive:
+                st.session_state.wa_running = False
+
         # تحديث سجلات الإرسال من العامل الخلفي
         bg_logs = mgr.get_logs()
         if bg_logs:
@@ -1247,7 +1248,29 @@ HR Manager"""
             st.session_state.wa_done = True
 
         elif worker_status == "error":
-            st.error("❌ " + worker_state.get("error", "خطأ في الإرسال"))
+            err_msg = worker_state.get("error", "خطأ في الإرسال")
+            st.error("❌ " + err_msg)
+            if "لم يتم الاتصال" in err_msg or "5 دقائق" in err_msg:
+                st.warning("⚠️ " + ("العامل الخلفي لم يتمكن من الاتصال بواتساب. تأكد من الاتصال أعلاه ثم اضغط 'مسح الخطأ'." if is_ar else "Background worker could not connect to WhatsApp. Please connect WhatsApp above then click 'Clear Error'."))
+            err_c1, err_c2 = st.columns(2)
+            with err_c1:
+                if st.button("🔄 " + ("مسح الخطأ وإعادة المحاولة" if is_ar else "Clear Error & Retry"), type="primary", key="clear_error_btn"):
+                    import json as _json
+                    try:
+                        _state_path = os.path.join(os.getcwd(), "wa_worker_state.json")
+                        with open(_state_path, "w", encoding="utf-8") as _f:
+                            _json.dump({"status": "idle", "pid": None, "updated_at": "", "current_idx": 0, "total": 0, "countdown": 0, "countdown_type": "normal", "error": None}, _f, ensure_ascii=False, indent=2)
+                    except Exception:
+                        pass
+                    st.session_state.wa_running = False
+                    st.session_state.wa_done = False
+                    st.toast("✅ " + ("تم مسح الخطأ. يمكنك المحاولة من جديد." if is_ar else "Error cleared. You can try again."))
+                    st.rerun()
+            with err_c2:
+                if st.button("🛑 " + ("إيقاف العامل" if is_ar else "Stop Worker"), key="force_stop_err_btn"):
+                    mgr.stop_worker()
+                    st.session_state.wa_running = False
+                    st.rerun()
 
         elif worker_status == "awaiting_login":
             st.warning("📱 " + ("يرجى مسح رمز QR من واتساب ثم الضغط تحقق" if is_ar else "Please scan QR code from WhatsApp then click Verify"))
