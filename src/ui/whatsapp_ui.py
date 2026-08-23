@@ -1084,196 +1084,187 @@ HR Manager"""
             st.session_state.wa_done = False
 
         # ══════════════════════════════════════════════════════════
-        # 🚀 وضع الإرسال الخلفي - يعمل حتى بعد إغلاق المتصفح
+        # 🚀 أزرار الإرسال / الإيقاف
         # ══════════════════════════════════════════════════════════
-        worker_state = mgr.get_state()
-        worker_status = worker_state.get("status", "not_started")
-        worker_alive  = mgr.is_worker_alive()
-        is_sending    = worker_alive and worker_status == "sending"
-
-        # 🛠️ إصلاح: إعادة ضبط wa_running تلقائياً إذا كان العامل متوقفاً أو في حالة خطأ
-        # هذا يمنع مشكلة "إرسال (0)" عند عودة المستخدم بعد انتهاء/فشل العامل
-        if st.session_state.wa_running and not is_sending:
-            if worker_status in ("stopped", "error", "done", "idle", "not_started") or not worker_alive:
-                st.session_state.wa_running = False
-
-        # تحديث سجلات الإرسال من العامل الخلفي
-        bg_logs = mgr.get_logs()
-        if bg_logs:
-            # دمج السجلات الجديدة فقط
-            existing_phones_times = {(e.get('phone',''), e.get('time','')) for e in st.session_state.wa_logs if isinstance(e, dict)}
-            for entry in bg_logs:
-                key = (entry.get('phone',''), entry.get('time',''))
-                if key not in existing_phones_times:
-                    st.session_state.wa_logs.append(entry)
-                    existing_phones_times.add(key)
-
-        # ─── أزرار الإرسال / الإيقاف ───
         btn1, btn2, btn3 = st.columns([1, 1, 2])
         with btn1:
-            if is_sending:
-                if st.button(lbl['stop'], type="primary", width='stretch', key="bg_stop_btn"):
-                    mgr.stop_worker()
+            if st.session_state.get('wa_running', False):
+                if st.button(lbl['stop'], type="primary", width='stretch', key="wa_stop_btn"):
                     st.session_state.wa_running = False
+                    if st.session_state.get('wa_temp_path') and os.path.exists(st.session_state.wa_temp_path):
+                        try: os.remove(st.session_state.wa_temp_path)
+                        except: pass
                     st.toast("🛑 " + ("تم إيقاف الإرسال" if is_ar else "Sending stopped"))
                     st.rerun()
             else:
-                has_valid_msg = any(msg.strip() != "" for msg in st.session_state.wa_messages)
+                has_valid_msg = any(msg.strip() != "" for msg in st.session_state.wa_messages) or st.session_state.get('wa_smart_mode', False)
                 ready = len(final_targets) > 0 and has_valid_msg
 
-                if worker_status == "done" and current_fp == st.session_state.get('wa_sent_fingerprint', ''):
+                if st.session_state.get('wa_done', False) and current_fp == st.session_state.get('wa_sent_fingerprint', ''):
                     st.button(lbl['sent_done'], disabled=True, width='stretch')
                 else:
-                    if st.button(lbl['send'].format(len(final_targets)), disabled=not ready, width='stretch', type="primary", key="bg_send_btn"):
-                        # ── حفظ المرفق في ملف مؤقت ──
-                        # 🛡️ نفس منطق WhatsAppService: يدعم whatsapp_session و .whatsapp_session
-                        base_no_dot = os.path.join(os.getcwd(), "whatsapp_session")
-                        base_with_dot = os.path.join(os.getcwd(), ".whatsapp_session")
-                        if os.path.exists(base_no_dot):
-                            temp_dir = base_no_dot
-                        elif os.path.exists(base_with_dot):
-                            temp_dir = base_with_dot
+                    if st.button(lbl['send'].format(len(final_targets)), disabled=not ready, width='stretch', type="primary", key="wa_send_btn"):
+                        # Check WhatsApp connection
+                        wa_stat = st.session_state.wa_service.get_status() if st.session_state.wa_service else "Stopped"
+                        if wa_stat != "Connected":
+                            st.error("⚠️ " + ("يرجى تشغيل محرك واتساب ومسح الباركود أولاً للاتصال" if is_ar else "Please start WhatsApp engine and scan QR first to connect"))
                         else:
-                            temp_dir = base_no_dot
-                        os.makedirs(temp_dir, exist_ok=True)
+                            temp_path = None
+                            if attachment:
+                                import tempfile
+                                suffix = os.path.splitext(attachment.name)[1]
+                                base_no_dot = os.path.join(os.getcwd(), "whatsapp_session")
+                                base_with_dot = os.path.join(os.getcwd(), ".whatsapp_session")
+                                temp_dir = base_no_dot if os.path.exists(base_no_dot) else (base_with_dot if os.path.exists(base_with_dot) else base_no_dot)
+                                os.makedirs(temp_dir, exist_ok=True)
+                                try:
+                                    t_file = tempfile.NamedTemporaryFile(delete=False, suffix=suffix, dir=temp_dir)
+                                    t_file.write(attachment.getvalue())
+                                    t_file.close()
+                                    temp_path = t_file.name
+                                    st.session_state.wa_temp_path = temp_path
+                                except Exception as att_err:
+                                    st.error(f"❌ {'فشل حفظ الملف المرفق: ' if is_ar else 'Failed to save attachment: '}{str(att_err)}")
+                                    temp_path = None
 
-                        temp_path = None
-                        if attachment:
-                            import tempfile
-                            suffix = os.path.splitext(attachment.name)[1]
-                            try:
-                                t_file = tempfile.NamedTemporaryFile(delete=False, suffix=suffix, dir=temp_dir)
-                                t_file.write(attachment.getvalue())
-                                t_file.close()
-                                temp_path = t_file.name
-                                st.session_state.wa_temp_path = temp_path
-                            except Exception as att_err:
-                                st.error(f"❌ {'فشل حفظ الملف المرفق: ' if is_ar else 'Failed to save attachment: '}{str(att_err)}")
-                                temp_path = None
+                            st.session_state.wa_running = True
+                            st.session_state.wa_idx = 0
+                            st.session_state.wa_done = False
+                            st.session_state.wa_sent_fingerprint = current_fp
+                            st.rerun()
 
-                        # ── تشغيل العامل الخلفي ──
-                        mgr.start_worker()
-                        time.sleep(1.5)
+        # ══════════════════════════════════════════════════════════
+        # 🚀 حلقة الإرسال والعداد التنازلي المباشر (Live Sending Loop & Countdown)
+        # ══════════════════════════════════════════════════════════
+        if st.session_state.get('wa_running', False) and final_targets:
+            total_targets = len(final_targets)
+            curr_i = st.session_state.get('wa_idx', 0)
 
-                        # ── أرسل الوظيفة ──
-                        job_id = mgr.send_job(
-                            targets            = final_targets,
-                            messages           = st.session_state.wa_messages,
-                            delay              = delay,
-                            batch_size         = int(batch_size),
-                            batch_delay        = int(batch_delay),
-                            is_smart           = bool(st.session_state.get('wa_smart_mode', False)),
-                            custom_job         = st.session_state.get('wa_custom_job_val', ''),
-                            attachment_path    = temp_path,
-                            msg_switch_threshold = int(msg_switch_threshold),
-                            start_from         = 0
-                        )
-                        st.session_state.wa_running = True
-                        st.session_state.wa_done = False
-                        st.session_state.wa_sent_fingerprint = current_fp
-                        st.session_state.wa_active_job_id = job_id
-                        st.toast("🚀 " + ("بدأ الإرسال في الخلفية! يمكنك إغلاق المتصفح" if is_ar else "Sending started in background! You can close the browser"), icon="✅")
+            if curr_i < total_targets:
+                trg = final_targets[curr_i]
+                p = trg.get('phone', '')
+                n = trg.get('name', 'Client')
+                v = trg.get('cv', '')
+
+                # 1. Progress Bar & Live Status Card
+                sent_pct = (curr_i / total_targets * 100) if total_targets > 0 else 0
+                st.progress(min(1.0, (curr_i + 1) / total_targets))
+
+                st.markdown(f"""
+                <div style="background: rgba(0, 255, 100, 0.05); padding: 16px 20px; border-radius: 14px; border: 1.5px solid rgba(0, 255, 100, 0.3); margin: 12px 0; box-shadow: 0 0 15px rgba(0, 255, 100, 0.1);">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                        <span style="color: #00FF88; font-weight: 700; font-size: 1.05rem;">📤 {'جاري إرسال الرسالة' if is_ar else 'Sending Message'}: {curr_i + 1} / {total_targets}</span>
+                        <span style="color: #D4AF37; font-weight: 700; font-size: 1.05rem;">⌛ {'متبقٍ' if is_ar else 'Remaining'}: {total_targets - (curr_i + 1)}</span>
+                    </div>
+                    <div style="color: #FFFFFF; font-size: 0.95rem;">
+                        👤 <strong>{n}</strong> · 📱 <span style="font-family: monospace; color: #00FF88;">{p}</span>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+
+                # 2. Message Generation
+                if st.session_state.get('wa_smart_mode', False):
+                    final_msg = generate_smart_message(n, v, custom_job=st.session_state.get('wa_custom_job_val', ''))
+                else:
+                    msg_idx = (curr_i // max(1, int(msg_switch_threshold))) % len(st.session_state.wa_messages)
+                    msg_template = st.session_state.wa_messages[msg_idx]
+                    
+                    final_msg = msg_template
+                    for k, val_k in trg.items():
+                        final_msg = final_msg.replace("{" + str(k) + "}", str(val_k))
+                    final_msg = final_msg.replace("{Name}", n).replace("{name}", n).replace("{الاسم}", n)
+                    final_msg = final_msg.replace("{CV}", v).replace("{cv}", v).replace("{السيرة}", v)
+                    import re
+                    final_msg = re.sub(r'\n{3,}', '\n\n', final_msg).strip()
+
+                temp_path = st.session_state.get('wa_temp_path')
+
+                # 3. Send Message via WhatsApp Service
+                with st.spinner(f"🚀 {'جاري إرسال الرسالة إلى' if is_ar else 'Sending message to'} {n} ({p})..."):
+                    ok, log_msg = st.session_state.wa_service.send_message(p, final_msg, attachment_path=temp_path)
+
+                # 4. Record Log
+                entry = {
+                    "idx": curr_i + 1,
+                    "name": n,
+                    "phone": p,
+                    "status": log_msg if ok else f"فشل ({log_msg})",
+                    "ok": ok,
+                    "time": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                }
+                st.session_state.wa_logs.append(entry)
+                if ok:
+                    st.session_state.wa_history.add(p)
+                    save_wa_history(st.session_state.wa_history)
+                    for r_i, r_trg in enumerate(st.session_state.wa_review_targets):
+                        if r_trg.get('phone') == p:
+                            st.session_state.wa_review_targets[r_i]['is_sent'] = True
+                            break
+
+                # 5. Move to next index
+                st.session_state.wa_idx += 1
+
+                # 6. Check if completed
+                if st.session_state.wa_idx >= total_targets:
+                    st.session_state.wa_running = False
+                    st.session_state.wa_done = True
+                    if temp_path and os.path.exists(temp_path):
+                        try: os.remove(temp_path)
+                        except: pass
+                    st.balloons()
+                    st.success("🎉 " + ("اكتمل إرسال جميع الرسائل بنجاح!" if is_ar else "All messages sent successfully!"))
+                    time.sleep(1)
+                    st.rerun()
+                else:
+                    # 7. ⏱️ LIVE COUNTDOWN TIMER BETWEEN MESSAGES / BATCHES
+                    is_batch_break = (batch_size > 0 and st.session_state.wa_idx % batch_size == 0)
+                    wait_seconds = batch_delay if is_batch_break else delay
+                    
+                    next_target = final_targets[st.session_state.wa_idx]
+                    next_n = next_target.get('name', 'Client')
+                    next_p = next_target.get('phone', '')
+
+                    c_title = "🛡️ استراحة دفعات بين الرسائل (حماية من الحظر)" if is_batch_break else "⏳ الانتظار قبل إرسال الرسالة التالية"
+                    if not is_ar:
+                        c_title = "🛡️ Batch Break (Anti-Ban Protection)" if is_batch_break else "⏳ Waiting Before Next Message"
+                    c_icon = "🛡️" if is_batch_break else "⏳"
+                    c_border = "rgba(0, 229, 255, 0.4)" if is_batch_break else "rgba(212, 175, 55, 0.4)"
+                    c_bg = "rgba(0, 229, 255, 0.06)" if is_batch_break else "rgba(212, 175, 55, 0.06)"
+                    c_text = "#00E5FF" if is_batch_break else "#D4AF37"
+
+                    countdown_ph = st.empty()
+                    for remaining in range(wait_seconds, 0, -1):
+                        if not st.session_state.get('wa_running', False):
+                            break
+                        m, s = divmod(remaining, 60)
+                        if m > 0:
+                            time_display = f"{m:02d}:{s:02d} دقيقة" if is_ar else f"{m:02d}:{s:02d} min"
+                        else:
+                            time_display = f"{s} ثانية" if is_ar else f"{s} sec"
+
+                        countdown_ph.markdown(f"""
+                        <div style="background: {c_bg}; border: 1.5px solid {c_border}; border-radius: 16px; padding: 20px; text-align: center; margin: 15px 0; box-shadow: 0 0 25px rgba(0,0,0,0.3);">
+                            <div style="color: {c_text}; font-size: 1.15rem; font-weight: 700; margin-bottom: 8px;">
+                                {c_icon} {c_title}
+                            </div>
+                            <div style="font-size: 2.6rem; font-weight: 800; color: #FFFFFF; font-family: 'Courier New', monospace; letter-spacing: 2px; text-shadow: 0 0 15px {c_text};">
+                                {time_display}
+                            </div>
+                            <div style="color: #bbb; font-size: 0.9rem; margin-top: 10px; border-top: 1px solid rgba(255,255,255,0.08); padding-top: 8px;">
+                                👤 {'الرقم التالي' if is_ar else 'Next'}: <strong>{next_n}</strong> · 📱 <span style="font-family: monospace;">{next_p}</span> · ({st.session_state.wa_idx} / {total_targets})
+                            </div>
+                        </div>
+                        """, unsafe_allow_html=True)
+                        time.sleep(1)
+                    
+                    countdown_ph.empty()
+                    if st.session_state.get('wa_running', False):
                         st.rerun()
 
-        # ─── بطاقة الحالة الخلفية ───
-        if is_sending or worker_status in ("starting", "awaiting_login"):
-            w_idx   = worker_state.get("current_idx", 0)
-            w_total = worker_state.get("total", len(final_targets))
-            w_name  = worker_state.get("current_name", "")
-            w_phone = worker_state.get("current_phone", "")
-            countdown = worker_state.get("countdown", 0)
-            countdown_type = worker_state.get("countdown_type", "normal")
-
-            countdown_icons = {
-                "batch_break": "🛡️", "think_break": "🧠",
-                "stealth_break": "🥷", "normal": "⏳"
-            }
-            c_icon = countdown_icons.get(countdown_type, "⏳")
-
-            if countdown > 0:
-                m, s = divmod(countdown, 60)
-                time_str = f"{m}د {s}ث" if is_ar else f"{m}m {s}s"
-                countdown_label = f"{c_icon} {'الانتظار بين الرسائل' if is_ar else 'Waiting'}: {time_str}"
             else:
-                countdown_label = f"📤 {'جاري الإرسال' if is_ar else 'Sending'}..."
-
-            sent_pct = (w_idx / w_total * 100) if w_total > 0 else 0
-
-            st.markdown(f"""
-            <div style="background:rgba(0,255,100,0.05);padding:16px;border-radius:14px;border:1.5px solid rgba(0,255,100,0.25);margin-bottom:12px;">
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-                    <span style="color:#00FF88;font-weight:700;font-size:1.05rem;">✅ {'تم الإرسال' if is_ar else 'Sent'}: {w_idx}</span>
-                    <span style="color:#D4AF37;font-weight:700;font-size:1.05rem;">⌛ {'متبقٍ' if is_ar else 'Remaining'}: {w_total - w_idx}</span>
-                </div>
-                <div style="background:rgba(255,255,255,0.06);border-radius:8px;height:8px;margin-bottom:10px;overflow:hidden;">
-                    <div style="background:linear-gradient(90deg,#00FF88,#D4AF37);height:100%;width:{sent_pct:.1f}%;transition:width 0.5s;"></div>
-                </div>
-                <div style="color:#aaa;font-size:0.85rem;display:flex;justify-content:space-between;">
-                    <span>👤 {w_name} · 📱 {w_phone}</span>
-                    <span>{countdown_label}</span>
-                </div>
-            </div>
-            <div style="background:rgba(0,180,255,0.08);padding:10px 16px;border-radius:10px;border:1px solid rgba(0,180,255,0.2);text-align:center;margin-bottom:8px;">
-                <span style="color:#00AAFF;font-weight:600;font-size:0.9rem;">
-                    🟢 {'الإرسال يعمل في الخلفية — يمكنك إغلاق هذا التبويب بأمان' if is_ar else 'Sending runs in background — safe to close this tab'}
-                </span>
-            </div>
-            """, unsafe_allow_html=True)
-
-            st.progress(min(1.0, sent_pct / 100))
-
-            # تحديث تلقائي كل 5 ثوان لعرض التقدم
-            st.markdown("""
-            <script>
-            (function(){
-                if(!window.__wa_bg_refresh){
-                    window.__wa_bg_refresh = setInterval(function(){
-                        if(document.hasFocus() || true){
-                            // Trigger a lightweight Streamlit rerun via clicking a hidden element
-                            var btns = window.parent.document.querySelectorAll('button[data-testid="baseButton-secondary"]');
-                        }
-                    }, 5000);
-                }
-            })();
-            </script>
-            """, unsafe_allow_html=True)
-
-            time.sleep(4)
-            st.rerun()
-
-        elif worker_status == "done" and worker_alive:
-            st.success("🎉 " + ("اكتمل الإرسال بنجاح!" if is_ar else "Sending completed successfully!"))
-            st.balloons()
-            st.session_state.wa_running = False
-            st.session_state.wa_done = True
-
-        elif worker_status == "error":
-            err_msg = worker_state.get("error", "خطأ في الإرسال")
-            st.error("❌ " + err_msg)
-            if "لم يتم الاتصال" in err_msg or "5 دقائق" in err_msg:
-                st.warning("⚠️ " + ("العامل الخلفي لم يتمكن من الاتصال بواتساب. تأكد من الاتصال أعلاه ثم اضغط 'مسح الخطأ'." if is_ar else "Background worker could not connect to WhatsApp. Please connect WhatsApp above then click 'Clear Error'."))
-            err_c1, err_c2 = st.columns(2)
-            with err_c1:
-                if st.button("🔄 " + ("مسح الخطأ وإعادة المحاولة" if is_ar else "Clear Error & Retry"), type="primary", key="clear_error_btn"):
-                    import json as _json
-                    try:
-                        _state_path = os.path.join(os.getcwd(), "wa_worker_state.json")
-                        with open(_state_path, "w", encoding="utf-8") as _f:
-                            _json.dump({"status": "idle", "pid": None, "updated_at": "", "current_idx": 0, "total": 0, "countdown": 0, "countdown_type": "normal", "error": None}, _f, ensure_ascii=False, indent=2)
-                    except Exception:
-                        pass
-                    st.session_state.wa_running = False
-                    st.session_state.wa_done = False
-                    st.toast("✅ " + ("تم مسح الخطأ. يمكنك المحاولة من جديد." if is_ar else "Error cleared. You can try again."))
-                    st.rerun()
-            with err_c2:
-                if st.button("🛑 " + ("إيقاف العامل" if is_ar else "Stop Worker"), key="force_stop_err_btn"):
-                    mgr.stop_worker()
-                    st.session_state.wa_running = False
-                    st.rerun()
-
-        elif worker_status == "awaiting_login":
-            st.warning("📱 " + ("يرجى مسح رمز QR من واتساب ثم الضغط تحقق" if is_ar else "Please scan QR code from WhatsApp then click Verify"))
+                st.session_state.wa_running = False
+                st.session_state.wa_done = True
+                st.rerun()
 
         # 📄 Professional 2026 Log Section
         if st.session_state.wa_logs:
