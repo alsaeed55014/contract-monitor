@@ -76,7 +76,9 @@ class TranslationService:
                 result = self._translator.translate(text)
                 if progress_callback:
                     progress_callback(1.0, "✅")
-                return result if result else text
+                if result and not any(err in str(result).lower() for err in ["error 500", "server error", "that's an error", "that’s an error", "translation error", "<html"]):
+                    return result
+                return text
             except Exception as e:
                 logging.warning(f"Translation failed: {e}")
                 return text
@@ -89,7 +91,10 @@ class TranslationService:
         for i, chunk in enumerate(chunks):
             try:
                 result = self._translator.translate(chunk)
-                translated_parts.append(result if result else chunk)
+                if result and not any(err in str(result).lower() for err in ["error 500", "server error", "that's an error", "that’s an error", "translation error", "<html"]):
+                    translated_parts.append(result)
+                else:
+                    translated_parts.append(chunk)
             except Exception as e:
                 logging.warning(f"Chunk {i+1}/{total} failed: {e}")
                 translated_parts.append(chunk)
@@ -152,7 +157,8 @@ class TranslationService:
             indices, combined = chunk_data
             try:
                 translated = self._translator.translate(combined)
-                if not translated: translated = combined
+                if not translated or any(err in str(translated).lower() for err in ["error 500", "server error", "that's an error", "that’s an error", "translation error", "<html"]):
+                    translated = combined
                 
                 if len(indices) == 1:
                     return [(indices[0], translated)]

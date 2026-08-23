@@ -342,17 +342,24 @@ class TranslationManager:
         if not self._is_arabic(word):
             return None
         
+        word_str = str(word).strip()
+        if not re.search(r'[a-zA-Z\u0600-\u06FF]', word_str) or re.match(r'^[\+\d\s\-\(\)\./:,#%*!=@&]+$', word_str):
+            return None
+            
         # Check cache first
-        cache_key = word.strip().lower()
+        cache_key = word_str.lower()
         if cache_key in TranslationManager._google_cache:
-            return TranslationManager._google_cache[cache_key]
+            cached_val = TranslationManager._google_cache[cache_key]
+            if not any(err in str(cached_val).lower() for err in ["error 500", "server error", "that's an error", "that’s an error", "translation error", "<html"]):
+                return cached_val
         
         try:
             translator = GoogleTranslator(source='ar', target='en')
-            result = translator.translate(word)
-            if result and result.lower() != word.lower():
-                TranslationManager._google_cache[cache_key] = result
-                return result
+            result = translator.translate(word_str)
+            if result and result.lower() != word_str.lower():
+                if not any(err in str(result).lower() for err in ["error 500", "server error", "that's an error", "that’s an error", "translation error", "<html"]):
+                    TranslationManager._google_cache[cache_key] = result
+                    return result
         except Exception:
             pass
         return None
@@ -450,35 +457,56 @@ class TranslationManager:
         if not text:
             return ""
 
+        text_str = str(text).strip()
+        if not text_str:
+            return ""
+
+        # Check if text contains no letters (pure digits, phone numbers, dates, times, symbols)
+        if not re.search(r'[a-zA-Z\u0600-\u06FF]', text_str) or re.match(r'^[\+\d\s\-\(\)\./:,#%*!=@&]+$', text_str):
+            return text_str
+
+        # If text is already an error signature, return original without re-translating
+        if any(err in text_str.lower() for err in ["error 500", "server error", "that's an error", "that’s an error", "translation error"]):
+            return text_str
+
         # Global Cache check
-        cache_key = f"{target_lang}_{hashlib.md5(str(text).strip().encode()).hexdigest()}"
+        cache_key = f"{target_lang}_{hashlib.md5(text_str.encode()).hexdigest()}"
         if 'translation_cache' not in st.session_state:
             st.session_state.translation_cache = {}
         
         if cache_key in st.session_state.translation_cache:
-            return st.session_state.translation_cache[cache_key]
+            cached_val = st.session_state.translation_cache[cache_key]
+            if not any(err in str(cached_val).lower() for err in ["error 500", "server error", "that's an error", "that’s an error", "translation error", "<html"]):
+                return cached_val
 
         # Explicit Exceptions (Do not translate to Arabic, keep strictly in English)
         if target_lang == 'ar':
-            lower_val = str(text).strip().lower()
+            lower_val = text_str.lower()
             if any(kw in lower_val for kw in ["aamal", "lebar", "labor"]):
-                st.session_state.translation_cache[cache_key] = text
-                return text
+                st.session_state.translation_cache[cache_key] = text_str
+                return text_str
 
         try:
-            chunks = [text[i:i+4000] for i in range(0, len(text), 4000)]
+            chunks = [text_str[i:i+4000] for i in range(0, len(text_str), 4000)]
             translated_text = ""
             translator = GoogleTranslator(source='auto', target=target_lang)
 
             for chunk in chunks:
-                translated_text += translator.translate(chunk) + "\n"
+                res = translator.translate(chunk)
+                if not res or any(err in str(res).lower() for err in ["error 500", "server error", "that's an error", "that’s an error", "translation error", "<html"]):
+                    return text_str
+                translated_text += res + "\n"
+
+            translated_text = translated_text.strip()
+            if not translated_text:
+                return text_str
 
             # Save to session cache
             st.session_state.translation_cache[cache_key] = translated_text
             return translated_text
 
-        except Exception as e:
-            return f"Translation Error: {str(e)}"
+        except Exception:
+            return text_str
 
     def translate_ui_value(self, val, target_lang='ar'):
         """Bidirectional UI value translation using dictionaries and heuristics."""
@@ -508,8 +536,6 @@ class TranslationManager:
             "jeddah": "جدة",
             "dammam": "الدمام",
             "madinah": "المدينة المنورة",
-            "rizal": "الجنس",
-            "rizal | male": "الجنس | ذكر",
             "filipino": "فلبيني",
             "indian": "هندي",
             "bangladeshi": "بنجلاديشي",

@@ -61,15 +61,24 @@ def auto_translate(val, target_lang='en'):
         return val
     
     val_str = str(val).strip()
-    if not val_str:
+    if not val_str or len(val_str) < 2:
         return val
+        
+    # Skip non-translatable text (numbers, dates, phones, symbols)
+    if not re.search(r'[a-zA-Z\u0600-\u06FF]', val_str) or re.match(r'^[\+\d\s\-\(\)\./:,#%*!=@&]+$', val_str):
+        return val_str
+
+    if any(err in val_str.lower() for err in ["error 500", "server error", "that's an error", "that’s an error", "translation error"]):
+        return val_str
     
     curr_lang = st.session_state.get('lang', 'ar')
     if curr_lang != target_lang:
         return val
         
     has_ar = any('\u0600' <= char <= '\u06FF' for char in val_str)
-    if not has_ar:
+    if not has_ar and target_lang == 'en':
+        return val
+    if has_ar and target_lang == 'ar':
         return val
 
     try:
@@ -83,7 +92,10 @@ def auto_translate(val, target_lang='en'):
             if isinstance(translated, list): translated = translated[0]
             if translated != val_str: return translated
             
-        return st.session_state.tm.translate_full_text(val_str, target_lang=target_lang)
+        res = tm.translate_full_text(val_str, target_lang=target_lang)
+        if res and not any(err in str(res).lower() for err in ["error 500", "server error", "that's an error", "that’s an error", "translation error", "<html"]):
+            return res
+        return val
     except:
         return val
 

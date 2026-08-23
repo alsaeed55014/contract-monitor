@@ -1897,9 +1897,15 @@ div[data-testid="stHorizontalBlock"]:has(.nat-flag-badge) .nat-clear-badge .stBu
 def get_cached_translation(val, target_lang):
     try:
         if not val: return val
+        val_str = str(val).strip()
+        if not re.search(r'[a-zA-Z\u0600-\u06FF]', val_str) or re.match(r'^[\+\d\s\-\(\)\./:,#%*!=@&]+$', val_str):
+            return val_str
         from src.core.translation import TranslationManager
         tm = TranslationManager()
-        return tm.translate_full_text(val, target_lang=target_lang)
+        res = tm.translate_full_text(val_str, target_lang=target_lang)
+        if res and not any(err in str(res).lower() for err in ["error 500", "server error", "that's an error", "that’s an error", "translation error", "<html"]):
+            return res
+        return val_str
     except:
         return val
 
@@ -1913,6 +1919,14 @@ def auto_translate(val, target_lang='en', force_stay_ar=False):
     val_str = str(val).strip()
     if not val_str or len(val_str) < 2:
         return val
+        
+    # Skip translation for numbers, phone numbers, timestamps, dates, symbols
+    if not re.search(r'[a-zA-Z\u0600-\u06FF]', val_str) or re.match(r'^[\+\d\s\-\(\)\./:,#%*!=@&]+$', val_str):
+        return val_str
+
+    # Guard against error strings leaking
+    if any(err in val_str.lower() for err in ["error 500", "server error", "that's an error", "that’s an error", "translation error"]):
+        return val_str
     
     try:
         # Get TM from session state
@@ -1922,19 +1936,31 @@ def auto_translate(val, target_lang='en', force_stay_ar=False):
             st.session_state.tm = TranslationManager()
             tm = st.session_state.tm
         
-        # SPECIAL: If force_stay_ar is True and it's already Arabic, don't translate to EN
+        # Check Arabic and Latin letters
         is_ar = bool(re.search(r'[\u0600-\u06FF]', val_str))
+        has_en = bool(re.search(r'[a-zA-Z]', val_str))
+
         if force_stay_ar and is_ar:
             return val_str
 
-        # Use our new bidirectional UI translator
+        # If target is Arabic and the string already contains Arabic, keep it as is
+        if target_lang == 'ar' and is_ar:
+            return val_str
+
+        # If target is English and the string already contains English without Arabic, keep it as is
+        if target_lang == 'en' and has_en and not is_ar:
+            return val_str
+
+        # Use our bidirectional UI translator
         translated = tm.translate_ui_value(val_str, target_lang)
         if translated != val_str:
             return translated
             
         # Fallback to cached full text translation if allowed and needed
-        if (is_ar and target_lang == 'en') or (not is_ar and target_lang == 'ar'):
-             return get_cached_translation(val_str, target_lang)
+        if (is_ar and target_lang == 'en') or (has_en and target_lang == 'ar'):
+             res = get_cached_translation(val_str, target_lang)
+             if res and not any(err in str(res).lower() for err in ["error 500", "server error", "that's an error", "that’s an error", "translation error", "<html"]):
+                 return res
              
         return val_str
     except:
@@ -5381,11 +5407,21 @@ def render_order_processing_content():
         if not value or str(value).strip().lower() in ["nan", "none", ""]:
             return ""
         
-        # Bidirectional translation based on current UI language
-        disp_val = auto_translate(str(value), target_lang=lang, force_stay_ar=force_ar)
+        val_raw = str(value).strip()
         
-        # Detect if this is a phone/number field for LTR direction
+        # Detect if this is a phone/number/date/time field for LTR direction and skipping translation
         is_phone_field = any(kw in label_text.lower() for kw in ["phone", "mobile", "جوال", "هاتف", "موبايل"])
+        is_numeric_or_date = any(kw in label_text.lower() for kw in ["تاريخ", "date", "وقت", "time", "ساعات", "hours", "راتب", "salary", "عدد", "employees", "يوم", "days", "كفالة"])
+        
+        if is_phone_field or is_numeric_or_date:
+            disp_val = val_raw
+        else:
+            # Bidirectional translation based on current UI language
+            disp_val = auto_translate(val_raw, target_lang=lang, force_stay_ar=force_ar)
+            
+        # Emergency safeguard against error strings leaking into UI
+        if any(err in str(disp_val).lower() for err in ["error 500", "server error", "that's an error", "that’s an error", "translation error"]):
+            disp_val = val_raw
         
         # Explicitly set text alignment and direction for stability across browsers
         cell_direction = 'ltr' if is_phone_field else 'rtl'
