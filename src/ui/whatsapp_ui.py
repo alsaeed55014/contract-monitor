@@ -156,9 +156,11 @@ def render_whatsapp_page():
     mgr: WAWorkerManager = st.session_state.wa_worker_mgr
 
     # للوضع القديم (المتزامن) نبقيه للتوافق
+    # 🛡️ لا نُنشئ خدمة جديدة إذا كان هناك driver نشط — ذلك يُفقد الاتصال
     if 'wa_service' not in st.session_state or st.session_state.wa_service is None:
         st.session_state.wa_service = WhatsAppService()
-    else:
+    elif not getattr(st.session_state.wa_service, 'driver', None):
+        # لا يوجد driver نشط — نتحقق من توافق الـ API فقط
         try:
             import inspect
             sig = inspect.signature(st.session_state.wa_service.send_message)
@@ -166,6 +168,7 @@ def render_whatsapp_page():
                 st.session_state.wa_service = WhatsAppService()
         except Exception:
             st.session_state.wa_service = WhatsAppService()
+    # إذا كان driver نشطاً → نُبقي الكائن كما هو بدون أي تعديل
 
     if 'wa_logs' not in st.session_state: st.session_state.wa_logs = []
     if 'wa_running' not in st.session_state: st.session_state.wa_running = False
@@ -827,48 +830,49 @@ def render_whatsapp_page():
                             st.session_state.wa_upload_key = 'xl_1' if st.session_state.get('wa_upload_key') == 'xl_0' else 'xl_0'
                             st.rerun()
             
-            # Build review targets if data changed or list is empty but data exists
-            if rebuild_review or (not st.session_state.wa_review_targets and (manual_list or st.session_state.wa_data is not None)):
-                new_targets = []
-                seen_in_current_file = set()
-                dups_count = 0
-                
-                # Manual
-                if manual_list:
-                    for n in manual_list:
-                        if n in seen_in_current_file: dups_count += 1; continue 
-                        new_targets.append({'phone': n, 'name': 'Client', 'cv': '', 'is_sent': (n in st.session_state.wa_history)})
-                        seen_in_current_file.add(n)
-                # Excel
-                if st.session_state.wa_data is not None:
-                    df_curr = st.session_state.wa_data
-                    def find_c(keys):
-                        for c in df_curr.columns:
-                            if any(k in str(c).lower() for k in keys): return c
-                        return None
-                    c_name = find_c(["اسم", "name"])
-                    c_phone = find_c(["واتساب", "رقم", "هاتف", "phone", "جوال"])
-                    c_cv = find_c(["سيرة", "cv", "resume", "link"])
+            # 🛡️ Build review targets only when NOT sending — never interrupt the send loop
+            if not st.session_state.get('wa_running', False):
+                if rebuild_review or (not st.session_state.wa_review_targets and (manual_list or st.session_state.wa_data is not None)):
+                    new_targets = []
+                    seen_in_current_file = set()
+                    dups_count = 0
                     
-                    for idx, row in df_curr.iterrows():
-                        raw_p = str(row[c_phone]).strip() if c_phone else ""
-                        phone = format_phone_number(raw_p)
-                        if not phone: phone = format_phone_number("".join(raw_p.split()))
+                    # Manual
+                    if manual_list:
+                        for n in manual_list:
+                            if n in seen_in_current_file: dups_count += 1; continue 
+                            new_targets.append({'phone': n, 'name': 'Client', 'cv': '', 'is_sent': (n in st.session_state.wa_history)})
+                            seen_in_current_file.add(n)
+                    # Excel
+                    if st.session_state.wa_data is not None:
+                        df_curr = st.session_state.wa_data
+                        def find_c(keys):
+                            for c in df_curr.columns:
+                                if any(k in str(c).lower() for k in keys): return c
+                            return None
+                        c_name = find_c(["اسم", "name"])
+                        c_phone = find_c(["واتساب", "رقم", "هاتف", "phone", "جوال"])
+                        c_cv = find_c(["سيرة", "cv", "resume", "link"])
                         
-                        if phone:
-                            if phone in seen_in_current_file: dups_count += 1; continue
-                            target_data = {str(col): str(row[col]).strip() if pd.notna(row[col]) else "" for col in df_curr.columns}
-                            target_data.update({'idx': idx, 'phone': phone, 'is_sent': (phone in st.session_state.wa_history)})
-                            target_data['name'] = str(row[c_name]).strip() if (c_name and pd.notna(row[c_name])) else "عميل"
-                            target_data['cv'] = str(row[c_cv]).strip() if (c_cv and pd.notna(row[c_cv])) else ""
-                            new_targets.append(target_data)
-                            seen_in_current_file.add(phone)
-                
-                if dups_count > 0: st.toast(lbl['dups_removed'].format(dups_count), icon="✂️")
-                if new_targets:
-                    st.session_state.wa_review_targets = new_targets
-                    st.session_state.wa_done = False
-                    st.rerun()
+                        for idx, row in df_curr.iterrows():
+                            raw_p = str(row[c_phone]).strip() if c_phone else ""
+                            phone = format_phone_number(raw_p)
+                            if not phone: phone = format_phone_number("".join(raw_p.split()))
+                            
+                            if phone:
+                                if phone in seen_in_current_file: dups_count += 1; continue
+                                target_data = {str(col): str(row[col]).strip() if pd.notna(row[col]) else "" for col in df_curr.columns}
+                                target_data.update({'idx': idx, 'phone': phone, 'is_sent': (phone in st.session_state.wa_history)})
+                                target_data['name'] = str(row[c_name]).strip() if (c_name and pd.notna(row[c_name])) else "عميل"
+                                target_data['cv'] = str(row[c_cv]).strip() if (c_cv and pd.notna(row[c_cv])) else ""
+                                new_targets.append(target_data)
+                                seen_in_current_file.add(phone)
+                    
+                    if dups_count > 0: st.toast(lbl['dups_removed'].format(dups_count), icon="✂️")
+                    if new_targets:
+                        st.session_state.wa_review_targets = new_targets
+                        st.session_state.wa_done = False
+                        st.rerun()
             
         # Consolidate Pending Targets for the rest of the application
         final_targets = [trg for trg in st.session_state.wa_review_targets if not trg['is_sent']]
@@ -1126,6 +1130,9 @@ HR Manager"""
                                 except Exception as att_err:
                                     st.error(f"❌ {'فشل حفظ الملف المرفق: ' if is_ar else 'Failed to save attachment: '}{str(att_err)}")
                                     temp_path = None
+                            else:
+                                # 🛡️ تنظيف المسار القديم إذا لم يوجد مرفق
+                                st.session_state.wa_temp_path = None
 
                             st.session_state.wa_running = True
                             st.session_state.wa_idx = 0
@@ -1136,7 +1143,12 @@ HR Manager"""
         # ══════════════════════════════════════════════════════════
         # 🚀 حلقة الإرسال والعداد التنازلي المباشر (Live Sending Loop & Countdown)
         # ══════════════════════════════════════════════════════════
-        if st.session_state.get('wa_running', False) and final_targets:
+        # 🛡️ إذا كان wa_running لكن لا توجد أهداف — أوقف الحلقة بأمان
+        if st.session_state.get('wa_running', False) and not final_targets:
+            st.session_state.wa_running = False
+            st.session_state.wa_done = True
+            st.warning("⚠️ " + ("لا توجد أرقام جاهزة للإرسال. ربما تم إرسالها جميعاً." if is_ar else "No numbers ready to send. They may have all been sent already."))
+        elif st.session_state.get('wa_running', False) and final_targets:
             total_targets = len(final_targets)
             curr_i = st.session_state.get('wa_idx', 0)
 

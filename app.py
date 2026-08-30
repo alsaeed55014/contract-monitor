@@ -3483,7 +3483,7 @@ def dashboard():
             st.rerun()
         
         # WhatsApp Marketing 2026 Button
-        if st.button("📱 " + t("whatsapp_marketing", lang), width='stretch'):
+        if st.button("📱 " + t("whatsapp_marketing", lang), width='stretch', disabled=_wa_lock_nav):
             st.session_state.page = "whatsapp_marketing"
             st.rerun()
         

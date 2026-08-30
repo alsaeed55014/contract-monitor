@@ -42,44 +42,18 @@ def parse_spintax(text: str) -> str:
         text = re.sub(pattern, repl, text)
     return text
 
-def inject_zero_width_spaces(text: str) -> str:
-    """🛡️ حقن الرموز المخفية بنسبة MODÉRÉE (12-18%) — détectable au-dessus de 25%"""
+def strip_zero_width_chars(text: str) -> str:
+    """إزالة الرموز المخفية تماماً لمنع اكتشاف الرسالة كسبام أو احتيال من خوارزميات ميتا"""
     if not text: return ""
-    zero_width_chars = ['\u200b', '\u200c', '\u200d', '\ufeff']
-    words = text.split(' ')
-    obfuscated_words = []
-    # Niveau d'obscurcissement aléatoire par message pour éviter un pattern fixe
-    density = random.uniform(0.10, 0.18)  # 10–18% seulement — audessous du seuil de détection
-    punctuations_changed = 0  # Limiter le nombre de ponctuations altérées
-    max_punct = 2
-    for word in words:
-        if len(word) > 3 and random.random() < density:
-            idx = random.randint(1, len(word) - 1)
-            char_to_insert = random.choice(zero_width_chars)
-            word = word[:idx] + char_to_insert + word[idx:]
-        obfuscated_words.append(word)
-    res = ' '.join(obfuscated_words)
-    # Une seule ponctuation max modifiée par message (évite les patterns)
-    if random.random() < 0.25:
-        if punctuations_changed < max_punct and '.' in res:
-            res = res.replace('.', '.\u200b', 1)
-            punctuations_changed += 1
-    return res
+    for ch in ['\u200b', '\u200c', '\u200d', '\ufeff', '\u200e', '\u200f', '\u202a', '\u202b', '\u202c', '\u202d', '\u202e']:
+        text = text.replace(ch, '')
+    return text
 
 def obfuscate_message(text: str) -> str:
-    """🛡️ محرك التمويه — التمييز بين الرسائل لكن دون إثارة انتباه خوارزميات واتساب"""
+    """تحليل Spintax وتنظيف الرسالة لضمان نص طبيعي وبشري 100%"""
     if not text: return ""
     text = parse_spintax(text)
-    # Appliquer ZWS seulement dans 65% des cas (évite une signature trop constante)
-    if random.random() < 0.65:
-        text = inject_zero_width_spaces(text)
-    # Espacement final aléatoire — modéré
-    tail_choice = random.random()
-    if tail_choice < 0.3:
-        text += " "
-    elif tail_choice < 0.45:
-        text += "  "
-    # 55% du temps, pas de modification de la fin (plus naturel)
+    text = strip_zero_width_chars(text)
     return text
 
 
@@ -191,53 +165,10 @@ class WhatsAppService:
     # 🛡️ SIMULATION DE COMPORTEMENT HUMAIN PENDANT LA SESSION
     # ============================================================
     def simulate_human_browsing(self):
-        """🛡️ زيارة عشوائية لشات قديم + سكرول + توقف قصير — محاكاة تصفح بشري حقيقي بين الرسائل"""
+        """وقفة طبيعية قبل الإرسال لمحاكاة السلوك البشري الطبيعي"""
         if not self.driver:
             return
-        try:
-            from selenium.webdriver.common.by import By
-            from selenium.webdriver.common.action_chains import ActionChains
-
-            # 30% du temps : on "ouvre" une conversation au hasard dans la liste de gauche (premières 5)
-            if random.random() < 0.30:
-                # Chercher les bulles de chats sur le côté
-                recent_chats = self.driver.find_elements(
-                    By.XPATH,
-                    '//div[contains(@class, "_21S-L")]'  # WhatsApp class pour item chat
-                    ' | //div[@role="listitem"]//div[contains(@class, "_8nE1Y")]'
-                    ' | //span[contains(@class, "_11JPr")]/ancestor::div[@role="listitem"][1]'
-                )
-                if recent_chats and len(recent_chats) >= 2:
-                    try:
-                        choice = random.choice(recent_chats[1:min(5, len(recent_chats))])
-                        actions = ActionChains(self.driver)
-                        actions.move_to_element(choice).pause(random.uniform(0.3, 0.9)).click().perform()
-                        # Attendre le chargement + scroll
-                        time.sleep(random.uniform(1.2, 2.6))
-                        for _ in range(random.randint(1, 3)):
-                            self.driver.execute_script(
-                                f"window.scrollBy(0, {random.randint(-250, 250)})"
-                            )
-                            time.sleep(random.uniform(0.3, 0.8))
-                        time.sleep(random.uniform(0.8, 1.8))
-                    except:
-                        pass
-            # Mouvement de souris + micro-scroll systématiques
-            try:
-                body = self.driver.find_element(By.TAG_NAME, "body")
-                actions = ActionChains(self.driver)
-                for _ in range(random.randint(1, 3)):
-                    actions.move_to_element_with_offset(
-                        body, random.randint(20, 400), random.randint(20, 400)
-                    ).pause(random.uniform(0.08, 0.25)).perform()
-                # Scroll micro dans la conversation
-                self.driver.execute_script(
-                    f"window.scrollBy(0, {random.randint(-80, 80)})"
-                )
-            except:
-                pass
-        except Exception:
-            pass
+        time.sleep(random.uniform(0.8, 1.8))
 
     def _get_chrome_version(self):
         """Detect Chrome version from the system to ensure UC compatibility"""
@@ -328,6 +259,20 @@ class WhatsAppService:
             std_opts = create_chrome_options(with_user_dir=True)
             self.driver = webdriver.Chrome(options=std_opts)
             
+            try:
+                self.driver.execute_cdp_cmd('Page.addScriptToEvaluateOnNewDocument', {
+                    'source': '''
+                        Object.defineProperty(navigator, 'webdriver', {
+                            get: () => undefined
+                        });
+                        window.navigator.chrome = {
+                            runtime: {},
+                        };
+                    '''
+                })
+            except Exception:
+                pass
+
             stealth(self.driver,
                 languages=["en-US", "en"],
                 vendor="Google Inc.",
@@ -358,6 +303,20 @@ class WhatsAppService:
             std_opts = create_chrome_options(with_user_dir=True)
             self.driver = webdriver.Chrome(options=std_opts)
             
+            try:
+                self.driver.execute_cdp_cmd('Page.addScriptToEvaluateOnNewDocument', {
+                    'source': '''
+                        Object.defineProperty(navigator, 'webdriver', {
+                            get: () => undefined
+                        });
+                        window.navigator.chrome = {
+                            runtime: {},
+                        };
+                    '''
+                })
+            except Exception:
+                pass
+
             stealth(self.driver,
                 languages=["en-US", "en"],
                 vendor="Google Inc.",
@@ -590,36 +549,35 @@ class WhatsAppService:
         except: return None
 
     def _type_human_like(self, element, text):
-        """محاكاة كتابة بشرية واقعية جداً مع تنوع سرعتها حسب نوع الحرف وأخطاء عشوائية بسيطة لتجنب الحظر"""
+        """محاكاة كتابة بشرية واقعية جداً مع تنوع سرعتها واستخدام Shift+Enter للأسطر الجديدة لمنع الإرسال المبكر"""
         from selenium.webdriver.common.keys import Keys
         for char in text:
             try:
-                element.send_keys(char)
+                if char == '\n':
+                    element.send_keys(Keys.SHIFT + Keys.ENTER)
+                else:
+                    element.send_keys(char)
             except:
                 try:
                     self.driver.execute_script(
-                        "arguments[0].innerText += arguments[1]; arguments[0].dispatchEvent(new Event('input', {bubbles:true}));",
+                        """
+                        arguments[0].focus();
+                        document.execCommand('insertText', false, arguments[1]);
+                        arguments[0].dispatchEvent(new Event('input', {bubbles:true}));
+                        """,
                         element, char
                     )
                 except: pass
-            base_delay = random.uniform(0.03, 0.11)
+            base_delay = random.uniform(0.02, 0.08)
             if char in [" ", "\n", ".", ",", "!", "?", "،", "؛"]:
-                base_delay += random.uniform(0.12, 0.40)
+                base_delay += random.uniform(0.08, 0.22)
             elif char.isupper():
-                base_delay += random.uniform(0.06, 0.18)
+                base_delay += random.uniform(0.04, 0.12)
                 
             time.sleep(base_delay)
             
-            if random.random() < 0.02:
-                time.sleep(random.uniform(0.4, 1.1))
-            
-            if random.random() < 0.003:
-                try:
-                    element.send_keys(random.choice("abcdefghijklmnopqrstuvwxyz"))
-                    time.sleep(random.uniform(0.10, 0.30))
-                    element.send_keys(Keys.BACKSPACE)
-                    time.sleep(random.uniform(0.07, 0.20))
-                except: pass
+            if random.random() < 0.015:
+                time.sleep(random.uniform(0.3, 0.7))
 
     def _find_send_button(self):
         """🛡️ العثور على زر الإرسال بأحدث الـ selectors لواتساب 2026"""
@@ -645,6 +603,24 @@ class WhatsAppService:
                     except: continue
             except: continue
         return None
+
+    def _dismiss_modals(self):
+        """إغلاق أي نوافذ منبثقة أو تنبيهات أرقام غير صالحة تلقائياً"""
+        from selenium.webdriver.common.by import By
+        from selenium.webdriver.common.keys import Keys
+        try:
+            ok_btns = self.driver.find_elements(By.XPATH,
+                '//div[@role="button"][contains(., "OK") or contains(., "موافق") or contains(., "Close") or contains(., "إغلاق")]'
+                ' | //button[contains(., "OK") or contains(., "موافق") or contains(., "Close") or contains(., "إغلاق")]'
+                ' | //span[@data-icon="x"]/parent::*'
+            )
+            for btn in ok_btns:
+                try:
+                    if btn.is_displayed():
+                        btn.click()
+                        time.sleep(0.5)
+                except: pass
+        except: pass
 
     def _verify_message_sent(self) -> bool:
         """🛡️ التحقق الفعلي من نجاح الإرسال بالبحث عن علامات الصح أو الساعة في آخر رسالة"""
@@ -718,67 +694,42 @@ class WhatsAppService:
                 self.update_daily_stats(False, is_invalid_number=True)
                 return False, "رقم قصير جداً" 
             
-            time.sleep(random.uniform(1.8, 3.8))
-            chat_opened = False
-            try:
-                search_boxes = self.driver.find_elements(By.XPATH,
-                    '//div[@contenteditable="true"][@data-tab="3"]'
-                    ' | //div[@title="Search input box"]'
-                    ' | //div[contains(@class, "selectable-text")][@contenteditable="true"]'
-                    ' | //p[contains(@class, "selectable-text")]/ancestor::div[@contenteditable="true"][1]'
-                )
-                if search_boxes and random.random() < 0.65:  # un peu moins souvent pour varier
-                    sbox = search_boxes[0]
-                    try:
-                        actions = ActionChains(self.driver)
-                        actions.move_to_element(sbox).pause(random.uniform(0.3, 0.8)).click().perform()
-                    except:
-                        sbox.click()
-                    time.sleep(random.uniform(0.5, 1.0))
-                    sbox.send_keys(Keys.CONTROL + "a")
-                    sbox.send_keys(Keys.BACKSPACE)
-                    time.sleep(random.uniform(0.25, 0.6))
-                    self._type_human_like(sbox, clean_phone)
-                    # ⏳ PLUS D'ATTENTE après la saisie du numéro ( WA charge les résultats )
-                    time.sleep(random.uniform(1.8, 3.2))
-                    sbox.send_keys(Keys.ENTER)
-                    time.sleep(random.uniform(2.2, 4.0))
-                    
-                    chat_inputs = self.driver.find_elements(By.XPATH,
-                        '//div[@contenteditable="true"][@data-tab="10"]'
-                        ' | //div[contains(@title, "Type a message")]'
-                        ' | //div[@aria-label="Type a message"]'
-                        ' | //div[@contenteditable="true"][contains(@class, "copyable-text")]'
-                        ' | //div[@role="textbox"]'
-                    )
-                    if chat_inputs:
-                        chat_opened = True
-            except Exception:
-                chat_opened = False
+            # إغلاق أي نافذة سابقة
+            self._dismiss_modals()
+            time.sleep(random.uniform(0.8, 1.5))
 
-            if not chat_opened:
-                url = f"https://web.whatsapp.com/send?phone={clean_phone}"
-                self.driver.get(url)
-                # ⏳ Attendre le chargement COMPLET de la conversation
-                time.sleep(random.uniform(4.0, 6.5))
+            # فتح المحادثة مباشرة عبر الرابط المخصص للرقم
+            target_url = f"https://web.whatsapp.com/send?phone={clean_phone}"
+            try:
+                # Use SPA link click in browser
+                self.driver.execute_script(f"""
+                    var a = document.getElementById('__wa_nav_link') || document.createElement('a');
+                    a.id = '__wa_nav_link';
+                    a.href = '{target_url}';
+                    a.style.display = 'none';
+                    if (!document.body.contains(a)) document.body.appendChild(a);
+                    a.click();
+                """)
+                time.sleep(random.uniform(2.5, 4.0))
+            except Exception:
+                self.driver.get(target_url)
+                time.sleep(random.uniform(3.0, 5.0))
             
             try:
                 actions = ActionChains(self.driver)
-                for _ in range(random.randint(2, 4)):
-                    actions.move_by_offset(random.randint(-50, 50), random.randint(-50, 50)).perform()
-                    time.sleep(random.uniform(0.1, 0.3))
-                self.driver.execute_script(f"window.scrollBy(0, {random.randint(100, 300)})")
-                time.sleep(random.uniform(0.6, 1.2))
-                self.driver.execute_script(f"window.scrollBy(0, -{random.randint(50, 150)})")
+                for _ in range(random.randint(1, 3)):
+                    actions.move_by_offset(random.randint(-30, 30), random.randint(-30, 30)).perform()
+                    time.sleep(random.uniform(0.1, 0.2))
             except: pass
             
-            wait = WebDriverWait(self.driver, 60)
+            wait = WebDriverWait(self.driver, 35)
             
             try:
                 msg_input = wait.until(EC.presence_of_element_located((By.XPATH,
                     '//div[@contenteditable="true"][@data-tab="10"]'
                     ' | //div[contains(@title, "Type a message")]'
                     ' | //div[@aria-label="Type a message"]'
+                    ' | //div[@aria-label="اكتب رسالة"]'
                     ' | //div[@contenteditable="true"][contains(@class, "copyable-text")]'
                     ' | //div[@role="textbox"][@contenteditable="true"]'
                     ' | //footer//div[@contenteditable="true"]'
@@ -790,11 +741,12 @@ class WhatsAppService:
                               "phone number shared via url is invalid", "no chats"]
                 is_invalid_num = any(k in src for k in invalid_kw)
                 self.update_daily_stats(False, is_invalid_number=is_invalid_num)
+                self._dismiss_modals()
                 if is_invalid_num:
                     return False, "رقم غير مسجل في الواتساب"
-                return False, "فشل في العثور على صندوق الرسالة (WA DOM changed?)"
+                return False, "فشل في العثور على صندوق الرسالة"
 
-            time.sleep(random.uniform(1.8, 3.2))
+            time.sleep(random.uniform(1.2, 2.5))
 
             if attachment_path and os.path.exists(attachment_path):
                 temp_dir = os.path.join(self.session_path, "temp_uploads")

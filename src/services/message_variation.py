@@ -102,41 +102,22 @@ class MessageVariationEngine:
         return text
 
     @classmethod
-    def inject_zero_width_spaces(cls, text: str) -> str:
-        """
-        حقن الرموز المخفية (Zero-Width Unicode Characters: \u200B, \u200C, \u200D)
-        داخل الكلمات والأسطر لمنع خوارزميات واتساب من اكتشاف التكرار أو البصمة الرقمية للرسالة (Fingerprinting Bypass)
-        """
+    def clean_text(cls, text: str) -> str:
+        """إزالة أي رموز غير مرئية قد تؤدي لحظر الحساب"""
         if not text: return ""
-        zw_chars = ['\u200b', '\u200c', '\u200d']
-        words = text.split(' ')
-        modified_words = []
-        for word in words:
-            # تجنب تعديل الكلمات القصيرة جداً أو الروابط/الرموز الخاصة
-            if len(word) > 3 and not word.startswith("http") and not "___" in word:
-                if random.random() < 0.45:
-                    insert_idx = random.randint(1, len(word) - 1)
-                    chosen_zw = random.choice(zw_chars)
-                    word = word[:insert_idx] + chosen_zw + word[insert_idx:]
-            modified_words.append(word)
-        
-        result = ' '.join(modified_words)
-        
-        # تنويع النقط والفواصل بالرموز المخفية
-        if random.random() < 0.5:
-            result = result.replace('.', '.\u200b').replace('!', '!\u200b')
-        return result
+        for ch in ['\u200b', '\u200c', '\u200d', '\ufeff', '\u200e', '\u200f', '\u202a', '\u202b', '\u202c', '\u202d', '\u202e']:
+            text = text.replace(ch, '')
+        return text
 
     @classmethod
     def paraphrase(cls, text: str, seed_key: str = None) -> str:
         """
-        الدالة الرئيسية لتغيير صياغة وتوليد مظهر فريد لكل رسالة مع الحفاظ الكامل على المعنى الأصلي.
+        الدالة الرئيسية لتغيير صياغة وتوليد مظهر فريد وطبيعي لكل رسالة مع الحفاظ الكامل على المعنى الأصلي.
         تتأكد من:
         1. حماية الروابط وأرقام الهواتف والمتغيرات {Name} و {CV}
         2. تطبيق استبدال المرادفات الذكية (Synonym Swapping)
         3. تحليل Spintax إن وجد
-        4. تنويع الفواصل والأسطر والترقيم
-        5. حقن البصمة الرقمية المخفية (Zero-Width Fingerprint)
+        4. تنظيف النص من أي أحرف مخفية
         """
         if not text or not text.strip():
             return text
@@ -159,7 +140,6 @@ class MessageVariationEngine:
         # 2. تطبيق استبدال المرادفات العربية
         for pattern, options in cls.AR_SYNONYMS:
             def replace_ar(m):
-                # اختيار مرادف عشوائي متوافق بالمعنى
                 return random.choice(options)
             temp_text = re.sub(pattern, replace_ar, temp_text, flags=re.IGNORECASE)
 
@@ -172,17 +152,12 @@ class MessageVariationEngine:
         # 4. تحليل Spintax المكتوب صراحة
         temp_text = cls.parse_spintax(temp_text)
 
-        # 5. تنويع الأسطر والمسافات النمطية
-        if random.random() < 0.35:
-            # تبديل السطر المزدوج بسطر واحد أو العكس لبعض الأجزاء العشوائية
-            temp_text = temp_text.replace('\n\n', '\n \n')
+        # 5. تنظيف أي أحرف مخفية
+        temp_text = cls.clean_text(temp_text)
 
-        # 6. حقن الرموز المخفية لمنع البصمة المكررة
-        temp_text = cls.inject_zero_width_spaces(temp_text)
-
-        # 7. استعادة المتغيرات والروابط المحمية
+        # 6. استعادة المتغيرات والروابط المحمية
         for idx, original_val in enumerate(protected_tokens):
             token = f"___PROT_TOKEN_{idx}___"
             temp_text = temp_text.replace(token, original_val)
 
-        return temp_text
+        return temp_text.strip()
