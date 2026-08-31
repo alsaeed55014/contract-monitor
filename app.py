@@ -8,10 +8,12 @@ import json
 import hashlib
 import time
 from datetime import datetime, timedelta
+from typing import Optional, Dict, List, Any, Union
 import pytz
 print(">>> DEBUG: Core libraries imported")
 import base64
 import re
+import hmac
 
 # Saudi Arabia timezone for consistent time display
 SAUDI_TZ = pytz.timezone('Asia/Riyadh')
