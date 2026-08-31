@@ -197,24 +197,14 @@ class AuthManager:
     def get_avatar(self, username):
         """Get the base64-encoded profile photo for the user, or None."""
         target = str(username).lower().strip()
-        return self.users.get(target, {}).get("avatar", None)
-
 def load_saved_credentials():
-    if os.path.exists(PERSIST_FILE):
-        try:
-            with open(PERSIST_FILE, 'r', encoding='utf-8') as f:
-                return json.load(f)
-        except:
-            return None
+    # Never read credentials from shared server files across different devices
     return None
 
 def save_credentials(u, p):
-    try:
-        os.makedirs(os.path.dirname(PERSIST_FILE), exist_ok=True)
-        with open(PERSIST_FILE, 'w', encoding='utf-8') as f:
-            json.dump({"u": u, "p": p}, f)
-    except Exception as e:
-        print(f"Error saving credentials: {e}")
+    # Server-side file persistence is disabled to prevent leaking credentials across different devices.
+    # Browsers will natively offer to save credentials locally on the user's specific device.
+    pass
 
 def clear_credentials():
     if os.path.exists(PERSIST_FILE):
@@ -222,6 +212,13 @@ def clear_credentials():
             os.remove(PERSIST_FILE)
         except:
             pass
+
+# Cleanup any legacy server-side saved credentials file immediately
+if os.path.exists(PERSIST_FILE):
+    try:
+        os.remove(PERSIST_FILE)
+    except:
+        pass
 
 @st.cache_data(ttl=3600, show_spinner=False)
 def get_base64_image(image_path):
@@ -2657,22 +2654,8 @@ if ('Notification' in window && Notification.permission === 'default') {
     st.markdown(f'<div id="login-container-wrapper"><div class="luxury-main-title">{title_text}</div>', unsafe_allow_html=True)
     
     def render_login_box(suffix):
-        saved = load_saved_credentials()
-        saved_u = saved.get("u", "") if saved else ""
-        saved_p = saved.get("p", "") if saved else ""
-        
         user_key = f"user_{suffix}"
         pass_key = f"pass_{suffix}"
-        persist_key = f"persist_{suffix}"
-        
-        # Pre-fill session state keys if saved credentials exist
-        if saved:
-            if user_key not in st.session_state:
-                st.session_state[user_key] = saved_u
-            if pass_key not in st.session_state:
-                st.session_state[pass_key] = saved_p
-            if persist_key not in st.session_state:
-                st.session_state[persist_key] = True
         
         with st.form(f"login_form_{suffix}"):
             # Row 1: Profile Image next to Welcome Text
@@ -2685,13 +2668,9 @@ if ('Notification' in window && Notification.permission === 'default') {
                     b64 = get_base64_image(IMG_PATH)
                     st.markdown(f'<div style="text-align:right;"><img src="data:image/jpeg;base64,{b64}" class="profile-img-circular" style="width:80px; height:80px; border:2px solid #FFF; box-shadow: 0 0 15px #FFF;"></div>', unsafe_allow_html=True)
             
-            # Inputs - Pre-fill with saved credentials
-            u = st.text_input(t("username", lang), value=saved_u, label_visibility="collapsed", placeholder=t("username", lang), key=user_key)
-            p = st.text_input(t("password", lang), value=saved_p, type="password", label_visibility="collapsed", placeholder=t("password", lang), key=pass_key)
-            
-            # Persistent check - White Neon Label
-            persist_txt = "هل تريد حفظ الدخول" if lang == 'ar' else "Do you want to stay logged in?"
-            st.checkbox(persist_txt, value=(True if saved else False), key=persist_key)
+            # Inputs - Clean inputs per device (browsers securely autofill on each device independently)
+            u = st.text_input(t("username", lang), value="", label_visibility="collapsed", placeholder=t("username", lang), key=user_key)
+            p = st.text_input(t("password", lang), value="", type="password", label_visibility="collapsed", placeholder=t("password", lang), key=pass_key)
             
             submit = st.form_submit_button(t("login_btn", lang), width='stretch')
             lang_toggle = st.form_submit_button("En" if lang == "ar" else "عربي", width='stretch')
@@ -2704,13 +2683,6 @@ if ('Notification' in window && Notification.permission === 'default') {
                     user = st.session_state.auth.authenticate(u, p.strip())
                     login_loader.empty()
                     if user:
-                        # Handle Persistence Logic
-                        should_persist = st.session_state.get(persist_key, False)
-                        if should_persist:
-                            save_credentials(u, p.strip())
-                        else:
-                            clear_credentials()
-                            
                         user['username'] = u.lower().strip()
                         st.session_state.user = user
                         st.session_state.last_login_time = time.time()
