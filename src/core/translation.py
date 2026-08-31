@@ -354,8 +354,9 @@ class TranslationManager:
                 return cached_val
         
         try:
-            translator = GoogleTranslator(source='ar', target='en')
-            result = translator.translate(word_str)
+            from src.core.file_translator import TranslationService
+            svc = TranslationService(source_lang='ar', target_lang='en')
+            result = svc.translate_text(word_str)
             if result and result.lower() != word_str.lower():
                 if not any(err in str(result).lower() for err in ["error 500", "server error", "that's an error", "that’s an error", "translation error", "<html"]):
                     TranslationManager._google_cache[cache_key] = result
@@ -487,17 +488,10 @@ class TranslationManager:
                 return text_str
 
         try:
-            chunks = [text_str[i:i+4000] for i in range(0, len(text_str), 4000)]
-            translated_text = ""
-            translator = GoogleTranslator(source='auto', target=target_lang)
-
-            for chunk in chunks:
-                res = translator.translate(chunk)
-                if not res or any(err in str(res).lower() for err in ["error 500", "server error", "that's an error", "that’s an error", "translation error", "<html"]):
-                    return text_str
-                translated_text += res + "\n"
-
-            translated_text = translated_text.strip()
+            from src.core.file_translator import TranslationService
+            svc = TranslationService(source_lang='auto', target_lang=target_lang)
+            translated_text = svc.translate_text(text_str)
+            translated_text = translated_text.strip() if translated_text else ""
             if not translated_text:
                 return text_str
 

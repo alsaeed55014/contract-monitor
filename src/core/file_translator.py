@@ -29,11 +29,17 @@ CHUNK_SIZE = 4500  # Max chars per translation request
 
 
 # ──────────────────────────────────────────────
-# Translation Service (Free, No API Key)
+# Translation Service (Free, High-Reliability, Multi-Engine)
 # ──────────────────────────────────────────────
 
 class TranslationService:
-    """Fast, chunked translation using deep_translator (free Google Translate)."""
+    """
+    High-performance, multi-provider translation engine:
+    1. Primary: Google Translate Client API (clients5.google.com) - fast, resilient, no key
+    2. Secondary: Google Translate API (translate.googleapis.com GTX)
+    3. Tertiary: MyMemory Translation API
+    4. Fallback: deep_translator library
+    """
 
     SUPPORTED_LANGUAGES = {
         "ar": "العربية (Arabic)",
@@ -59,29 +65,146 @@ class TranslationService:
     }
 
     def __init__(self, source_lang: str = "auto", target_lang: str = "ar", logger=None):
-        from deep_translator import GoogleTranslator
+        import requests
         self.source_lang = source_lang
         self.target_lang = target_lang
         self.logger = logger
-        self._translator = GoogleTranslator(source=source_lang, target=target_lang)
+        self.session = requests.Session()
+        self.session.headers.update({
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+            "Accept": "*/*",
+        })
+
+    def _is_error_response(self, text: str) -> bool:
+        if not text:
+            return True
+        t_low = str(text).lower()
+        error_signatures = [
+            "error 500", "server error", "that's an error", "that’s an error", 
+            "translation error", "<html", "<!doctype", "429 too many", 
+            "unauthorized", "bad gateway", "service unavailable"
+        ]
+        return any(sig in t_low for sig in error_signatures)
+
+    def _call_clients5(self, text: str, source: str, target: str) -> Optional[str]:
+        url = "https://clients5.google.com/translate_a/t"
+        params = {
+            "client": "dict-chrome-ex",
+            "sl": source if source != "auto" else "auto",
+            "tl": target,
+            "q": text
+        }
+        resp = self.session.get(url, params=params, timeout=12)
+        if resp.status_code == 200:
+            data = resp.json()
+            if isinstance(data, list) and len(data) > 0:
+                if isinstance(data[0], list) and len(data[0]) > 0:
+                    val = str(data[0][0])
+                    if val and not self._is_error_response(val):
+                        return val
+                elif isinstance(data[0], str):
+                    val = str(data[0])
+                    if val and not self._is_error_response(val):
+                        return val
+            elif isinstance(data, str) and not self._is_error_response(data):
+                return data
+        return None
+
+    def _call_gtx(self, text: str, source: str, target: str) -> Optional[str]:
+        url = "https://translate.googleapis.com/translate_a/single"
+        params = {
+            "client": "gtx",
+            "sl": source if source != "auto" else "auto",
+            "tl": target,
+            "dt": "t",
+            "q": text
+        }
+        resp = self.session.get(url, params=params, timeout=12)
+        if resp.status_code == 200:
+            data = resp.json()
+            if isinstance(data, list) and len(data) > 0 and isinstance(data[0], list):
+                res = "".join(seg[0] for seg in data[0] if seg and seg[0])
+                if res and not self._is_error_response(res):
+                    return res
+        return None
+
+    def _call_mymemory(self, text: str, source: str, target: str) -> Optional[str]:
+        import requests
+        s = "en" if source == "auto" else source
+        # MyMemory supports max 500 chars per query
+        q_text = text[:500]
+        url = f"https://api.mymemory.translated.net/get?q={requests.utils.quote(q_text)}&langpair={s}|{target}"
+        resp = self.session.get(url, timeout=10)
+        if resp.status_code == 200:
+            data = resp.json()
+            matches = data.get("responseData", {}).get("translatedText")
+            if matches and not self._is_error_response(matches):
+                return matches
+        return None
+
+    def _call_deep_translator(self, text: str, source: str, target: str) -> Optional[str]:
+        try:
+            from deep_translator import GoogleTranslator
+            t = GoogleTranslator(source=source, target=target)
+            res = t.translate(text)
+            if res and not self._is_error_response(res):
+                return res
+        except Exception:
+            pass
+        return None
+
+    def _translate_piece(self, text: str) -> str:
+        """Translate a single piece of text trying providers in order."""
+        if not text or not text.strip():
+            return ""
+
+        cleaned = text.strip()
+
+        # 1. Try clients5 API
+        try:
+            res = self._call_clients5(cleaned, self.source_lang, self.target_lang)
+            if res:
+                return res
+        except Exception as e:
+            if self.logger: self.logger.log(f"Clients5 failed: {e}", "warning")
+
+        # 2. Try GTX API
+        try:
+            res = self._call_gtx(cleaned, self.source_lang, self.target_lang)
+            if res:
+                return res
+        except Exception as e:
+            if self.logger: self.logger.log(f"GTX failed: {e}", "warning")
+
+        # 3. Try MyMemory API
+        try:
+            res = self._call_mymemory(cleaned, self.source_lang, self.target_lang)
+            if res:
+                return res
+        except Exception as e:
+            pass
+
+        # 4. Try deep_translator
+        try:
+            res = self._call_deep_translator(cleaned, self.source_lang, self.target_lang)
+            if res:
+                return res
+        except Exception:
+            pass
+
+        return text
 
     def translate_text(self, text: str, progress_callback: Optional[Callable] = None) -> str:
-        """Translate a single text string, with chunking for large content."""
+        """Translate a text string, chunking automatically if needed."""
         if not text or not text.strip():
             return ""
 
         # If small enough, translate directly
-        if len(text) <= CHUNK_SIZE:
-            try:
-                result = self._translator.translate(text)
-                if progress_callback:
-                    progress_callback(1.0, "✅")
-                if result and not any(err in str(result).lower() for err in ["error 500", "server error", "that's an error", "that’s an error", "translation error", "<html"]):
-                    return result
-                return text
-            except Exception as e:
-                logging.warning(f"Translation failed: {e}")
-                return text
+        if len(text) <= 3500:
+            result = self._translate_piece(text)
+            if progress_callback:
+                progress_callback(1.0, "✅")
+            return result if result else text
 
         # Split large text into chunks at newline boundaries
         chunks = self._split_into_chunks(text)
@@ -89,14 +212,10 @@ class TranslationService:
         translated_parts = []
 
         for i, chunk in enumerate(chunks):
-            try:
-                result = self._translator.translate(chunk)
-                if result and not any(err in str(result).lower() for err in ["error 500", "server error", "that's an error", "that’s an error", "translation error", "<html"]):
-                    translated_parts.append(result)
-                else:
-                    translated_parts.append(chunk)
-            except Exception as e:
-                logging.warning(f"Chunk {i+1}/{total} failed: {e}")
+            if chunk.strip():
+                part = self._translate_piece(chunk)
+                translated_parts.append(part if part else chunk)
+            else:
                 translated_parts.append(chunk)
 
             if progress_callback:
@@ -106,8 +225,7 @@ class TranslationService:
 
     def translate_batch_fast(self, texts: List[str], progress_callback: Optional[Callable] = None) -> List[str]:
         """
-        ULTRA-FAST batch translation: combines multiple texts into mega-chunks,
-        translates them in parallel using multi-threading.
+        High-speed batch translation: translates multiple texts concurrently using ThreadPoolExecutor.
         """
         if not texts:
             return []
@@ -124,20 +242,20 @@ class TranslationService:
         if not indexed_texts:
             return results
 
-        # Build mega-chunks
+        # Build mega-chunks with separator for maximum throughput
         mega_chunks = []
         current_indices = []
         current_text = ""
 
         for idx, txt in indexed_texts:
             candidate = current_text + BATCH_SEPARATOR + txt if current_text else txt
-            if len(candidate) <= CHUNK_SIZE:
+            if len(candidate) <= 3500:
                 current_text = candidate
                 current_indices.append(idx)
             else:
                 if current_text:
                     mega_chunks.append((list(current_indices), current_text))
-                if len(txt) > CHUNK_SIZE:
+                if len(txt) > 3500:
                     mega_chunks.append(([idx], txt))
                     current_text = ""
                     current_indices = []
@@ -149,16 +267,15 @@ class TranslationService:
             mega_chunks.append((list(current_indices), current_text))
 
         total_mega = len(mega_chunks)
-        
-        # USE MULTI-THREADING FOR SPEED
         from concurrent.futures import ThreadPoolExecutor
         
         def process_chunk(chunk_data):
             indices, combined = chunk_data
             try:
-                translated = self._translator.translate(combined)
-                if not translated or any(err in str(translated).lower() for err in ["error 500", "server error", "that's an error", "that’s an error", "translation error", "<html"]):
-                    translated = combined
+                translated = self._translate_piece(combined)
+                if not translated or self._is_error_response(translated):
+                    # Fallback to translating individual texts
+                    return [(idx, self._translate_piece(texts[idx])) for idx in indices]
                 
                 if len(indices) == 1:
                     return [(indices[0], translated)]
@@ -166,7 +283,7 @@ class TranslationService:
                     parts = self._smart_split(translated, len(indices))
                     chunk_results = []
                     for j, part_idx in enumerate(indices):
-                        val = parts[j].strip() if j < len(parts) else texts[part_idx]
+                        val = parts[j].strip() if j < len(parts) else self._translate_piece(texts[part_idx])
                         chunk_results.append((part_idx, val))
                     return chunk_results
             except Exception as e:
@@ -174,13 +291,12 @@ class TranslationService:
                 logging.warning(f"Chunk failed: {e}")
                 return [(idx, texts[idx]) for idx in indices]
 
-        # Limit threads to avoid rate limiting (max 5)
         if self.logger:
             self.logger.log(f"🚀 معالجة {total_mega} حزمة ترجمة متوازية...")
-        with ThreadPoolExecutor(max_workers=min(total_mega, 5)) as executor:
+
+        with ThreadPoolExecutor(max_workers=min(total_mega, 6)) as executor:
             batch_results = list(executor.map(process_chunk, mega_chunks))
             
-            # Map back to final results
             completed = 0
             for chunk_res in batch_results:
                 for idx, val in chunk_res:
@@ -193,7 +309,6 @@ class TranslationService:
 
     def _smart_split(self, translated_text: str, expected_count: int) -> List[str]:
         """Split translated text back into parts, handling separator variations."""
-        # Try exact separator first
         for sep in ["|||SPLIT|||", "|||split|||", "||| SPLIT |||", "|||Split|||",
                      "|||تقسيم|||", "|||انقسام|||", "SPLIT", "|||"]:
             parts = translated_text.split(sep)
@@ -208,7 +323,6 @@ class TranslationService:
         # Last resort: split by newline
         parts = translated_text.split("\n")
         if len(parts) >= expected_count:
-            # Distribute lines evenly
             chunk_size = max(1, len(parts) // expected_count)
             result = []
             for i in range(expected_count):
@@ -217,27 +331,25 @@ class TranslationService:
                 result.append("\n".join(parts[start:end]))
             return result
 
-        # Absolute fallback: return as single chunk
         return [translated_text]
 
     def _split_into_chunks(self, text: str) -> List[str]:
         """Split text into chunks at paragraph/sentence boundaries."""
-        if len(text) <= CHUNK_SIZE:
+        if len(text) <= 3500:
             return [text]
 
         chunks = []
         current = ""
 
         for para in text.split("\n"):
-            if len(current) + len(para) + 1 <= CHUNK_SIZE:
+            if len(current) + len(para) + 1 <= 3500:
                 current += para + "\n"
             else:
                 if current:
                     chunks.append(current.strip())
-                if len(para) > CHUNK_SIZE:
-                    # Force-split very long paragraphs
-                    for j in range(0, len(para), CHUNK_SIZE):
-                        chunks.append(para[j:j + CHUNK_SIZE])
+                if len(para) > 3500:
+                    for j in range(0, len(para), 3500):
+                        chunks.append(para[j:j + 3500])
                     current = ""
                 else:
                     current = para + "\n"
