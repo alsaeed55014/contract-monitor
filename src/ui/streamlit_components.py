@@ -403,6 +403,10 @@ def login_screen(auth_manager, t, toggle_lang, load_saved_credentials, save_cred
             u = st.text_input(t("username", lang), value="", label_visibility="collapsed", placeholder=t("username", lang))
             p = st.text_input(t("password", lang), value="", type="password", label_visibility="collapsed", placeholder=t("password", lang))
             
+            # Remember login on THIS device only (Client-side Cookie)
+            persist_txt = "هل تريد حفظ الدخول" if lang == 'ar' else "Do you want to stay logged in?"
+            persist = st.checkbox(persist_txt, value=False, key="persist_components_login")
+            
             submit = st.form_submit_button(t("login_btn", lang), use_container_width=True)
             lang_toggle = st.form_submit_button("En" if lang == "ar" else "عربي", use_container_width=True)
 
@@ -418,6 +422,25 @@ def login_screen(auth_manager, t, toggle_lang, load_saved_credentials, save_cred
                         st.session_state.user = user
                         st.session_state.show_welcome = True
                         st.markdown("<style>div[data-testid='stForm'] { display: none !important; }</style>", unsafe_allow_html=True)
+                        
+                        if persist:
+                            try:
+                                from app import create_device_token, DEVICE_REMEMBER_COOKIE
+                                dev_token = create_device_token(user['username'], days=30)
+                                st.html(f"""
+                                <script>
+                                document.cookie = "{DEVICE_REMEMBER_COOKIE}={dev_token}; max-age=2592000; path=/; SameSite=Lax";
+                                </script>
+                                """)
+                            except Exception:
+                                pass
+                        else:
+                            st.html("""
+                            <script>
+                            document.cookie = "_recruitment_remember_token=; max-age=0; path=/;";
+                            </script>
+                            """)
+                        
                         st.success("جاري الدخول... | Loading..." if lang == 'ar' else "Loading... | Entering")
                         st.rerun()
                     else:

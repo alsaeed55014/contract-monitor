@@ -197,28 +197,42 @@ class AuthManager:
     def get_avatar(self, username):
         """Get the base64-encoded profile photo for the user, or None."""
         target = str(username).lower().strip()
-def load_saved_credentials():
-    # Never read credentials from shared server files across different devices
-    return None
+        return self.users.get(target, {}).get("avatar", None)
 
-def save_credentials(u, p):
-    # Server-side file persistence is disabled to prevent leaking credentials across different devices.
-    # Browsers will natively offer to save credentials locally on the user's specific device.
-    pass
+import hmac
+import hashlib
 
-def clear_credentials():
-    if os.path.exists(PERSIST_FILE):
-        try:
-            os.remove(PERSIST_FILE)
-        except:
-            pass
+DEVICE_REMEMBER_COOKIE = "_recruitment_remember_token"
+DEVICE_REMEMBER_SECRET = b"alwazzan_luxury_recruitment_salt_2026_auth"
 
-# Cleanup any legacy server-side saved credentials file immediately
-if os.path.exists(PERSIST_FILE):
+def create_device_token(username: str, days: int = 30) -> str:
+    """Create a signed client-only authentication token for the specific device."""
+    expires_at = int(time.time()) + (days * 86400)
+    payload = f"{str(username).lower().strip()}:{expires_at}"
+    sig = hmac.new(DEVICE_REMEMBER_SECRET, payload.encode(), hashlib.sha256).hexdigest()
+    raw = f"{payload}:{sig}"
+    return base64.urlsafe_b64encode(raw.encode()).decode()
+
+def verify_device_token(token: str) -> Optional[str]:
+    """Verify signed client token. Returns username if valid and unexpired."""
+    if not token or not isinstance(token, str):
+        return None
     try:
-        os.remove(PERSIST_FILE)
-    except:
-        pass
+        raw = base64.urlsafe_b64decode(token.encode()).decode()
+        parts = raw.split(":")
+        if len(parts) != 3:
+            return None
+        username, expires_at_str, sig = parts
+        expires_at = int(expires_at_str)
+        if time.time() > expires_at:
+            return None
+        payload = f"{username}:{expires_at}"
+        expected_sig = hmac.new(DEVICE_REMEMBER_SECRET, payload.encode(), hashlib.sha256).hexdigest()
+        if hmac.compare_digest(sig, expected_sig):
+            return username
+    except Exception:
+        return None
+    return None
 
 @st.cache_data(ttl=3600, show_spinner=False)
 def get_base64_image(image_path):
@@ -2140,6 +2154,25 @@ if 'tm' not in st.session_state:
 # 7. Session State Defaults
 if 'user' not in st.session_state:
     st.session_state.user = None
+
+# Device-Specific Auto Login via Client Cookie (Never shared across devices)
+if st.session_state.user is None and hasattr(st, "context") and hasattr(st.context, "cookies"):
+    try:
+        cookie_token = st.context.cookies.get(DEVICE_REMEMBER_COOKIE)
+        if cookie_token:
+            valid_username = verify_device_token(cookie_token)
+            if valid_username and valid_username in st.session_state.auth.users:
+                u_obj = st.session_state.auth.users[valid_username]
+                st.session_state.user = {
+                    "username": valid_username,
+                    "role": u_obj.get("role", "viewer"),
+                    "permissions": u_obj.get("permissions", {}),
+                    "name": u_obj.get("name", valid_username)
+                }
+                st.session_state.last_login_time = time.time()
+    except Exception as e:
+        print(f"[AUTH] Auto device login check error: {e}")
+
 if 'lang' not in st.session_state:
     st.session_state.lang = 'ar'
 if 'last_login_time' not in st.session_state:
@@ -2155,7 +2188,11 @@ query_params = st.query_params
 if query_params.get('logout') == 'inactive':
     st.session_state.user = None
     st.session_state.force_logout_inactive = False
-    clear_credentials()
+    st.html(f"""
+    <script>
+    document.cookie = "{DEVICE_REMEMBER_COOKIE}=; max-age=0; path=/;";
+    </script>
+    """)
     st.query_params.clear()
     st.rerun()
 
@@ -2656,6 +2693,7 @@ if ('Notification' in window && Notification.permission === 'default') {
     def render_login_box(suffix):
         user_key = f"user_{suffix}"
         pass_key = f"pass_{suffix}"
+        persist_key = f"persist_{suffix}"
         
         with st.form(f"login_form_{suffix}"):
             # Row 1: Profile Image next to Welcome Text
@@ -2671,6 +2709,10 @@ if ('Notification' in window && Notification.permission === 'default') {
             # Inputs - Clean inputs per device (browsers securely autofill on each device independently)
             u = st.text_input(t("username", lang), value="", label_visibility="collapsed", placeholder=t("username", lang), key=user_key)
             p = st.text_input(t("password", lang), value="", type="password", label_visibility="collapsed", placeholder=t("password", lang), key=pass_key)
+            
+            # Remember login on THIS device only (Client-side Cookie)
+            persist_txt = "هل تريد حفظ الدخول" if lang == 'ar' else "Do you want to stay logged in?"
+            st.checkbox(persist_txt, value=False, key=persist_key)
             
             submit = st.form_submit_button(t("login_btn", lang), width='stretch')
             lang_toggle = st.form_submit_button("En" if lang == "ar" else "عربي", width='stretch')
@@ -2688,6 +2730,22 @@ if ('Notification' in window && Notification.permission === 'default') {
                         st.session_state.last_login_time = time.time()
                         st.session_state.show_welcome = True
                         
+                        # Handle Remember Me for THIS device ONLY
+                        should_persist = st.session_state.get(persist_key, False)
+                        if should_persist:
+                            dev_token = create_device_token(user['username'], days=30)
+                            st.html(f"""
+                            <script>
+                            document.cookie = "{DEVICE_REMEMBER_COOKIE}={dev_token}; max-age=2592000; path=/; SameSite=Lax";
+                            </script>
+                            """)
+                        else:
+                            st.html(f"""
+                            <script>
+                            document.cookie = "{DEVICE_REMEMBER_COOKIE}=; max-age=0; path=/;";
+                            </script>
+                            """)
+
                         st.rerun()
                     else:
                         st.error(t("invalid_creds", lang))
@@ -3500,6 +3558,11 @@ def dashboard():
         
         if st.button(t("logout", lang), type="primary", width='stretch'):
             st.session_state.user = None
+            st.html(f"""
+            <script>
+            document.cookie = "{DEVICE_REMEMBER_COOKIE}=; max-age=0; path=/;";
+            </script>
+            """)
             st.rerun()
         
         # Global Deep Reset Opportunity
