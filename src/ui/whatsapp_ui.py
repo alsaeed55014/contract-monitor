@@ -1066,20 +1066,22 @@ HR Manager"""
             st.success(lbl['attached'].format(attachment.name, round(attachment.size/1024, 1)))
         
         st.markdown(lbl['settings_title'])
-        col_s1, col_s2, col_s3, col_s4 = st.columns(4)
+        col_s1, col_s2, col_s3, col_s4, col_s5 = st.columns(5)
         with col_s1:
-            # 🛡️ حد أدنى 25 ثانية — أي شيء أقل يسبب حظر سريع
-            delay = st.number_input(lbl['delay'], min_value=25, max_value=600, value=60, disabled=st.session_state.wa_running,
-                                    help=("🛡️ الحد الأدنى الآمن 25 ثانية (يوصى 45-90 ثانية)" if is_ar else "🛡️ Min safe value 25s (recommended 45–90s)"))
+            min_delay = st.number_input("أدنى مهلة (ثانية)" if is_ar else "Min Delay (s)", min_value=30, max_value=300, value=60, disabled=st.session_state.wa_running,
+                                        help=("🛡️ أدنى وقت انتظار عشوائي بين الرسائل (الافتراضي 60 ثانية)" if is_ar else "🛡️ Minimum random delay (default 60s)"))
         with col_s2:
+            max_delay = st.number_input("أقصى مهلة (ثانية)" if is_ar else "Max Delay (s)", min_value=30, max_value=600, value=120, disabled=st.session_state.wa_running,
+                                        help=("🛡️ أقصى وقت انتظار عشوائي بين الرسائل (الافتراضي 120 ثانية)" if is_ar else "🛡️ Maximum random delay (default 120s)"))
+        with col_s3:
             # 🛡️ min_value = 5 على الأقل — ممنوع الصفر (كان يسمح بإلغاء الاستراحة تماماً)
             batch_size = st.number_input(lbl['batch_size'], min_value=5, max_value=100, value=10, help=lbl['batch_help'], disabled=st.session_state.wa_running)
-        with col_s3:
+        with col_s4:
             # 🛡️ min 3 دقائق بدل 1 (يوصى 10 دقائق فما فوق)
             batch_delay_mins = st.number_input(lbl['batch_delay'], min_value=3, max_value=60, value=10, disabled=st.session_state.wa_running,
                                                help=("🛡️ 3 دقائق على الأقل بين الدفعات (يوصى 10+)" if is_ar else "🛡️ Min 3 min between batches (recommended 10+)"))
             batch_delay = int(batch_delay_mins * 60)
-        with col_s4:
+        with col_s5:
             msg_switch_threshold = st.number_input("تبديل الرسالة بعد" if is_ar else "Switch msg after", min_value=1, max_value=50, value=2, disabled=st.session_state.wa_running)
 
         # Smart detect target changes
@@ -1228,21 +1230,26 @@ HR Manager"""
                     time.sleep(1)
                     st.rerun()
                 else:
-                    # 7. ⏱️ LIVE COUNTDOWN TIMER BETWEEN MESSAGES / BATCHES
+                    # 7. ⏱️ LIVE DYNAMIC RANDOM COUNTDOWN TIMER (60s - 120s unique per message)
                     is_batch_break = (batch_size > 0 and st.session_state.wa_idx % batch_size == 0)
-                    wait_seconds = batch_delay if is_batch_break else delay
+                    if is_batch_break:
+                        wait_seconds = batch_delay
+                    else:
+                        low_d = min(int(min_delay), int(max_delay))
+                        high_d = max(int(min_delay), int(max_delay))
+                        wait_seconds = random.randint(low_d, high_d)
                     
                     next_target = final_targets[st.session_state.wa_idx]
                     next_n = next_target.get('name', 'Client')
                     next_p = next_target.get('phone', '')
 
-                    c_title = "🛡️ استراحة دفعات بين الرسائل (حماية من الحظر)" if is_batch_break else "⏳ الانتظار قبل إرسال الرسالة التالية"
+                    c_title = "🛡️ استراحة دفعات بين الرسائل (حماية من الحظر)" if is_batch_break else f"⏳ انتظار عشوائي بين الرسائل ({wait_seconds} ثانية)"
                     if not is_ar:
-                        c_title = "🛡️ Batch Break (Anti-Ban Protection)" if is_batch_break else "⏳ Waiting Before Next Message"
-                    c_icon = "🛡️" if is_batch_break else "⏳"
-                    c_border = "rgba(0, 229, 255, 0.4)" if is_batch_break else "rgba(212, 175, 55, 0.4)"
-                    c_bg = "rgba(0, 229, 255, 0.06)" if is_batch_break else "rgba(212, 175, 55, 0.06)"
-                    c_text = "#00E5FF" if is_batch_break else "#D4AF37"
+                        c_title = "🛡️ Batch Break (Anti-Ban Protection)" if is_batch_break else f"⏳ Random Delay Between Messages ({wait_seconds}s)"
+                    c_icon = "🛡️" if is_batch_break else "🎲"
+                    c_border = "rgba(0, 229, 255, 0.4)" if is_batch_break else "rgba(0, 255, 136, 0.4)"
+                    c_bg = "rgba(0, 229, 255, 0.06)" if is_batch_break else "rgba(0, 255, 136, 0.06)"
+                    c_text = "#00E5FF" if is_batch_break else "#00FF88"
 
                     countdown_ph = st.empty()
                     for remaining in range(wait_seconds, 0, -1):

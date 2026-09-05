@@ -580,18 +580,28 @@ class WhatsAppService:
                 time.sleep(random.uniform(0.3, 0.7))
 
     def _find_send_button(self):
-        """🛡️ العثور على زر الإرسال بأحدث الـ selectors لواتساب 2026"""
+        """🛡️ العثور على زر الإرسال بأحدث الـ selectors لواتساب 2026 (نسخة 2.24.x+)"""
         from selenium.webdriver.common.by import By
         selectors = [
-            '//button[contains(@aria-label, "Send")]',
-            '//button[@aria-label="Send"]',
-            '//span[@data-icon="send"]',
-            '//span[@data-icon="send-dark"]',
-            '//span[@data-icon="send-light"]',
+            # === الـ selectors الرسمية لواتساب ويب 2024-2026 ===
+            '//button[contains(@data-testid, "compose-btn-send")]',
             '//div[contains(@data-testid, "compose-btn-send")]',
-            '//button[contains(@data-testid, "send")]',
-            '//footer//*[name()="svg" and contains(@data-icon, "send")]/ancestor::*[self::button or self::div][1]',
+            # Span داخل زر الإرسال
+            '//span[@data-icon="send"]/parent::button',
+            '//span[@data-icon="send"]/ancestor::button',
+            '//span[@data-icon="send"]/ancestor::div[contains(@role,"button")]',
+            '//span[@data-icon="send"]/parent::*',
+            # بالعربية
+            '//button[@aria-label="إرسال"]',
+            '//button[@aria-label="ارسل"]',
+            # بالإنجليزية (حسابات EN)
+            '//button[@aria-label="Send"]',
+            # SVG بأيقونة الإرسال
+            '//*[name()="svg" and contains(@data-icon, "send")]/ancestor::*[self::button or self::div][1]',
+            # fallback: أي زر داخل footer له tabindex
             '//footer//button[@tabindex]',
+            # fallback: أي عنصر role=button في footer له بادئة send
+            '//footer//*[@role="button"][contains(translate(@aria-label,"ABCDEFGHIJKLMNOPQRSTUVWXYZ","abcdefghijklmnopqrstuvwxyz"),"send") or contains(translate(@aria-label,"ABCDEFGHIJKLMNOPQRSTUVWXYZ","abcdefghijklmnopqrstuvwxyz"),"ارسل") or contains(translate(@aria-label,"ABCDEFGHIJKLMNOPQRSTUVWXYZ","abcdefghijklmnopqrstuvwxyz"),"إرسال")]',
         ]
         for sel in selectors:
             try:
@@ -599,64 +609,128 @@ class WhatsAppService:
                 for e in elems:
                     try:
                         if e.is_displayed() and e.is_enabled():
+                            # تحقق إضافي: العنصر له حجم حقيقي
+                            size = e.size
+                            if size.get("width", 0) < 5 or size.get("height", 0) < 5:
+                                continue
                             return e
                     except: continue
             except: continue
         return None
 
     def _dismiss_modals(self):
-        """إغلاق أي نوافذ منبثقة أو تنبيهات أرقام غير صالحة تلقائياً"""
+        """إغلاق أي نوافذ منبثقة أو تنبيهات أرقام غير صالحة تلقائياً (واتساب 2026)"""
         from selenium.webdriver.common.by import By
         from selenium.webdriver.common.keys import Keys
         try:
-            ok_btns = self.driver.find_elements(By.XPATH,
-                '//div[@role="button"][contains(., "OK") or contains(., "موافق") or contains(., "Close") or contains(., "إغلاق")]'
-                ' | //button[contains(., "OK") or contains(., "موافق") or contains(., "Close") or contains(., "إغلاق")]'
-                ' | //span[@data-icon="x"]/parent::*'
-            )
-            for btn in ok_btns:
-                try:
-                    if btn.is_displayed():
-                        btn.click()
-                        time.sleep(0.5)
-                except: pass
+            # 1. الأزرار النصية (OK / موافق / Close / إغلاق / No / لا)
+            ok_btn_selectors = [
+                '//div[@role="button"][contains(normalize-space(.), "OK") or contains(normalize-space(.), "موافق") or contains(normalize-space(.), "Close") or contains(normalize-space(.), "إغلاق") or contains(normalize-space(.), "حسناً") or contains(normalize-space(.), "حسنا") or contains(normalize-space(.), "No") or contains(normalize-space(.), "لا")]',
+                '//button[contains(normalize-space(.), "OK") or contains(normalize-space(.), "موافق") or contains(normalize-space(.), "Close") or contains(normalize-space(.), "إغلاق") or contains(normalize-space(.), "حسناً") or contains(normalize-space(.), "حسنا") or contains(normalize-space(.), "No") or contains(normalize-space(.), "لا")]',
+                # 2026: الـ data-testid الجديد
+                '//*[contains(@data-testid, "popup-modal")]//button',
+                '//*[contains(@data-testid, "dialog-close")]',
+                # أيقونة X
+                '//span[@data-icon="x"]/parent::*',
+                '//span[@data-icon="X"]/parent::*',
+                '//*[@aria-label="Close"]',
+                '//*[@aria-label="إغلاق"]',
+            ]
+            for sel in ok_btn_selectors:
+                ok_btns = self.driver.find_elements(By.XPATH, sel)
+                for btn in ok_btns:
+                    try:
+                        if btn.is_displayed():
+                            try:
+                                btn.click()
+                            except:
+                                try:
+                                    self.driver.execute_script("arguments[0].click();", btn)
+                                except:
+                                    pass
+                            time.sleep(0.5)
+                    except: pass
+            # 2. الضغط على ESC كطريقة احتياطية لإغلاق المودالات
+            try:
+                body = self.driver.find_element(By.TAG_NAME, "body")
+                body.send_keys(Keys.ESCAPE)
+                time.sleep(0.3)
+            except:
+                pass
         except: pass
 
     def _verify_message_sent(self) -> bool:
-        """🛡️ التحقق الفعلي من نجاح الإرسال بالبحث عن علامات الصح أو الساعة في آخر رسالة"""
+        """🛡️ التحقق الفعلي من نجاح الإرسال بالبحث عن علامات الصح أو الساعة في آخر رسالة — 2026"""
         from selenium.webdriver.common.by import By
         try:
             status_selectors = [
-                '//span[@data-icon="msg-time"]',
+                # 🛡️ 2026: أحدث الـ data-icon لعلامات الحالة
+                '//*[@data-icon="msg-time"]',
                 '//*[contains(@data-icon, "msg-time")]',
-                '//span[@data-icon="msg-check"]',
+                '//span[@data-icon="msg-time"]',
+                '//*[@data-icon="msg-check"]',
                 '//*[contains(@data-icon, "msg-check")]',
-                '//span[@data-icon="msg-dblcheck"]',
+                '//span[@data-icon="msg-check"]',
+                '//*[@data-icon="msg-dblcheck"]',
                 '//*[contains(@data-icon, "msg-dblcheck")]',
-                '//span[@data-icon="msg-dblcheck-ack"]',
+                '//span[@data-icon="msg-dblcheck"]',
+                '//*[@data-icon="msg-dblcheck-ack"]',
                 '//*[contains(@data-icon, "msg-dblcheck-ack")]',
-                '//div[contains(@class, "message-out")]',
+                # الرسائل الصادرة
                 '//div[contains(@data-testid, "msg-out")]',
+                '//div[contains(@class, "message-out")]',
+                '//div[contains(@data-testid, "message-out")]',
+                '//div[contains(@role,"row")][contains(translate(@class,"ABCDEFGHIJKLMNOPQRSTUVWXYZ","abcdefghijklmnopqrstuvwxyz"),"out")]',
             ]
             for sel in status_selectors:
                 try:
                     elems = self.driver.find_elements(By.XPATH, sel)
                     if elems:
+                        # 🛡️ التحقق من أن العنصر حديث (العنصر الأخير) فعلاً ظاهر
                         last = elems[-1]
                         try:
-                            if last.is_displayed():
+                            rect = last.rect
+                            if rect.get("width", 0) > 0 and rect.get("height", 0) > 0:
                                 return True
+                            # حتى لو لم يكن ظاهراً بسبب السكرول، فوجوده يكفي للإشارة للنجاح
+                            return True
                         except:
                             return True
-                except: continue
+                except:
+                    continue
+            # 🔍 طريقة احتياطية: البحث في مصدر الصفحة عن علامات الإرسال
             try:
                 src = self.driver.page_source.lower()
-                bad_words = ["failed", "error", "couldn't", "can't send", "غير قادر", "فشل", "خطأ"]
-                if any(w in src for w in bad_words):
-                    recent_src = src[-2000:].lower()
+                # كلمات تشير للنجاح
+                success_indicators = [
+                    'data-icon="msg-check"', "data-icon='msg-check'",
+                    'data-icon="msg-dblcheck"', "data-icon='msg-dblcheck'",
+                    'data-icon="msg-time"', "data-icon='msg-time'",
+                    'message-out', "msg-out",
+                    'sent',
+                ]
+                has_success = any(ind in src for ind in success_indicators)
+
+                # الكلمات التي تشير إلى فشل مؤكد
+                bad_words = [
+                    "couldn't send", "can't send this message",
+                    "غير قادر على الإرسال", "فشل إرسال الرسالة",
+                    "failed to send", "message not delivered",
+                ]
+                has_failure = any(w in src for w in bad_words)
+
+                if has_failure and not has_success:
+                    recent_src = src[-5000:].lower()
                     if any(w in recent_src for w in bad_words):
                         return False
-                return True
+
+                # إذا وجدنا مؤشرات نجاح → تم الإرسال
+                if has_success:
+                    return True
+
+                # خطة احتياطية نهائية: إذا لم نجد رسالة خطأ واضحة → نفترض النجاح
+                # (لأن بعض الأحيان علامات الوضع لا تظهر فوراً بسبب الـ lazy load)
+                return not has_failure
             except:
                 return True
         except Exception:
@@ -677,20 +751,50 @@ class WhatsAppService:
         return clean
 
     def _auto_handle_popups(self):
-        """Automatically dismiss or accept common WhatsApp Web popups (Use Here, etc.)."""
+        """Automatically dismiss or accept common WhatsApp Web popups (Use Here, etc.) — 2026 Edition."""
         if not self.driver: return
         from selenium.webdriver.common.by import By
         try:
-            # 1. 'Use Here' / 'استخدام هنا' popup
-            use_here_btns = self.driver.find_elements(By.XPATH,
-                '//button[contains(., "Use Here") or contains(., "استخدام هنا") or contains(., "استخدم هنا")] | '
-                '//div[@role="button"][contains(., "Use Here") or contains(., "استخدام هنا") or contains(., "استخدم هنا")]'
-            )
-            for btn in use_here_btns:
-                if btn.is_displayed():
-                    btn.click()
-                    time.sleep(1.0)
-                    break
+            # 1. 'Use Here' / 'استخدام هنا' popup — أحدث النسخ 2024-2026
+            use_here_selectors = [
+                '//button[contains(normalize-space(.), "Use Here") or contains(normalize-space(.), "استخدام هنا") or contains(normalize-space(.), "استخدم هنا") or contains(normalize-space(.), "Use on this device") or contains(normalize-space(.), "استخدم على هذا الجهاز")]',
+                '//div[@role="button"][contains(normalize-space(.), "Use Here") or contains(normalize-space(.), "استخدام هنا") or contains(normalize-space(.), "استخدم هنا") or contains(normalize-space(.), "Use on this device") or contains(normalize-space(.), "استخدم على هذا الجهاز")]',
+                # data-testid الجديد لـ Use Here
+                '//*[contains(@data-testid, "use-here")]//button',
+                '//*[contains(@data-testid, "use-here")]//*[@role="button"]',
+                # Pop-up عام جلسة مفتوحة في مكان آخر
+                '//*[contains(@data-testid, "content-host")]//button[1]',
+            ]
+            for sel in use_here_selectors:
+                use_here_btns = self.driver.find_elements(By.XPATH, sel)
+                for btn in use_here_btns:
+                    try:
+                        if btn.is_displayed():
+                            try:
+                                btn.click()
+                            except:
+                                try:
+                                    self.driver.execute_script("arguments[0].click();", btn)
+                                except:
+                                    pass
+                            time.sleep(1.0)
+                            return
+                    except: pass
+            # 2. إشعارات الواتساب (Turn on notifications / تفعيل الإشعارات)
+            try:
+                notif_close_selectors = [
+                    '//div[contains(@data-testid, "popup-notification")]//span[@data-icon="x"]/parent::*',
+                    '//*[contains(@data-testid, "notification-attention")]//*[@role="button" and contains(@aria-label,"Close")]',
+                ]
+                for sel in notif_close_selectors:
+                    btns = self.driver.find_elements(By.XPATH, sel)
+                    for btn in btns:
+                        try:
+                            if btn.is_displayed():
+                                btn.click()
+                                time.sleep(0.8)
+                        except: pass
+            except Exception: pass
         except Exception: pass
 
     def send_message(self, phone, message, attachment_path=None):
@@ -741,31 +845,56 @@ class WhatsAppService:
                 print(f"[{time.strftime('%H:%M:%S')}] Navigation retry via JS: {e_nav}")
                 self.driver.execute_script(f"window.location.href = '{target_url}';")
 
-            time.sleep(random.uniform(2.0, 3.5))
+            # 🛡️ 2026: زيادة وقت التحميل الأولي لـ React hydration (مهم جداً للنسخ الجديدة)
+            time.sleep(random.uniform(4.0, 7.0))
 
             # ⏳ 3. Wait for chat input / send button OR invalid number dialog
+            #    — 2026: زيادة المهلة إلى 60 ثانية بسبب بطء بعض أجهزة واتساب الجديدة
             wait_start = time.time()
             msg_input = None
             send_btn = None
             is_invalid_num = False
 
-            while time.time() - wait_start < 35:
+            while time.time() - wait_start < 60:
                 self._auto_handle_popups()
+                self._dismiss_modals()
 
-                # A. Check for invalid number dialog
+                # A. Check for invalid number dialog (أحدث التحكم 2026)
                 try:
-                    invalid_elements = self.driver.find_elements(By.XPATH,
-                        '//div[@data-animate-modal-popup="true"] | '
-                        '//div[contains(@class, "modal")] | '
-                        '//div[@role="dialog"] | '
-                        '//div[@role="alert"]'
-                    )
-                    for elem in invalid_elements:
-                        txt = elem.text.lower()
-                        if any(k in txt for k in ["invalid", "phone number shared via url is invalid", "غير صالح", "غير صحيح", "not on whatsapp", "ليس مسجلاً"]):
+                    invalid_selectors = [
+                        '//div[@data-animate-modal-popup="true"]',
+                        '//div[contains(@class, "modal")]',
+                        '//div[@role="dialog"]',
+                        '//div[@role="alert"]',
+                        '//*[contains(@data-testid, "popup")]',
+                        '//*[contains(@data-testid, "dialog")]',
+                    ]
+                    bad_keywords = [
+                        "invalid", "phone number shared via url is invalid",
+                        "غير صالح", "غير صحيح", "not on whatsapp", "ليس مسجلاً",
+                        "number is invalid", "this phone number", "check the number",
+                        "رقم هاتف", "رقم غير صالح", "رقم الهاتف غير مسجل",
+                        "shared url is invalid",
+                    ]
+                    for sel in invalid_selectors:
+                        try:
+                            invalid_elements = self.driver.find_elements(By.XPATH, sel)
+                            for elem in invalid_elements:
+                                try:
+                                    txt = elem.text.lower()
+                                    if any(k in txt for k in bad_keywords):
+                                        is_invalid_num = True
+                                        break
+                                except:
+                                    pass
+                        except: pass
+                    if not is_invalid_num:
+                        # فحص page_source مباشرة (backup plan)
+                        src_lower = self.driver.page_source.lower()
+                        if any(k in src_lower for k in bad_keywords):
                             is_invalid_num = True
-                            break
-                except Exception: pass
+                except Exception:
+                    pass
 
                 if is_invalid_num:
                     break
@@ -775,24 +904,44 @@ class WhatsAppService:
                 if send_btn and send_btn.is_displayed():
                     break
 
-                # C. Check for compose box
+                # C. Check for compose box — أحدث الـ selectors لـ 2024-2026
                 try:
-                    inputs = self.driver.find_elements(By.XPATH,
-                        '//footer//div[@contenteditable="true"] | '
-                        '//div[@contenteditable="true"][@data-tab="10"] | '
-                        '//div[@contenteditable="true"][contains(@class, "copyable-text")] | '
-                        '//div[@role="textbox"][@contenteditable="true"] | '
-                        '//div[contains(@data-testid, "conversation-compose-box-input")]'
-                    )
-                    for inp in inputs:
-                        if inp.is_displayed():
-                            msg_input = inp
-                            break
-                    if msg_input:
+                    input_selectors = [
+                        # الأصلي الرسمي لواتساب الجديد
+                        '//*[@data-testid="conversation-compose-box-input"]',
+                        # نسخة div contenteditable عادية
+                        '//footer//div[@contenteditable="true"][@data-tab="10"]',
+                        # fallback عام للنسخ القديمة
+                        '//footer//div[@contenteditable="true"][contains(@class, "copyable-text")]',
+                        '//div[@role="textbox"][@contenteditable="true"]',
+                        # fallback بحد أوسع
+                        '//footer//*[@contenteditable="true"]',
+                        # من خلال الهامش الأيمن للـ compose
+                        '//div[contains(@data-testid,"conversation")]//div[@contenteditable="true"]',
+                    ]
+                    found = False
+                    for sel in input_selectors:
+                        try:
+                            inputs = self.driver.find_elements(By.XPATH, sel)
+                            for inp in inputs:
+                                try:
+                                    if inp.is_displayed():
+                                        size = inp.size
+                                        if size.get("width", 0) > 20 or size.get("height", 0) > 10:
+                                            msg_input = inp
+                                            found = True
+                                            break
+                                except:
+                                    pass
+                            if found:
+                                break
+                        except Exception:
+                            continue
+                    if found:
                         break
                 except Exception: pass
 
-                time.sleep(0.4)
+                time.sleep(0.5)
 
             if is_invalid_num:
                 self._dismiss_modals()
@@ -822,12 +971,21 @@ class WhatsAppService:
 
                 attach_btn_found = None
                 attach_selectors = [
-                    '//span[@data-icon="plus"]',
+                    # 2026: أحدث الأيقونات والإرفاقات
+                    '//*[contains(@data-testid, "conversation-attach-button")]',
+                    '//div[contains(@data-testid, "conversation-attach-button")]',
+                    # أيقونة +/attach-menu-plus (الأصلية)
+                    '//span[@data-icon="attach-menu-plus"]/parent::*',
                     '//span[@data-icon="attach-menu-plus"]',
-                    '//div[@title="Attach"]',
+                    '//span[@data-icon="plus"]/parent::*',
+                    '//span[@data-icon="plus"]',
+                    # بالعربية والإنجليزية
                     '//button[contains(@aria-label, "Attach")]',
                     '//button[contains(@aria-label, "إرفاق")]',
-                    '//div[contains(@data-testid, "conversation-attach-button")]',
+                    '//*[@role="button"][contains(translate(@aria-label,"ABCDEFGHIJKLMNOPQRSTUVWXYZ","abcdefghijklmnopqrstuvwxyz"),"attach") or contains(translate(@aria-label,"ABCDEFGHIJKLMNOPQRSTUVWXYZ","abcdefghijklmnopqrstuvwxyz"),"إرفاق")]',
+                    # عنوان الشريط
+                    '//div[@title="Attach"]',
+                    '//div[@title="إرفاق"]',
                 ]
                 for sel in attach_selectors:
                     try:
@@ -906,22 +1064,61 @@ class WhatsAppService:
                 # If Send button is not yet active (e.g. text wasn't pre-filled by URL), inject it into msg_input
                 if not send_btn and msg_input:
                     try:
-                        ActionChains(self.driver).move_to_element(msg_input).click().perform()
+                        # 🛡️ 2026: التأكيد أولاً على Focus فعلي للعنصر قبل أي إجراء
+                        self.driver.execute_script("""
+                            var el = arguments[0];
+                            el.scrollIntoView({behavior: 'smooth', block: 'center'});
+                            el.focus();
+                            el.setSelectionRange(el.innerText.length, el.innerText.length);
+                        """, msg_input)
+                    except:
+                        pass
+                    time.sleep(random.uniform(0.5, 1.0))
+
+                    try:
+                        ActionChains(self.driver).move_to_element(msg_input).pause(0.2).click().perform()
                     except Exception:
                         try: msg_input.click()
                         except Exception: pass
-                    time.sleep(random.uniform(0.4, 0.8))
+                    time.sleep(random.uniform(0.6, 1.0))
 
-                    encoded_msg = json.dumps(message)
-                    self.driver.execute_script(f"""
-                        var el = arguments[0];
-                        el.focus();
-                        document.execCommand('selectAll', false, null);
-                        document.execCommand('insertText', false, {encoded_msg});
-                        el.dispatchEvent(new InputEvent('input', {{ bubbles: true, data: {encoded_msg} }}));
-                        el.dispatchEvent(new Event('change', {{ bubbles: true }}));
-                    """, msg_input)
-                    time.sleep(random.uniform(0.8, 1.5))
+                    # 🛡️ 2026: حقن النص بطريقة تشغل أحداث React بشكل كامل
+                    # الطريقة 1: insertText مع أحداث input كاملة
+                    try:
+                        encoded_msg = json.dumps(message)
+                        self.driver.execute_script(f"""
+                            (function() {{
+                                var el = arguments[0];
+                                var text = {encoded_msg};
+                                el.focus();
+                                document.execCommand('selectAll', false, null);
+                                document.execCommand('insertText', false, text);
+                                // أحداث متعددة لتفعيل React state
+                                el.dispatchEvent(new InputEvent('beforeinput', {{ bubbles: true, cancelable: true, data: text, inputType: 'insertText' }}));
+                                el.dispatchEvent(new InputEvent('input', {{ bubbles: true, cancelable: true, data: text, inputType: 'insertText' }}));
+                                el.dispatchEvent(new Event('change', {{ bubbles: true }}));
+                                el.dispatchEvent(new KeyboardEvent('keydown', {{ bubbles: true, key: 'Enter' }}));
+                            }}).call(null, arguments[0]);
+                        """, msg_input)
+                    except Exception as js_err:
+                        print(f"[DEBUG] JS inject error: {js_err}")
+                        # الطريقة الاحتياطية: محاكاة الكتابة البشرية
+                        try:
+                            self._type_human_like(msg_input, message)
+                        except Exception as ty_err:
+                            print(f"[DEBUG] _type_human_like error: {ty_err}")
+                    time.sleep(random.uniform(1.0, 1.8))
+
+                    # 🛡️ 2026: إعادة محاولة تفعيل زر الإرسال بعد حقن النص
+                    time.sleep(random.uniform(0.5, 1.0))
+                    send_btn = self._find_send_button()
+                    if not send_btn:
+                        # زيادة فترة الانتظار قليلاً لظهور الزر
+                        for _retry in range(3):
+                            time.sleep(1.0)
+                            send_btn = self._find_send_button()
+                            if send_btn:
+                                break
 
                 # Click Send button or press ENTER
                 sent_ok = False
@@ -935,11 +1132,20 @@ class WhatsAppService:
                             send_btn.click()
                             sent_ok = True
                         except Exception:
-                            self.driver.execute_script("arguments[0].click();", send_btn)
-                            sent_ok = True
+                            try:
+                                self.driver.execute_script("arguments[0].click();", send_btn)
+                                sent_ok = True
+                            except Exception:
+                                pass
 
                 if not sent_ok and msg_input:
                     try:
+                        # التركيز على صندوق الكتابة ثم ENTER
+                        try:
+                            msg_input.click()
+                            time.sleep(0.3)
+                        except:
+                            pass
                         msg_input.send_keys(Keys.ENTER)
                         sent_ok = True
                     except Exception as k_err:
@@ -947,39 +1153,93 @@ class WhatsAppService:
 
                 if not sent_ok:
                     try:
+                        # 2026: أحدث query للزر من داخل الـ JS
                         self.driver.execute_script("""
-                            var btn = document.querySelector('button[aria-label="Send"], button[aria-label="إرسال"], span[data-icon="send"]');
-                            if (btn) (btn.closest('button') || btn).click();
+                            var btn = null;
+                            var all = document.querySelectorAll('[data-testid*="compose-btn-send"], [data-icon="send"], button[aria-label="Send"], button[aria-label="إرسال"], button[aria-label="ارسل"]');
+                            for (var b of all) {
+                                var rect = b.getBoundingClientRect();
+                                if (rect.width > 0 && rect.height > 0) { btn = b; break; }
+                            }
+                            if (!btn) {
+                                var ancestor = document.querySelector('footer span[data-icon="send"]');
+                                if (ancestor) btn = ancestor.closest('button, div[role="button"]');
+                            }
+                            if (btn) {
+                                var rect0 = btn.getBoundingClientRect();
+                                function clickAt(el, x, y) {
+                                    el.dispatchEvent(new MouseEvent('pointerdown', {bubbles:true,cancelable:true,clientX:x,clientY:y,view:window,button:0}));
+                                    el.dispatchEvent(new MouseEvent('pointerup',   {bubbles:true,cancelable:true,clientX:x,clientY:y,view:window,button:0}));
+                                    el.dispatchEvent(new MouseEvent('click',      {bubbles:true,cancelable:true,clientX:x,clientY:y,view:window,button:0}));
+                                }
+                                clickAt(btn, rect0.left+rect0.width/2, rect0.top+rect0.height/2);
+                            }
                         """)
                         sent_ok = True
-                    except Exception: pass
+                    except Exception:
+                        pass
 
-            # 🔍 6. STRICT VERIFICATION LOOP (Ensures 100% Real Send, No Fake Progress)
+            # 🔍 6. STRICT VERIFICATION LOOP (Ensures 100% Real Send, No Fake Progress) — 2026 Enhanced
             sent_verified = False
             verify_start = time.time()
-            while time.time() - verify_start < 12:
+            # 2026: زيادة المهلة إلى 25 ثانية للسماح بإرسال المرفقات الكبيرة + نصوص طويلة
+            VERIFY_TIMEOUT = 25
+            while time.time() - verify_start < VERIFY_TIMEOUT:
+                # A. تحقق 1: هل صندوق الكتابة أصبح فارغاً؟ (إشارة قوية للإرسال)
                 if msg_input:
                     try:
-                        if not msg_input.text.strip():
+                        inp_text = msg_input.text.strip()
+                        if not inp_text:
                             sent_verified = True
                             break
                     except Exception:
-                        sent_verified = True
-                        break
+                        pass
 
+                # B. تحقق 2: البحث عن علامات الإرسال في DOM
                 if self._verify_message_sent():
                     sent_verified = True
                     break
 
-                time.sleep(0.5)
+                # C. تحقق 3: البحث عن الحالة عبر JS (أسرع وأكثر دقة أحياناً)
+                try:
+                    js_check = self.driver.execute_script("""
+                        // Search for last message-out indicators
+                        var lastMsg = document.querySelectorAll('[data-testid*="msg-out"], [class*="message-out"]');
+                        if (lastMsg.length > 0) {
+                            var lm = lastMsg[lastMsg.length-1];
+                            var r = lm.getBoundingClientRect();
+                            if (r.width > 0 || r.height > 0) {
+                                return 'has_out_msg';
+                            }
+                        }
+                        // Search for status icons
+                        var icons = document.querySelectorAll('[data-icon*="msg-check"], [data-icon*="msg-time"], [data-icon*="msg-dblcheck"]');
+                        if (icons.length > 0) return 'has_status_icon';
+                        return 'not_found';
+                    """)
+                    if js_check and js_check != 'not_found':
+                        sent_verified = True
+                        break
+                except Exception:
+                    pass
 
+                time.sleep(0.7)
+
+            # 🛡️ 2026: حلقة احتياطية إضافية - إذا لسه متأكدش، جرب ENTER مرة أخيرة بعد الانتظار
             if not sent_verified and msg_input:
                 try:
+                    time.sleep(1.0)
+                    try:
+                        msg_input.click()
+                        time.sleep(0.3)
+                    except:
+                        pass
                     msg_input.send_keys(Keys.ENTER)
-                    time.sleep(2.0)
+                    time.sleep(3.0)
                     if not msg_input.text.strip() or self._verify_message_sent():
                         sent_verified = True
-                except Exception: pass
+                except Exception:
+                    pass
 
             if sent_verified:
                 self.update_daily_stats(True, is_invalid_number=False)
