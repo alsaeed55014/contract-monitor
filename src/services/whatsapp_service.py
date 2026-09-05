@@ -662,12 +662,44 @@ class WhatsAppService:
         except Exception:
             return False
 
+    def _normalize_phone(self, phone: str) -> str:
+        """Standardize phone to international digits format (e.g. 9665XXXXXXXX)."""
+        clean = "".join(filter(str.isdigit, str(phone)))
+        if not clean:
+            return ""
+        # Local Saudi numbers
+        if clean.startswith("05") and len(clean) == 10:
+            return "966" + clean[1:]
+        if clean.startswith("5") and len(clean) == 9:
+            return "966" + clean
+        if clean.startswith("00"):
+            return clean[2:]
+        return clean
+
+    def _auto_handle_popups(self):
+        """Automatically dismiss or accept common WhatsApp Web popups (Use Here, etc.)."""
+        if not self.driver: return
+        from selenium.webdriver.common.by import By
+        try:
+            # 1. 'Use Here' / 'استخدام هنا' popup
+            use_here_btns = self.driver.find_elements(By.XPATH,
+                '//button[contains(., "Use Here") or contains(., "استخدام هنا") or contains(., "استخدم هنا")] | '
+                '//div[@role="button"][contains(., "Use Here") or contains(., "استخدام هنا") or contains(., "استخدم هنا")]'
+            )
+            for btn in use_here_btns:
+                if btn.is_displayed():
+                    btn.click()
+                    time.sleep(1.0)
+                    break
+        except Exception: pass
+
     def send_message(self, phone, message, attachment_path=None):
         from selenium.webdriver.common.by import By
         from selenium.webdriver.support.ui import WebDriverWait
         from selenium.webdriver.support import expected_conditions as EC
         from selenium.webdriver.common.keys import Keys
         from selenium.webdriver.common.action_chains import ActionChains
+        import urllib.parse
         
         if not self.driver:
             return False, "Engine Offline (المحرك غير متصل)"
@@ -682,21 +714,27 @@ class WhatsAppService:
         self.simulate_human_browsing()
 
         try:
-            clean_phone = "".join(filter(str.isdigit, str(phone)))
+            clean_phone = self._normalize_phone(phone)
             if message:
                 message = obfuscate_message(message)
 
             if len(clean_phone) < 8:
                 self.update_daily_stats(False, is_invalid_number=True)
-                return False, "رقم غير صالح (قصير جداً)"
+                return False, f"رقم غير صالح ({phone})"
 
-            # Dismiss any leftover modals/alerts
+            # Dismiss any popups or 'Use Here'
+            self._auto_handle_popups()
             self._dismiss_modals()
-            time.sleep(random.uniform(0.5, 1.2))
+            time.sleep(random.uniform(0.4, 0.8))
 
-            # 🌐 2. Navigate directly to WhatsApp chat URL
-            target_url = f"https://web.whatsapp.com/send?phone={clean_phone}"
-            print(f"[{time.strftime('%H:%M:%S')}] Navigating to: {target_url}")
+            # 🌐 2. Navigate directly to WhatsApp chat URL (pre-filling text for native React compatibility)
+            if not attachment_path and message:
+                encoded_text = urllib.parse.quote(message)
+                target_url = f"https://web.whatsapp.com/send?phone={clean_phone}&text={encoded_text}"
+            else:
+                target_url = f"https://web.whatsapp.com/send?phone={clean_phone}"
+
+            print(f"[{time.strftime('%H:%M:%S')}] 🚀 Navigating to: {target_url[:80]}...")
             try:
                 self.driver.get(target_url)
             except Exception as e_nav:
@@ -705,12 +743,15 @@ class WhatsAppService:
 
             time.sleep(random.uniform(2.0, 3.5))
 
-            # ⏳ 3. Wait for chat input OR invalid number dialog
+            # ⏳ 3. Wait for chat input / send button OR invalid number dialog
             wait_start = time.time()
             msg_input = None
+            send_btn = None
             is_invalid_num = False
 
             while time.time() - wait_start < 35:
+                self._auto_handle_popups()
+
                 # A. Check for invalid number dialog
                 try:
                     invalid_elements = self.driver.find_elements(By.XPATH,
@@ -729,7 +770,12 @@ class WhatsAppService:
                 if is_invalid_num:
                     break
 
-                # B. Check for compose box
+                # B. Check for active send button (when pre-filled via URL)
+                send_btn = self._find_send_button()
+                if send_btn and send_btn.is_displayed():
+                    break
+
+                # C. Check for compose box
                 try:
                     inputs = self.driver.find_elements(By.XPATH,
                         '//footer//div[@contenteditable="true"] | '
@@ -753,7 +799,7 @@ class WhatsAppService:
                 self.update_daily_stats(False, is_invalid_number=True)
                 return False, "رقم غير مسجل في الواتساب"
 
-            if not msg_input:
+            if not send_btn and not msg_input:
                 src = self.driver.page_source.lower()
                 if any(k in src for k in ["invalid", "phone number shared via url is invalid", "غير صالح"]):
                     self._dismiss_modals()
@@ -762,7 +808,7 @@ class WhatsAppService:
                 self.update_daily_stats(False, is_invalid_number=False)
                 return False, "فشل في فتح المحادثة أو العثور على صندوق الرسائل"
 
-            time.sleep(random.uniform(0.8, 1.5))
+            time.sleep(random.uniform(0.6, 1.2))
 
             # 📎 4. Handle Attachment (if specified)
             if attachment_path and os.path.exists(attachment_path):
@@ -836,10 +882,10 @@ class WhatsAppService:
                     time.sleep(random.uniform(0.8, 1.5))
 
                 sent_ok = False
-                send_btn = self._find_send_button()
-                if send_btn:
+                media_send_btn = self._find_send_button()
+                if media_send_btn:
                     try:
-                        ActionChains(self.driver).move_to_element(send_btn).pause(0.3).click().perform()
+                        ActionChains(self.driver).move_to_element(media_send_btn).pause(0.3).click().perform()
                         sent_ok = True
                     except Exception: pass
                 if not sent_ok:
@@ -857,25 +903,25 @@ class WhatsAppService:
                 if not message:
                     return False, "الرسالة فارغة"
 
-                try:
-                    ActionChains(self.driver).move_to_element(msg_input).click().perform()
-                except Exception:
-                    try: msg_input.click()
-                    except Exception: pass
-                time.sleep(random.uniform(0.4, 0.8))
+                # If Send button is not yet active (e.g. text wasn't pre-filled by URL), inject it into msg_input
+                if not send_btn and msg_input:
+                    try:
+                        ActionChains(self.driver).move_to_element(msg_input).click().perform()
+                    except Exception:
+                        try: msg_input.click()
+                        except Exception: pass
+                    time.sleep(random.uniform(0.4, 0.8))
 
-                # Insert text safely through Lexical event triggers
-                encoded_msg = json.dumps(message)
-                self.driver.execute_script(f"""
-                    var el = arguments[0];
-                    el.focus();
-                    document.execCommand('selectAll', false, null);
-                    document.execCommand('insertText', false, {encoded_msg});
-                    el.dispatchEvent(new InputEvent('input', {{ bubbles: true, data: {encoded_msg} }}));
-                    el.dispatchEvent(new Event('change', {{ bubbles: true }}));
-                """, msg_input)
-
-                time.sleep(random.uniform(1.2, 2.2))
+                    encoded_msg = json.dumps(message)
+                    self.driver.execute_script(f"""
+                        var el = arguments[0];
+                        el.focus();
+                        document.execCommand('selectAll', false, null);
+                        document.execCommand('insertText', false, {encoded_msg});
+                        el.dispatchEvent(new InputEvent('input', {{ bubbles: true, data: {encoded_msg} }}));
+                        el.dispatchEvent(new Event('change', {{ bubbles: true }}));
+                    """, msg_input)
+                    time.sleep(random.uniform(0.8, 1.5))
 
                 # Click Send button or press ENTER
                 sent_ok = False
@@ -885,9 +931,14 @@ class WhatsAppService:
                         ActionChains(self.driver).move_to_element(send_btn).pause(random.uniform(0.2, 0.5)).click().perform()
                         sent_ok = True
                     except Exception as s_err:
-                        print(f"[DEBUG] Send button click error: {s_err}")
+                        try:
+                            send_btn.click()
+                            sent_ok = True
+                        except Exception:
+                            self.driver.execute_script("arguments[0].click();", send_btn)
+                            sent_ok = True
 
-                if not sent_ok:
+                if not sent_ok and msg_input:
                     try:
                         msg_input.send_keys(Keys.ENTER)
                         sent_ok = True
@@ -906,15 +957,15 @@ class WhatsAppService:
             # 🔍 6. STRICT VERIFICATION LOOP (Ensures 100% Real Send, No Fake Progress)
             sent_verified = False
             verify_start = time.time()
-            while time.time() - verify_start < 10:
-                try:
-                    # If the contenteditable input text is empty, message was sent
-                    if not msg_input.text.strip():
+            while time.time() - verify_start < 12:
+                if msg_input:
+                    try:
+                        if not msg_input.text.strip():
+                            sent_verified = True
+                            break
+                    except Exception:
                         sent_verified = True
                         break
-                except Exception:
-                    sent_verified = True
-                    break
 
                 if self._verify_message_sent():
                     sent_verified = True
@@ -922,8 +973,7 @@ class WhatsAppService:
 
                 time.sleep(0.5)
 
-            if not sent_verified:
-                # One last attempt with ENTER
+            if not sent_verified and msg_input:
                 try:
                     msg_input.send_keys(Keys.ENTER)
                     time.sleep(2.0)
