@@ -2666,15 +2666,116 @@ def render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search", 
     else: st.info("لا يتوفر رابط معاينة لهذا العامل.")
 
 def login_screen():
-    # Request browser notification permission early
+    # Client-side Device Remember Script (Isolates storage strictly to this specific device/browser)
     st.html("""
 <script>
-// Request notification permission on page load
+// 1. Request notification permission on page load
 if ('Notification' in window && Notification.permission === 'default') {
     Notification.requestPermission().then(function(permission) {
         console.log('Notification permission:', permission);
     });
 }
+
+// 2. Device-Isolated Remember Login System (localStorage per client device)
+(function() {
+    function setReactInputValue(input, val) {
+        if (!input) return;
+        const lastVal = input.value;
+        const descriptor = Object.getOwnPropertyDescriptor(input, 'value');
+        const setter = descriptor ? descriptor.set : null;
+        const proto = Object.getPrototypeOf(input);
+        const protoSetter = Object.getOwnPropertyDescriptor(proto, 'value')?.set;
+        
+        if (protoSetter && setter !== protoSetter) {
+            protoSetter.call(input, val);
+        } else if (setter) {
+            setter.call(input, val);
+        } else {
+            input.value = val;
+        }
+        if (lastVal !== val) {
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+            input.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+    }
+
+    function initClientRemember() {
+        try {
+            const savedU = localStorage.getItem("_recruitment_device_u");
+            const savedP = localStorage.getItem("_recruitment_device_p");
+            const savedPersist = localStorage.getItem("_recruitment_device_persist");
+
+            const form = document.querySelector('form[data-testid="stForm"]') || document.querySelector('form');
+            if (!form) return;
+
+            const inputs = form.querySelectorAll('input');
+            let userInput = null;
+            let passInput = null;
+            let checkboxInput = null;
+
+            inputs.forEach(input => {
+                const t = (input.getAttribute('type') || 'text').toLowerCase();
+                if (t === 'password') {
+                    passInput = input;
+                } else if (t === 'checkbox') {
+                    checkboxInput = input;
+                } else if (t === 'text' || t === '') {
+                    userInput = input;
+                }
+            });
+
+            // Pre-fill on this specific device only
+            if (savedPersist === "true" && savedU && savedP) {
+                if (userInput && !userInput.value) {
+                    setReactInputValue(userInput, savedU);
+                }
+                if (passInput && !passInput.value) {
+                    setReactInputValue(passInput, savedP);
+                }
+                if (checkboxInput && !checkboxInput.checked) {
+                    checkboxInput.click();
+                }
+            }
+
+            // Hook form submit buttons to save/clear localStorage
+            const buttons = form.querySelectorAll('button');
+            buttons.forEach(btn => {
+                if (!btn._remHook) {
+                    btn._remHook = true;
+                    btn.addEventListener('click', function() {
+                        const curU = userInput ? userInput.value : '';
+                        const curP = passInput ? passInput.value : '';
+                        const curPersist = checkboxInput ? checkboxInput.checked : false;
+
+                        if (curPersist && curU && curP) {
+                            localStorage.setItem("_recruitment_device_u", curU);
+                            localStorage.setItem("_recruitment_device_p", curP);
+                            localStorage.setItem("_recruitment_device_persist", "true");
+                        } else if (!curPersist) {
+                            localStorage.removeItem("_recruitment_device_u");
+                            localStorage.removeItem("_recruitment_device_p");
+                            localStorage.removeItem("_recruitment_device_persist");
+                        }
+                    }, true);
+                }
+            });
+        } catch (err) {
+            console.error("Local remember error:", err);
+        }
+    }
+
+    setTimeout(initClientRemember, 60);
+    setTimeout(initClientRemember, 250);
+    setTimeout(initClientRemember, 600);
+    setTimeout(initClientRemember, 1500);
+
+    const observer = new MutationObserver(function() {
+        initClientRemember();
+    });
+    if (document.body) {
+        observer.observe(document.body, { childList: true, subtree: true });
+    }
+})();
 </script>
 """)
 
@@ -2739,12 +2840,22 @@ if ('Notification' in window && Notification.permission === 'default') {
                             st.html(f"""
                             <script>
                             document.cookie = "{DEVICE_REMEMBER_COOKIE}={dev_token}; max-age=2592000; path=/; SameSite=Lax";
+                            try {{
+                                localStorage.setItem("_recruitment_device_u", "{u.strip()}");
+                                localStorage.setItem("_recruitment_device_p", "{p.strip()}");
+                                localStorage.setItem("_recruitment_device_persist", "true");
+                            }} catch(e) {{}}
                             </script>
                             """)
                         else:
                             st.html(f"""
                             <script>
                             document.cookie = "{DEVICE_REMEMBER_COOKIE}=; max-age=0; path=/;";
+                            try {{
+                                localStorage.removeItem("_recruitment_device_u");
+                                localStorage.removeItem("_recruitment_device_p");
+                                localStorage.removeItem("_recruitment_device_persist");
+                            }} catch(e) {{}}
                             </script>
                             """)
 
