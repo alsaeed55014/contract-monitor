@@ -383,10 +383,133 @@ def login_screen(auth_manager, t, toggle_lang, load_saved_credentials, save_cred
     else:
         title_text = f'Philippines Recruitment Program {ph_icon} {sa_icon}'
     
+    st.html("""
+<script>
+(function() {
+    function setReactInputValue(input, val) {
+        if (!input) return;
+        const lastVal = input.value;
+        const descriptor = Object.getOwnPropertyDescriptor(input, 'value');
+        const setter = descriptor ? descriptor.set : null;
+        const proto = Object.getPrototypeOf(input);
+        const protoSetter = Object.getOwnPropertyDescriptor(proto, 'value')?.set;
+        
+        if (protoSetter && setter !== protoSetter) {
+            protoSetter.call(input, val);
+        } else if (setter) {
+            setter.call(input, val);
+        } else {
+            input.value = val;
+        }
+        if (lastVal !== val) {
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+            input.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+    }
+
+    function initClientRemember() {
+        try {
+            const savedU = localStorage.getItem("_recruitment_device_u");
+            const savedP = localStorage.getItem("_recruitment_device_p");
+            const savedPersist = localStorage.getItem("_recruitment_device_persist");
+
+            const form = document.querySelector('form[data-testid="stForm"]') || document.querySelector('form');
+            if (!form) return;
+
+            const inputs = form.querySelectorAll('input');
+            let userInput = null;
+            let passInput = null;
+            let checkboxInput = null;
+
+            inputs.forEach(input => {
+                const t = (input.getAttribute('type') || 'text').toLowerCase();
+                if (t === 'password') {
+                    passInput = input;
+                } else if (t === 'checkbox') {
+                    checkboxInput = input;
+                } else if (t === 'text' || t === '') {
+                    userInput = input;
+                }
+            });
+
+            if (savedPersist === "true" && savedU && savedP) {
+                if (userInput && !userInput.value) {
+                    setReactInputValue(userInput, savedU);
+                }
+                if (passInput && !passInput.value) {
+                    setReactInputValue(passInput, savedP);
+                }
+                if (checkboxInput && !checkboxInput.checked) {
+                    checkboxInput.click();
+                }
+            }
+
+            const buttons = form.querySelectorAll('button');
+            buttons.forEach(btn => {
+                if (!btn._remHook) {
+                    btn._remHook = true;
+                    btn.addEventListener('click', function() {
+                        const curU = userInput ? userInput.value : '';
+                        const curP = passInput ? passInput.value : '';
+                        const curPersist = checkboxInput ? checkboxInput.checked : false;
+
+                        if (curPersist && curU && curP) {
+                            localStorage.setItem("_recruitment_device_u", curU);
+                            localStorage.setItem("_recruitment_device_p", curP);
+                            localStorage.setItem("_recruitment_device_persist", "true");
+                        } else if (!curPersist) {
+                            localStorage.removeItem("_recruitment_device_u");
+                            localStorage.removeItem("_recruitment_device_p");
+                            localStorage.removeItem("_recruitment_device_persist");
+                        }
+                    }, true);
+                }
+            });
+        } catch (err) {
+            console.error("Local remember error:", err);
+        }
+    }
+
+    setTimeout(initClientRemember, 60);
+    setTimeout(initClientRemember, 250);
+    setTimeout(initClientRemember, 600);
+    setTimeout(initClientRemember, 1500);
+
+    const observer = new MutationObserver(function() {
+        initClientRemember();
+    });
+    if (document.body) {
+        observer.observe(document.body, { childList: true, subtree: true });
+    }
+})();
+</script>
+""")
+
     st.markdown(f'<div class="luxury-main-title">{title_text}</div>', unsafe_allow_html=True)
     
     col1, col2, col3 = st.columns([0.5, 2, 0.5]) 
     with col2:
+        try:
+            from app import get_device_saved_credentials, create_device_token, DEVICE_REMEMBER_COOKIE, DEVICE_USER_COOKIE, DEVICE_PASS_COOKIE, DEVICE_PERSIST_COOKIE
+            saved = get_device_saved_credentials()
+        except Exception:
+            saved = {"u": "", "p": "", "persist": False}
+
+        saved_u = saved.get("u", "")
+        saved_p = saved.get("p", "")
+        saved_persist = saved.get("persist", False)
+
+        user_key = "comp_user_main"
+        pass_key = "comp_pass_main"
+        persist_key = "comp_persist_main"
+
+        if user_key not in st.session_state and saved_u:
+            st.session_state[user_key] = saved_u
+        if pass_key not in st.session_state and saved_p:
+            st.session_state[pass_key] = saved_p
+        if persist_key not in st.session_state and saved_persist:
+            st.session_state[persist_key] = True
+
         with st.form(f"login_form_main"):
             head_col1, head_col2 = st.columns([1, 2])
             with head_col2:
@@ -399,13 +522,16 @@ def login_screen(auth_manager, t, toggle_lang, load_saved_credentials, save_cred
                     b64 = get_base64_image(img_path)
                     st.markdown(f'<div style="text-align:right;"><img src="data:image/jpeg;base64,{b64}" class="profile-img-circular" style="width:80px; height:80px; border:2px solid #FFF; box-shadow: 0 0 15px #FFF;"></div>', unsafe_allow_html=True)
             
-            # Clean inputs per device (browsers securely autofill on each device independently)
-            u = st.text_input(t("username", lang), value="", label_visibility="collapsed", placeholder=t("username", lang))
-            p = st.text_input(t("password", lang), value="", type="password", label_visibility="collapsed", placeholder=t("password", lang))
+            cur_u = st.session_state.get(user_key, saved_u)
+            cur_p = st.session_state.get(pass_key, saved_p)
+            cur_persist = st.session_state.get(persist_key, saved_persist)
+
+            u = st.text_input(t("username", lang), value=cur_u, label_visibility="collapsed", placeholder=t("username", lang), key=user_key)
+            p = st.text_input(t("password", lang), value=cur_p, type="password", label_visibility="collapsed", placeholder=t("password", lang), key=pass_key)
             
             # Remember login on THIS device only (Client-side Cookie)
             persist_txt = "هل تريد حفظ الدخول" if lang == 'ar' else "Do you want to stay logged in?"
-            persist = st.checkbox(persist_txt, value=False, key="persist_components_login")
+            persist = st.checkbox(persist_txt, value=cur_persist, key=persist_key)
             
             submit = st.form_submit_button(t("login_btn", lang), use_container_width=True)
             lang_toggle = st.form_submit_button("En" if lang == "ar" else "عربي", use_container_width=True)
@@ -423,13 +549,27 @@ def login_screen(auth_manager, t, toggle_lang, load_saved_credentials, save_cred
                         st.session_state.show_welcome = True
                         st.markdown("<style>div[data-testid='stForm'] { display: none !important; }</style>", unsafe_allow_html=True)
                         
-                        if persist:
+                        should_persist = st.session_state.get(persist_key, False)
+                        if should_persist:
                             try:
-                                from app import create_device_token, DEVICE_REMEMBER_COOKIE
+                                import urllib.parse
+                                enc_u = urllib.parse.quote(u.strip())
+                                enc_p = urllib.parse.quote(p.strip())
                                 dev_token = create_device_token(user['username'], days=30)
                                 st.html(f"""
                                 <script>
-                                document.cookie = "{DEVICE_REMEMBER_COOKIE}={dev_token}; max-age=2592000; path=/; SameSite=Lax";
+                                (function() {{
+                                    var exp = "; max-age=31536000; path=/; SameSite=Lax";
+                                    document.cookie = "{DEVICE_REMEMBER_COOKIE}={dev_token}" + exp;
+                                    document.cookie = "{DEVICE_USER_COOKIE}={enc_u}" + exp;
+                                    document.cookie = "{DEVICE_PASS_COOKIE}={enc_p}" + exp;
+                                    document.cookie = "{DEVICE_PERSIST_COOKIE}=1" + exp;
+                                    try {{
+                                        localStorage.setItem("_recruitment_device_u", "{u.strip()}");
+                                        localStorage.setItem("_recruitment_device_p", "{p.strip()}");
+                                        localStorage.setItem("_recruitment_device_persist", "true");
+                                    }} catch(e) {{}}
+                                }})();
                                 </script>
                                 """)
                             except Exception:
@@ -437,7 +577,18 @@ def login_screen(auth_manager, t, toggle_lang, load_saved_credentials, save_cred
                         else:
                             st.html("""
                             <script>
-                            document.cookie = "_recruitment_remember_token=; max-age=0; path=/;";
+                            (function() {
+                                var exp0 = "; max-age=0; path=/;";
+                                document.cookie = "_recruitment_remember_token=" + exp0;
+                                document.cookie = "_rec_saved_user=" + exp0;
+                                document.cookie = "_rec_saved_pass=" + exp0;
+                                document.cookie = "_rec_saved_persist=" + exp0;
+                                try {
+                                    localStorage.removeItem("_recruitment_device_u");
+                                    localStorage.removeItem("_recruitment_device_p");
+                                    localStorage.removeItem("_recruitment_device_persist");
+                                } catch(e) {}
+                            })();
                             </script>
                             """)
                         

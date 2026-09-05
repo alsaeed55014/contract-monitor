@@ -203,9 +203,30 @@ class AuthManager:
 
 import hmac
 import hashlib
+import urllib.parse
 
 DEVICE_REMEMBER_COOKIE = "_recruitment_remember_token"
 DEVICE_REMEMBER_SECRET = b"alwazzan_luxury_recruitment_salt_2026_auth"
+DEVICE_USER_COOKIE = "_rec_saved_user"
+DEVICE_PASS_COOKIE = "_rec_saved_pass"
+DEVICE_PERSIST_COOKIE = "_rec_saved_persist"
+
+def get_device_saved_credentials() -> Dict[str, Any]:
+    """Read saved credentials from client browser cookies (strictly isolated to this device)."""
+    if hasattr(st, "context") and hasattr(st.context, "cookies"):
+        try:
+            cookies = st.context.cookies
+            is_p = cookies.get(DEVICE_PERSIST_COOKIE)
+            if is_p in ["1", "true", "True"]:
+                raw_u = cookies.get(DEVICE_USER_COOKIE, "")
+                raw_p = cookies.get(DEVICE_PASS_COOKIE, "")
+                u = urllib.parse.unquote(raw_u) if raw_u else ""
+                p = urllib.parse.unquote(raw_p) if raw_p else ""
+                if u and p:
+                    return {"u": u, "p": p, "persist": True}
+        except Exception:
+            pass
+    return {"u": "", "p": "", "persist": False}
 
 def create_device_token(username: str, days: int = 30) -> str:
     """Create a signed client-only authentication token for the specific device."""
@@ -2798,6 +2819,19 @@ if ('Notification' in window && Notification.permission === 'default') {
         pass_key = f"pass_{suffix}"
         persist_key = f"persist_{suffix}"
         
+        saved = get_device_saved_credentials()
+        saved_u = saved["u"]
+        saved_p = saved["p"]
+        saved_persist = saved["persist"]
+
+        # If saved credentials exist on this device and not yet in session_state:
+        if user_key not in st.session_state and saved_u:
+            st.session_state[user_key] = saved_u
+        if pass_key not in st.session_state and saved_p:
+            st.session_state[pass_key] = saved_p
+        if persist_key not in st.session_state and saved_persist:
+            st.session_state[persist_key] = True
+
         with st.form(f"login_form_{suffix}"):
             # Row 1: Profile Image next to Welcome Text
             head_col1, head_col2 = st.columns([1, 2])
@@ -2809,13 +2843,17 @@ if ('Notification' in window && Notification.permission === 'default') {
                     b64 = get_base64_image(IMG_PATH)
                     st.markdown(f'<div style="text-align:right;"><img src="data:image/jpeg;base64,{b64}" class="profile-img-circular" style="width:80px; height:80px; border:2px solid #FFF; box-shadow: 0 0 15px #FFF;"></div>', unsafe_allow_html=True)
             
-            # Inputs - Clean inputs per device (browsers securely autofill on each device independently)
-            u = st.text_input(t("username", lang), value="", label_visibility="collapsed", placeholder=t("username", lang), key=user_key)
-            p = st.text_input(t("password", lang), value="", type="password", label_visibility="collapsed", placeholder=t("password", lang), key=pass_key)
+            # Inputs - Pre-filled with saved credentials for THIS device only
+            cur_u = st.session_state.get(user_key, saved_u)
+            cur_p = st.session_state.get(pass_key, saved_p)
+            cur_persist = st.session_state.get(persist_key, saved_persist)
+
+            u = st.text_input(t("username", lang), value=cur_u, label_visibility="collapsed", placeholder=t("username", lang), key=user_key)
+            p = st.text_input(t("password", lang), value=cur_p, type="password", label_visibility="collapsed", placeholder=t("password", lang), key=pass_key)
             
-            # Remember login on THIS device only (Client-side Cookie)
+            # Remember login on THIS device only
             persist_txt = "هل تريد حفظ الدخول" if lang == 'ar' else "Do you want to stay logged in?"
-            st.checkbox(persist_txt, value=False, key=persist_key)
+            persist = st.checkbox(persist_txt, value=cur_persist, key=persist_key)
             
             submit = st.form_submit_button(t("login_btn", lang), width='stretch')
             lang_toggle = st.form_submit_button("En" if lang == "ar" else "عربي", width='stretch')
@@ -2836,26 +2874,41 @@ if ('Notification' in window && Notification.permission === 'default') {
                         # Handle Remember Me for THIS device ONLY
                         should_persist = st.session_state.get(persist_key, False)
                         if should_persist:
+                            import urllib.parse
+                            enc_u = urllib.parse.quote(u.strip())
+                            enc_p = urllib.parse.quote(p.strip())
                             dev_token = create_device_token(user['username'], days=30)
                             st.html(f"""
                             <script>
-                            document.cookie = "{DEVICE_REMEMBER_COOKIE}={dev_token}; max-age=2592000; path=/; SameSite=Lax";
-                            try {{
-                                localStorage.setItem("_recruitment_device_u", "{u.strip()}");
-                                localStorage.setItem("_recruitment_device_p", "{p.strip()}");
-                                localStorage.setItem("_recruitment_device_persist", "true");
-                            }} catch(e) {{}}
+                            (function() {{
+                                var exp = "; max-age=31536000; path=/; SameSite=Lax";
+                                document.cookie = "{DEVICE_REMEMBER_COOKIE}={dev_token}" + exp;
+                                document.cookie = "{DEVICE_USER_COOKIE}={enc_u}" + exp;
+                                document.cookie = "{DEVICE_PASS_COOKIE}={enc_p}" + exp;
+                                document.cookie = "{DEVICE_PERSIST_COOKIE}=1" + exp;
+                                try {{
+                                    localStorage.setItem("_recruitment_device_u", "{u.strip()}");
+                                    localStorage.setItem("_recruitment_device_p", "{p.strip()}");
+                                    localStorage.setItem("_recruitment_device_persist", "true");
+                                }} catch(e) {{}}
+                            }})();
                             </script>
                             """)
                         else:
                             st.html(f"""
                             <script>
-                            document.cookie = "{DEVICE_REMEMBER_COOKIE}=; max-age=0; path=/;";
-                            try {{
-                                localStorage.removeItem("_recruitment_device_u");
-                                localStorage.removeItem("_recruitment_device_p");
-                                localStorage.removeItem("_recruitment_device_persist");
-                            }} catch(e) {{}}
+                            (function() {{
+                                var exp0 = "; max-age=0; path=/;";
+                                document.cookie = "{DEVICE_REMEMBER_COOKIE}=" + exp0;
+                                document.cookie = "{DEVICE_USER_COOKIE}=" + exp0;
+                                document.cookie = "{DEVICE_PASS_COOKIE}=" + exp0;
+                                document.cookie = "{DEVICE_PERSIST_COOKIE}=" + exp0;
+                                try {{
+                                    localStorage.removeItem("_recruitment_device_u");
+                                    localStorage.removeItem("_recruitment_device_p");
+                                    localStorage.removeItem("_recruitment_device_persist");
+                                }} catch(e) {{}}
+                            }})();
                             </script>
                             """)
 
