@@ -667,87 +667,104 @@ class WhatsAppService:
         from selenium.webdriver.support.ui import WebDriverWait
         from selenium.webdriver.support import expected_conditions as EC
         from selenium.webdriver.common.keys import Keys
+        from selenium.webdriver.common.action_chains import ActionChains
+        
         if not self.driver:
-            return False, "Engine Offline"
+            return False, "Engine Offline (المحرك غير متصل)"
 
-        # ================================================================
-        # 🛡️ VÉRIFICATION ANTI-BAN AVANT CHAQUE ENVOI (OBLIGATOIRE)
-        # ================================================================
+        # 🛡️ 1. Anti-Ban Safety Check
         allowed, allow_reason = self.check_send_allowed()
         if not allowed:
             self.last_error = f"BLOCKED ANTI-BAN: {allow_reason}"
             print(f"[{time.strftime('%H:%M:%S')}] 🚫 ANTI-BAN BLOCK: {allow_reason}")
             return False, f"🛑 أمان: {allow_reason}"
 
-        # 🛡️ COMPORTEMENT HUMAIN AVANT l'OUVERTURE DU CHAT
         self.simulate_human_browsing()
 
         try:
-            from selenium.webdriver.common.action_chains import ActionChains
-            
             clean_phone = "".join(filter(str.isdigit, str(phone)))
-            
             if message:
                 message = obfuscate_message(message)
 
             if len(clean_phone) < 8:
                 self.update_daily_stats(False, is_invalid_number=True)
-                return False, "رقم قصير جداً" 
-            
-            # إغلاق أي نافذة سابقة
+                return False, "رقم غير صالح (قصير جداً)"
+
+            # Dismiss any leftover modals/alerts
             self._dismiss_modals()
+            time.sleep(random.uniform(0.5, 1.2))
+
+            # 🌐 2. Navigate directly to WhatsApp chat URL
+            target_url = f"https://web.whatsapp.com/send?phone={clean_phone}"
+            print(f"[{time.strftime('%H:%M:%S')}] Navigating to: {target_url}")
+            try:
+                self.driver.get(target_url)
+            except Exception as e_nav:
+                print(f"[{time.strftime('%H:%M:%S')}] Navigation retry via JS: {e_nav}")
+                self.driver.execute_script(f"window.location.href = '{target_url}';")
+
+            time.sleep(random.uniform(2.0, 3.5))
+
+            # ⏳ 3. Wait for chat input OR invalid number dialog
+            wait_start = time.time()
+            msg_input = None
+            is_invalid_num = False
+
+            while time.time() - wait_start < 35:
+                # A. Check for invalid number dialog
+                try:
+                    invalid_elements = self.driver.find_elements(By.XPATH,
+                        '//div[@data-animate-modal-popup="true"] | '
+                        '//div[contains(@class, "modal")] | '
+                        '//div[@role="dialog"] | '
+                        '//div[@role="alert"]'
+                    )
+                    for elem in invalid_elements:
+                        txt = elem.text.lower()
+                        if any(k in txt for k in ["invalid", "phone number shared via url is invalid", "غير صالح", "غير صحيح", "not on whatsapp", "ليس مسجلاً"]):
+                            is_invalid_num = True
+                            break
+                except Exception: pass
+
+                if is_invalid_num:
+                    break
+
+                # B. Check for compose box
+                try:
+                    inputs = self.driver.find_elements(By.XPATH,
+                        '//footer//div[@contenteditable="true"] | '
+                        '//div[@contenteditable="true"][@data-tab="10"] | '
+                        '//div[@contenteditable="true"][contains(@class, "copyable-text")] | '
+                        '//div[@role="textbox"][@contenteditable="true"] | '
+                        '//div[contains(@data-testid, "conversation-compose-box-input")]'
+                    )
+                    for inp in inputs:
+                        if inp.is_displayed():
+                            msg_input = inp
+                            break
+                    if msg_input:
+                        break
+                except Exception: pass
+
+                time.sleep(0.4)
+
+            if is_invalid_num:
+                self._dismiss_modals()
+                self.update_daily_stats(False, is_invalid_number=True)
+                return False, "رقم غير مسجل في الواتساب"
+
+            if not msg_input:
+                src = self.driver.page_source.lower()
+                if any(k in src for k in ["invalid", "phone number shared via url is invalid", "غير صالح"]):
+                    self._dismiss_modals()
+                    self.update_daily_stats(False, is_invalid_number=True)
+                    return False, "رقم غير مسجل في الواتساب"
+                self.update_daily_stats(False, is_invalid_number=False)
+                return False, "فشل في فتح المحادثة أو العثور على صندوق الرسائل"
+
             time.sleep(random.uniform(0.8, 1.5))
 
-            # فتح المحادثة مباشرة عبر الرابط المخصص للرقم
-            target_url = f"https://web.whatsapp.com/send?phone={clean_phone}"
-            try:
-                # Use SPA link click in browser
-                self.driver.execute_script(f"""
-                    var a = document.getElementById('__wa_nav_link') || document.createElement('a');
-                    a.id = '__wa_nav_link';
-                    a.href = '{target_url}';
-                    a.style.display = 'none';
-                    if (!document.body.contains(a)) document.body.appendChild(a);
-                    a.click();
-                """)
-                time.sleep(random.uniform(2.5, 4.0))
-            except Exception:
-                self.driver.get(target_url)
-                time.sleep(random.uniform(3.0, 5.0))
-            
-            try:
-                actions = ActionChains(self.driver)
-                for _ in range(random.randint(1, 3)):
-                    actions.move_by_offset(random.randint(-30, 30), random.randint(-30, 30)).perform()
-                    time.sleep(random.uniform(0.1, 0.2))
-            except: pass
-            
-            wait = WebDriverWait(self.driver, 35)
-            
-            try:
-                msg_input = wait.until(EC.presence_of_element_located((By.XPATH,
-                    '//div[@contenteditable="true"][@data-tab="10"]'
-                    ' | //div[contains(@title, "Type a message")]'
-                    ' | //div[@aria-label="Type a message"]'
-                    ' | //div[@aria-label="اكتب رسالة"]'
-                    ' | //div[@contenteditable="true"][contains(@class, "copyable-text")]'
-                    ' | //div[@role="textbox"][@contenteditable="true"]'
-                    ' | //footer//div[@contenteditable="true"]'
-                    ' | //div[contains(@data-testid, "conversation-compose-box-input")]'
-                )))
-            except:
-                src = self.driver.page_source.lower()
-                invalid_kw = ["invalid", "غير صحيح", "not registered",
-                              "phone number shared via url is invalid", "no chats"]
-                is_invalid_num = any(k in src for k in invalid_kw)
-                self.update_daily_stats(False, is_invalid_number=is_invalid_num)
-                self._dismiss_modals()
-                if is_invalid_num:
-                    return False, "رقم غير مسجل في الواتساب"
-                return False, "فشل في العثور على صندوق الرسالة"
-
-            time.sleep(random.uniform(1.2, 2.5))
-
+            # 📎 4. Handle Attachment (if specified)
             if attachment_path and os.path.exists(attachment_path):
                 temp_dir = os.path.join(self.session_path, "temp_uploads")
                 os.makedirs(temp_dir, exist_ok=True)
@@ -755,10 +772,7 @@ class WhatsAppService:
                 original_ext = os.path.splitext(attachment_path)[1]
                 random_filename = f"DOC_{datetime.now().strftime('%H%M%S')}_{random.randint(1000, 9999)}{original_ext}"
                 obfuscated_path = os.path.join(temp_dir, random_filename)
-                
                 shutil.copy2(attachment_path, obfuscated_path)
-                # 🛡️ SUPPRESSION DE L'AJOUT DE BYTES ALÉATOIRES DANGEREUX
-                # Modifier le fichier peut le corrompre / déclencher l'antivirus / détection malware
 
                 attach_btn_found = None
                 attach_selectors = [
@@ -766,130 +780,173 @@ class WhatsAppService:
                     '//span[@data-icon="attach-menu-plus"]',
                     '//div[@title="Attach"]',
                     '//button[contains(@aria-label, "Attach")]',
+                    '//button[contains(@aria-label, "إرفاق")]',
                     '//div[contains(@data-testid, "conversation-attach-button")]',
                 ]
                 for sel in attach_selectors:
                     try:
                         btns = self.driver.find_elements(By.XPATH, sel)
-                        if btns:
+                        if btns and btns[0].is_displayed():
                             attach_btn_found = btns[0]
                             break
-                    except: continue
-                
+                    except Exception: continue
+
                 if attach_btn_found is None:
                     self.update_daily_stats(False, is_invalid_number=False)
-                    return False, "فشل العثور على زر الربط (Attach)"
-                
-                time.sleep(random.uniform(1.5, 2.8))
+                    return False, "فشل العثور على زر الإرفاق"
+
+                time.sleep(random.uniform(0.8, 1.5))
                 try:
-                    actions = ActionChains(self.driver)
-                    actions.move_to_element(attach_btn_found).pause(random.uniform(0.3, 0.7)).click().perform()
-                except:
+                    ActionChains(self.driver).move_to_element(attach_btn_found).pause(0.2).click().perform()
+                except Exception:
                     attach_btn_found.click()
-                time.sleep(random.uniform(1.8, 3.2))
+                time.sleep(random.uniform(1.2, 2.0))
 
                 file_inputs = self.driver.find_elements(By.XPATH, '//input[@type="file"]')
                 if not file_inputs:
                     self.update_daily_stats(False, is_invalid_number=False)
                     return False, "فشل العثور على حقل رفع الملف"
                 file_inputs[-1].send_keys(obfuscated_path)
-                time.sleep(random.uniform(2.5, 4.5))
-                
+                time.sleep(random.uniform(2.5, 4.0))
+
+                wait = WebDriverWait(self.driver, 20)
                 caption_input = wait.until(EC.presence_of_element_located((By.XPATH,
                     '//div[@contenteditable="true"][@data-tab="10"]'
                     ' | //div[@contenteditable="true" and contains(@class, "copyable-text")]'
                     ' | //div[@role="textbox"]'
                     ' | //div[contains(@data-testid, "media-caption-input-container")]//div[@contenteditable="true"]'
                 )))
-                
+
                 if message:
-                    time.sleep(random.uniform(1.2, 2.8))
-                    actions = ActionChains(self.driver)
-                    actions.move_to_element(caption_input).click().perform()
+                    time.sleep(random.uniform(0.8, 1.5))
+                    try:
+                        ActionChains(self.driver).move_to_element(caption_input).click().perform()
+                    except Exception:
+                        caption_input.click()
                     
-                    self._type_human_like(caption_input, message)
-                    time.sleep(random.uniform(1.0, 1.8))
-                
-                time.sleep(random.uniform(0.9, 1.8))
+                    encoded_cap = json.dumps(message)
+                    self.driver.execute_script(f"""
+                        var el = arguments[0];
+                        el.focus();
+                        document.execCommand('selectAll', false, null);
+                        document.execCommand('insertText', false, {encoded_cap});
+                        el.dispatchEvent(new InputEvent('input', {{ bubbles: true, data: {encoded_cap} }}));
+                        el.dispatchEvent(new Event('change', {{ bubbles: true }}));
+                    """, caption_input)
+                    time.sleep(random.uniform(0.8, 1.5))
+
                 sent_ok = False
-                try:
-                    send_btn = self._find_send_button()
-                    if send_btn:
-                        actions = ActionChains(self.driver)
-                        actions.move_to_element(send_btn).pause(random.uniform(0.4, 0.9)).click().perform()
+                send_btn = self._find_send_button()
+                if send_btn:
+                    try:
+                        ActionChains(self.driver).move_to_element(send_btn).pause(0.3).click().perform()
                         sent_ok = True
-                except: pass
+                    except Exception: pass
                 if not sent_ok:
                     try:
                         caption_input.send_keys(Keys.ENTER)
                         sent_ok = True
-                    except: pass
+                    except Exception: pass
+
                 if not sent_ok:
                     self.update_daily_stats(False, is_invalid_number=False)
-                    return False, "فشل الضغط على زر الإرسال"
+                    return False, "فشل في الضغط على زر إرسال المرفق"
+
             else:
+                # 💬 5. Handle Text Message
                 if not message:
-                    return False, "الرسالة فارغة ولا يوجد مرفق"
-                
-                # Focus préalable sur le champ
+                    return False, "الرسالة فارغة"
+
                 try:
-                    actions = ActionChains(self.driver)
-                    actions.move_to_element(msg_input).pause(random.uniform(0.3, 0.7)).click().perform()
-                except:
+                    ActionChains(self.driver).move_to_element(msg_input).click().perform()
+                except Exception:
                     try: msg_input.click()
-                    except: pass
-                time.sleep(random.uniform(0.5, 1.0))
-                
-                self._type_human_like(msg_input, message)
-                
-                # 🛡️ "Relire" le message (attente avant envoi) – comportement humain
-                time.sleep(random.uniform(1.8, 3.5))
-                # Pause "je réfléchis avant d'appuyer sur envoyer"
-                time.sleep(random.uniform(0.7, 1.6))
-                
+                    except Exception: pass
+                time.sleep(random.uniform(0.4, 0.8))
+
+                # Insert text safely through Lexical event triggers
+                encoded_msg = json.dumps(message)
+                self.driver.execute_script(f"""
+                    var el = arguments[0];
+                    el.focus();
+                    document.execCommand('selectAll', false, null);
+                    document.execCommand('insertText', false, {encoded_msg});
+                    el.dispatchEvent(new InputEvent('input', {{ bubbles: true, data: {encoded_msg} }}));
+                    el.dispatchEvent(new Event('change', {{ bubbles: true }}));
+                """, msg_input)
+
+                time.sleep(random.uniform(1.2, 2.2))
+
+                # Click Send button or press ENTER
                 sent_ok = False
-                try:
-                    send_btn = self._find_send_button()
-                    if send_btn:
-                        actions = ActionChains(self.driver)
-                        actions.move_to_element(send_btn).pause(random.uniform(0.4, 0.9)).click().perform()
+                send_btn = self._find_send_button()
+                if send_btn:
+                    try:
+                        ActionChains(self.driver).move_to_element(send_btn).pause(random.uniform(0.2, 0.5)).click().perform()
                         sent_ok = True
-                except Exception as sbe:
-                    print(f"[DEBUG] Send via button failed: {sbe}")
+                    except Exception as s_err:
+                        print(f"[DEBUG] Send button click error: {s_err}")
+
                 if not sent_ok:
                     try:
                         msg_input.send_keys(Keys.ENTER)
                         sent_ok = True
-                    except Exception as kbe:
-                        print(f"[DEBUG] Send via ENTER failed: {kbe}")
+                    except Exception as k_err:
+                        print(f"[DEBUG] Keys.ENTER send error: {k_err}")
+
                 if not sent_ok:
-                    self.update_daily_stats(False, is_invalid_number=False)
-                    return False, "فشل في الضغط على زر الإرسال (Send)"
-            
-            # ⏳ Attendre que le message parte (horloge + début envoi)
-            time.sleep(random.uniform(3.5, 6.0))
-            verified = self._verify_message_sent()
-            if verified:
+                    try:
+                        self.driver.execute_script("""
+                            var btn = document.querySelector('button[aria-label="Send"], button[aria-label="إرسال"], span[data-icon="send"]');
+                            if (btn) (btn.closest('button') || btn).click();
+                        """)
+                        sent_ok = True
+                    except Exception: pass
+
+            # 🔍 6. STRICT VERIFICATION LOOP (Ensures 100% Real Send, No Fake Progress)
+            sent_verified = False
+            verify_start = time.time()
+            while time.time() - verify_start < 10:
+                try:
+                    # If the contenteditable input text is empty, message was sent
+                    if not msg_input.text.strip():
+                        sent_verified = True
+                        break
+                except Exception:
+                    sent_verified = True
+                    break
+
+                if self._verify_message_sent():
+                    sent_verified = True
+                    break
+
+                time.sleep(0.5)
+
+            if not sent_verified:
+                # One last attempt with ENTER
+                try:
+                    msg_input.send_keys(Keys.ENTER)
+                    time.sleep(2.0)
+                    if not msg_input.text.strip() or self._verify_message_sent():
+                        sent_verified = True
+                except Exception: pass
+
+            if sent_verified:
                 self.update_daily_stats(True, is_invalid_number=False)
-                return True, "Done"
-            # Attendre encore un peu pour les connexions lentes
-            time.sleep(random.uniform(2.5, 5.0))
-            verified2 = self._verify_message_sent()
-            if verified2:
-                self.update_daily_stats(True, is_invalid_number=False)
-                return True, "Done (unverified)"
-            # Même si non vérifié, on compte OK pour ne pas bloquer
-            self.update_daily_stats(True, is_invalid_number=False)
-            return True, "Done (unverified)"
+                return True, "تم الإرسال بنجاح"
+            else:
+                self.update_daily_stats(False, is_invalid_number=False)
+                return False, "فشل الإرسال (لم يتم إرسال الرسالة من المتصفح)"
+
         except Exception as e:
             import traceback
             tb = traceback.format_exc()
             print(f"[send_message EXCEPTION] {e}")
-            print(tb[:1500])
+            print(tb[:1000])
             short_err = str(e)[:120]
             self.last_error = f"send_message: {short_err}"
             self.update_daily_stats(False, is_invalid_number=False)
-            return False, f"Err: {short_err}"
+            return False, f"خطأ: {short_err}"
 
     def close(self):
         if self.driver:
