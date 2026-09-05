@@ -9,6 +9,34 @@ import re
 import json
 from datetime import datetime, date
 
+# #region debug-point helper: wa-fake-send-bug logger (std lib only, env file based)
+def __dbg_log(hypothesis_id, msg, data=None, run_id="pre-fix", location=""):
+    """تسجيل أحداث التصحيح لسيرفر wa-fake-send-bug بدون أثر على الأداء."""
+    try:
+        import urllib.request
+        _env_p = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), ".dbg", "wa-fake-send-bug.env")
+        _u, _s = "http://127.0.0.1:7777/event", "wa-fake-send-bug"
+        try:
+            with open(_env_p, "r", encoding="utf-8") as __f:
+                __c = __f.read()
+            for __l in __c.split("\n"):
+                if __l.startswith("DEBUG_SERVER_URL="): _u = __l.split("=",1)[1].strip()
+                if __l.startswith("DEBUG_SESSION_ID="): _s = __l.split("=",1)[1].strip()
+        except Exception:
+            pass
+        _payload = json.dumps({
+            "sessionId": _s, "runId": run_id, "hypothesisId": hypothesis_id,
+            "location": location or f"whatsapp_service.py",
+            "msg": f"[DEBUG] {msg}",
+            "data": data or {}, "ts": int(time.time()*1000)
+        }).encode("utf-8")
+        _req = urllib.request.Request(_u, data=_payload, headers={"Content-Type":"application/json"})
+        try: urllib.request.urlopen(_req, timeout=1.5).read()
+        except Exception: pass
+    except Exception:
+        pass
+# #endregion
+
 # ============================================================
 # 🛡️ LIMITES GLOBAUX DE SÉCURITÉ ANTI-BAN 2026
 # Ces valeurs sont des planchers de sécurité ABSOLUS
@@ -659,80 +687,139 @@ class WhatsAppService:
                 pass
         except: pass
 
-    def _verify_message_sent(self) -> bool:
-        """🛡️ التحقق الفعلي من نجاح الإرسال بالبحث عن علامات الصح أو الساعة في آخر رسالة — 2026"""
+    def _verify_message_sent(self, baseline_msgout_count: int = -1, prev_last_msgout_text: str = "",
+                              expected_msg_fragment: str = "", is_attachment: bool = False) -> bool:
+        """
+        🛡️ التحقق الصارم الفعلي من نجاح الإرسال (افتراضياً False = غير مُرسل حتى يثبت العكس!).
+        — القاعدة الذهبية: لا يعيد True أبداً بدون دليل مادي في الـ DOM يثبت ظهور رسالة جديدة.
+        :param baseline_msgout_count: عدد الرسائل الصادرة قبل محاولة الإرسال
+        :param prev_last_msgout_text: نص آخر رسالة صادرة قبل الإرسال (للمقارنة)
+        :param expected_msg_fragment: مقطع من نص الرسالة المتوقع ظهوره بعد الإرسال (بعد تنظيف الرموز المخفية)
+        :param is_attachment: هل هي مرفق (يبحث عن وسائط بدلاً من النص)
+        :return: True فقط إذا وُجد دليل حقيقي على إرسال رسالة جديدة
+        """
         from selenium.webdriver.common.by import By
         try:
-            status_selectors = [
-                # 🛡️ 2026: أحدث الـ data-icon لعلامات الحالة
-                '//*[@data-icon="msg-time"]',
-                '//*[contains(@data-icon, "msg-time")]',
-                '//span[@data-icon="msg-time"]',
-                '//*[@data-icon="msg-check"]',
-                '//*[contains(@data-icon, "msg-check")]',
-                '//span[@data-icon="msg-check"]',
-                '//*[@data-icon="msg-dblcheck"]',
-                '//*[contains(@data-icon, "msg-dblcheck")]',
-                '//span[@data-icon="msg-dblcheck"]',
-                '//*[@data-icon="msg-dblcheck-ack"]',
-                '//*[contains(@data-icon, "msg-dblcheck-ack")]',
-                # الرسائل الصادرة
-                '//div[contains(@data-testid, "msg-out")]',
-                '//div[contains(@class, "message-out")]',
-                '//div[contains(@data-testid, "message-out")]',
-                '//div[contains(@role,"row")][contains(translate(@class,"ABCDEFGHIJKLMNOPQRSTUVWXYZ","abcdefghijklmnopqrstuvwxyz"),"out")]',
-            ]
-            for sel in status_selectors:
-                try:
-                    elems = self.driver.find_elements(By.XPATH, sel)
-                    if elems:
-                        # 🛡️ التحقق من أن العنصر حديث (العنصر الأخير) فعلاً ظاهر
-                        last = elems[-1]
-                        try:
-                            rect = last.rect
-                            if rect.get("width", 0) > 0 and rect.get("height", 0) > 0:
-                                return True
-                            # حتى لو لم يكن ظاهراً بسبب السكرول، فوجوده يكفي للإشارة للنجاح
-                            return True
-                        except:
-                            return True
-                except:
-                    continue
-            # 🔍 طريقة احتياطية: البحث في مصدر الصفحة عن علامات الإرسال
-            try:
-                src = self.driver.page_source.lower()
-                # كلمات تشير للنجاح
-                success_indicators = [
-                    'data-icon="msg-check"', "data-icon='msg-check'",
-                    'data-icon="msg-dblcheck"', "data-icon='msg-dblcheck'",
-                    'data-icon="msg-time"', "data-icon='msg-time'",
-                    'message-out', "msg-out",
-                    'sent',
-                ]
-                has_success = any(ind in src for ind in success_indicators)
+            if not self.driver:
+                return False
 
-                # الكلمات التي تشير إلى فشل مؤكد
+            _msgout_xpath = '//div[contains(@data-testid, "msg-out")] | //div[contains(@class, "message-out")] | //div[contains(@data-testid, "message-out")]'
+            _current_msgouts = self.driver.find_elements(By.XPATH, _msgout_xpath)
+            _current_count = len(_current_msgouts)
+
+            # ─────────────────────────────────────────────────────────────────
+            # 🔴 مستوى 1 (الأقوى فعلياً): زيادة عدد الرسائل الصادرة عن BASELINE
+            # ─────────────────────────────────────────────────────────────────
+            if baseline_msgout_count >= 0 and _current_count > baseline_msgout_count:
+                return True
+
+            # ─────────────────────────────────────────────────────────────────
+            # 🟠 مستوى 2 (قوي): نص آخر رسالة صادرة يطابق الرسالة المتوقعة
+            # ─────────────────────────────────────────────────────────────────
+            if _current_msgouts:
+                try:
+                    _last_e = _current_msgouts[-1]
+                    # استخدام JS للحصول على النص الحقيقي من DOM بدون React artifacts
+                    _last_norm = self.driver.execute_script("""
+                        (function(el){
+                            if (!el) return '';
+                            var t = (el.innerText || el.textContent || '').toString();
+                            // إزالة الرموز المخفية والمسافات الزائدة
+                            t = t.replace(/[\\u200B-\\u200F\\u202A-\\u202E\\u00AD\\u2060\\uFEFF]/g, '');
+                            t = t.replace(/\\s+/g, ' ').trim();
+                            return t.toLowerCase();
+                        })(arguments[0]);
+                    """, _last_e)
+
+                    if expected_msg_fragment and len(expected_msg_fragment) > 3:
+                        if expected_msg_fragment in _last_norm:
+                            # التأكد أنها رسالة جديدة وليست رسالة قديمة بنفس المحتوى
+                            _prev_norm = re.sub(r'[\u200B-\u200F\u202A-\u202E\u00AD\u2060\uFEFF\s]', '',
+                                                prev_last_msgout_text or '').lower()
+                            _expected_in_prev = expected_msg_fragment in _prev_norm
+                            if not _expected_in_prev or (baseline_msgout_count >= 0 and _current_count > baseline_msgout_count):
+                                return True
+                            # حتى لو تطابق المحتوى القديم: تأكد أن الـ DOM changed
+                            if _last_norm != _prev_norm:
+                                return True
+
+                    # للمرفقات: نتحقق من وجود وسائط (IMG / VIDEO / PDF preview) في آخر رسالة صادرة
+                    if is_attachment:
+                        try:
+                            has_media_children = self.driver.execute_script("""
+                                (function(el){
+                                    if (!el) return false;
+                                    // البحث عن صورة، فيديو، مستند، أو أيقونة ملف
+                                    var has = el.querySelector('img, video, [data-testid*="image"], [data-testid*="video"], [data-testid*="document"], [aria-label*="file"], [data-testid*="media"]');
+                                    if (has) return true;
+                                    // البحث عن اسم ملف أو حجم الملف
+                                    var html = el.innerHTML || '';
+                                    if ((html.indexOf('.pdf') > -1 || html.indexOf('.docx') > -1 || html.indexOf('.xlsx') > -1)
+                                        && (html.indexOf('KB') > -1 || html.indexOf('MB') > -1 || html.indexOf('bytes') > -1)) return true;
+                                    return false;
+                                })(arguments[0]);
+                            """, _last_e)
+                            if has_media_children and (_last_norm != (prev_last_msgout_text or '').strip().lower()
+                                                      or (baseline_msgout_count >= 0 and _current_count > baseline_msgout_count)):
+                                return True
+                        except Exception:
+                            pass
+                except Exception:
+                    pass
+
+            # ─────────────────────────────────────────────────────────────────
+            # 🟡 مستوى 3 (متوسط): علامات الحالة في آخر رسالة صادرة فقط
+            #   — لا نعتبر مجرد وجود أي msg-out كنجاح (هذا هو خطأ سابقة)
+            #   — نبحث عن علامات msg-time/check/dblcheck DIRECTLY داخل آخر msg-out فقط
+            # ─────────────────────────────────────────────────────────────────
+            if _current_msgouts:
+                try:
+                    _last_e = _current_msgouts[-1]
+                    _icons = _last_e.find_elements(By.XPATH,
+                        './/*[contains(@data-icon, "msg-time") or contains(@data-icon, "msg-check") or contains(@data-icon, "msg-dblcheck")]')
+                    if _icons:
+                        # التأكد من أنها ليست نفس رسالة قديمة (محتوى جديد أو زيادة في العدد)
+                        _is_new_content = (baseline_msgout_count >= 0 and _current_count > baseline_msgout_count)
+                        try:
+                            if not _is_new_content:
+                                _last_txt = (_last_e.text or "").strip()
+                                _prev_txt = (prev_last_msgout_text or "").strip()
+                                if _last_txt and _prev_txt and _last_txt != _prev_txt:
+                                    _is_new_content = True
+                                elif expected_msg_fragment and len(expected_msg_fragment) > 3:
+                                    _ln = (_last_txt or '').lower()
+                                    _pn = (_prev_txt or '').lower()
+                                    if expected_msg_fragment in _ln and expected_msg_fragment not in _pn:
+                                        _is_new_content = True
+                        except Exception:
+                            pass
+                        if _is_new_content:
+                            return True
+                except Exception:
+                    pass
+
+            # ─────────────────────────────────────────────────────────────────
+            # 🔵 مستوى 4 (ضعيف جداً): نجاح في مصدر الصفحة
+            #   — فقط إذا كان هناك فشل مؤكد، نعيد False
+            #   — الافتراضي نعيد False صارمة! لا نعطي نجاح ساهل
+            # ─────────────────────────────────────────────────────────────────
+            try:
+                src_last = (self.driver.page_source or "")[-8000:].lower()
                 bad_words = [
                     "couldn't send", "can't send this message",
                     "غير قادر على الإرسال", "فشل إرسال الرسالة",
                     "failed to send", "message not delivered",
+                    "only admins can send", "blocked", "you need to save",
+                    "you are blocked", "تم حظرك", "لا يمكن الإرسال",
+                    "red clock", "error",
                 ]
-                has_failure = any(w in src for w in bad_words)
+                if any(w in src_last for w in bad_words):
+                    return False  # فشل مؤكد
+            except Exception:
+                pass
 
-                if has_failure and not has_success:
-                    recent_src = src[-5000:].lower()
-                    if any(w in recent_src for w in bad_words):
-                        return False
-
-                # إذا وجدنا مؤشرات نجاح → تم الإرسال
-                if has_success:
-                    return True
-
-                # خطة احتياطية نهائية: إذا لم نجد رسالة خطأ واضحة → نفترض النجاح
-                # (لأن بعض الأحيان علامات الوضع لا تظهر فوراً بسبب الـ lazy load)
-                return not has_failure
-            except:
-                return True
+            # ===== ⚠️ افتراضي صارم: False (لا نجاح بدون دليل قاطع!) =====
+            return False
         except Exception:
             return False
 
@@ -804,6 +891,34 @@ class WhatsAppService:
         from selenium.webdriver.common.keys import Keys
         from selenium.webdriver.common.action_chains import ActionChains
         import urllib.parse
+
+        # #region debug-point H4+H5: pre-send state capture
+        try:
+            _dbg_pre = {"phone": phone, "msg_len": len(message or ""), "has_attachment": bool(attachment_path and os.path.exists(attachment_path))}
+            try:
+                _dbg_pre["driver_url"] = (self.driver.current_url[:120] if self.driver and self.driver.current_url else "NO_URL")
+                _dbg_pre["driver_title"] = (self.driver.title[:80] if self.driver else "NO_DRIVER")
+            except Exception as _e:
+                _dbg_pre["driver_url_err"] = str(_e)[:80]
+            try:
+                _qr = self.driver.find_elements(By.XPATH, '//canvas | //*[@data-ref] | //*[contains(@data-testid, "qr")] | //*[contains(@aria-label, "QR")] | //*[contains(@aria-label, "Scan")]') if self.driver else []
+                _dbg_pre["qr_elements_found"] = len(_qr)
+                _main = self.driver.find_elements(By.XPATH, '//*[@id="main"] | //div[@id="main"]') if self.driver else []
+                _dbg_pre["main_div_found"] = len(_main)
+                _side = self.driver.find_elements(By.XPATH, '//*[@id="side"]') if self.driver else []
+                _dbg_pre["side_panel_found"] = len(_side)
+                _out_msgs = self.driver.find_elements(By.XPATH, '//*[contains(@data-testid, "msg-out")] | //div[contains(@class, "message-out")]') if self.driver else []
+                _dbg_pre["existing_msgout_count_initial"] = len(_out_msgs)
+            except Exception as _e:
+                _dbg_pre["dom_check_err"] = str(_e)[:100]
+            try:
+                _dbg_pre["wa_status"] = self.get_status()
+            except Exception as _e:
+                _dbg_pre["status_err"] = str(_e)[:80]
+            __dbg_log("H5", "pre-send state (login check + url + qr check + initial msg-out)", _dbg_pre, location="send_message:start (H4+H5)")
+        except Exception:
+            pass
+        # #endregion
         
         if not self.driver:
             return False, "Engine Offline (المحرك غير متصل)"
@@ -847,6 +962,29 @@ class WhatsAppService:
 
             # 🛡️ 2026: زيادة وقت التحميل الأولي لـ React hydration (مهم جداً للنسخ الجديدة)
             time.sleep(random.uniform(4.0, 7.0))
+
+            # #region debug-point H4: post-navigation state (did we really reach the chat?)
+            try:
+                _dbg_postnav = {"clean_phone": clean_phone, "target_url": target_url[:120]}
+                try:
+                    _dbg_postnav["actual_url"] = (self.driver.current_url[:150] if self.driver else "NO_DRIVER")
+                    _dbg_postnav["title"] = (self.driver.title[:80] if self.driver else "")
+                    _dbg_postnav["match_send"] = "send?phone" in (_dbg_postnav.get("actual_url","").lower())
+                except Exception as _e:
+                    _dbg_postnav["nav_url_err"] = str(_e)[:80]
+                try:
+                    _main = self.driver.find_elements(By.XPATH, '//*[@id="main"] | //div[@id="main"]') if self.driver else []
+                    _footer = self.driver.find_elements(By.XPATH, '//footer | //*[@role="region"][contains(@data-testid,"conversation-panel")]') if self.driver else []
+                    _qr2 = self.driver.find_elements(By.XPATH, '//canvas | //*[@data-ref] | //*[contains(@data-testid, "qr")]') if self.driver else []
+                    _dbg_postnav["main_count"] = len(_main)
+                    _dbg_postnav["footer_count"] = len(_footer)
+                    _dbg_postnav["qr_count_postnav"] = len(_qr2)
+                except Exception as _e:
+                    _dbg_postnav["postnav_dom_err"] = str(_e)[:80]
+                __dbg_log("H4", "post navigation: real URL match chat URL? + main/footer present?", _dbg_postnav, location="send_message:post-navigate (H4)")
+            except Exception:
+                pass
+            # #endregion
 
             # ⏳ 3. Wait for chat input / send button OR invalid number dialog
             #    — 2026: زيادة المهلة إلى 60 ثانية بسبب بطء بعض أجهزة واتساب الجديدة
@@ -943,6 +1081,94 @@ class WhatsAppService:
 
                 time.sleep(0.5)
 
+            # #region debug-point H1+H2+H3: state after wait, BEFORE send click
+            try:
+                _dbg_presend = {"is_invalid_num": is_invalid_num, "wait_secs_elapsed": round(time.time()-wait_start, 1)}
+                # H1: COUNT OF EXISTING msg-out ELEMENTS BEFORE SENDING (the gold baseline for H1)
+                try:
+                    _out_before = self.driver.find_elements(By.XPATH, '//div[contains(@data-testid, "msg-out")] | //div[contains(@class, "message-out")] | //div[contains(@data-testid, "message-out")]') if self.driver else []
+                    _dbg_presend["msgout_count_before_send"] = len(_out_before)
+                    # Also capture text contents of LAST 2 msg-out items (if any) to compare later
+                    try:
+                        _dbg_presend["last_msgout_texts_pre"] = [((elem.text[:100] if elem.text else "") + f"|visible={elem.is_displayed()}") for elem in _out_before[-2:]]
+                    except Exception:
+                        pass
+                except Exception as _e:
+                    _dbg_presend["msgout_count_err"] = str(_e)[:100]
+                # H3: send_btn details
+                try:
+                    if send_btn is not None:
+                        _dbg_presend["send_btn_found"] = True
+                        _s = send_btn
+                        try:
+                            _dbg_presend["send_btn_tag"] = _s.tag_name
+                            _dbg_presend["send_btn_displayed"] = _s.is_displayed()
+                            _dbg_presend["send_btn_enabled"] = _s.is_enabled()
+                            _sz = _s.size
+                            _dbg_presend["send_btn_size_w"] = _sz.get("width", -1)
+                            _dbg_presend["send_btn_size_h"] = _sz.get("height", -1)
+                            for _a in ["aria-label","data-testid","data-icon","class","title","role"]:
+                                try:
+                                    _v = _s.get_attribute(_a)
+                                    if _v: _dbg_presend[f"send_btn_{_a.replace('-','_')}"] = str(_v)[:80]
+                                except Exception: pass
+                        except Exception as _es:
+                            _dbg_presend["send_btn_props_err"] = str(_es)[:100]
+                    else:
+                        _dbg_presend["send_btn_found"] = False
+                except Exception as _e:
+                    _dbg_presend["send_btn_check_err"] = str(_e)[:100]
+                # H2: msg_input details (is it really there? does it have actual text content from URL prefill?)
+                try:
+                    if msg_input is not None:
+                        _dbg_presend["msg_input_found"] = True
+                        _mi = msg_input
+                        try:
+                            _mi_sz = _mi.size
+                            _dbg_presend["msg_input_size_w"] = _mi_sz.get("width",-1)
+                            _dbg_presend["msg_input_size_h"] = _mi_sz.get("height",-1)
+                            _dbg_presend["msg_input_displayed"] = _mi.is_displayed()
+                            _dbg_presend["msg_input_enabled"] = _mi.is_enabled()
+                            # CRITICAL: capture actual DOM text of the input box (is the pre-filled URL text really visible in it?)
+                            try:
+                                _input_text = _mi.text if hasattr(_mi, "text") else ""
+                                _dbg_presend["msg_input_actual_text_len"] = len(_input_text or "")
+                                _dbg_presend["msg_input_actual_text_preview"] = str(_input_text or "")[:150]
+                                # Alternative: check innerText via JS
+                                try:
+                                    _js_text = self.driver.execute_script("return (arguments[0] && (arguments[0].innerText || arguments[0].textContent || '')).toString();", _mi)
+                                    _dbg_presend["msg_input_js_innertext_len"] = len(_js_text or "")
+                                    _dbg_presend["msg_input_js_innertext_preview"] = str(_js_text or "")[:150]
+                                except Exception:
+                                    pass
+                            except Exception as _ei:
+                                _dbg_presend["msg_input_text_err"] = str(_ei)[:100]
+                            # Capture attributes for class name match for search field vs chat field
+                            for _a in ["data-tab","data-testid","role","contenteditable","class","aria-label","title","placeholder"]:
+                                try:
+                                    _v = _mi.get_attribute(_a)
+                                    if _v: _dbg_presend[f"msg_input_{_a.replace('-','_')}"] = str(_v)[:120]
+                                except Exception: pass
+                        except Exception as _em:
+                            _dbg_presend["msg_input_props_err"] = str(_em)[:100]
+                        # Also check: is this search box or real chat box? search box has data-tab="3"
+                        try:
+                            _dt = _mi.get_attribute("data-tab") or ""
+                            if _dt == "3":
+                                _dbg_presend["msg_input_DANGER_search_box"] = True  # DANGER: This is SEARCH not CHAT!
+                            elif _dt == "10" or (_mi.get_attribute("data-testid") or "").find("compose") > -1:
+                                _dbg_presend["msg_input_OK_chat_box"] = True  # OK: real chat compose
+                        except Exception:
+                            pass
+                    else:
+                        _dbg_presend["msg_input_found"] = False
+                except Exception as _e:
+                    _dbg_presend["msg_input_check_err"] = str(_e)[:100]
+                __dbg_log("H2", "after wait loop: msg-out baseline count + send_btn validity + msg_input real content (H1+H2+H3)", _dbg_presend, location="send_message:after-wait (H1+H2+H3)")
+            except Exception:
+                pass
+            # #endregion
+
             if is_invalid_num:
                 self._dismiss_modals()
                 self.update_daily_stats(False, is_invalid_number=True)
@@ -958,6 +1184,41 @@ class WhatsAppService:
                 return False, "فشل في فتح المحادثة أو العثور على صندوق الرسائل"
 
             time.sleep(random.uniform(0.6, 1.2))
+
+            # ╔══════════════════════════════════════════════════════════════╗
+            # ║ 🛡️ STRICT SEND BASELINE (لإيقاف النتائج الوهمية نهائياً)      ║
+            # ╠══════════════════════════════════════════════════════════════╣
+            # ║ 1. عدّ كل رسائل صادرة (msg-out) الموجودة قبل محاولة الإرسال  ║
+            # ║ 2. احفظ نص آخر رسالة صادرة حتى نقارنها بعد الإرسال           ║
+            # ║ 3. احفظ مقطع النص المتوقع للبحث عنه بعد الإرسال              ║
+            # ╚══════════════════════════════════════════════════════════════╝
+            from selenium.webdriver.common.by import By as _By
+            _msgout_count_baseline = -1
+            _last_msgout_text_baseline = ""
+            _expected_msg_fragment = ""
+            try:
+                _baseline_xpath = '//div[contains(@data-testid, "msg-out")] | //div[contains(@class, "message-out")] | //div[contains(@data-testid, "message-out")]'
+                _prev = self.driver.find_elements(_By.XPATH, _baseline_xpath)
+                _msgout_count_baseline = len(_prev)
+                if _prev:
+                    try:
+                        _last_e = _prev[-1]
+                        _t = self.driver.execute_script(
+                            "return (arguments[0].innerText || arguments[0].textContent || '').toString().replace(/\\s+/g, ' ').trim();",
+                            _last_e
+                        )
+                        _last_msgout_text_baseline = (_t or "").strip()
+                    except Exception:
+                        _last_msgout_text_baseline = getattr(_prev[-1], "text", "").strip()
+            except Exception:
+                _msgout_count_baseline = -1
+            if message:
+                # إزالة الرموز المخفية من المقطع المقارن لتفادي الفشل بسبب الـ obfuscation
+                _norm = re.sub(r'[\u200B-\u200F\u202A-\u202E\u00AD\u2060\uFEFF\s]', '', message).lower()
+                if len(_norm) > 55:
+                    _norm = _norm[:55]
+                _expected_msg_fragment = _norm
+            # ══════════════════════════════════════════════════════════════
 
             # 📎 4. Handle Attachment (if specified)
             if attachment_path and os.path.exists(attachment_path):
@@ -1179,67 +1440,192 @@ class WhatsAppService:
                     except Exception:
                         pass
 
-            # 🔍 6. STRICT VERIFICATION LOOP (Ensures 100% Real Send, No Fake Progress) — 2026 Enhanced
-            sent_verified = False
-            verify_start = time.time()
-            # 2026: زيادة المهلة إلى 25 ثانية للسماح بإرسال المرفقات الكبيرة + نصوص طويلة
-            VERIFY_TIMEOUT = 25
-            while time.time() - verify_start < VERIFY_TIMEOUT:
-                # A. تحقق 1: هل صندوق الكتابة أصبح فارغاً؟ (إشارة قوية للإرسال)
-                if msg_input:
+            # #region debug-point H1+H3: post-click, PRE-verification. Count msg-out and compare with baseline
+            try:
+                _dbg_postclick = {"sent_ok_click_flag": sent_ok, "clean_phone": clean_phone, "message_expected_len": len(message or "")}
+                try:
+                    _out_after = self.driver.find_elements(By.XPATH, '//div[contains(@data-testid, "msg-out")] | //div[contains(@class, "message-out")] | //div[contains(@data-testid, "message-out")]') if self.driver else []
+                    _dbg_postclick["msgout_count_after_click"] = len(_out_after)
+                    # last 3 message texts
                     try:
-                        inp_text = msg_input.text.strip()
-                        if not inp_text:
-                            sent_verified = True
-                            break
+                        _dbg_postclick["last_msgout_texts_postclick"] = [((elem.text[:120] if elem.text else "") + f"|display={elem.is_displayed()}") for elem in _out_after[-3:]]
                     except Exception:
                         pass
+                except Exception as _e:
+                    _dbg_postclick["msgout_postclick_count_err"] = str(_e)[:80]
+                # check msg_input now empty or not
+                try:
+                    if msg_input is not None:
+                        _it = msg_input.text if hasattr(msg_input, "text") else ""
+                        _dbg_postclick["msg_input_text_after_click_len"] = len(_it or "")
+                        _dbg_postclick["msg_input_text_after_click_preview"] = str(_it or "")[:100]
+                        try:
+                            _it2 = self.driver.execute_script("return (arguments[0] && (arguments[0].innerText || arguments[0].textContent || '')).toString();", msg_input)
+                            _dbg_postclick["msg_input_js_text_after_click_len"] = len(_it2 or "")
+                            _dbg_postclick["msg_input_js_text_after_click_preview"] = str(_it2 or "")[:100]
+                        except Exception:
+                            pass
+                except Exception:
+                    pass
+                __dbg_log("H1", "IMMEDIATELY AFTER SEND CLICK: new msgout count + input empty check (H1 H3)", _dbg_postclick, location="send_message:post-click pre-verify (H1+H3)")
+            except Exception:
+                pass
+            # #endregion
 
-                # B. تحقق 2: البحث عن علامات الإرسال في DOM
-                if self._verify_message_sent():
+            # 🔍 6. STRICT VERIFICATION LOOP (محسوب بدقة BASELINE COUNT + TEXT MATCH)
+            sent_verified = False
+            verify_start = time.time()
+            VERIFY_TIMEOUT = 30  # صارمة: 30 ثانية كحد أقصى مع فحوصات حقيقية
+            _input_was_empty_js = False
+            _msgout_increased = False
+
+            while time.time() - verify_start < VERIFY_TIMEOUT:
+                # ───────── A. فحص فارغية صندوق الكتابة بواسطة JS (موثوق) ─────────
+                if msg_input is not None:
+                    try:
+                        _curr_input_text_js = self.driver.execute_script("""
+                            (function(el){
+                                if (!el) return '';
+                                var t = (el.innerText || el.textContent || '').toString();
+                                t = t.replace(/[\\u200B-\\u200F\\u202A-\\u202E\\u00AD\\u2060\\uFEFF]/g, '');
+                                return t.replace(/\\s+/g, ' ').trim();
+                            })(arguments[0]);
+                        """, msg_input)
+                        _input_was_empty_js = (len(_curr_input_text_js or "") == 0)
+                    except Exception:
+                        _input_was_empty_js = False
+                else:
+                    _input_was_empty_js = False
+
+                # ───────── B. فحص الزيادة في عدد الرسائل الصادرة عن BASELINE ─────────
+                try:
+                    _check_xpath = '//div[contains(@data-testid, "msg-out")] | //div[contains(@class, "message-out")] | //div[contains(@data-testid, "message-out")]'
+                    _now_count = self.driver.find_elements(By.XPATH, _check_xpath)
+                    _msgout_increased = (_msgout_count_baseline >= 0 and len(_now_count) > _msgout_count_baseline)
+                except Exception:
+                    _msgout_increased = False
+
+                # ───────── C. استدعاء دالة التحقق الصارمة مع كل المعاملات ─────────
+                _strict_ok = self._verify_message_sent(
+                    baseline_msgout_count=_msgout_count_baseline,
+                    prev_last_msgout_text=_last_msgout_text_baseline,
+                    expected_msg_fragment=_expected_msg_fragment,
+                    is_attachment=(attachment_path and os.path.exists(attachment_path)),
+                )
+                if _strict_ok:
                     sent_verified = True
                     break
 
-                # C. تحقق 3: البحث عن الحالة عبر JS (أسرع وأكثر دقة أحياناً)
-                try:
-                    js_check = self.driver.execute_script("""
-                        // Search for last message-out indicators
-                        var lastMsg = document.querySelectorAll('[data-testid*="msg-out"], [class*="message-out"]');
-                        if (lastMsg.length > 0) {
-                            var lm = lastMsg[lastMsg.length-1];
-                            var r = lm.getBoundingClientRect();
-                            if (r.width > 0 || r.height > 0) {
-                                return 'has_out_msg';
-                            }
-                        }
-                        // Search for status icons
-                        var icons = document.querySelectorAll('[data-icon*="msg-check"], [data-icon*="msg-time"], [data-icon*="msg-dblcheck"]');
-                        if (icons.length > 0) return 'has_status_icon';
-                        return 'not_found';
-                    """)
-                    if js_check and js_check != 'not_found':
+                # شروط ترقية إضافية فقط في حالة اجتماع 2 شرطين معاً (وليس أحدهما فقط!)
+                if _msgout_increased and _input_was_empty_js:
+                    sent_verified = True
+                    break
+                if _msgout_increased and message and len(_expected_msg_fragment) < 4:
+                    # رسالة قصيرة جداً فشل المطابقة النصية لكن العدد زاد + الرسالة قصيرة
+                    sent_verified = True
+                    break
+                if _input_was_empty_js and (attachment_path and os.path.exists(attachment_path)):
+                    # مرفق: فارغ الحقل + العدد زاد (تحقق C بالفعل سيعيد True غالباً)
+                    if _msgout_increased or (attachment_path and self._verify_message_sent(
+                        baseline_msgout_count=_msgout_count_baseline,
+                        prev_last_msgout_text=_last_msgout_text_baseline,
+                        expected_msg_fragment="", is_attachment=True)):
                         sent_verified = True
                         break
-                except Exception:
-                    pass
 
                 time.sleep(0.7)
 
-            # 🛡️ 2026: حلقة احتياطية إضافية - إذا لسه متأكدش، جرب ENTER مرة أخيرة بعد الانتظار
-            if not sent_verified and msg_input:
+            # 🛡️ محاولة أخيرة: ENTER + إعادة التحقق مرة واحدة فقط بعد 4 ثوانٍ
+            if not sent_verified and msg_input is not None:
                 try:
                     time.sleep(1.0)
                     try:
+                        self.driver.execute_script("arguments[0].scrollIntoView({block:'center'}); arguments[0].focus();", msg_input)
+                        time.sleep(0.3)
                         msg_input.click()
                         time.sleep(0.3)
-                    except:
+                    except Exception:
                         pass
-                    msg_input.send_keys(Keys.ENTER)
-                    time.sleep(3.0)
-                    if not msg_input.text.strip() or self._verify_message_sent():
+                    try:
+                        msg_input.send_keys(Keys.ENTER)
+                    except Exception:
+                        # fallback JS Enter
+                        self.driver.execute_script("""
+                            var el = arguments[0]; if (el && el.dispatchEvent) {
+                                el.dispatchEvent(new KeyboardEvent('keydown', {bubbles:true,cancelable:true,key:'Enter',code:'Enter'}));
+                                el.dispatchEvent(new KeyboardEvent('keypress',{bubbles:true,cancelable:true,key:'Enter',code:'Enter'}));
+                                el.dispatchEvent(new KeyboardEvent('keyup',   {bubbles:true,cancelable:true,key:'Enter',code:'Enter'}));
+                            }
+                        """, msg_input)
+                    time.sleep(4.0)
+                    # إعادة تشغيل فحص صارم واحد أخير بعد الـ ENTER
+                    if self._verify_message_sent(
+                        baseline_msgout_count=_msgout_count_baseline,
+                        prev_last_msgout_text=_last_msgout_text_baseline,
+                        expected_msg_fragment=_expected_msg_fragment,
+                        is_attachment=(attachment_path and os.path.exists(attachment_path)),
+                    ):
                         sent_verified = True
                 except Exception:
                     pass
+
+            # #region debug-point H1+H2+H3: FINAL VERDICT EVIDENCE CAPTURE (critical for distinguishing real vs fake success)
+            try:
+                _dbg_final = {"clean_phone": clean_phone, "sent_ok_flag": sent_ok, "sent_verified": sent_verified,
+                              "verify_elapsed_sec": round(time.time() - verify_start, 1), "verify_timeout": VERIFY_TIMEOUT}
+                # H1: FINAL COUNT OF msg-out + actual text of LAST msg-out (SMOKING GUN)
+                try:
+                    _out_final = self.driver.find_elements(By.XPATH, '//div[contains(@data-testid, "msg-out")] | //div[contains(@class, "message-out")] | //div[contains(@data-testid, "message-out")]') if self.driver else []
+                    _dbg_final["msgout_count_final"] = len(_out_final)
+                    # Check the actual TEXT of the LAST (most recent) message-out - does it really contain our message?
+                    if _out_final:
+                        try:
+                            last_out = _out_final[-1]
+                            _last_txt = (last_out.text or "").strip()[:300]
+                            _dbg_final["last_msgout_final_text_len"] = len(_last_txt)
+                            _dbg_final["last_msgout_final_text"] = _last_txt
+                            # Check if expected message (first 80 chars) is actually PRESENT in last msg-out (real success indicator)
+                            if message:
+                                _expected_fragment = (message.strip()[:80]).lower()
+                                _found_in_last = _expected_fragment and (_expected_fragment in _last_txt.lower())
+                                _dbg_final["EXPECTED_MESSAGE_IN_LAST_MSGOUT_MATCH"] = _found_in_last
+                                # Also check 2nd-to-last if needed
+                                if not _found_in_last and len(_out_final) >= 2:
+                                    _prev_txt = ((_out_final[-2].text or "").strip()[:300]).lower()
+                                    _dbg_final["EXPECTED_MESSAGE_IN_2NDLAST_MSGOUT_MATCH"] = _expected_fragment in _prev_txt
+                        except Exception as _e:
+                            _dbg_final["last_msgout_capture_err"] = str(_e)[:100]
+                except Exception as _e:
+                    _dbg_final["msgout_final_count_err"] = str(_e)[:80]
+                # H2: Final check of input field
+                try:
+                    if msg_input is not None:
+                        _fi_final = msg_input.text if hasattr(msg_input, "text") else ""
+                        _dbg_final["msg_input_final_empty"] = len((_fi_final or "").strip()) == 0
+                        try:
+                            _fi_final_js = self.driver.execute_script("return (arguments[0] && (arguments[0].innerText || arguments[0].textContent || '')).toString();", msg_input)
+                            _dbg_final["msg_input_final_js_empty"] = len((_fi_final_js or "").strip()) == 0
+                        except Exception:
+                            pass
+                except Exception:
+                    pass
+                # H3: What did _verify_message_sent actually return?
+                try:
+                    _vms = self._verify_message_sent()
+                    _dbg_final["verify_message_sent_result"] = _vms
+                except Exception as _e:
+                    _dbg_final["verify_message_sent_error"] = str(_e)[:80]
+                # FINAL: The return value we are about to give (exposes the fake positive claim)
+                _ok = bool(sent_verified)
+                _dbg_final["FUNCTION_CLAIMS_OK"] = _ok
+                _dbg_final["IS_PROBABLE_FAKE_SUCCESS"] = _ok and (not _dbg_final.get("EXPECTED_MESSAGE_IN_LAST_MSGOUT_MATCH", False)
+                                                                and not _dbg_final.get("EXPECTED_MESSAGE_IN_2NDLAST_MSGOUT_MATCH", False)
+                                                                and len(_out_final if _out_final else []) == _dbg_presend.get("msgout_count_before_send", -1))
+                __dbg_log("H1", "SMOKING GUN: FINAL VERDICT Evidence (message text in DOM + count delta + claim comparison)",
+                          _dbg_final, location="send_message:final-verdict (ALL H)")
+            except Exception:
+                pass
+            # #endregion
 
             if sent_verified:
                 self.update_daily_stats(True, is_invalid_number=False)
