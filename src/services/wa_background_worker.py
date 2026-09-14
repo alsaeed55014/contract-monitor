@@ -247,6 +247,14 @@ def run_worker():
                 anti_ban_triggered = False
                 anti_ban_reason = ""
 
+                # 🔄 إعادة ضبط عداد الأرقام الخاطئة المتتالية لكل حملة جديدة
+                # يمنع توقف الحملة بسبب أخطاء من حملة سابقة في نفس اليوم
+                if wa is not None:
+                    try:
+                        wa.reset_sequential_counter()
+                    except Exception as _rst_e:
+                        print(f"[{time.strftime('%H:%M:%S')}] ⚠️ تعذّر إعادة ضبط العداد: {_rst_e}")
+
                 update_state("sending", current_idx=start_from, total=total)
 
                 for i in range(start_from, total):
