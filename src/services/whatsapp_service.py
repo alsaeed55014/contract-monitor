@@ -9,9 +9,7 @@ import re
 import json
 from datetime import datetime, date
 
-def __dbg_log(hypothesis_id, msg, data=None, run_id="fix", location=""):
-    """No-op logger to prevent network delays during message sending."""
-    pass
+
 
 def _copy_text_to_clipboard(text: str) -> bool:
     """نسخ النص إلى حافظة ويندوز بدعم كامل لليونيكود واللغة العربية والإيموجي والأسطر المتعددة"""
@@ -63,10 +61,22 @@ def strip_zero_width_chars(text: str) -> str:
     return text
 
 def obfuscate_message(text: str) -> str:
-    """تحليل Spintax وتنظيف الرسالة لضمان نص طبيعي وبشري 100%"""
+    """تحليل Spintax وتغيير صياغة الرسائل وتنظيفها لضمان نص طبيعي وبشري 100%"""
     if not text: return ""
+    
+    # 1. استخدام محرك تغيير الصياغة لتوليد رسالة فريدة بنفس المعنى
+    try:
+        from src.services.message_variation import MessageVariationEngine
+        text = MessageVariationEngine.paraphrase(text)
+    except Exception as e:
+        print(f"[obfuscate_message] Warning: Could not use paraphrase engine: {e}")
+    
+    # 2. تحليل Spintax
     text = parse_spintax(text)
+    
+    # 3. تنظيف الرموز المخفية
     text = strip_zero_width_chars(text)
+    
     return text
 
 
@@ -591,16 +601,28 @@ class WhatsAppService:
                         element, char
                     )
                 except: pass
-            base_delay = random.uniform(0.02, 0.08)
-            if char in [" ", "\n", ".", ",", "!", "?", "،", "؛"]:
-                base_delay += random.uniform(0.08, 0.22)
+            
+            # تأخيرات واقعية أكثر تنوعاً لمحاكاة الكتابة البشرية
+            base_delay = random.uniform(0.03, 0.12)
+            
+            # تأخير إضافي للرموز الخاصة
+            if char in [" ", "\n", ".", ",", "!", "?", "،", "؛", ":", "؛", "؟", "،"]:
+                base_delay += random.uniform(0.10, 0.35)
+            # تأخير إضافي للأحرف الكبيرة
             elif char.isupper():
-                base_delay += random.uniform(0.04, 0.12)
+                base_delay += random.uniform(0.05, 0.18)
+            # تأخير إضافي للأرقام
+            elif char.isdigit():
+                base_delay += random.uniform(0.04, 0.15)
                 
             time.sleep(base_delay)
             
-            if random.random() < 0.015:
-                time.sleep(random.uniform(0.3, 0.7))
+            # وقفات عشوائية أثناء الكتابة لمحاكاة التفكير
+            if random.random() < 0.025:
+                time.sleep(random.uniform(0.2, 0.8))
+            # وقفات أطول نادرة جداً
+            elif random.random() < 0.008:
+                time.sleep(random.uniform(0.5, 1.2))
 
     def _find_send_button(self):
         """العثور على زر الإرسال الحقيقي لواتساب ويب (نسخة 2024-2026) مع استبعاد أزرار الميكروفون والإيموجي والإرفاق تماماً"""
@@ -707,7 +729,7 @@ class WhatsAppService:
         return None
 
     def _inject_text_to_input(self, msg_input, text: str) -> bool:
-        """إدخال النص في صندوق الرسالة بطرق متعددة ومضمونة (Clipboard paste ثم send_keys ثم JS)"""
+        """إدخال النص في صندوق الرسالة بطرق متعددة ومضمونة (الكتابة اليدوية البشرية هي الطريقة الأساسية)"""
         from selenium.webdriver.common.keys import Keys
         from selenium.webdriver.common.action_chains import ActionChains
 
@@ -738,17 +760,15 @@ class WhatsAppService:
             pass
         time.sleep(0.2)
 
-        # الطريقة الأولى (الأفضل والأضمن للعربية والإيموجي والأسطر المتعددة): Clipboard Paste (Ctrl+V)
-        copied = _copy_text_to_clipboard(text)
-        if copied:
-            try:
-                ActionChains(self.driver).move_to_element(msg_input).click().key_down(Keys.CONTROL).send_keys('v').key_up(Keys.CONTROL).perform()
-                time.sleep(0.6)
-                curr_text = self.driver.execute_script("return (arguments[0].innerText || arguments[0].textContent || '').trim();", msg_input)
-                if len(curr_text) > 0:
-                    return True
-            except Exception:
-                pass
+        # الطريقة الأولى (الأكثر واقعية ومحاكاة للكتابة البشرية): الكتابة حرف بحرف
+        try:
+            self._type_human_like(msg_input, text)
+            time.sleep(0.5)
+            curr_text = self.driver.execute_script("return (arguments[0].innerText || arguments[0].textContent || '').trim();", msg_input)
+            if len(curr_text) > 0:
+                return True
+        except Exception:
+            pass
 
         # الطريقة الثانية: send_keys سطر بسطر مع Shift+Enter
         try:
@@ -766,7 +786,19 @@ class WhatsAppService:
         except Exception:
             pass
 
-        # الطريقة الثالثة: JS insertText مع أحداث React InputEvent
+        # الطريقة الثالثة (للحالات الطارئة): Clipboard Paste (Ctrl+V)
+        copied = _copy_text_to_clipboard(text)
+        if copied:
+            try:
+                ActionChains(self.driver).move_to_element(msg_input).click().key_down(Keys.CONTROL).send_keys('v').key_up(Keys.CONTROL).perform()
+                time.sleep(0.6)
+                curr_text = self.driver.execute_script("return (arguments[0].innerText || arguments[0].textContent || '').trim();", msg_input)
+                if len(curr_text) > 0:
+                    return True
+            except Exception:
+                pass
+
+        # الطريقة الرابعة (للحالات الطارئة جداً): JS insertText مع أحداث React InputEvent
         try:
             encoded = json.dumps(text)
             self.driver.execute_script(f"""
@@ -1110,11 +1142,12 @@ class WhatsAppService:
             msg_input = None
             is_invalid_num = False
             invalid_reason = "رقم غير مسجل في الواتساب"
+            invalid_detection_count = 0  # عداد للتحقق المتعدد من الرقم غير الصالح
 
             while time.time() - wait_start < 35:
                 self._auto_handle_popups()
 
-                # A. التحقق من ظهور نافذة رقم غير مسجل
+                # A. التحقق من ظهور نافذة رقم غير مسجل (مع تحقق متعدد لتجنب الأخطاء)
                 try:
                     dialogs = self.driver.find_elements(By.XPATH,
                         '//div[@data-animate-modal-popup="true"] | '
@@ -1145,9 +1178,12 @@ class WhatsAppService:
                             if len(d_text) < 8:
                                 continue
                             if any(bp in d_text for bp in bad_phrases):
-                                is_invalid_num = True
-                                invalid_reason = "رقم غير مسجل في الواتساب"
-                                break
+                                invalid_detection_count += 1
+                                # نحتاج للتحقق مرتين متتاليتين لتجنب الأخطاء المؤقتة
+                                if invalid_detection_count >= 2:
+                                    is_invalid_num = True
+                                    invalid_reason = "رقم غير مسجل في الواتساب"
+                                    break
                         except Exception:
                             continue
                     if is_invalid_num:
@@ -1158,6 +1194,9 @@ class WhatsAppService:
                 # B. التحقق من ظهور صندوق كتابة المحادثة (داخل الفوتر حصراً)
                 msg_input = self._find_input_box()
                 if msg_input is not None and msg_input.is_displayed():
+                    # إذا وجد صندوق الكتابة، الرقم صالح - إلغاء أي اكتشاف خاطئ للرقم غير الصالح
+                    is_invalid_num = False
+                    invalid_detection_count = 0
                     break
 
                 # إذا لم يبدأ التنقل الداخلي، استخدام driver.get كإجراء احتياطي
