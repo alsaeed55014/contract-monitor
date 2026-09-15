@@ -1319,48 +1319,82 @@ class WhatsAppService:
                 if not message:
                     return False, "الرسالة فارغة"
 
+                print(f"[{time.strftime('%H:%M:%S')}] 📝 Starting to inject message (length: {len(message)} chars)...")
+
                 # إدخال الرسالة في صندوق الكتابة المكتشف
                 injected = self._inject_text_to_input(msg_input, message)
                 if not injected:
-                    print(f"[{time.strftime('%H:%M:%S')}] ⚠️ Retry injecting text...")
+                    print(f"[{time.strftime('%H:%M:%S')}] ⚠️ First injection failed, retrying...")
                     time.sleep(0.5)
-                    self._inject_text_to_input(msg_input, message)
+                    injected = self._inject_text_to_input(msg_input, message)
+                    if not injected:
+                        print(f"[{time.strftime('%H:%M:%S')}] ⚠️ Second injection failed, trying clipboard method...")
+                        # محاولة طريقة الحافظة مباشرة
+                        try:
+                            from selenium.webdriver.common.action_chains import ActionChains
+                            copied = _copy_text_to_clipboard(message)
+                            if copied:
+                                ActionChains(self.driver).move_to_element(msg_input).click().key_down(Keys.CONTROL).send_keys('v').key_up(Keys.CONTROL).perform()
+                                time.sleep(0.6)
+                                curr_text = self.driver.execute_script("return (arguments[0].innerText || arguments[0].textContent || '').trim();", msg_input)
+                                if len(curr_text) > 0:
+                                    injected = True
+                                    print(f"[{time.strftime('%H:%M:%S')}] ✅ Clipboard injection succeeded")
+                        except Exception as e:
+                            print(f"[{time.strftime('%H:%M:%S')}] ❌ Clipboard injection failed: {e}")
 
-                time.sleep(random.uniform(0.6, 1.2))
+                if not injected:
+                    print(f"[{time.strftime('%H:%M:%S')}] ❌ All injection methods failed")
+                    return False, "فشل في إدخال الرسالة في صندوق الكتابة"
+
+                print(f"[{time.strftime('%H:%M:%S')}] ✅ Message injected successfully")
+                time.sleep(random.uniform(0.8, 1.5))
 
                 # إرسال الرسالة: النقر على زر الإرسال أو إرسال مفتاح ENTER
                 sent_ok = False
                 send_btn = self._find_send_button()
+                print(f"[{time.strftime('%H:%M:%S')}] 🔘 Send button found: {send_btn is not None}")
+                
                 if send_btn and send_btn.is_displayed():
                     try:
                         ActionChains(self.driver).move_to_element(send_btn).pause(0.2).click().perform()
                         sent_ok = True
-                    except Exception:
+                        print(f"[{time.strftime('%H:%M:%S')}] ✅ Clicked send button via ActionChains")
+                    except Exception as e:
+                        print(f"[{time.strftime('%H:%M:%S')}] ⚠️ ActionChains click failed: {e}")
                         try:
                             send_btn.click()
                             sent_ok = True
-                        except Exception:
+                            print(f"[{time.strftime('%H:%M:%S')}] ✅ Clicked send button directly")
+                        except Exception as e2:
+                            print(f"[{time.strftime('%H:%M:%S')}] ⚠️ Direct click failed: {e2}")
                             try:
                                 self.driver.execute_script("arguments[0].click();", send_btn)
                                 sent_ok = True
-                            except Exception:
-                                pass
+                                print(f"[{time.strftime('%H:%M:%S')}] ✅ Clicked send button via JS")
+                            except Exception as e3:
+                                print(f"[{time.strftime('%H:%M:%S')}] ❌ JS click failed: {e3}")
 
                 # الضغط على ENTER مباشرة في صندوق الرسائل (الطريقة الأساسية والمضمونة في واتساب)
                 try:
                     msg_input.send_keys(Keys.ENTER)
                     sent_ok = True
-                except Exception:
+                    print(f"[{time.strftime('%H:%M:%S')}] ✅ Pressed ENTER key")
+                except Exception as e:
+                    print(f"[{time.strftime('%H:%M:%S')}] ⚠️ ENTER key failed: {e}")
                     try:
                         ActionChains(self.driver).move_to_element(msg_input).click().send_keys(Keys.ENTER).perform()
                         sent_ok = True
-                    except Exception:
-                        pass
+                        print(f"[{time.strftime('%H:%M:%S')}] ✅ Pressed ENTER via ActionChains")
+                    except Exception as e2:
+                        print(f"[{time.strftime('%H:%M:%S')}] ❌ ENTER via ActionChains failed: {e2}")
+
+                print(f"[{time.strftime('%H:%M:%S')}] 📊 Send operation completed: {sent_ok}")
 
             # 🔍 6. حلقة التحقق المحسّن من الإرسال الفعلي (أكثر تساهلاً ودقة)
             sent_verified = False
             verify_start = time.time()
-            VERIFY_TIMEOUT = 25  # زيادة وقت التحقق
+            VERIFY_TIMEOUT = 35  # زيادة وقت التحقق
 
             while time.time() - verify_start < VERIFY_TIMEOUT:
                 # أ. فحص تفريغ صندوق الكتابة
@@ -1441,6 +1475,21 @@ class WhatsAppService:
                     sent_verified = True
                     break
 
+                # 6. تفريغ الصندوق فقط بعد 5 ثوانٍ (أكثر تساهلاً)
+                if _input_empty and (time.time() - verify_start > 5):
+                    sent_verified = True
+                    break
+
+                # 7. إذا مر وقت طويل (15 ثانية) والصندوق فارغ تقريباً أو يحتوي على نص قصير جداً
+                if (time.time() - verify_start > 15):
+                    try:
+                        _txt = self.driver.execute_script("return (arguments[0].innerText || arguments[0].textContent || '').trim();", msg_input)
+                        if len(_txt or "") < 5:  # أقل من 5 أحرف يعتبر إرسال
+                            sent_verified = True
+                            break
+                    except Exception:
+                        pass
+
                 # محاولة إضافية للضغط على ENTER بعد 4 ثوانٍ إذا كان الحقل لا يزال يحتوي على نص
                 if not _input_empty and (time.time() - verify_start > 4):
                     try:
@@ -1449,7 +1498,7 @@ class WhatsAppService:
                     except Exception:
                         pass
 
-                time.sleep(0.8)
+                time.sleep(1.0)  # زيادة وقت الانتظار بين الفحوص
 
             if sent_verified:
                 self.update_daily_stats(True, is_invalid_number=False)
