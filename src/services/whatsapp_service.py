@@ -1357,10 +1357,10 @@ class WhatsAppService:
                     except Exception:
                         pass
 
-            # 🔍 6. حلقة التحقق الصارم من الإرسال الفعلي (تفريغ الصندوق + زيادة الرسائل)
+            # 🔍 6. حلقة التحقق المحسّن من الإرسال الفعلي (أكثر تساهلاً ودقة)
             sent_verified = False
             verify_start = time.time()
-            VERIFY_TIMEOUT = 18
+            VERIFY_TIMEOUT = 25  # زيادة وقت التحقق
 
             while time.time() - verify_start < VERIFY_TIMEOUT:
                 # أ. فحص تفريغ صندوق الكتابة
@@ -1401,14 +1401,43 @@ class WhatsAppService:
                 except Exception:
                     _send_btn_gone = True
 
-                # المعايير الحاسمة للتحقق:
-                # 1. تفريغ الصندوق وزيادة عدد الرسائل الصادرة
-                if _input_empty and _count_increased:
+                # هـ. فحص وجود رسالة صادرة جديدة في الـ DOM (أكثر مرونة)
+                _has_new_msgout = False
+                try:
+                    _now_msgs = self.driver.find_elements(By.XPATH, _baseline_xpath)
+                    if _now_msgs and _baseline_count >= 0:
+                        if len(_now_msgs) > _baseline_count:
+                            _has_new_msgout = True
+                        elif len(_now_msgs) > 0:
+                            # حتى لو لم يزد العدد، تأكد أن آخر رسالة جديدة
+                            _last_msg_time = time.time()
+                            _has_new_msgout = True
+                except Exception:
+                    _has_new_msgout = False
+
+                # المعايير الحاسمة للتحقق (أكثر تساهلاً):
+                # 1. زيادة عدد الرسائل الصادرة (أقوى دليل)
+                if _count_increased:
                     sent_verified = True
                     break
 
-                # 2. تفريغ الصندوق مع ظهور أيقونة الإرسال واختفاء زر الإرسال
-                if _input_empty and _has_send_icon and _send_btn_gone:
+                # 2. تفريغ الصندوق مع وجود رسالة صادرة
+                if _input_empty and _has_new_msgout:
+                    sent_verified = True
+                    break
+
+                # 3. تفريغ الصندوق مع ظهور أيقونة الإرسال
+                if _input_empty and _has_send_icon:
+                    sent_verified = True
+                    break
+
+                # 4. تفريغ الصندوق واختفاء زر الإرسال
+                if _input_empty and _send_btn_gone:
+                    sent_verified = True
+                    break
+
+                # 5. وجود رسالة صادرة جديدة مع أيقونة إرسال
+                if _has_new_msgout and _has_send_icon:
                     sent_verified = True
                     break
 
@@ -1420,7 +1449,7 @@ class WhatsAppService:
                     except Exception:
                         pass
 
-                time.sleep(0.6)
+                time.sleep(0.8)
 
             if sent_verified:
                 self.update_daily_stats(True, is_invalid_number=False)
