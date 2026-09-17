@@ -1,0 +1,44 @@
+# Byte-compiled / cache
+__pycache__/
+*.py[cod]
+*.log
+
+# Local dev-only scripts
+gui_monitor.py
+monitor.py
+app_icon.ico
+profile.jpg
+image/
+
+# Credentials and secrets (NEVER commit these)
+credentials.json
+service_account.json
+.persist_login.json
+src/.persist_login.json
+.env
+
+# Local user data / PII (NEVER commit these)
+users.json
+whatsapp_history.json
+bengali_data.json
+state.json
+ignored_rows.json
+
+# Notification local state
+notif_seen_admin.json
+notification_cache.json
+notification_state.json
+
+# Test / scratch scripts
+test_*.py
+check_*.py
+find_*.py
+debug_*.py
+verify_*.py
+fix_*.py
+cleanup_*.py
+temp_*.py
+remove_*.py
+move_*.py
+apply_*.py
+restart_*.py

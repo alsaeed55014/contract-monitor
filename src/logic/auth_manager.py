@@ -1,7 +1,22 @@
 import os
 import json
 import hashlib
+import secrets
 import streamlit as st
+
+
+def _resolve_default_admin_password():
+    """Return the initial admin password from the environment, or generate a
+    random one. Avoids shipping a hardcoded default credential in source."""
+    pw = os.environ.get("CM_ADMIN_PASSWORD")
+    if pw:
+        return pw
+    pw = secrets.token_urlsafe(16)
+    print("[SECURITY] CM_ADMIN_PASSWORD is not set; generated a random admin password.")
+    print(f"[SECURITY] Initial admin password: {pw}")
+    print("[SECURITY] Log in and change it immediately, or set CM_ADMIN_PASSWORD.")
+    return pw
+
 
 class AuthManager:
     def __init__(self, users_file_path):
@@ -24,7 +39,7 @@ class AuthManager:
         # Ensure Default Admin
         if "admin" not in self.users:
             self.users["admin"] = {
-                "password": self.hash_password("266519111"), # User's preferred password
+                "password": self.hash_password(_resolve_default_admin_password()),
                 "role": "admin",
                 "first_name_ar": "السعيد",
                 "father_name_ar": "الوزان",
