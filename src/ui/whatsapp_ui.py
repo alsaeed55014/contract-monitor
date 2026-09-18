@@ -497,7 +497,7 @@ def render_whatsapp_page():
             st.markdown(f"#### 📝 {'نص الرسالة' if is_ar else 'Message Content'}")
             st.caption("💡 يمكنك استخدام `{Name}` أو `{الاسم}` لإدراج اسم العميل تلقائياً، والـ Spintax مثل `{مرحباً|أهلاً|السلام عليكم}` لتنويع الرسائل وتجنب الحظر.")
             
-            default_emp_msg = "مرحباً {Name}،\n\nنأمل أن تكونوا بخير.\nيسعدنا خدمتكم في توفير أفضل الكوادر المهنية والعمالة المناسبة لمتطلباتكم بأسرع وقت.\n\nللتواصل والاستفسار يرجى الرد على هذه الرسالة.\n\nمع خالص التحية والتقدير،\nقسم الموارد البشرية (HR)\nAbu Fahad"
+            default_emp_msg = "مرحباً {Name}،\n\nنأمل أن تكونوا بخير.\nيسعدنا خدمتكم في توفير أفضل الكوادر المهنية والعمالة المناسبة لمتطلباتكم بأسرع وقت.\n\nللتواصل والاستفسار يرجى الرد على هذه الرسالة.\n\nمع خالص التحية والتقدير،\nابو فهد\nHR"
             emp_message = st.text_area(
                 "الرسالة" if is_ar else "Message",
                 value=st.session_state.get('wa_emp_last_msg', default_emp_msg),
@@ -597,7 +597,7 @@ def render_whatsapp_page():
                     personalized_msg = emp_message.replace("{Name}", c_name).replace("{name}", c_name).replace("{الاسم}", c_name)
 
                     # إضافة التوقيع العربي إذا لم يكن موجوداً
-                    signature = "\n\nمع خالص التحية والتقدير،\nقسم الموارد البشرية (HR)\nAbu Fahad"
+                    signature = "\n\nمع خالص التحية والتقدير،\nابو فهد\nHR"
                     if signature not in personalized_msg:
                         personalized_msg += signature
 
@@ -1302,7 +1302,7 @@ HR Manager"""
                 temp_path = st.session_state.get('wa_temp_path')
 
                 # إضافة التوقيع العربي إذا لم يكن موجوداً
-                signature = "\n\nمع خالص التحية والتقدير،\nقسم الموارد البشرية (HR)\nAbu Fahad"
+                signature = "\n\nمع خالص التحية والتقدير،\nابو فهد\nHR"
                 if signature not in final_msg:
                     final_msg += signature
 
