@@ -1,7 +1,5 @@
 import streamlit as st
-print(">>> DEBUG: Streamlit imported")
 import pandas as pd
-print(">>> DEBUG: Pandas imported")
 import os
 import sys
 import json
@@ -10,10 +8,10 @@ import time
 from datetime import datetime, timedelta
 from typing import Optional, Dict, List, Any, Union
 import pytz
-print(">>> DEBUG: Core libraries imported")
 import base64
 import re
 import hmac
+import urllib.parse
 
 # Saudi Arabia timezone for consistent time display
 SAUDI_TZ = pytz.timezone('Asia/Riyadh')
@@ -35,20 +33,17 @@ SRC_DIR = os.path.join(BASE_DIR, 'src')
 if SRC_DIR not in sys.path:
     sys.path.insert(0, SRC_DIR)
 
-print(">>> DEBUG: Importing project modules...")
 try:
     from src.core.contracts import ContractManager
     from src.data.bengali_manager import BengaliDataManager
     from src.utils.phone_utils import create_pasha_whatsapp_excel, format_phone_number, save_to_local_desktop, render_pasha_export_button, is_local_windows_pc
     from src.core.matcher import CandidateMatcher, format_match_result, _find_city_region, _fuzzy_match, REGION_PROXIMITY, REGION_MAP
-    print(">>> DEBUG: Project modules (src.*) imported successfully")
 except ImportError:
     # Fallback for different environment path configurations
     from core.contracts import ContractManager
     from data.bengali_manager import BengaliDataManager
     from utils.phone_utils import create_pasha_whatsapp_excel, format_phone_number, save_to_local_desktop, render_pasha_export_button, is_local_windows_pc
     from core.matcher import CandidateMatcher, format_match_result, _find_city_region, _fuzzy_match, REGION_PROXIMITY, REGION_MAP
-    print(">>> DEBUG: Project modules (core.*) imported successfully via fallback")
 
 # 2. Local Auth Class to prevent Import/Sync Errors
 class AuthManager:
@@ -201,10 +196,6 @@ class AuthManager:
         target = str(username).lower().strip()
         return self.users.get(target, {}).get("avatar", None)
 
-import hmac
-import hashlib
-import urllib.parse
-
 DEVICE_REMEMBER_COOKIE = "_recruitment_remember_token"
 DEVICE_REMEMBER_SECRET = b"alwazzan_luxury_recruitment_salt_2026_auth"
 DEVICE_USER_COOKIE = "_rec_saved_user"
@@ -259,11 +250,15 @@ def verify_device_token(token: str) -> Optional[str]:
 
 @st.cache_data(ttl=3600, show_spinner=False)
 def get_base64_image(image_path):
+    """Cache base64 encoded images to improve performance."""
+    if not os.path.exists(image_path):
+        return None
     with open(image_path, "rb") as img_file:
         return base64.b64encode(img_file.read()).decode()
 
 @st.cache_data(ttl=600, show_spinner=False)
 def get_css(lang='ar'):
+    """Generate optimized CSS based on language direction."""
     direction = 'rtl' if lang == 'ar' else 'ltr'
     toggle_side = 'right' if lang == 'ar' else 'left'
     toggle_opposite = 'left' if lang == 'ar' else 'right'
@@ -1383,20 +1378,11 @@ def _get_flag_url_cached(val):
         s_val = s_val[2:]
         
     # Standardize Arabic characters
-    s_val = (s_val.replace("أ", "ا")
-                  .replace("إ", "ا")
-                  .replace("آ", "ا")
-                  .replace("ة", "ه")
-                  .replace("ى", "ي"))
+    s_val = _normalize_arabic_text(s_val)
     
     # 3. Match against FLAG_MAP
     for key, code in FLAG_MAP_SORTED:
-        # Normalize the key too for safety
-        norm_key = (key.replace("أ", "ا")
-                       .replace("إ", "ا")
-                       .replace("آ", "ا")
-                       .replace("ة", "ه")
-                       .replace("ى", "ي"))
+        norm_key = _normalize_arabic_text(key)
                        
         if len(norm_key) <= 3:
             # Short keys (like ISO codes if any) need strict word matching
@@ -1410,33 +1396,32 @@ def _get_flag_url_cached(val):
                 
     return None
 
-# Pre-sort FLAG_MAP keys once at startup
+# Pre-sort FLAG_MAP keys once at startup for performance
 FLAG_MAP_SORTED = sorted(FLAG_MAP.items(), key=lambda x: len(x[0]), reverse=True)
+
+def _normalize_arabic_text(text):
+    """Normalize Arabic text for consistent matching."""
+    return (text.replace("أ", "ا")
+                 .replace("إ", "ا")
+                 .replace("آ", "ا")
+                 .replace("ة", "ه")
+                 .replace("ى", "ي"))
 
 def _get_nationality_code(val):
     if not val or pd.isna(val): return None
     s_val = str(val).strip().lower()
     
-    # Remove emoji flags
+    # Remove emoji flags and extra non-word chars
     s_val = re.sub(r'[\U0001F1E6-\U0001F1FF]{2}\s*', '', s_val)
-    # Remove extra non-word chars
     s_val = re.sub(r'[^\w\s]', ' ', s_val).strip()
     
+    # Remove Arabic definite article and normalize
     if s_val.startswith("ال") and len(s_val) > 4:
         s_val = s_val[2:]
-        
-    s_val = (s_val.replace("أ", "ا")
-                  .replace("إ", "ا")
-                  .replace("آ", "ا")
-                  .replace("ة", "ه")
-                  .replace("ى", "ي"))
+    s_val = _normalize_arabic_text(s_val)
                   
     for key, code in FLAG_MAP_SORTED:
-        norm_key = (key.replace("أ", "ا")
-                       .replace("إ", "ا")
-                       .replace("آ", "ا")
-                       .replace("ة", "ه")
-                       .replace("ى", "ي"))
+        norm_key = _normalize_arabic_text(key)
         if len(norm_key) <= 3:
             pattern = rf'(?:^|[\s,:;.\-/]){re.escape(norm_key)}(?:[\s,:;.\-/]|$)'
             if re.search(pattern, s_val):
@@ -2874,7 +2859,6 @@ if ('Notification' in window && Notification.permission === 'default') {
                         # Handle Remember Me for THIS device ONLY
                         should_persist = st.session_state.get(persist_key, False)
                         if should_persist:
-                            import urllib.parse
                             enc_u = urllib.parse.quote(u.strip())
                             enc_p = urllib.parse.quote(p.strip())
                             dev_token = create_device_token(user['username'], days=30)
@@ -3657,36 +3641,43 @@ def dashboard():
             </script>
             """, unsafe_allow_html=True)
 
-        if st.button(t("dashboard", lang), width='stretch', disabled=_wa_lock_nav):
-            st.session_state.page = "dashboard"
-            st.rerun()
-        if st.button(t("smart_search", lang), width='stretch', disabled=_wa_lock_nav):
-            # Reset the filter expander state to force open on entry
-            for key in list(st.session_state.keys()):
-                if key.startswith("filter_expander_"):
-                    del st.session_state[key]
-            st.session_state.page = "search"
-            st.rerun()
-        if st.button(t("cv_translator", lang), width='stretch', disabled=_wa_lock_nav):
-            st.session_state.page = "translator"
-            st.rerun()
-        if user.get("role") != "viewer":
-            if st.button(t("customer_requests", lang), width='stretch', disabled=_wa_lock_nav):
-                st.session_state.page = "customer_requests"
+        # Navigation menu - optimized with loop
+        nav_items = [
+            ("dashboard", "dashboard"),
+            ("smart_search", "search"),
+            ("cv_translator", "translator"),
+        ]
+        
+        for label_key, page_name in nav_items:
+            if st.button(t(label_key, lang), width='stretch', disabled=_wa_lock_nav, key=f"nav_{page_name}"):
+                if page_name == "search":
+                    # Reset filter expander state for search page
+                    for key in list(st.session_state.keys()):
+                        if key.startswith("filter_expander_"):
+                            del st.session_state[key]
+                st.session_state.page = page_name
                 st.rerun()
-        if st.button(t("order_processing", lang), width='stretch', disabled=_wa_lock_nav):
+        
+        # Role-based navigation
+        if user.get("role") != "viewer":
+            if st.button(t("customer_requests", lang), width='stretch', disabled=_wa_lock_nav, key="nav_customer_requests"):
+                st.session_state.page = "order_processing"
+                st.rerun()
+        
+        if st.button(t("order_processing", lang), width='stretch', disabled=_wa_lock_nav, key="nav_order_processing"):
             st.session_state.page = "order_processing"
             st.rerun()
         
-        # WhatsApp Marketing 2026 Button
-        if st.button("📱 " + t("whatsapp_marketing", lang), width='stretch', disabled=_wa_lock_nav):
-            st.session_state.page = "whatsapp_marketing"
-            st.rerun()
+        # Special navigation with icons
+        special_nav = [
+            ("📱 " + t("whatsapp_marketing", lang), "whatsapp_marketing"),
+            ("🗑️ " + t("duplicate_remover", lang), "duplicate_remover"),
+        ]
         
-        # Duplicate Remover Button
-        if st.button("🗑️ " + t("duplicate_remover", lang), width='stretch', disabled=_wa_lock_nav):
-            st.session_state.page = "duplicate_remover"
-            st.rerun()
+        for label, page_name in special_nav:
+            if st.button(label, width='stretch', disabled=_wa_lock_nav, key=f"nav_{page_name}"):
+                st.session_state.page = page_name
+                st.rerun()
         
         # Determine Bengali Supply Visibility
         user_perms = user.get("permissions", [])
@@ -3701,17 +3692,16 @@ def dashboard():
             st.sidebar.markdown("</div>", unsafe_allow_html=True)
 
         if user.get("role") == "admin":
-            if st.button(t("permissions", lang), width='stretch', disabled=_wa_lock_nav):
+            if st.button(t("permissions", lang), width='stretch', disabled=_wa_lock_nav, key="nav_permissions"):
                 st.session_state.page = "permissions"
                 st.rerun()
             
             # Refresh Data button below Permissions for Admins
             refresh_notif = st.empty()
             if st.button(t("refresh_data_btn", lang), key="force_refresh_db", width='stretch'):
-                refresh_loader = show_loading_hourglass()
-                st.session_state.db.fetch_data(force=True)
-                st.session_state.db.fetch_customer_requests(force=True)
-                refresh_loader.empty()
+                with st.spinner("Refreshing data..."):
+                    st.session_state.db.fetch_data(force=True)
+                    st.session_state.db.fetch_customer_requests(force=True)
                 st.session_state['_notif_refresh'] = ("success", "تم تحديث البيانات من Google Sheets بنجاح! ✅" if lang == 'ar' else "Data refreshed successfully! ✅")
                 st.rerun()
             
@@ -3765,20 +3755,30 @@ def dashboard():
 
     page = st.session_state.get('page', 'dashboard')
     
-    if page == "dashboard": render_dashboard_content()
-    elif page == "search": render_search_content()
-    elif page == "translator": render_translator_content()
-    elif page == "customer_requests":
-        if user.get("role") == "viewer":
-            st.error("🔒 لا تملك صلاحية الوصول لهذه الصفحة" if lang == 'ar' else "🔒 Access Denied")
-            st.session_state.page = "dashboard"
-            st.rerun()
-        render_order_processing_content()
-    elif page == "order_processing": render_order_processing_content()
-    elif page == "permissions": render_permissions_content()
-    elif page == "bengali_supply": render_bengali_supply_content()
-    elif page == "whatsapp_marketing": render_whatsapp_page()
-    elif page == "duplicate_remover": render_duplicate_remover_content()
+    # Page router with permission checks
+    page_handlers = {
+        "dashboard": render_dashboard_content,
+        "search": render_search_content,
+        "translator": render_translator_content,
+        "order_processing": render_order_processing_content,
+        "permissions": render_permissions_content,
+        "bengali_supply": render_bengali_supply_content,
+        "whatsapp_marketing": render_whatsapp_page,
+        "duplicate_remover": render_duplicate_remover_content
+    }
+    
+    # Handle legacy page name
+    if page == "customer_requests":
+        page = "order_processing"
+        st.session_state.page = page
+    
+    # Permission check for restricted pages
+    if page in ["permissions"] and user.get("role") == "viewer":
+        st.error("🔒 لا تملك صلاحية الوصول لهذه الصفحة" if lang == 'ar' else "🔒 Access Denied")
+        st.session_state.page = "dashboard"
+        st.rerun()
+    elif page in page_handlers:
+        page_handlers[page]()
     # --- 3. Notification Check (Moved to BOTTOM to prevent hanging on login) ---
     check_notifications()
 

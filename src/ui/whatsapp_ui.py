@@ -83,6 +83,7 @@ def save_templates(templates):
         pass
 
 def generate_smart_message(name, cv_link, custom_job=""):
+    # Always load fresh templates to get latest saved changes
     templates = load_templates().get("smart", SMART_TEMPLATES)
     
     # 🛡️ تنويع التحية
@@ -1061,8 +1062,18 @@ HR Manager"""
         else:
             # Preview of Smart Message
             st.info("💡 " + ("سيتم توليد رسالة فريدة لكل رقم تلقائياً عند بدء الإرسال." if is_ar else "A unique message will be generated for each number upon sending."))
+            
+            # Always reload templates to get the latest saved changes
+            current_templates = load_templates().get("smart", SMART_TEMPLATES)
             preview_msg = generate_smart_message("{Name}", "{CV}", custom_job=st.session_state.get('wa_custom_job_val', ''))
-            st.text_area("معاينة الرسالة الذكية (Smart Message Preview)", value=preview_msg, height=250, disabled=True)
+            
+            # Add a refresh button for manual preview update
+            preview_col1, preview_col2 = st.columns([4, 1])
+            with preview_col1:
+                st.text_area("معاينة الرسالة الذكية (Smart Message Preview)", value=preview_msg, height=250, disabled=True, key="smart_preview_area")
+            with preview_col2:
+                if st.button("🔄 " + ("تحديث" if is_ar else "Refresh"), key="refresh_preview"):
+                    st.rerun()
             
         # --- 📁 Templates Library Logic (Self-contained at start to avoid state conflicts) ---
         templates_data = load_templates()
@@ -1148,20 +1159,35 @@ HR Manager"""
         with st.expander("🛠️ " + ("تعديل مكونات الرسائل الذكية" if is_ar else "Edit Smart Message Components")):
             templates_data = load_templates()
             smart_parts = templates_data.get("smart", SMART_TEMPLATES)
-            changed_parts = False
+            
+            # Store original values to detect changes
+            original_smart_parts = {k: list(v) for k, v in smart_parts.items()}
+            
             for part_key, part_list in smart_parts.items():
                 st.markdown(f"**{part_key.replace('_', ' ').title()}**")
                 new_list_str = st.text_area(f"Options for {part_key}", value="\n".join(part_list), height=100, key=f"smart_part_{part_key}")
                 new_list = [line.strip() for line in new_list_str.split("\n") if line.strip()]
-                if new_list != part_list:
-                    smart_parts[part_key] = new_list
-                    changed_parts = True
-            if changed_parts:
-                if st.button("💾 " + ("حفظ جميع التغييرات" if is_ar else "Save All Changes"), key="save_smart_parts"):
+                smart_parts[part_key] = new_list
+            
+            # Check if any changes were made
+            has_changes = any(original_smart_parts[k] != smart_parts[k] for k in original_smart_parts)
+            
+            # Save button - always visible but shows different state
+            save_col1, save_col2 = st.columns([2, 1])
+            with save_col1:
+                if st.button("💾 " + ("حفظ التغييرات وتحديث المعاينة" if is_ar else "Save Changes & Update Preview"), 
+                            type="primary" if has_changes else "secondary", 
+                            key="save_smart_parts"):
                     templates_data["smart"] = smart_parts
                     save_templates(templates_data)
-                    st.toast("✅ Smart components updated!")
+                    st.toast("✅ " + ("تم حفظ التغييرات وتحديث المعاينة بنجاح!" if is_ar else "Changes saved and preview updated!"))
                     st.rerun()
+            
+            with save_col2:
+                if has_changes:
+                    st.info("📝 " + ("هناك تغييرات غير محفوظة" if is_ar else "Unsaved changes"))
+                else:
+                    st.success("✅ " + ("جميع التغييرات محفوظة" if is_ar else "All changes saved"))
         
         # Attachment
         attachment = st.file_uploader(lbl['attach'], 
