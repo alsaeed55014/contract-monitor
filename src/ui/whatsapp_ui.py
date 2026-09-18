@@ -117,7 +117,8 @@ def generate_smart_message(name, cv_link, custom_job=""):
         "Best regards,\nAbu Fahd\nHR Manager",
         "Kind regards,\nAbu Fahd\nHR Manager",
         "With respect,\nAbu Fahd\nHR Manager",
-        "Sincerely,\nAbu Fahd\nHR Manager"
+        "Sincerely,\nAbu Fahd\nHR Manager",
+        "مع خالص التحية والتقدير،\nقسم الموارد البشرية (HR)\nAbu Fahad"
     ]
     msg += random.choice(signatures)
     
