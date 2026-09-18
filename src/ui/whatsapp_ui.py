@@ -1063,6 +1063,11 @@ HR Manager"""
             # Preview of Smart Message
             st.info("💡 " + ("سيتم توليد رسالة فريدة لكل رقم تلقائياً عند بدء الإرسال." if is_ar else "A unique message will be generated for each number upon sending."))
             
+            # Check if smart components were recently updated
+            force_refresh = st.session_state.get('smart_components_updated', False)
+            if force_refresh:
+                st.session_state.smart_components_updated = False  # Reset the flag
+            
             # Always reload templates to get the latest saved changes
             current_templates = load_templates().get("smart", SMART_TEMPLATES)
             preview_msg = generate_smart_message("{Name}", "{CV}", custom_job=st.session_state.get('wa_custom_job_val', ''))
@@ -1073,6 +1078,7 @@ HR Manager"""
                 st.text_area("معاينة الرسالة الذكية (Smart Message Preview)", value=preview_msg, height=250, disabled=True, key="smart_preview_area")
             with preview_col2:
                 if st.button("🔄 " + ("تحديث" if is_ar else "Refresh"), key="refresh_preview"):
+                    st.session_state.smart_components_updated = True
                     st.rerun()
             
         # --- 📁 Templates Library Logic (Self-contained at start to avoid state conflicts) ---
@@ -1180,6 +1186,8 @@ HR Manager"""
                             key="save_smart_parts"):
                     templates_data["smart"] = smart_parts
                     save_templates(templates_data)
+                    # Force preview refresh
+                    st.session_state.smart_components_updated = True
                     st.toast("✅ " + ("تم حفظ التغييرات وتحديث المعاينة بنجاح!" if is_ar else "Changes saved and preview updated!"))
                     st.rerun()
             
