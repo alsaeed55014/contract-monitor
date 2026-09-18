@@ -112,14 +112,8 @@ def generate_smart_message(name, cv_link, custom_job=""):
     if cv_link and str(cv_link).lower() != 'nan' and str(cv_link).strip() != '':
         msg += f"Link to your profile: {cv_link}\n\n"
     
-    # 🛡️ تنويع التوقيع
-    signatures = [
-        "Best regards,\nAbu Fahd\nHR Manager",
-        "Kind regards,\nAbu Fahd\nHR Manager",
-        "With respect,\nAbu Fahd\nHR Manager",
-        "Sincerely,\nAbu Fahd\nHR Manager"
-    ]
-    msg += random.choice(signatures)
+    # 🛡️ التوقيع الافتراضي (عربي)
+    msg += "مع خالص التحية والتقدير،\nقسم الموارد البشرية (HR)\nAbu Fahad"
     
     # 🛡️ عشوائية المسافات والرموز التعبيرية
     if random.random() > 0.7:
@@ -177,6 +171,9 @@ def render_whatsapp_page():
     if 'wa_history' not in st.session_state: st.session_state.wa_history = load_wa_history()
     if 'wa_review_targets' not in st.session_state: st.session_state.wa_review_targets = []
     if 'wa_messages' not in st.session_state: st.session_state.wa_messages = [""]
+    if 'wa_emp_targets' not in st.session_state: st.session_state.wa_emp_targets = []
+    if 'wa_emp_running' not in st.session_state: st.session_state.wa_emp_running = False
+    if 'wa_emp_idx' not in st.session_state: st.session_state.wa_emp_idx = 0
 
     st.markdown('<div class="programmer-signature-neon">By: Alsaeed Alwazzan</div>', unsafe_allow_html=True)
 
@@ -347,272 +344,354 @@ def render_whatsapp_page():
                     st.rerun()
 
         # ── إذا لم يتصل، أوقف ولا تكمل (إلا إذا كان الإرسال جاري بالفعل) ──
-        if status_emp != "Connected" and not st.session_state.get('wa_running', False):
+        if status_emp != "Connected" and not st.session_state.get('wa_emp_running', False):
             st.info("💡 " + ("قم بتشغيل المحرك ومسح الباركود أولاً للبدء بالإرسال." if is_ar else "Start the engine and scan the QR code first to begin sending."))
             st.markdown("---")
             return
 
         st.markdown("---")
         # ──────────────────────────────────────────────────────────────
+        # 🛡️ شريط الأمان وإحصائيات اليوم وزر فك القفل
+        # ──────────────────────────────────────────────────────────────
+        sec_c1, sec_c2 = st.columns([3, 1])
+        with sec_c1:
+            stats = st.session_state.wa_service.get_daily_stats() if st.session_state.wa_service else {}
+            ok_cnt = stats.get('sent_ok', 0)
+            fail_cnt = stats.get('sent_fail', 0)
+            inval_cnt = stats.get('invalid_numbers', 0)
+            st.markdown(
+                f'<div style="background: rgba(0,255,136,0.06); padding: 10px 15px; border-radius: 10px; border: 1px solid rgba(0,255,136,0.2); font-size: 0.9rem;">'
+                f'🛡️ <b>{"درع الحماية من الحظر" if is_ar else "Anti-Ban Shield"}:</b> '
+                f'{"تم إرسال اليوم" if is_ar else "Today Sent"}: <span style="color:#00FF88; font-weight:bold;">{ok_cnt}</span> | '
+                f'{"محاولات فاشلة" if is_ar else "Failed"}: <span style="color:#FF6B6B; font-weight:bold;">{fail_cnt}</span> | '
+                f'{"أرقام غير صالحة" if is_ar else "Invalid"}: <span style="color:#FFA500; font-weight:bold;">{inval_cnt}</span>'
+                f'</div>',
+                unsafe_allow_html=True
+            )
+        with sec_c2:
+            if st.button("🔄 " + ("تصفير العداد / فك القفل" if is_ar else "Reset Counter"), key="emp_unblock_btn", help="تصفير عداد الأخطاء وفك أي قفل أمان مؤقت"):
+                if st.session_state.wa_service:
+                    st.session_state.wa_service.reset_daily_stats()
+                    st.toast("✅ " + ("تم فك قفل الأمان وتصفير العداد بنجاح" if is_ar else "Anti-ban counters reset successfully!"))
+                    st.rerun()
 
-        # Data Source Selection
-        st.markdown(f"#### {'مصدر البيانات' if is_ar else 'Data Source'}")
+        st.markdown("---")
+
+        # ──────────────────────────────────────────────────────────────
+        # 1. اختيار مصدر البيانات وإدارتها (محفوظة في st.session_state)
+        # ──────────────────────────────────────────────────────────────
+        st.markdown(f"#### {'مصدر أرقام العملاء' if is_ar else 'Customer Data Source'}")
         data_source = st.radio(
             "اختر مصدر البيانات" if is_ar else "Select Data Source",
-            ["من النظام (Bengali Supply)" if is_ar else "From System (Bengali Supply)", 
-             "استيراد ملف Excel" if is_ar else "Import Excel File"],
+            ["استيراد ملف Excel" if is_ar else "Import Excel File",
+             "من النظام (Bengali Supply)" if is_ar else "From System (Bengali Supply)",
+             "إدخال أرقام يدوياً" if is_ar else "Enter Numbers Manually"],
             horizontal=True,
-            key="wa_bengali_data_source"
+            key="wa_emp_data_source"
         )
-        
-        target_phones = []
-        target_names = []
-        
-        if data_source == ("من النظام (Bengali Supply)" if is_ar else "From System (Bengali Supply)"):
-            # Import BengaliDataManager
-            from src.data.bengali_manager import BengaliDataManager
-            bm = BengaliDataManager()
-            
-            # Get all employers
-            all_employers = bm.get_employers()
-            
-            if not all_employers:
-                st.warning("⚠️ " + ("لا يوجد عملاء في النظام" if is_ar else "No employers in the system"))
-            else:
-                # Select employers to send to
-                st.markdown(f"#### {'اختر العملاء للإرسال' if is_ar else 'Select Employers to Send'}")
-                
-                # Multi-select employers
-                employer_options = [f"{e['name']} - {e.get('mobile', '')}" for e in all_employers]
-                selected_employers = st.multiselect(
-                    "العملاء" if is_ar else "Employers",
-                    employer_options,
-                    key="wa_bengali_employers"
-                )
-                
-                if selected_employers:
-                    # Extract phone numbers
-                    for selection in selected_employers:
-                        # Extract phone from selection
-                        parts = selection.split(' - ')
-                        if len(parts) > 1:
-                            phone = parts[-1].strip()
-                            name = parts[0].strip()
-                            # Clean phone number
-                            clean_phone = "".join(filter(str.isdigit, phone))
-                            if clean_phone:
-                                target_phones.append(clean_phone)
-                                target_names.append(name)
-                
-                st.info(f"📊 {'تم اختيار' if is_ar else 'Selected'}: {len(target_phones)} {'عميل' if is_ar else 'employers'}")
-        else:
-            # Excel Import
-            st.markdown(f"#### {'استيراد ملف Excel' if is_ar else 'Import Excel File'}")
+
+        if data_source == ("استيراد ملف Excel" if is_ar else "Import Excel File"):
             uploaded_file = st.file_uploader(
                 "ارفع ملف Excel" if is_ar else "Upload Excel file",
                 type=['xlsx', 'xls'],
-                key="wa_bengali_excel_upload"
+                key="wa_emp_excel_uploader"
             )
-            
             if uploaded_file:
                 try:
                     df = pd.read_excel(uploaded_file)
-                    st.success(f"✅ {'تم تحميل الملف بنجاح' if is_ar else 'File loaded successfully'}: {len(df)} {'صف' if is_ar else 'rows'}")
+                    st.success(f"✅ {'تم قراءة الملف بنجاح' if is_ar else 'File loaded successfully'}: {len(df)} {'صف' if is_ar else 'rows'}")
                     
-                    # Show columns
-                    st.write(f"**{'الأعمدة المتاحة' if is_ar else 'Available columns'}:**", list(df.columns))
-                    
-                    # Select name and phone columns
-                    col1, col2 = st.columns(2)
-                    with col1:
-                        name_col = st.selectbox(
-                            "عمود الاسم" if is_ar else "Name column",
-                            df.columns.tolist(),
-                            key="wa_bengali_name_col"
-                        )
-                    with col2:
-                        phone_col = st.selectbox(
-                            "عمود رقم الهاتف" if is_ar else "Phone column",
-                            df.columns.tolist(),
-                            key="wa_bengali_phone_col"
-                        )
-                    
-                    if st.button("📥 " + ("استخراج البيانات" if is_ar else "Extract Data"), key="extract_bengali_data"):
-                        for _, row in df.iterrows():
-                            name = str(row[name_col]).strip()
-                            phone = str(row[phone_col]).strip()
-                            # Clean phone number
-                            clean_phone = "".join(filter(str.isdigit, phone))
-                            if clean_phone and name != 'nan':
-                                target_phones.append(clean_phone)
-                                target_names.append(name)
-                        
-                        st.success(f"✅ {'تم استخراج' if is_ar else 'Extracted'}: {len(target_phones)} {'عميل' if is_ar else 'employers'}")
-                except Exception as e:
-                    st.error(f"❌ {'خطأ في قراءة الملف' if is_ar else 'Error reading file'}: {str(e)}")
-        
-        if target_phones:
-            # Message input (empty for manual writing)
-            st.markdown(f"#### {'اكتب رسالتك' if is_ar else 'Write Your Message'}")
-            custom_message = st.text_area(
-                "الرسالة" if is_ar else "Message",
-                placeholder="اكتب رسالتك هنا... استخدم {Name} لاسم العميل" if is_ar else "Write your message here... Use {Name} for customer name",
-                height=200,
-                key="wa_bengali_message"
-            )
-            
-            # Random delay settings
-            st.markdown(f"#### {'إعدادات التأخير العشوائي' if is_ar else 'Random Delay Settings'}")
-            col_d1, col_d2 = st.columns(2)
-            with col_d1:
-                # 🛡️ حد أدنى 25 ثانية (كان 5 ثواني — كارثة الحظر!)
-                min_delay = st.number_input(
-                    "الحد الأدنى (ثواني)" if is_ar else "Min delay (seconds)",
-                    min_value=25,
-                    max_value=300,
-                    value=45,
-                    help=("🛡️ الحد الأدنى الآمن 25 ثانية (يوصى 45-90)" if is_ar else "🛡️ Safe minimum 25s (recommended 45–90s)"),
-                    key="wa_bengali_min_delay"
-                )
-            with col_d2:
-                # 🛡️ حد أدنى لـ max_delay = 35 (كان 10 ثواني!)
-                max_delay = st.number_input(
-                    "الحد الأقصى (ثواني)" if is_ar else "Max delay (seconds)",
-                    min_value=35,
-                    max_value=600,
-                    value=90,
-                    key="wa_bengali_max_delay"
-                )
-            
-            # Message variation settings
-            st.markdown(f"#### {'إعدادات تغيير الرسالة' if is_ar else 'Message Variation Settings'}")
-            col_v1, col_v2 = st.columns(2)
-            with col_v1:
-                enable_variation = st.checkbox(
-                    "تفعيل تغيير الصيغة" if is_ar else "Enable Message Variation",
-                    value=True,
-                    help="تغيير صيغة الرسالة كل 5 رسائل بنفس المعنى لتجنب الحظر"
-                )
-            with col_v2:
-                variation_interval = st.number_input(
-                    "تغيير كل (رسالة)" if is_ar else "Change every (messages)",
-                    min_value=1,
-                    max_value=20,
-                    value=5,
-                    key="wa_bengali_interval"
-                )
-            
-            # Send button
-            if st.button("📨 إرسال الرسائل" if is_ar else "📨 Send Messages", type="primary", key="send_bengali_wa"):
-                if not custom_message:
-                    st.error("❌ " + ("يرجى كتابة الرسالة أولاً" if is_ar else "Please write a message first"))
-                elif not target_phones:
-                    st.error("❌ " + ("لا يوجد أرقام هواتف صالحة" if is_ar else "No valid phone numbers"))
-                elif not st.session_state.wa_service or st.session_state.wa_service.get_status() != "Connected":
-                    st.error("❌ " + ("واتساب غير متصل! ابدأ المحرك أولاً في الصفحة الرئيسية" if is_ar else "WhatsApp not connected! Start engine first on home page"))
-                else:
-                    # 🛡️ VÉRIFICATION PRÉALABLES LIMITE QUOTIDIENNE
-                    allowed_ok, allowed_msg = st.session_state.wa_service.check_send_allowed()
-                    if not allowed_ok:
-                        st.error(f"🛑 {'محظور مؤقتاً لحماية الحساب: ' if is_ar else 'Temporarily blocked for account safety: '}{allowed_msg}")
-                    else:
-                        # Send messages
-                        success_count = 0
-                        fail_count = 0
-                        # 🛡️ PLANCHER DUR: 20 secondes minimum (même si min_delay < 20, impossible via UI mais on se protège)
-                        effective_min = max(20, int(min_delay))
-                        effective_max = max(effective_min + 10, int(max_delay))
-                        
-                        progress_bar = st.progress(0)
-                        status_text = st.empty()
-                        anti_ban_triggered = False
-                        anti_ban_reason = ""
+                    ec_c1, ec_c2 = st.columns(2)
+                    with ec_c1:
+                        name_col = st.selectbox("عمود الاسم" if is_ar else "Name column", df.columns.tolist(), key="wa_emp_name_col")
+                    with ec_c2:
+                        phone_col = st.selectbox("عمود رقم الجوال" if is_ar else "Phone column", df.columns.tolist(), key="wa_emp_phone_col")
 
-                        st.info(f"🛡️ {'تم تطبيق حدود الحماية: تأخير بين الرسائل ' if is_ar else '🛡️ Protections applied: inter-message delay '}"
-                                f"{effective_min}-{effective_max}s — {allowed_msg}")
+                    if st.button("📥 " + ("استخراج وحفظ قائمة العملاء" if is_ar else "Extract & Load Customers"), type="primary", key="btn_extract_emp_excel"):
+                        extracted = []
+                        seen_phones = set()
+                        for _, row in df.iterrows():
+                            c_name = str(row[name_col]).strip() if pd.notna(row[name_col]) else "عميل"
+                            raw_p = str(row[phone_col]).strip() if pd.notna(row[phone_col]) else ""
+                            c_phone = "".join(filter(str.isdigit, raw_p))
+                            if c_phone and len(c_phone) >= 8 and c_phone not in seen_phones:
+                                seen_phones.add(c_phone)
+                                extracted.append({'name': c_name if c_name != 'nan' else 'عميل', 'phone': c_phone, 'is_sent': False})
+                        st.session_state.wa_emp_targets = extracted
+                        st.toast(f"✅ تم استخراج {len(extracted)} عميل بنجاح")
+                        st.rerun()
+                except Exception as ex:
+                    st.error(f"❌ {'خطأ في قراءة ملف الإكسل' if is_ar else 'Error reading Excel file'}: {str(ex)}")
+
+        elif data_source == ("من النظام (Bengali Supply)" if is_ar else "From System (Bengali Supply)"):
+            from src.data.bengali_manager import BengaliDataManager
+            bm = BengaliDataManager()
+            all_employers = bm.get_employers()
+            if not all_employers:
+                st.warning("⚠️ " + ("لا يوجد عملاء مسجلين في Bengali Supply" if is_ar else "No employers found in Bengali Supply"))
+            else:
+                emp_options = [f"{e['name']} - {e.get('mobile', '')}" for e in all_employers]
+                selected_options = st.multiselect(
+                    "اختر العملاء" if is_ar else "Select Employers",
+                    emp_options,
+                    default=emp_options,
+                    key="wa_emp_system_multiselect"
+                )
+                if st.button("📥 " + ("اعتماد العملاء المحددين" if is_ar else "Load Selected Employers"), key="btn_load_system_emp"):
+                    extracted = []
+                    seen_phones = set()
+                    for item in selected_options:
+                        parts = item.split(' - ')
+                        e_name = parts[0].strip()
+                        raw_p = parts[-1].strip() if len(parts) > 1 else ""
+                        c_phone = "".join(filter(str.isdigit, raw_p))
+                        if c_phone and len(c_phone) >= 8 and c_phone not in seen_phones:
+                            seen_phones.add(c_phone)
+                            extracted.append({'name': e_name, 'phone': c_phone, 'is_sent': False})
+                    st.session_state.wa_emp_targets = extracted
+                    st.toast(f"✅ تم تحميل {len(extracted)} عميل")
+                    st.rerun()
+
+        else: # Manual input
+            raw_txt = st.text_area(lbl['paste_numbers'], placeholder="05XXXXXXXX\n05YYYYYYYY...", height=120, key="wa_emp_manual_raw")
+            if st.button("📥 " + ("اعتماد الأرقام" if is_ar else "Load Numbers"), key="btn_load_manual_emp"):
+                m_list, _, _ = validate_numbers(raw_txt)
+                extracted = [{'name': 'عميل', 'phone': p, 'is_sent': False} for p in m_list]
+                st.session_state.wa_emp_targets = extracted
+                st.toast(f"✅ تم تحميل {len(extracted)} رقم")
+                st.rerun()
+
+        # ──────────────────────────────────────────────────────────────
+        # 2. عرض القائمة وإعداد الرسالة والإرسال
+        # ──────────────────────────────────────────────────────────────
+        targets = st.session_state.get('wa_emp_targets', [])
+        if targets:
+            st.markdown("---")
+            t_hdr_col1, t_hdr_col2 = st.columns([3, 1])
+            with t_hdr_col1:
+                pending_count = sum(1 for t in targets if not t.get('is_sent', False))
+                sent_count = len(targets) - pending_count
+                st.markdown(f"#### 📋 {'قائمة العملاء المستهدفين' if is_ar else 'Target Customers'} ({len(targets)} إجمالي | {pending_count} بانتظار الإرسال | {sent_count} تم الإرسال)")
+            with t_hdr_col2:
+                if st.button("🗑️ " + ("مسح القائمة بالكامل" if is_ar else "Clear List"), key="emp_clear_targets_btn"):
+                    st.session_state.wa_emp_targets = []
+                    st.session_state.wa_emp_running = False
+                    st.session_state.wa_emp_idx = 0
+                    st.rerun()
+
+            with st.expander("👁️ " + ("عرض وتعديل قائمة العملاء المستخرجين" if is_ar else "View & Edit Target List"), expanded=False):
+                for idx_t, trg in enumerate(targets):
+                    col_t1, col_t2, col_t3 = st.columns([3, 2, 1])
+                    with col_t1:
+                        status_mark = "✅ تم الإرسال" if trg.get('is_sent') else "⏳ بانتظار الإرسال"
+                        st.write(f"**{trg['name']}** ({status_mark})")
+                    with col_t2:
+                        st.code(trg['phone'], language=None)
+                    with col_t3:
+                        if st.button("❌", key=f"del_emp_trg_{idx_t}", help="حذف من القائمة"):
+                            st.session_state.wa_emp_targets.pop(idx_t)
+                            st.rerun()
+
+            # 📝 Message Composition
+            st.markdown("---")
+            st.markdown(f"#### 📝 {'نص الرسالة' if is_ar else 'Message Content'}")
+            st.caption("💡 يمكنك استخدام `{Name}` أو `{الاسم}` لإدراج اسم العميل تلقائياً، والـ Spintax مثل `{مرحباً|أهلاً|السلام عليكم}` لتنويع الرسائل وتجنب الحظر.")
+            
+            default_emp_msg = "مرحباً {Name}،\n\nنأمل أن تكونوا بخير.\nيسعدنا خدمتكم في توفير أفضل الكوادر المهنية والعمالة المناسبة لمتطلباتكم بأسرع وقت.\n\nللتواصل والاستفسار يرجى الرد على هذه الرسالة.\n\nمع خالص التحية والتقدير،\nقسم الموارد البشرية (HR)\nAbu Fahad"
+            emp_message = st.text_area(
+                "الرسالة" if is_ar else "Message",
+                value=st.session_state.get('wa_emp_last_msg', default_emp_msg),
+                height=160,
+                key="wa_emp_msg_input"
+            )
+            st.session_state.wa_emp_last_msg = emp_message
+
+            # 🛡️ Anti-ban Settings
+            st.markdown(f"#### ⚙️ {'إعدادات الأمان والتأخير' if is_ar else 'Safety & Delay Settings'}")
+            c_d1, c_d2, c_d3 = st.columns(3)
+            with c_d1:
+                emp_min_delay = st.number_input(
+                    "الحد الأدنى للتأخير (ثانية)" if is_ar else "Min delay (s)",
+                    min_value=20, max_value=300, value=25,
+                    help="الحد الأدنى الآمن 20-25 ثانية بين كل رسالة لحماية الحساب من الحظر",
+                    key="emp_min_delay_val"
+                )
+            with c_d2:
+                emp_max_delay = st.number_input(
+                    "الحد الأقصى للتأخير (ثانية)" if is_ar else "Max delay (s)",
+                    min_value=25, max_value=600, value=45,
+                    help="الحد الأقصى للتأخير العشوائي (يوصى 45-60 ثانية)",
+                    key="emp_max_delay_val"
+                )
+            with c_d3:
+                emp_batch_break = st.number_input(
+                    "استراحة كل (رسائل)" if is_ar else "Pause every (msgs)",
+                    min_value=5, max_value=50, value=15,
+                    help="أخذ وقفة لمحاكاة السلوك البشري الطبيعي",
+                    key="emp_batch_break_val"
+                )
+
+            # 🚀 Send / Stop Controls
+            st.markdown("---")
+            is_sending = st.session_state.get('wa_emp_running', False)
+            btn_box1, btn_box2 = st.columns([1, 2])
+
+            with btn_box1:
+                if is_sending:
+                    if st.button("🛑 " + ("إيقاف الإرسال" if is_ar else "Stop Sending"), type="primary", width='stretch', key="btn_stop_emp_send"):
+                        st.session_state.wa_emp_running = False
+                        st.toast("🛑 " + ("تم إيقاف الإرسال" if is_ar else "Sending stopped"))
+                        st.rerun()
+                else:
+                    ready_to_send = (pending_count > 0) and bool(emp_message.strip())
+                    btn_send_label = f"📨 {'إرسال إلى' if is_ar else 'Send to'} {pending_count} {'عميل' if is_ar else 'clients'}"
+                    if st.button(btn_send_label, disabled=not ready_to_send, type="primary", width='stretch', key="btn_start_emp_send"):
+                        # فحص اتصال واتساب
+                        wa_stat = st.session_state.wa_service.get_status() if st.session_state.wa_service else "Stopped"
+                        if wa_stat != "Connected":
+                            st.error("⚠️ " + ("يرجى تشغيل محرك واتساب والاتصال أولاً" if is_ar else "WhatsApp is not connected!"))
+                        else:
+                            st.session_state.wa_emp_running = True
+                            st.session_state.wa_emp_idx = 0
+                            st.rerun()
+
+            # ══════════════════════════════════════════════════════════
+            # 🚀 حلقة الإرسال المباشرة لواتساب للعملاء
+            # ══════════════════════════════════════════════════════════
+            if is_sending:
+                targets_to_send = st.session_state.wa_emp_targets
+                total_t = len(targets_to_send)
+                curr_idx = st.session_state.get('wa_emp_idx', 0)
+
+                # البحث عن أول رقم لم يتم إرساله بدءاً من curr_idx
+                while curr_idx < total_t and targets_to_send[curr_idx].get('is_sent', False):
+                    curr_idx += 1
+                st.session_state.wa_emp_idx = curr_idx
+
+                if curr_idx >= total_t:
+                    st.session_state.wa_emp_running = False
+                    st.balloons()
+                    st.success("🎉 " + ("اكتمل إرسال الرسائل لجميع العملاء بنجاح!" if is_ar else "All customer messages sent!"))
+                    time.sleep(1)
+                    st.rerun()
+                else:
+                    current_client = targets_to_send[curr_idx]
+                    c_name = current_client.get('name', 'عميل')
+                    c_phone = current_client.get('phone', '')
+
+                    # بطاقة حالة الإرسال المباشرة
+                    st.progress((curr_idx + 1) / total_t)
+                    st.markdown(f"""
+                    <div style="background: rgba(0, 255, 100, 0.05); padding: 16px 20px; border-radius: 14px; border: 1.5px solid rgba(0, 255, 100, 0.3); margin: 12px 0;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                            <span style="color: #00FF88; font-weight: 700; font-size: 1.05rem;">📤 {'جاري الإرسال للعميل' if is_ar else 'Sending to'}: {curr_idx + 1} / {total_t}</span>
+                            <span style="color: #D4AF37; font-weight: 700; font-size: 1.05rem;">⌛ {'متبقٍ' if is_ar else 'Remaining'}: {total_t - (curr_idx + 1)}</span>
+                        </div>
+                        <div style="color: #FFFFFF; font-size: 0.95rem;">
+                            👤 <strong>{c_name}</strong> · 📱 <span style="font-family: monospace; color: #00FF88;">{c_phone}</span>
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)
+
+                    # تجهيز نص الرسالة وتخصيصه للعميل
+                    personalized_msg = emp_message.replace("{Name}", c_name).replace("{name}", c_name).replace("{الاسم}", c_name)
+
+                    # إرسال الرسالة عبر محرك واتساب
+                    with st.spinner(f"🚀 {'جاري الإرسال إلى' if is_ar else 'Sending to'} {c_name} ({c_phone})..."):
+                        ok_send, log_detail = st.session_state.wa_service.send_message(c_phone, personalized_msg)
+
+                    # تسجيل النتيجة في سجل الإرسال العام
+                    log_entry = {
+                        "idx": curr_idx + 1,
+                        "name": c_name,
+                        "phone": c_phone,
+                        "status": log_detail if ok_send else f"فشل ({log_detail})",
+                        "ok": ok_send,
+                        "time": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    }
+                    st.session_state.wa_logs.append(log_entry)
+
+                    if ok_send:
+                        st.session_state.wa_emp_targets[curr_idx]['is_sent'] = True
+                        st.session_state.wa_history.add(c_phone)
+                        save_wa_history(st.session_state.wa_history)
+
+                    # 🛡️ إيقاف فوري إذا كان خطأ أمان لحماية الحساب من الحظر
+                    if not ok_send and str(log_detail).startswith("🛑"):
+                        st.session_state.wa_emp_running = False
+                        st.error(f"🛑 {log_detail}")
+                        st.toast("🛑 تم إيقاف الإرسال لحماية الحساب من الحظر", icon="⚠️")
+                    else:
+                        st.session_state.wa_emp_idx = curr_idx + 1
                         
-                        for i, (phone, name) in enumerate(zip(target_phones, target_names)):
-                            # 🛡️ Si anti-ban déjà déclenché, on skip tout le reste
-                            if anti_ban_triggered:
-                                status_text.text(f"🛑 {'تم إيقاف الحملة: ' if is_ar else 'Campaign stopped: '}{anti_ban_reason}")
-                                st.warning(f"🛑 {anti_ban_reason}")
-                                break
-                                
-                            status_text.text(f"{'جاري الإرسال إلى' if is_ar else 'Sending to'}: {name} ({i+1}/{len(target_phones)})")
-                            
-                            # 🛡️ VÉRIFICATION LIMITE ANTI-BAN AVANT CHAQUE MESSAGE
-                            allowed_ok, allowed_msg = st.session_state.wa_service.check_send_allowed()
-                            if not allowed_ok:
-                                anti_ban_triggered = True
-                                anti_ban_reason = allowed_msg
-                                fail_count += (len(target_phones) - i)
-                                continue
-                            
-                            # Generate message variation
-                            if enable_variation and (i + 1) % variation_interval == 0:
-                                # Simple variation: change greeting and structure
-                                variations = [
-                                    custom_message,
-                                    custom_message.replace("مرحبا", "أهلاً").replace("Hello", "Hi"),
-                                    custom_message.replace("،", ".").replace(",", "."),
-                                    custom_message.replace("\n\n", "\n"),
-                                    custom_message.replace(".", "...")
-                                ]
-                                message_to_send = variations[(i // variation_interval) % len(variations)]
+                        # حساب التأخير العشوائي الذكي بين الرسائل (حماية الحساب)
+                        if st.session_state.wa_emp_idx < total_t:
+                            # فحص استراحة الدفعات
+                            is_break = (emp_batch_break > 0 and st.session_state.wa_emp_idx % emp_batch_break == 0)
+                            if is_break:
+                                delay_sec = 180  # 3 دقائق استراحة بين الدفعات
+                                break_msg = "🛡️ استراحة دفعات لحماية الحساب (3 دقائق)"
                             else:
-                                message_to_send = custom_message
-                            
-                            # Replace {Name} placeholder
-                            message_to_send = message_to_send.replace("{Name}", name).replace("{name}", name)
-                            
-                            # Send message
-                            success, msg = st.session_state.wa_service.send_message(phone, message_to_send)
-                            
-                            if success:
-                                success_count += 1
-                            else:
-                                fail_count += 1
-                                st.warning(f"⚠️ {name}: {msg}")
-                                # 🛡️ Si c'est une protection ANTI-BAN, arrêter la campagne ENTIÈRE
-                                if str(msg).startswith("🛑"):
-                                    anti_ban_triggered = True
-                                    anti_ban_reason = str(msg)
+                                low_s = max(20, int(emp_min_delay))
+                                high_s = max(low_s + 5, int(emp_max_delay))
+                                delay_sec = random.randint(low_s, high_s)
+                                break_msg = f"⏳ انتظار عشوائي بين الرسائل ({delay_sec} ثانية)"
+
+                            # عداد تنازلي تفاعلي
+                            timer_ph = st.empty()
+                            for rem in range(delay_sec, 0, -1):
+                                if not st.session_state.get('wa_emp_running', False):
                                     break
-                            
-                            progress_bar.progress((i + 1) / len(target_phones))
-                            
-                            # Random delay between messages (anti-ban)
-                            if i < len(target_phones) - 1 and not anti_ban_triggered:
-                                # Utilise uniform + floor sécurité
-                                random_delay = int(random.uniform(effective_min, effective_max))
-                                # Micro-jitter
-                                random_delay += random.randint(-3, 5)
-                                random_delay = max(effective_min, random_delay)
-                                
-                                delay_text = f"⏳ {'تأخير عشوائي' if is_ar else 'Random delay'}: {random_delay} {'ثانية' if is_ar else 'seconds'}"
-                                
-                                for s_sec in range(random_delay, 0, -1):
-                                    status_text.text(f"{delay_text} ({s_sec}s)")
-                                    if s_sec % 10 == 0:
-                                        st.session_state.wa_service.keep_alive()
-                                    time.sleep(1)
-                                
-                                # 🛡️ Anti-ban: Secondary random micro-rest (2-5 seconds maintenant un peu plus long)
-                                micro_rest = random.uniform(2.0, 5.0)
-                                time.sleep(micro_rest)
-                                
-                                # 🛡️ استراحة "تفكير" مفاجئة كل 3-6 رسائل لمحاكاة التعب البشري (5-15 secondes)
-                                if i > 0 and i % random.randint(3, 6) == 0:
-                                    stealth_break = random.uniform(8.0, 20.0)
-                                    st.toast("🛡️ " + ("استراحة تمويهية قصيرة..." if is_ar else "Short stealth break..."), icon="⏳")
-                                    time.sleep(stealth_break)
-                    
-                        status_text.empty()
-                        progress_bar.empty()
-                        
-                        st.success(f"✅ {'تم الإرسال بنجاح' if is_ar else 'Sending completed'}: {success_count} {'رسالة' if is_ar else 'messages'}")
-                        if fail_count > 0:
-                            st.warning(f"⚠️ {'فشل' if is_ar else 'Failed'}: {fail_count}")
+                                m, s = divmod(rem, 60)
+                                timer_str = f"{m:02d}:{s:02d}" if m > 0 else f"{s} ثانية"
+                                timer_ph.markdown(f"""
+                                <div style="background: rgba(0, 229, 255, 0.06); border: 1.5px solid rgba(0, 229, 255, 0.4); border-radius: 14px; padding: 15px; text-align: center; margin: 10px 0;">
+                                    <div style="color: #00E5FF; font-weight: 700;">{break_msg}</div>
+                                    <div style="font-size: 2.2rem; font-weight: 800; color: #FFFFFF; font-family: monospace;">{timer_str}</div>
+                                </div>
+                                """, unsafe_allow_html=True)
+                                time.sleep(1)
+                            timer_ph.empty()
+
+                        if st.session_state.get('wa_emp_running', False):
+                            st.rerun()
+
+        else:
+            st.info("💡 " + ("يرجى اختيار مصدر البيانات بالأعلى واستخراج قائمة العملاء للبدء في كتابة الرسالة والإرسال." if is_ar else "Please choose a data source and extract customer list to begin."))
+
+        # ──────────────────────────────────────────────────────────────
+        # 3. سجل الإرسال الحديث ببطاقات أنيقة (Send Log)
+        # ──────────────────────────────────────────────────────────────
+        if st.session_state.get('wa_logs', []):
+            st.markdown("---")
+            with st.expander(lbl['log_title'], expanded=True):
+                lg_col1, lg_col2 = st.columns([3, 1])
+                with lg_col2:
+                    if st.button(lbl['delete_log'], width='stretch', key="emp_clear_log_btn"):
+                        st.session_state.wa_logs = []
+                        st.rerun()
+                
+                for entry in reversed(st.session_state.wa_logs):
+                    if isinstance(entry, str):
+                        st.text(entry)
+                        continue
+                    status_cls = "status-success" if entry.get('ok') else "status-error"
+                    status_t = entry.get('status', '')
+                    st.markdown(f"""
+                    <div class="log-card">
+                        <div class="log-info">
+                            <div class="log-name">{entry.get('name', 'عميل')}</div>
+                            <div class="log-phone">📱 {entry.get('phone', '')}</div>
+                        </div>
+                        <div class="log-status-group">
+                            <div class="log-status">
+                                <span class="status-badge {status_cls}">{status_t}</span>
+                                <span class="log-time">🕒 {entry.get('time', '')}</span>
+                            </div>
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)
+
         return
 
 
@@ -693,6 +772,30 @@ def render_whatsapp_page():
 
     # 3. INPUT + BROADCAST
     if status == "Connected" or st.session_state.get('wa_running', False):
+        st.markdown("---")
+        # 🛡️ شريط الأمان وإحصائيات اليوم وزر فك القفل في وضع ماركتنج
+        m_sec1, m_sec2 = st.columns([3, 1])
+        with m_sec1:
+            stats_m = st.session_state.wa_service.get_daily_stats() if st.session_state.wa_service else {}
+            ok_m = stats_m.get('sent_ok', 0)
+            fail_m = stats_m.get('sent_fail', 0)
+            inval_m = stats_m.get('invalid_numbers', 0)
+            st.markdown(
+                f'<div style="background: rgba(0,255,136,0.06); padding: 10px 15px; border-radius: 10px; border: 1px solid rgba(0,255,136,0.2); font-size: 0.9rem;">'
+                f'🛡️ <b>{"درع الحماية من الحظر" if is_ar else "Anti-Ban Shield"}:</b> '
+                f'{"تم إرسال اليوم" if is_ar else "Today Sent"}: <span style="color:#00FF88; font-weight:bold;">{ok_m}</span> | '
+                f'{"محاولات فاشلة" if is_ar else "Failed"}: <span style="color:#FF6B6B; font-weight:bold;">{fail_m}</span> | '
+                f'{"أرقام غير صالحة" if is_ar else "Invalid"}: <span style="color:#FFA500; font-weight:bold;">{inval_m}</span>'
+                f'</div>',
+                unsafe_allow_html=True
+            )
+        with m_sec2:
+            if st.button("🔄 " + ("فك قفل الأمان" if is_ar else "Reset Counter"), key="mkt_unblock_btn", help="تصفير عداد الأخطاء وفك أي قفل أمان مؤقت"):
+                if st.session_state.wa_service:
+                    st.session_state.wa_service.reset_daily_stats()
+                    st.toast("✅ " + ("تم فك قفل الأمان وتصفير العداد بنجاح" if is_ar else "Anti-ban counters reset successfully!"))
+                    st.rerun()
+
         st.markdown("---")
         
         # --- 🏗️ Linear Layout: Images Top, Main Middle, Review Bottom ---
@@ -1215,70 +1318,76 @@ HR Manager"""
                             st.session_state.wa_review_targets[r_i]['is_sent'] = True
                             break
 
-                # 5. Move to next index
-                st.session_state.wa_idx += 1
-
-                # 6. Check if completed
-                if st.session_state.wa_idx >= total_targets:
+                # 🛡️ إيقاف فوري للحملة إذا تم إرجاع تنبيه أمان لمنع حظر الحساب وحفظ باقي الأرقام
+                if not ok and str(log_msg).startswith("🛑"):
                     st.session_state.wa_running = False
-                    st.session_state.wa_done = True
-                    if temp_path and os.path.exists(temp_path):
-                        try: os.remove(temp_path)
-                        except: pass
-                    st.balloons()
-                    st.success("🎉 " + ("اكتمل إرسال جميع الرسائل بنجاح!" if is_ar else "All messages sent successfully!"))
-                    time.sleep(1)
-                    st.rerun()
+                    st.error(f"🛑 تم إيقاف الحملة لحماية الحساب من الحظر: {log_msg}")
+                    st.toast("🛑 تم إيقاف الحملة لحماية الحساب", icon="⚠️")
                 else:
-                    # 7. ⏱️ LIVE DYNAMIC RANDOM COUNTDOWN TIMER (60s - 120s unique per message)
-                    is_batch_break = (batch_size > 0 and st.session_state.wa_idx % batch_size == 0)
-                    if is_batch_break:
-                        wait_seconds = batch_delay
-                    else:
-                        low_d = min(int(min_delay), int(max_delay))
-                        high_d = max(int(min_delay), int(max_delay))
-                        wait_seconds = random.randint(low_d, high_d)
-                    
-                    next_target = final_targets[st.session_state.wa_idx]
-                    next_n = next_target.get('name', 'Client')
-                    next_p = next_target.get('phone', '')
+                    # 5. Move to next index
+                    st.session_state.wa_idx += 1
 
-                    c_title = "🛡️ استراحة دفعات بين الرسائل (حماية من الحظر)" if is_batch_break else f"⏳ انتظار عشوائي بين الرسائل ({wait_seconds} ثانية)"
-                    if not is_ar:
-                        c_title = "🛡️ Batch Break (Anti-Ban Protection)" if is_batch_break else f"⏳ Random Delay Between Messages ({wait_seconds}s)"
-                    c_icon = "🛡️" if is_batch_break else "🎲"
-                    c_border = "rgba(0, 229, 255, 0.4)" if is_batch_break else "rgba(0, 255, 136, 0.4)"
-                    c_bg = "rgba(0, 229, 255, 0.06)" if is_batch_break else "rgba(0, 255, 136, 0.06)"
-                    c_text = "#00E5FF" if is_batch_break else "#00FF88"
-
-                    countdown_ph = st.empty()
-                    for remaining in range(wait_seconds, 0, -1):
-                        if not st.session_state.get('wa_running', False):
-                            break
-                        m, s = divmod(remaining, 60)
-                        if m > 0:
-                            time_display = f"{m:02d}:{s:02d} دقيقة" if is_ar else f"{m:02d}:{s:02d} min"
-                        else:
-                            time_display = f"{s} ثانية" if is_ar else f"{s} sec"
-
-                        countdown_ph.markdown(f"""
-                        <div style="background: {c_bg}; border: 1.5px solid {c_border}; border-radius: 16px; padding: 20px; text-align: center; margin: 15px 0; box-shadow: 0 0 25px rgba(0,0,0,0.3);">
-                            <div style="color: {c_text}; font-size: 1.15rem; font-weight: 700; margin-bottom: 8px;">
-                                {c_icon} {c_title}
-                            </div>
-                            <div style="font-size: 2.6rem; font-weight: 800; color: #FFFFFF; font-family: 'Courier New', monospace; letter-spacing: 2px; text-shadow: 0 0 15px {c_text};">
-                                {time_display}
-                            </div>
-                            <div style="color: #bbb; font-size: 0.9rem; margin-top: 10px; border-top: 1px solid rgba(255,255,255,0.08); padding-top: 8px;">
-                                👤 {'الرقم التالي' if is_ar else 'Next'}: <strong>{next_n}</strong> · 📱 <span style="font-family: monospace;">{next_p}</span> · ({st.session_state.wa_idx} / {total_targets})
-                            </div>
-                        </div>
-                        """, unsafe_allow_html=True)
+                    # 6. Check if completed
+                    if st.session_state.wa_idx >= total_targets:
+                        st.session_state.wa_running = False
+                        st.session_state.wa_done = True
+                        if temp_path and os.path.exists(temp_path):
+                            try: os.remove(temp_path)
+                            except: pass
+                        st.balloons()
+                        st.success("🎉 " + ("اكتمل إرسال جميع الرسائل بنجاح!" if is_ar else "All messages sent successfully!"))
                         time.sleep(1)
-                    
-                    countdown_ph.empty()
-                    if st.session_state.get('wa_running', False):
                         st.rerun()
+                    else:
+                        # 7. ⏱️ LIVE DYNAMIC RANDOM COUNTDOWN TIMER (60s - 120s unique per message)
+                        is_batch_break = (batch_size > 0 and st.session_state.wa_idx % batch_size == 0)
+                        if is_batch_break:
+                            wait_seconds = batch_delay
+                        else:
+                            low_d = min(int(min_delay), int(max_delay))
+                            high_d = max(int(min_delay), int(max_delay))
+                            wait_seconds = random.randint(low_d, high_d)
+                        
+                        next_target = final_targets[st.session_state.wa_idx]
+                        next_n = next_target.get('name', 'Client')
+                        next_p = next_target.get('phone', '')
+
+                        c_title = "🛡️ استراحة دفعات بين الرسائل (حماية من الحظر)" if is_batch_break else f"⏳ انتظار عشوائي بين الرسائل ({wait_seconds} ثانية)"
+                        if not is_ar:
+                            c_title = "🛡️ Batch Break (Anti-Ban Protection)" if is_batch_break else f"⏳ Random Delay Between Messages ({wait_seconds}s)"
+                        c_icon = "🛡️" if is_batch_break else "🎲"
+                        c_border = "rgba(0, 229, 255, 0.4)" if is_batch_break else "rgba(0, 255, 136, 0.4)"
+                        c_bg = "rgba(0, 229, 255, 0.06)" if is_batch_break else "rgba(0, 255, 136, 0.06)"
+                        c_text = "#00E5FF" if is_batch_break else "#00FF88"
+
+                        countdown_ph = st.empty()
+                        for remaining in range(wait_seconds, 0, -1):
+                            if not st.session_state.get('wa_running', False):
+                                break
+                            m, s = divmod(remaining, 60)
+                            if m > 0:
+                                time_display = f"{m:02d}:{s:02d} دقيقة" if is_ar else f"{m:02d}:{s:02d} min"
+                            else:
+                                time_display = f"{s} ثانية" if is_ar else f"{s} sec"
+
+                            countdown_ph.markdown(f"""
+                            <div style="background: {c_bg}; border: 1.5px solid {c_border}; border-radius: 16px; padding: 20px; text-align: center; margin: 15px 0; box-shadow: 0 0 25px rgba(0,0,0,0.3);">
+                                <div style="color: {c_text}; font-size: 1.15rem; font-weight: 700; margin-bottom: 8px;">
+                                    {c_icon} {c_title}
+                                </div>
+                                <div style="font-size: 2.6rem; font-weight: 800; color: #FFFFFF; font-family: 'Courier New', monospace; letter-spacing: 2px; text-shadow: 0 0 15px {c_text};">
+                                    {time_display}
+                                </div>
+                                <div style="color: #bbb; font-size: 0.9rem; margin-top: 10px; border-top: 1px solid rgba(255,255,255,0.08); padding-top: 8px;">
+                                    👤 {'الرقم التالي' if is_ar else 'Next'}: <strong>{next_n}</strong> · 📱 <span style="font-family: monospace;">{next_p}</span> · ({st.session_state.wa_idx} / {total_targets})
+                                </div>
+                            </div>
+                            """, unsafe_allow_html=True)
+                            time.sleep(1)
+                        
+                        countdown_ph.empty()
+                        if st.session_state.get('wa_running', False):
+                            st.rerun()
 
             else:
                 st.session_state.wa_running = False
