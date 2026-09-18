@@ -596,6 +596,11 @@ def render_whatsapp_page():
                     # تجهيز نص الرسالة وتخصيصه للعميل
                     personalized_msg = emp_message.replace("{Name}", c_name).replace("{name}", c_name).replace("{الاسم}", c_name)
 
+                    # إضافة التوقيع العربي إذا لم يكن موجوداً
+                    signature = "\n\nمع خالص التحية والتقدير،\nقسم الموارد البشرية (HR)\nAbu Fahad"
+                    if signature not in personalized_msg:
+                        personalized_msg += signature
+
                     # إرسال الرسالة عبر محرك واتساب
                     with st.spinner(f"🚀 {'جاري الإرسال إلى' if is_ar else 'Sending to'} {c_name} ({c_phone})..."):
                         ok_send, log_detail = st.session_state.wa_service.send_message(c_phone, personalized_msg)
@@ -1295,6 +1300,11 @@ HR Manager"""
                     final_msg = re.sub(r'\n{3,}', '\n\n', final_msg).strip()
 
                 temp_path = st.session_state.get('wa_temp_path')
+
+                # إضافة التوقيع العربي إذا لم يكن موجوداً
+                signature = "\n\nمع خالص التحية والتقدير،\nقسم الموارد البشرية (HR)\nAbu Fahad"
+                if signature not in final_msg:
+                    final_msg += signature
 
                 # 3. Send Message via WhatsApp Service
                 with st.spinner(f"🚀 {'جاري إرسال الرسالة إلى' if is_ar else 'Sending message to'} {n} ({p})..."):
