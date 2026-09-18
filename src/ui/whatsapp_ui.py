@@ -112,15 +112,8 @@ def generate_smart_message(name, cv_link, custom_job=""):
     if cv_link and str(cv_link).lower() != 'nan' and str(cv_link).strip() != '':
         msg += f"Link to your profile: {cv_link}\n\n"
     
-    # 🛡️ تنويع التوقيع
-    signatures = [
-        "Best regards,\nAbu Fahd\nHR Manager",
-        "Kind regards,\nAbu Fahd\nHR Manager",
-        "With respect,\nAbu Fahd\nHR Manager",
-        "Sincerely,\nAbu Fahd\nHR Manager",
-        "مع خالص التحية والتقدير،\nقسم الموارد البشرية (HR)\nAbu Fahad"
-    ]
-    msg += random.choice(signatures)
+    # 🛡️ التوقيع الافتراضي (عربي)
+    msg += "مع خالص التحية والتقدير،\nقسم الموارد البشرية (HR)\nAbu Fahad"
     
     # 🛡️ عشوائية المسافات والرموز التعبيرية
     if random.random() > 0.7:
