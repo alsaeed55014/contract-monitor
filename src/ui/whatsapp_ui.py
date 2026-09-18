@@ -1329,72 +1329,71 @@ HR Manager"""
                     st.session_state.wa_running = False
                     st.error(f"🛑 تم إيقاف الحملة لحماية الحساب من الحظر: {log_msg}")
                     st.toast("🛑 تم إيقاف الحملة لحماية الحساب", icon="⚠️")
-                    break
-
-                # 5. Move to next index
-                st.session_state.wa_idx += 1
-
-                # 6. Check if completed
-                if st.session_state.wa_idx >= total_targets:
-                    st.session_state.wa_running = False
-                    st.session_state.wa_done = True
-                    if temp_path and os.path.exists(temp_path):
-                        try: os.remove(temp_path)
-                        except: pass
-                    st.balloons()
-                    st.success("🎉 " + ("اكتمل إرسال جميع الرسائل بنجاح!" if is_ar else "All messages sent successfully!"))
-                    time.sleep(1)
-                    st.rerun()
                 else:
-                    # 7. ⏱️ LIVE DYNAMIC RANDOM COUNTDOWN TIMER (60s - 120s unique per message)
-                    is_batch_break = (batch_size > 0 and st.session_state.wa_idx % batch_size == 0)
-                    if is_batch_break:
-                        wait_seconds = batch_delay
-                    else:
-                        low_d = min(int(min_delay), int(max_delay))
-                        high_d = max(int(min_delay), int(max_delay))
-                        wait_seconds = random.randint(low_d, high_d)
-                    
-                    next_target = final_targets[st.session_state.wa_idx]
-                    next_n = next_target.get('name', 'Client')
-                    next_p = next_target.get('phone', '')
+                    # 5. Move to next index
+                    st.session_state.wa_idx += 1
 
-                    c_title = "🛡️ استراحة دفعات بين الرسائل (حماية من الحظر)" if is_batch_break else f"⏳ انتظار عشوائي بين الرسائل ({wait_seconds} ثانية)"
-                    if not is_ar:
-                        c_title = "🛡️ Batch Break (Anti-Ban Protection)" if is_batch_break else f"⏳ Random Delay Between Messages ({wait_seconds}s)"
-                    c_icon = "🛡️" if is_batch_break else "🎲"
-                    c_border = "rgba(0, 229, 255, 0.4)" if is_batch_break else "rgba(0, 255, 136, 0.4)"
-                    c_bg = "rgba(0, 229, 255, 0.06)" if is_batch_break else "rgba(0, 255, 136, 0.06)"
-                    c_text = "#00E5FF" if is_batch_break else "#00FF88"
-
-                    countdown_ph = st.empty()
-                    for remaining in range(wait_seconds, 0, -1):
-                        if not st.session_state.get('wa_running', False):
-                            break
-                        m, s = divmod(remaining, 60)
-                        if m > 0:
-                            time_display = f"{m:02d}:{s:02d} دقيقة" if is_ar else f"{m:02d}:{s:02d} min"
-                        else:
-                            time_display = f"{s} ثانية" if is_ar else f"{s} sec"
-
-                        countdown_ph.markdown(f"""
-                        <div style="background: {c_bg}; border: 1.5px solid {c_border}; border-radius: 16px; padding: 20px; text-align: center; margin: 15px 0; box-shadow: 0 0 25px rgba(0,0,0,0.3);">
-                            <div style="color: {c_text}; font-size: 1.15rem; font-weight: 700; margin-bottom: 8px;">
-                                {c_icon} {c_title}
-                            </div>
-                            <div style="font-size: 2.6rem; font-weight: 800; color: #FFFFFF; font-family: 'Courier New', monospace; letter-spacing: 2px; text-shadow: 0 0 15px {c_text};">
-                                {time_display}
-                            </div>
-                            <div style="color: #bbb; font-size: 0.9rem; margin-top: 10px; border-top: 1px solid rgba(255,255,255,0.08); padding-top: 8px;">
-                                👤 {'الرقم التالي' if is_ar else 'Next'}: <strong>{next_n}</strong> · 📱 <span style="font-family: monospace;">{next_p}</span> · ({st.session_state.wa_idx} / {total_targets})
-                            </div>
-                        </div>
-                        """, unsafe_allow_html=True)
+                    # 6. Check if completed
+                    if st.session_state.wa_idx >= total_targets:
+                        st.session_state.wa_running = False
+                        st.session_state.wa_done = True
+                        if temp_path and os.path.exists(temp_path):
+                            try: os.remove(temp_path)
+                            except: pass
+                        st.balloons()
+                        st.success("🎉 " + ("اكتمل إرسال جميع الرسائل بنجاح!" if is_ar else "All messages sent successfully!"))
                         time.sleep(1)
-                    
-                    countdown_ph.empty()
-                    if st.session_state.get('wa_running', False):
                         st.rerun()
+                    else:
+                        # 7. ⏱️ LIVE DYNAMIC RANDOM COUNTDOWN TIMER (60s - 120s unique per message)
+                        is_batch_break = (batch_size > 0 and st.session_state.wa_idx % batch_size == 0)
+                        if is_batch_break:
+                            wait_seconds = batch_delay
+                        else:
+                            low_d = min(int(min_delay), int(max_delay))
+                            high_d = max(int(min_delay), int(max_delay))
+                            wait_seconds = random.randint(low_d, high_d)
+                        
+                        next_target = final_targets[st.session_state.wa_idx]
+                        next_n = next_target.get('name', 'Client')
+                        next_p = next_target.get('phone', '')
+
+                        c_title = "🛡️ استراحة دفعات بين الرسائل (حماية من الحظر)" if is_batch_break else f"⏳ انتظار عشوائي بين الرسائل ({wait_seconds} ثانية)"
+                        if not is_ar:
+                            c_title = "🛡️ Batch Break (Anti-Ban Protection)" if is_batch_break else f"⏳ Random Delay Between Messages ({wait_seconds}s)"
+                        c_icon = "🛡️" if is_batch_break else "🎲"
+                        c_border = "rgba(0, 229, 255, 0.4)" if is_batch_break else "rgba(0, 255, 136, 0.4)"
+                        c_bg = "rgba(0, 229, 255, 0.06)" if is_batch_break else "rgba(0, 255, 136, 0.06)"
+                        c_text = "#00E5FF" if is_batch_break else "#00FF88"
+
+                        countdown_ph = st.empty()
+                        for remaining in range(wait_seconds, 0, -1):
+                            if not st.session_state.get('wa_running', False):
+                                break
+                            m, s = divmod(remaining, 60)
+                            if m > 0:
+                                time_display = f"{m:02d}:{s:02d} دقيقة" if is_ar else f"{m:02d}:{s:02d} min"
+                            else:
+                                time_display = f"{s} ثانية" if is_ar else f"{s} sec"
+
+                            countdown_ph.markdown(f"""
+                            <div style="background: {c_bg}; border: 1.5px solid {c_border}; border-radius: 16px; padding: 20px; text-align: center; margin: 15px 0; box-shadow: 0 0 25px rgba(0,0,0,0.3);">
+                                <div style="color: {c_text}; font-size: 1.15rem; font-weight: 700; margin-bottom: 8px;">
+                                    {c_icon} {c_title}
+                                </div>
+                                <div style="font-size: 2.6rem; font-weight: 800; color: #FFFFFF; font-family: 'Courier New', monospace; letter-spacing: 2px; text-shadow: 0 0 15px {c_text};">
+                                    {time_display}
+                                </div>
+                                <div style="color: #bbb; font-size: 0.9rem; margin-top: 10px; border-top: 1px solid rgba(255,255,255,0.08); padding-top: 8px;">
+                                    👤 {'الرقم التالي' if is_ar else 'Next'}: <strong>{next_n}</strong> · 📱 <span style="font-family: monospace;">{next_p}</span> · ({st.session_state.wa_idx} / {total_targets})
+                                </div>
+                            </div>
+                            """, unsafe_allow_html=True)
+                            time.sleep(1)
+                        
+                        countdown_ph.empty()
+                        if st.session_state.get('wa_running', False):
+                            st.rerun()
 
             else:
                 st.session_state.wa_running = False
