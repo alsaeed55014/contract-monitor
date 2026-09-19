@@ -12,7 +12,11 @@ from src.ui.styles import get_base64_image
 import random
 
 # --- Smart Message Templates (Updated 2026-03-20) ---
+SMART_PART_KEYS = ("header", "intro", "body_start", "body_end", "closing", "final_call", "signature")
 SMART_TEMPLATES = {
+    "header": [
+        "Hello {Name},"
+    ],
     "intro": [
         "I hope you are doing well.",
         "I hope this message finds you in good health.",
@@ -47,6 +51,10 @@ SMART_TEMPLATES = {
         "The selection process is moving fast, so please get back to us as soon as possible.",
         "To ensure you don't miss out, please let us know your status shortly.",
         "We look forward to your prompt response."
+    ],
+    "signature": [
+        "Best regards,\nAbu Fahd\nHR Manager",
+        "مع خالص التحية والتقدير،\nقسم الموارد البشرية (HR)\nAbu Fahad"
     ]
 }
 
@@ -70,17 +78,26 @@ def load_templates():
                     for k, v in data["custom"].items():
                         if isinstance(v, str):
                             data["custom"][k] = {"body": v, "is_smart": False, "job_title": ""}
+                smart = dict(SMART_TEMPLATES)
+                smart.update(data.get("smart") or {})
+                data["smart"] = smart
                 return data
-        except:
+        except Exception:
             return default_templates
     return default_templates
 
 def save_templates(templates):
     try:
+        parent = os.path.dirname(WA_TEMPLATES_FILE)
+        if parent:
+            os.makedirs(parent, exist_ok=True)
         with open(WA_TEMPLATES_FILE, 'w', encoding='utf-8') as f:
             json.dump(templates, f, ensure_ascii=False, indent=4)
-    except:
-        pass
+            f.flush()
+            os.fsync(f.fileno())
+        return True, None
+    except Exception as e:
+        return False, str(e)
 
 def _split_smart_part_text(text):
     """Parse editor text into component options. A line with only --- separates multi-line options."""
@@ -121,19 +138,45 @@ def _pick_smart_part(templates, key, fallback, stable=False):
     return random.choice(options)
 
 
+def _smart_editor_keys(file_smart=None):
+    keys = list(SMART_PART_KEYS)
+    if isinstance(file_smart, dict):
+        for key in file_smart:
+            if key not in keys:
+                keys.append(key)
+    return keys
+
+
+def _read_smart_parts_from_widgets(file_smart=None):
+    """Always prefer the editor widget text; never re-apply the file over typed changes."""
+    file_smart = file_smart if isinstance(file_smart, dict) else (load_templates().get("smart") or dict(SMART_TEMPLATES))
+    parts = {}
+    for key in _smart_editor_keys(file_smart):
+        raw = st.session_state.get(f"smart_comp_{key}")
+        if isinstance(raw, str):
+            parsed = _split_smart_part_text(raw)
+            parts[key] = parsed if parsed else list(file_smart.get(key) or SMART_TEMPLATES.get(key) or [])
+        else:
+            parts[key] = list(file_smart.get(key) or SMART_TEMPLATES.get(key) or [])
+    return parts
+
+
 def get_live_smart_templates():
-    """Prefer the in-editor values so preview tracks unsaved edits, then fall back to the saved file."""
     live = st.session_state.get("smart_parts_live")
     if isinstance(live, dict) and live:
         return live
-    merged = {k: list(v) for k, v in load_templates().get("smart", SMART_TEMPLATES).items()}
-    for part_key in list(merged.keys()):
-        raw = st.session_state.get(f"smart_comp_{part_key}")
-        if isinstance(raw, str):
-            parsed = _split_smart_part_text(raw)
-            if parsed:
-                merged[part_key] = parsed
-    return merged
+    return _read_smart_parts_from_widgets()
+
+
+def _save_smart_parts_from_editor():
+    data = load_templates()
+    parts = _read_smart_parts_from_widgets(data.get("smart"))
+    data["smart"] = parts
+    ok, err = save_templates(data)
+    st.session_state.smart_parts_live = parts
+    st.session_state.smart_preview_nonce = st.session_state.get("smart_preview_nonce", 0) + 1
+    st.session_state.smart_preview_randomize = False
+    st.session_state.smart_save_status = {"ok": ok, "error": err, "parts": parts}
 
 
 def generate_smart_message(name, cv_link, custom_job="", templates=None, stable=False):
