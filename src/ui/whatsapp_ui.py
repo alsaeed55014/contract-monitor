@@ -82,44 +82,103 @@ def save_templates(templates):
     except:
         pass
 
-def generate_smart_message(name, cv_link, custom_job=""):
-    # Always load fresh templates to get latest saved changes
-    templates = load_templates().get("smart", SMART_TEMPLATES)
-    
-    # 🛡️ تنويع التحية
-    greetings = ["Hello", "Hi", "Greetings", "Dear"]
-    greet = random.choice(greetings)
-    
-    intro = random.choice(templates.get("intro", [""]))
-    b_start = random.choice(templates.get("body_start", [""]))
-    b_end = random.choice(templates.get("body_end", [""]))
-    closing = random.choice(templates.get("closing", [""]))
-    final_call = random.choice(templates.get("final_call", [""]))
-    
-    # Handle custom job title injection beautifully
-    job_part = f" - {custom_job}" if custom_job.strip() else ""
+def _split_smart_part_text(text):
+    """Parse editor text into component options. A line with only --- separates multi-line options."""
+    text = (text or "").replace("\r\n", "\n").strip()
+    if not text:
+        return []
+    lines = text.split("\n")
+    if any(line.strip() == "---" for line in lines):
+        parts, buf = [], []
+        for line in lines:
+            if line.strip() == "---":
+                chunk = "\n".join(buf).strip()
+                if chunk:
+                    parts.append(chunk)
+                buf = []
+            else:
+                buf.append(line)
+        chunk = "\n".join(buf).strip()
+        if chunk:
+            parts.append(chunk)
+        return parts
+    return [line.strip() for line in lines if line.strip()]
+
+
+def _join_smart_part_list(part_list):
+    return "\n---\n".join(str(item).strip() for item in (part_list or []) if str(item).strip())
+
+
+def _pick_smart_part(templates, key, fallback, stable=False):
+    options = templates.get(key) if templates else None
+    if not options:
+        options = fallback
+    options = [o for o in options if str(o).strip()]
+    if not options:
+        options = fallback or [""]
+    if stable:
+        return options[0]
+    return random.choice(options)
+
+
+def get_live_smart_templates():
+    """Prefer the in-editor values so preview tracks unsaved edits, then fall back to the saved file."""
+    live = st.session_state.get("smart_parts_live")
+    if isinstance(live, dict) and live:
+        return live
+    merged = {k: list(v) for k, v in load_templates().get("smart", SMART_TEMPLATES).items()}
+    for part_key in list(merged.keys()):
+        raw = st.session_state.get(f"smart_comp_{part_key}")
+        if isinstance(raw, str):
+            parsed = _split_smart_part_text(raw)
+            if parsed:
+                merged[part_key] = parsed
+    return merged
+
+
+def generate_smart_message(name, cv_link, custom_job="", templates=None, stable=False):
+    if templates is None:
+        templates = load_templates().get("smart", SMART_TEMPLATES)
+
+    header_opts = [o for o in (templates.get("header") or []) if str(o).strip()]
+    if header_opts:
+        header = _pick_smart_part(templates, "header", ["Hello {Name},"], stable=stable)
+        header = (
+            header.replace("{Name}", str(name))
+            .replace("{name}", str(name))
+            .replace("{الاسم}", str(name))
+        )
+    else:
+        greetings = ["Hello", "Hi", "Greetings", "Dear"]
+        greet = greetings[0] if stable else random.choice(greetings)
+        header = f"{greet} {name},"
+
+    intro = _pick_smart_part(templates, "intro", [""], stable=stable)
+    b_start = _pick_smart_part(templates, "body_start", [""], stable=stable)
+    b_end = _pick_smart_part(templates, "body_end", [""], stable=stable)
+    closing = _pick_smart_part(templates, "closing", [""], stable=stable)
+    final_call = _pick_smart_part(templates, "final_call", [""], stable=stable)
+    signature = _pick_smart_part(
+        templates,
+        "signature",
+        ["مع خالص التحية والتقدير،\nقسم الموارد البشرية (HR)\nAbu Fahad"],
+        stable=stable,
+    )
+
+    job_part = f" - {custom_job}" if custom_job and str(custom_job).strip() else ""
     full_body = f"{b_start}{job_part}{b_end}"
-    
-    # 🛡️ تبديل هيكلية الرسالة بشكل عشوائي (Shuffling sections)
-    sections = [intro, full_body, closing, final_call]
-    # random.shuffle(sections) # Not always good as it might break logical flow
-    
-    # Randomize line breaks (one or two)
-    lb = "\n" if random.random() > 0.5 else "\n\n"
-    
-    msg = f"{greet} {name},{lb}{intro}{lb}{full_body}{lb}{closing}{lb}{final_call}{lb}"
-    
-    # Logic: If CV exists, add CV link. If not, omit it.
-    if cv_link and str(cv_link).lower() != 'nan' and str(cv_link).strip() != '':
+    lb = "\n\n" if stable else ("\n" if random.random() > 0.5 else "\n\n")
+
+    msg = f"{header}{lb}{intro}{lb}{full_body}{lb}{closing}{lb}{final_call}{lb}"
+
+    if cv_link and str(cv_link).lower() != "nan" and str(cv_link).strip() != "":
         msg += f"Link to your profile: {cv_link}\n\n"
-    
-    # 🛡️ التوقيع الافتراضي (عربي)
-    msg += "مع خالص التحية والتقدير،\nقسم الموارد البشرية (HR)\nAbu Fahad"
-    
-    # 🛡️ عشوائية المسافات والرموز التعبيرية
-    if random.random() > 0.7:
+
+    msg += signature
+
+    if not stable and random.random() > 0.7:
         msg = msg.replace(".", " .").replace("!", " ! ")
-        
+
     return msg
 
 def load_wa_history():
@@ -1040,6 +1099,51 @@ HR Manager"""
         if not st.session_state.wa_messages[0]:
             st.session_state.wa_messages[0] = default_msg
         
+        # --- ⚙️ Smart Templates Components Editor (before preview so live edits apply) ---
+        with st.expander("🛠️ " + ("تعديل مكونات الرسائل الذكية" if is_ar else "Edit Smart Message Components"), expanded=is_smart):
+            templates_data_smart = load_templates()
+            smart_parts = {k: list(v) for k, v in templates_data_smart.get("smart", SMART_TEMPLATES).items()}
+            original_smart_parts = {k: list(v) for k, v in smart_parts.items()}
+
+            st.caption("💡 " + (
+                "افصل بين الخيارات بسطر يحتوي --- حتى تبقى النصوص متعددة الأسطر خياراً واحداً."
+                if is_ar else
+                "Separate options with a line containing --- so multi-line texts stay as one option."
+            ))
+
+            for part_key, part_list in smart_parts.items():
+                st.markdown(f"**{part_key.replace('_', ' ').title()}**")
+                new_list_str = st.text_area(
+                    f"Options for {part_key}",
+                    value=_join_smart_part_list(part_list),
+                    height=120,
+                    key=f"smart_comp_{part_key}",
+                )
+                smart_parts[part_key] = _split_smart_part_text(new_list_str)
+
+            st.session_state.smart_parts_live = smart_parts
+            has_changes = any(original_smart_parts.get(k) != smart_parts.get(k) for k in original_smart_parts)
+
+            save_col1, save_col2 = st.columns([2, 1])
+            with save_col1:
+                if st.button(
+                    "💾 " + ("حفظ التغييرات وتحديث المعاينة" if is_ar else "Save Changes & Update Preview"),
+                    type="primary" if has_changes else "secondary",
+                    key="save_smart_parts",
+                ):
+                    templates_data_smart["smart"] = smart_parts
+                    save_templates(templates_data_smart)
+                    st.session_state.smart_parts_live = smart_parts
+                    st.session_state.smart_preview_nonce = st.session_state.get("smart_preview_nonce", 0) + 1
+                    st.toast("✅ " + ("تم حفظ التغييرات وتحديث المعاينة بنجاح!" if is_ar else "Changes saved and preview updated!"))
+                    st.rerun()
+
+            with save_col2:
+                if has_changes:
+                    st.info("📝 " + ("هناك تغييرات غير محفوظة" if is_ar else "Unsaved changes"))
+                else:
+                    st.success("✅ " + ("جميع التغييرات محفوظة" if is_ar else "All changes saved"))
+
         # --- ⌨️ Message Input Logic ---
         if not is_smart:
             for i in range(len(st.session_state.wa_messages)):
@@ -1060,25 +1164,45 @@ HR Manager"""
                 st.session_state.wa_messages.append(new_smart_msg)
                 st.rerun()
         else:
-            # Preview of Smart Message
             st.info("💡 " + ("سيتم توليد رسالة فريدة لكل رقم تلقائياً عند بدء الإرسال." if is_ar else "A unique message will be generated for each number upon sending."))
-            
-            # Check if smart components were recently updated
-            force_refresh = st.session_state.get('smart_components_updated', False)
-            if force_refresh:
-                st.session_state.smart_components_updated = False  # Reset the flag
-            
-            # Always reload templates to get the latest saved changes
-            current_templates = load_templates().get("smart", SMART_TEMPLATES)
-            preview_msg = generate_smart_message("{Name}", "{CV}", custom_job=st.session_state.get('wa_custom_job_val', ''))
-            
-            # Add a refresh button for manual preview update
+
+            live_templates = get_live_smart_templates()
+            use_random_preview = bool(st.session_state.pop("smart_preview_randomize", False))
+            preview_msg = generate_smart_message(
+                "{Name}",
+                "{CV}",
+                custom_job=st.session_state.get("wa_custom_job_val", ""),
+                templates=live_templates,
+                stable=not use_random_preview,
+            )
+
+            # Streamlit ignores `value` on a keyed widget after first render; remount when content changes.
+            preview_token = abs(hash(preview_msg + str(st.session_state.get("smart_preview_nonce", 0))))
+            for stale_key in [k for k in st.session_state.keys() if str(k).startswith("smart_preview_area")]:
+                if stale_key != f"smart_preview_area_{preview_token}":
+                    try:
+                        del st.session_state[stale_key]
+                    except Exception:
+                        pass
+
             preview_col1, preview_col2 = st.columns([4, 1])
             with preview_col1:
-                st.text_area("معاينة الرسالة الذكية (Smart Message Preview)", value=preview_msg, height=250, disabled=True, key="smart_preview_area")
+                st.text_area(
+                    "معاينة الرسالة الذكية (Smart Message Preview)",
+                    value=preview_msg,
+                    height=250,
+                    disabled=True,
+                    key=f"smart_preview_area_{preview_token}",
+                )
+                st.caption("🔎 " + (
+                    "المعاينة تستخدم الخيار الأول من كل مكوّن بعد التعديل. اضغط تحديث لعرض عينة عشوائية."
+                    if is_ar else
+                    "Preview uses the first option of each component after edits. Click Refresh for a random sample."
+                ))
             with preview_col2:
                 if st.button("🔄 " + ("تحديث" if is_ar else "Refresh"), key="refresh_preview"):
-                    st.session_state.smart_components_updated = True
+                    st.session_state.smart_preview_randomize = True
+                    st.session_state.smart_preview_nonce = st.session_state.get("smart_preview_nonce", 0) + 1
                     st.rerun()
             
         # --- 📁 Templates Library Logic (Self-contained at start to avoid state conflicts) ---
@@ -1161,42 +1285,6 @@ HR Manager"""
                     m_col2.button(lbl['wa_delete_template'], key=f"del_tpl_{t_name}", on_click=delete_tpl)
             st.info(lbl['wa_placeholders_guide'])
 
-        # --- ⚙️ Smart Templates Components Editor ---
-        with st.expander("🛠️ " + ("تعديل مكونات الرسائل الذكية" if is_ar else "Edit Smart Message Components")):
-            templates_data = load_templates()
-            smart_parts = templates_data.get("smart", SMART_TEMPLATES)
-            
-            # Store original values to detect changes
-            original_smart_parts = {k: list(v) for k, v in smart_parts.items()}
-            
-            for part_key, part_list in smart_parts.items():
-                st.markdown(f"**{part_key.replace('_', ' ').title()}**")
-                new_list_str = st.text_area(f"Options for {part_key}", value="\n".join(part_list), height=100, key=f"smart_part_{part_key}")
-                new_list = [line.strip() for line in new_list_str.split("\n") if line.strip()]
-                smart_parts[part_key] = new_list
-            
-            # Check if any changes were made
-            has_changes = any(original_smart_parts[k] != smart_parts[k] for k in original_smart_parts)
-            
-            # Save button - always visible but shows different state
-            save_col1, save_col2 = st.columns([2, 1])
-            with save_col1:
-                if st.button("💾 " + ("حفظ التغييرات وتحديث المعاينة" if is_ar else "Save Changes & Update Preview"), 
-                            type="primary" if has_changes else "secondary", 
-                            key="save_smart_parts"):
-                    templates_data["smart"] = smart_parts
-                    save_templates(templates_data)
-                    # Force preview refresh
-                    st.session_state.smart_components_updated = True
-                    st.toast("✅ " + ("تم حفظ التغييرات وتحديث المعاينة بنجاح!" if is_ar else "Changes saved and preview updated!"))
-                    st.rerun()
-            
-            with save_col2:
-                if has_changes:
-                    st.info("📝 " + ("هناك تغييرات غير محفوظة" if is_ar else "Unsaved changes"))
-                else:
-                    st.success("✅ " + ("جميع التغييرات محفوظة" if is_ar else "All changes saved"))
-        
         # Attachment
         attachment = st.file_uploader(lbl['attach'], 
                                       type=["png","jpg","jpeg","gif","bmp","webp",
@@ -1320,7 +1408,12 @@ HR Manager"""
 
                 # 2. Message Generation
                 if st.session_state.get('wa_smart_mode', False):
-                    final_msg = generate_smart_message(n, v, custom_job=st.session_state.get('wa_custom_job_val', ''))
+                    final_msg = generate_smart_message(
+                        n,
+                        v,
+                        custom_job=st.session_state.get('wa_custom_job_val', ''),
+                        templates=get_live_smart_templates(),
+                    )
                 else:
                     msg_idx = (curr_i // max(1, int(msg_switch_threshold))) % len(st.session_state.wa_messages)
                     msg_template = st.session_state.wa_messages[msg_idx]
