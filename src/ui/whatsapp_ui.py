@@ -53,8 +53,7 @@ SMART_TEMPLATES = {
         "We look forward to your prompt response."
     ],
     "signature": [
-        "Best regards,\nAbu Fahd\nHR Manager",
-        "مع خالص التحية والتقدير،\nقسم الموارد البشرية (HR)\nAbu Fahad"
+        "Best regards,\nAbu Fahd\nHR Manager"
     ]
 }
 
@@ -204,7 +203,7 @@ def generate_smart_message(name, cv_link, custom_job="", templates=None, stable=
     signature = _pick_smart_part(
         templates,
         "signature",
-        ["مع خالص التحية والتقدير،\nقسم الموارد البشرية (HR)\nAbu Fahad"],
+        ["Best regards,\nAbu Fahd\nHR Manager"],
         stable=stable,
     )
 
@@ -600,7 +599,7 @@ def render_whatsapp_page():
             st.markdown(f"#### 📝 {'نص الرسالة' if is_ar else 'Message Content'}")
             st.caption("💡 يمكنك استخدام `{Name}` أو `{الاسم}` لإدراج اسم العميل تلقائياً، والـ Spintax مثل `{مرحباً|أهلاً|السلام عليكم}` لتنويع الرسائل وتجنب الحظر.")
             
-            default_emp_msg = "مرحباً {Name}،\n\nنأمل أن تكونوا بخير.\nيسعدنا خدمتكم في توفير أفضل الكوادر المهنية والعمالة المناسبة لمتطلباتكم بأسرع وقت.\n\nللتواصل والاستفسار يرجى الرد على هذه الرسالة.\n\nمع خالص التحية والتقدير،\nابو فهد\nHR"
+            default_emp_msg = "مرحباً {Name}،\n\nنأمل أن تكونوا بخير.\nيسعدنا خدمتكم في توفير أفضل الكوادر المهنية والعمالة المناسبة لمتطلباتكم بأسرع وقت.\n\nللتواصل والاستفسار يرجى الرد على هذه الرسالة.\n\nمع خالص التحية والتقدير،\nأبو فهد\nHR"
             emp_message = st.text_area(
                 "الرسالة" if is_ar else "Message",
                 value=st.session_state.get('wa_emp_last_msg', default_emp_msg),
@@ -700,7 +699,7 @@ def render_whatsapp_page():
                     personalized_msg = emp_message.replace("{Name}", c_name).replace("{name}", c_name).replace("{الاسم}", c_name)
 
                     # إضافة التوقيع العربي إذا لم يكن موجوداً
-                    signature = "\n\nمع خالص التحية والتقدير،\nابو فهد\nHR"
+                    signature = "\n\nمع خالص التحية والتقدير،\nأبو فهد\nHR"
                     if signature not in personalized_msg:
                         personalized_msg += signature
 
@@ -1471,8 +1470,8 @@ HR Manager"""
 
                 temp_path = st.session_state.get('wa_temp_path')
 
-                # إضافة التوقيع العربي إذا لم يكن موجوداً
-                signature = "\n\nمع خالص التحية والتقدير،\nابو فهد\nHR"
+                # إضافة التوقيع الإنجليزي لواتساب ماركتنج
+                signature = "\n\nBest regards,\nAbu Fahd\nHR Manager"
                 if signature not in final_msg:
                     final_msg += signature
 
