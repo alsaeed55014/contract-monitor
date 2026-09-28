@@ -5205,9 +5205,10 @@ def render_order_processing_content():
         
         # Execute global filter on worker dataset
         if any(filters.values()):
+            total_orig_workers = len(workers_df)
             engine = SmartSearchEngine(workers_df)
             workers_df = engine.search("", filters=filters)
-            st.info(f"💡 {'تم تطبيق التصفية: متاح حالياً ' if lang == 'ar' else 'Filter applied: available '} {len(workers_df)} {' عامل' if lang == 'ar' else ' workers'}")
+            st.info(f"💡 {'تم تطبيق التصفية: متاح حالياً ' if lang == 'ar' else 'Filter applied: available '} {len(workers_df)} {' عامل' if lang == 'ar' else ' workers'} ({'من أصل ' if lang == 'ar' else 'out of '} {total_orig_workers})")
 
     # --- Resume Original Logic ---
 
@@ -5703,7 +5704,8 @@ def render_order_processing_content():
             c_timestamp = customers_df.columns[0]
 
     # --- Container for all requests ---
-    st.markdown("### 📋 " + t('customer_requests', lang))
+    total_active_clients = len([idx for idx in customers_df.index if f"client_{idx}" not in st.session_state.op_hidden_clients])
+    st.markdown(f"### 📋 {t('customer_requests', lang)} <span style='font-size: 0.9rem; color: #888; font-weight: normal;'>({total_active_clients} {'طلب' if lang == 'ar' else 'requests'})</span>", unsafe_allow_html=True)
     
     # NEW SEARCH INPUT
     search_lbl = "🔍 بحث عن بطاقة طلب (الجوال، المسؤول، الموقع، الجنسية، المهنة، الملاحظات)" if lang == 'ar' else "🔍 Search Request (Mobile, Manager, Location, Nationality, Job, Notes)"
@@ -5814,6 +5816,20 @@ def render_order_processing_content():
     total_items = len(filtered_indices)
     total_pages = max(1, (total_items + PAGE_SIZE - 1) // PAGE_SIZE)
     
+    # --- Search Results Count Display ---
+    if cust_search_q:
+        if total_items > 0:
+            count_msg = f"🔍 **عدد نتائج البحث: {total_items}** من أصل {total_active_clients} طلب" if lang == 'ar' else f"🔍 **Search results: {total_items}** out of {total_active_clients} requests"
+            st.info(count_msg)
+        else:
+            no_res_msg = f"⚠️ **عدد نتائج البحث: 0** — لا توجد أي طلبات مطابقة للبحث عن: \"{cust_search_q}\"" if lang == 'ar' else f"⚠️ **Search results: 0** — No requests found matching: \"{cust_search_q}\""
+            st.warning(no_res_msg)
+            return
+
+    if total_items == 0:
+        st.warning(t("no_data", lang))
+        return
+    
     if "op_page_number" not in st.session_state:
         st.session_state.op_page_number = 1
         
@@ -5841,6 +5857,8 @@ def render_order_processing_content():
                 st.rerun()
         with pc2:
             page_text = f"صفحة {st.session_state.op_page_number} من {total_pages}" if lang == 'ar' else f"Page {st.session_state.op_page_number} of {total_pages}"
+            if cust_search_q:
+                page_text += f" (نتائج البحث: {total_items})" if lang == 'ar' else f" ({total_items} results)"
             st.markdown(f"<div style='text-align:center; padding-top:10px; color:#ddd;'>{page_text}</div>", unsafe_allow_html=True)
         with pc3:
             if st.button("➡️ التالي" if lang == 'ar' else "Next ➡️", disabled=(st.session_state.op_page_number == total_pages), key="next_top", width='stretch'):
