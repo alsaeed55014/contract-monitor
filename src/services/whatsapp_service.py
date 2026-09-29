@@ -1259,17 +1259,18 @@ class WhatsAppService:
             except Exception:
                 _baseline_count = -1
 
-            # 📎 4. التعامل مع المرفقات (إذا تم تحديد مرفق)
-            if attachment_path and os.path.exists(attachment_path):
+            # 📎 4. التعامل مع المرفقات (سواء ملف واحد أو قائمة ملفات PDF، فيديو، صور)
+            raw_attachments = []
+            if attachment_path:
+                if isinstance(attachment_path, (list, tuple, set)):
+                    raw_attachments = [str(p) for p in attachment_path if p and os.path.exists(str(p))]
+                elif isinstance(attachment_path, str) and os.path.exists(attachment_path):
+                    raw_attachments = [attachment_path]
+
+            if raw_attachments:
                 temp_dir = os.path.join(self.session_path, "temp_uploads")
                 os.makedirs(temp_dir, exist_ok=True)
 
-                original_ext = os.path.splitext(attachment_path)[1]
-                random_filename = f"DOC_{datetime.now().strftime('%H%M%S')}_{random.randint(1000, 9999)}{original_ext}"
-                obfuscated_path = os.path.join(temp_dir, random_filename)
-                shutil.copy2(attachment_path, obfuscated_path)
-
-                attach_btn_found = None
                 attach_selectors = [
                     '//*[contains(@data-testid, "conversation-attach-button")]',
                     '//div[contains(@data-testid, "conversation-attach-button")]',
@@ -1282,60 +1283,165 @@ class WhatsAppService:
                     '//div[@title="Attach"]',
                     '//div[@title="إرفاق"]',
                 ]
-                for sel in attach_selectors:
-                    try:
-                        btns = self.driver.find_elements(By.XPATH, sel)
-                        if btns and btns[0].is_displayed():
-                            attach_btn_found = btns[0]
-                            break
-                    except Exception: continue
 
-                if attach_btn_found is None:
-                    self.update_daily_stats(False, is_invalid_number=False)
-                    return False, "فشل العثور على زر الإرفاق"
+                def _open_attach_menu():
+                    for sel in attach_selectors:
+                        try:
+                            btns = self.driver.find_elements(By.XPATH, sel)
+                            if btns and btns[0].is_displayed():
+                                try:
+                                    ActionChains(self.driver).move_to_element(btns[0]).pause(0.2).click().perform()
+                                except Exception:
+                                    btns[0].click()
+                                return True
+                        except Exception:
+                            continue
+                    return False
 
-                time.sleep(0.8)
+                media_exts = {'.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.mp4', '.mov', '.avi', '.mkv', '.3gp'}
+
+                def _get_target_file_input(ext):
+                    is_media = ext.lower() in media_exts
+                    file_inputs = self.driver.find_elements(By.XPATH, '//input[@type="file"]')
+                    if not file_inputs:
+                        return None
+                    for finp in file_inputs:
+                        acc = (finp.get_attribute("accept") or "").lower()
+                        if is_media and ("image" in acc or "video" in acc):
+                            return finp
+                        elif not is_media and ("*" in acc or "document" in acc or ("image" not in acc and "video" not in acc)):
+                            return finp
+                    return file_inputs[0] if is_media else file_inputs[-1]
+
+                caption_injected = False
+                created_temp_subfolders = []
+
                 try:
-                    ActionChains(self.driver).move_to_element(attach_btn_found).pause(0.2).click().perform()
-                except Exception:
-                    attach_btn_found.click()
-                time.sleep(1.5)
+                    for att_idx, single_att in enumerate(raw_attachments):
+                        ext = os.path.splitext(single_att)[1].lower()
 
-                file_inputs = self.driver.find_elements(By.XPATH, '//input[@type="file"]')
-                if not file_inputs:
-                    self.update_daily_stats(False, is_invalid_number=False)
-                    return False, "فشل العثور على حقل رفع الملف"
-                file_inputs[-1].send_keys(obfuscated_path)
-                time.sleep(3.0)
+                        # وقفة طبيعية لمحاكاة السلوك البشري إذا كان هناك أكثر من مرفق
+                        if att_idx > 0:
+                            time.sleep(random.uniform(2.5, 4.0))
 
-                wait = WebDriverWait(self.driver, 20)
-                caption_input = wait.until(EC.presence_of_element_located((By.XPATH,
-                    '//div[@contenteditable="true"][@data-tab="10"]'
-                    ' | //div[@contenteditable="true" and contains(@class, "copyable-text")]'
-                    ' | //div[@role="textbox"]'
-                    ' | //div[contains(@data-testid, "media-caption-input-container")]//div[@contenteditable="true"]'
-                )))
+                        # فتح قائمة الإرفاق
+                        opened = _open_attach_menu()
+                        if not opened:
+                            time.sleep(0.8)
+                            opened = _open_attach_menu()
+                        if not opened:
+                            self.update_daily_stats(False, is_invalid_number=False)
+                            return False, "فشل العثور على زر الإرفاق"
 
-                if message:
-                    self._inject_text_to_input(caption_input, message)
-                    time.sleep(1.0)
+                        time.sleep(1.2)
 
-                sent_ok = False
-                media_send_btn = self._find_send_button()
-                if media_send_btn:
-                    try:
-                        ActionChains(self.driver).move_to_element(media_send_btn).pause(0.3).click().perform()
-                        sent_ok = True
-                    except Exception: pass
-                if not sent_ok:
-                    try:
-                        caption_input.send_keys(Keys.ENTER)
-                        sent_ok = True
-                    except Exception: pass
+                        target_input = _get_target_file_input(ext)
+                        if not target_input:
+                            self.update_daily_stats(False, is_invalid_number=False)
+                            return False, "فشل العثور على حقل رفع الملف"
 
-                if not sent_ok:
-                    self.update_daily_stats(False, is_invalid_number=False)
-                    return False, "فشل في الضغط على زر إرسال المرفق"
+                        # الحفاظ على الاسم الأصلي للملف داخل مجلد مؤقت فريد
+                        orig_name = os.path.basename(single_att)
+                        send_subfolder = os.path.join(temp_dir, f"send_{int(time.time()*1000)}_{random.randint(100, 999)}")
+                        os.makedirs(send_subfolder, exist_ok=True)
+                        created_temp_subfolders.append(send_subfolder)
+                        ready_path = os.path.join(send_subfolder, orig_name)
+                        shutil.copy2(single_att, ready_path)
+
+                        target_input.send_keys(ready_path)
+                        time.sleep(2.5)
+
+                        # فحص شاشة المعاينة وصندوق النص المرفق
+                        caption_input = None
+                        try:
+                            wait = WebDriverWait(self.driver, 15)
+                            caption_input = wait.until(EC.presence_of_element_located((By.XPATH,
+                                '//div[@contenteditable="true"][@data-tab="10"]'
+                                ' | //div[@contenteditable="true" and contains(@class, "copyable-text")]'
+                                ' | //div[@role="textbox"]'
+                                ' | //div[contains(@data-testid, "media-caption-input-container")]//div[@contenteditable="true"]'
+                            )))
+                        except Exception:
+                            caption_input = None
+
+                        # حقن نص الرسالة مع أول مرفق فقط
+                        if att_idx == 0 and message and caption_input:
+                            try:
+                                self._inject_text_to_input(caption_input, message)
+                                caption_injected = True
+                                time.sleep(1.0)
+                            except Exception:
+                                caption_injected = False
+
+                        # النقر على زر إرسال المرفق
+                        sent_att_ok = False
+                        media_send_btn = self._find_send_button()
+                        if media_send_btn:
+                            try:
+                                ActionChains(self.driver).move_to_element(media_send_btn).pause(0.3).click().perform()
+                                sent_att_ok = True
+                            except Exception: pass
+                        if not sent_att_ok and caption_input:
+                            try:
+                                caption_input.send_keys(Keys.ENTER)
+                                sent_att_ok = True
+                            except Exception: pass
+                        if not sent_att_ok:
+                            try:
+                                alt_btns = self.driver.find_elements(By.XPATH, '//span[@data-icon="send"]/parent::* | //button[@aria-label="Send" or @aria-label="إرسال"]')
+                                if alt_btns and alt_btns[-1].is_displayed():
+                                    alt_btns[-1].click()
+                                    sent_att_ok = True
+                            except Exception: pass
+
+                        if not sent_att_ok:
+                            self.update_daily_stats(False, is_invalid_number=False)
+                            return False, f"فشل في الضغط على زر إرسال المرفق ({orig_name})"
+
+                        # ⏳ الانتظار حتى اكتمال رفع الوسائط وإغلاق شاشة المعاينة (حماية الحساب من قطع الرفع)
+                        up_start = time.time()
+                        while time.time() - up_start < 25:
+                            previews = self.driver.find_elements(By.XPATH,
+                                '//div[contains(@data-testid, "media-preview")] | '
+                                '//div[contains(@data-testid, "media-caption-input-container")] | '
+                                '//div[contains(@data-testid, "drawer-middle")]'
+                            )
+                            if not previews or not any(p.is_displayed() for p in previews):
+                                break
+                            time.sleep(0.5)
+
+                        # مهلة أمان إضافية بحسب حجم الملف ونوعه (فيديوهات / مستندات PDF) لضمان تسليمه لخوادم واتساب
+                        try:
+                            file_size_mb = os.path.getsize(ready_path) / (1024 * 1024)
+                        except Exception:
+                            file_size_mb = 1.0
+
+                        if ext in ['.mp4', '.mov', '.avi', '.mkv'] or file_size_mb > 5:
+                            time.sleep(min(8.0, 3.0 + file_size_mb * 0.4))
+                        elif ext in ['.pdf', '.doc', '.docx']:
+                            time.sleep(min(5.0, 2.0 + file_size_mb * 0.3))
+                        else:
+                            time.sleep(1.5)
+
+                    # إذا لم يتم حقن نص الرسالة كـ Caption (مثلاً مستند بدون حقل شرح)، إرسال النص في المحادثة
+                    if message and not caption_injected:
+                        time.sleep(1.5)
+                        chat_box = self._find_input_box()
+                        if chat_box:
+                            if self._inject_text_to_input(chat_box, message):
+                                time.sleep(0.6)
+                                snd = self._find_send_button()
+                                if snd:
+                                    try: snd.click()
+                                    except: chat_box.send_keys(Keys.ENTER)
+                                else:
+                                    chat_box.send_keys(Keys.ENTER)
+                                time.sleep(1.5)
+                finally:
+                    # تنظيف المجلدات المؤقتة المنشأة لهذا الإرسال
+                    for sub in created_temp_subfolders:
+                        try: shutil.rmtree(sub, ignore_errors=True)
+                        except Exception: pass
 
             else:
                 # 💬 5. إرسال الرسالة النصية

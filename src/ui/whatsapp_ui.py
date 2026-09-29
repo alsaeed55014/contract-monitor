@@ -486,7 +486,7 @@ def render_whatsapp_page():
         data_source = st.radio(
             "اختر مصدر البيانات" if is_ar else "Select Data Source",
             ["استيراد ملف Excel" if is_ar else "Import Excel File",
-             "من النظام (Bengali Supply)" if is_ar else "From System (Bengali Supply)",
+             "من النظام (طلبات العملاء & Bengali Supply)" if is_ar else "From System (Requests & Bengali Supply)",
              "إدخال أرقام يدوياً" if is_ar else "Enter Numbers Manually"],
             horizontal=True,
             key="wa_emp_data_source"
@@ -525,34 +525,171 @@ def render_whatsapp_page():
                 except Exception as ex:
                     st.error(f"❌ {'خطأ في قراءة ملف الإكسل' if is_ar else 'Error reading Excel file'}: {str(ex)}")
 
-        elif data_source == ("من النظام (Bengali Supply)" if is_ar else "From System (Bengali Supply)"):
+        elif data_source == ("من النظام (طلبات العملاء & Bengali Supply)" if is_ar else "From System (Requests & Bengali Supply)"):
             from src.data.bengali_manager import BengaliDataManager
-            bm = BengaliDataManager()
-            all_employers = bm.get_employers()
-            if not all_employers:
-                st.warning("⚠️ " + ("لا يوجد عملاء مسجلين في Bengali Supply" if is_ar else "No employers found in Bengali Supply"))
+
+            # ── جلب البيانات من المصدرين ──────────────────────────────
+            all_sys_records = []  # list of dicts: {name, phone, city, job, source}
+
+            # 1) طلبات العملاء (Google Sheet)
+            try:
+                if hasattr(st.session_state, 'db') and st.session_state.db:
+                    cust_df = st.session_state.db.fetch_customer_requests()
+                    if cust_df is not None and not cust_df.empty:
+                        cols = cust_df.columns.tolist()
+                        # محاولة تحديد أعمدة الاسم، الجوال، المدينة، الوظيفة
+                        def _find_col(keywords):
+                            for kw in keywords:
+                                for c in cols:
+                                    if kw.lower() in str(c).lower():
+                                        return c
+                            return None
+                        name_c  = _find_col(["اسم", "name", "شركة", "company", "عميل"])
+                        phone_c = _find_col(["جوال", "موبايل", "تليفون", "هاتف", "phone", "mobile"])
+                        city_c  = _find_col(["مدينة", "city", "منطقة", "location"])
+                        job_c   = _find_col(["وظيفة", "مهنة", "طلب", "job", "category", "profession"])
+                        for _, row in cust_df.iterrows():
+                            r_name  = str(row[name_c]).strip()  if name_c  and pd.notna(row[name_c])  else "عميل"
+                            r_phone = str(row[phone_c]).strip() if phone_c and pd.notna(row[phone_c]) else ""
+                            r_city  = str(row[city_c]).strip()  if city_c  and pd.notna(row[city_c])  else ""
+                            r_job   = str(row[job_c]).strip()   if job_c   and pd.notna(row[job_c])   else ""
+                            r_phone_clean = "".join(filter(str.isdigit, r_phone))
+                            if r_phone_clean and len(r_phone_clean) >= 8:
+                                all_sys_records.append({
+                                    'name': r_name if r_name not in ('', 'nan') else 'عميل',
+                                    'phone': r_phone_clean,
+                                    'city': r_city,
+                                    'job': r_job,
+                                    'source': '📋 طلبات العملاء'
+                                })
+            except Exception as _ce:
+                st.warning(f"⚠️ تعذّر جلب طلبات العملاء: {_ce}")
+
+            # 2) Bengali Supply
+            try:
+                bm = BengaliDataManager()
+                for e in (bm.get_employers() or []):
+                    raw_p = "".join(filter(str.isdigit, str(e.get('mobile', ''))))
+                    if raw_p and len(raw_p) >= 8:
+                        all_sys_records.append({
+                            'name': str(e.get('name', 'عميل')).strip(),
+                            'phone': raw_p,
+                            'city': str(e.get('city', '')).strip(),
+                            'job': str(e.get('cafe', '')).strip(),
+                            'source': '🏢 Bengali Supply'
+                        })
+            except Exception as _be:
+                st.warning(f"⚠️ تعذّر جلب Bengali Supply: {_be}")
+
+            if not all_sys_records:
+                st.warning("⚠️ لا توجد بيانات في النظام حالياً")
             else:
-                emp_options = [f"{e['name']} - {e.get('mobile', '')}" for e in all_employers]
-                selected_options = st.multiselect(
-                    "اختر العملاء" if is_ar else "Select Employers",
-                    emp_options,
-                    default=emp_options,
-                    key="wa_emp_system_multiselect"
+                # ── خانة البحث ────────────────────────────────────────
+                st.markdown(f"**📊 إجمالي السجلات:** {len(all_sys_records)} سجل")
+                search_q = st.text_input(
+                    "🔍 ابحث بالاسم أو رقم التليفون أو المدينة أو المهنة...",
+                    key="wa_sys_search_box",
+                    placeholder="مثال: محمد  أو  0501234567  أو  الرياض  أو  مطعم"
                 )
-                if st.button("📥 " + ("اعتماد العملاء المحددين" if is_ar else "Load Selected Employers"), key="btn_load_system_emp"):
-                    extracted = []
-                    seen_phones = set()
-                    for item in selected_options:
-                        parts = item.split(' - ')
-                        e_name = parts[0].strip()
-                        raw_p = parts[-1].strip() if len(parts) > 1 else ""
-                        c_phone = "".join(filter(str.isdigit, raw_p))
-                        if c_phone and len(c_phone) >= 8 and c_phone not in seen_phones:
-                            seen_phones.add(c_phone)
-                            extracted.append({'name': e_name, 'phone': c_phone, 'is_sent': False})
-                    st.session_state.wa_emp_targets = extracted
-                    st.toast(f"✅ تم تحميل {len(extracted)} عميل")
-                    st.rerun()
+
+                # ── تصفية النتائج ─────────────────────────────────────
+                if search_q and search_q.strip():
+                    q = search_q.strip().lower()
+                    filtered = [
+                        r for r in all_sys_records
+                        if q in r['name'].lower()
+                        or q in r['phone']
+                        or q in r['city'].lower()
+                        or q in r['job'].lower()
+                        or q in r['source'].lower()
+                    ]
+                else:
+                    filtered = all_sys_records
+
+                st.markdown(f"**🔎 نتائج البحث:** {len(filtered)} سجل")
+
+                if not filtered:
+                    st.info("لا توجد نتائج مطابقة، جرّب كلمة بحث مختلفة.")
+                else:
+                    # ── عرض النتائج كجدول قابل للاختيار ─────────────
+                    # بناء DataFrame للعرض
+                    display_rows = []
+                    for i, r in enumerate(filtered):
+                        display_rows.append({
+                            '#': i + 1,
+                            'الاسم': r['name'],
+                            '📱 رقم التليفون': r['phone'],
+                            'المدينة': r['city'],
+                            'المهنة / النشاط': r['job'],
+                            'المصدر': r['source'],
+                        })
+                    disp_df = pd.DataFrame(display_rows)
+
+                    # multiselect باستخدام options مبسطة (الاسم + رقم الهاتف)
+                    options_list = [
+                        f"{r['name']} | 📱 {r['phone']} | {r['city']} | {r['source']}"
+                        for r in filtered
+                    ]
+
+                    # إظهار الجدول للمعاينة
+                    st.dataframe(
+                        disp_df,
+                        use_container_width=True,
+                        hide_index=True,
+                        column_config={
+                            '📱 رقم التليفون': st.column_config.TextColumn('📱 رقم التليفون', width='medium'),
+                        }
+                    )
+
+                    st.markdown("**اختر السجلات للإضافة:**")
+                    selected_sys = st.multiselect(
+                        "✅ حدد العملاء المراد إرسالهم",
+                        options=options_list,
+                        default=options_list,
+                        key="wa_emp_sys_multiselect_new",
+                        format_func=lambda x: x
+                    )
+
+                    btn_col1, btn_col2 = st.columns(2)
+                    with btn_col1:
+                        if st.button(
+                            f"📥 اعتماد المحددين ({len(selected_sys)})",
+                            type="primary",
+                            key="btn_load_sys_selected",
+                            use_container_width=True
+                        ):
+                            extracted = []
+                            seen_phones = set()
+                            for opt in selected_sys:
+                                # استخراج رقم الهاتف من الخيار
+                                try:
+                                    parts = opt.split('|')
+                                    raw_name = parts[0].strip()
+                                    raw_phone = parts[1].replace('📱', '').strip() if len(parts) > 1 else ''
+                                    c_phone = "".join(filter(str.isdigit, raw_phone))
+                                    if c_phone and len(c_phone) >= 8 and c_phone not in seen_phones:
+                                        seen_phones.add(c_phone)
+                                        extracted.append({'name': raw_name, 'phone': c_phone, 'is_sent': False})
+                                except Exception:
+                                    pass
+                            st.session_state.wa_emp_targets = extracted
+                            st.toast(f"✅ تم اعتماد {len(extracted)} عميل")
+                            st.rerun()
+                    with btn_col2:
+                        if st.button(
+                            f"⚡ اعتماد كافة نتائج البحث ({len(filtered)})",
+                            key="btn_load_sys_all_filtered",
+                            use_container_width=True
+                        ):
+                            extracted = []
+                            seen_phones = set()
+                            for r in filtered:
+                                if r['phone'] not in seen_phones:
+                                    seen_phones.add(r['phone'])
+                                    extracted.append({'name': r['name'], 'phone': r['phone'], 'is_sent': False})
+                            st.session_state.wa_emp_targets = extracted
+                            st.toast(f"✅ تم اعتماد كافة {len(extracted)} نتيجة بحث")
+                            st.rerun()
 
         else: # Manual input
             raw_txt = st.text_area(lbl['paste_numbers'], placeholder="05XXXXXXXX\n05YYYYYYYY...", height=120, key="wa_emp_manual_raw")
@@ -579,6 +716,7 @@ def render_whatsapp_page():
                     st.session_state.wa_emp_targets = []
                     st.session_state.wa_emp_running = False
                     st.session_state.wa_emp_idx = 0
+                    st.session_state.wa_emp_saved_attachments = []
                     st.rerun()
 
             with st.expander("👁️ " + ("عرض وتعديل قائمة العملاء المستخرجين" if is_ar else "View & Edit Target List"), expanded=False):
@@ -608,29 +746,115 @@ def render_whatsapp_page():
             )
             st.session_state.wa_emp_last_msg = emp_message
 
+            # 📎 مرفقات الرسالة للعملاء (PDF / فيديوهات / صور)
+            st.markdown("---")
+            st.markdown(f"#### 📎 {'مرفقات الرسالة للعملاء (PDF / فيديوهات / صور)' if is_ar else 'Customer Attachments (PDF / Videos / Photos)'}")
+            st.caption("💡 يمكنك رفع ملفات PDF، مقاطع فيديو (MP4/MOV)، وصور (JPG/PNG) لإرسالها كمرفقات مع الرسالة المخصصة لكل عميل.")
+
+            emp_uploaded_files = st.file_uploader(
+                "📎 " + ("اختر أو اسحب الملفات (PDF، فيديو، صور)" if is_ar else "Upload attachments (PDF, Video, Images)"),
+                type=["pdf", "png", "jpg", "jpeg", "webp", "mp4", "mov", "avi", "mkv", "doc", "docx", "xls", "xlsx"],
+                accept_multiple_files=True,
+                key="wa_emp_files_uploader"
+            )
+
+            # معالجة وحفظ المرفقات في مجلد مؤقت للجلسة
+            emp_saved_attachments = []
+            if emp_uploaded_files:
+                base_dir = os.path.join(os.getcwd(), "whatsapp_session")
+                if not os.path.exists(base_dir):
+                    base_dir_alt = os.path.join(os.getcwd(), ".whatsapp_session")
+                    if os.path.exists(base_dir_alt):
+                        base_dir = base_dir_alt
+                emp_uploads_dir = os.path.join(base_dir, "emp_temp_uploads")
+                os.makedirs(emp_uploads_dir, exist_ok=True)
+
+                total_size_bytes = 0
+                st.markdown("<div style='margin: 8px 0;'>", unsafe_allow_html=True)
+                for f in emp_uploaded_files:
+                    total_size_bytes += f.size
+                    file_ext = os.path.splitext(f.name)[1].lower()
+                    if file_ext == '.pdf':
+                        icon = "📄 [PDF]"
+                    elif file_ext in ['.mp4', '.mov', '.avi', '.mkv', '.3gp']:
+                        icon = "🎥 [فيديو]"
+                    elif file_ext in ['.png', '.jpg', '.jpeg', '.webp', '.gif', '.bmp']:
+                        icon = "🖼️ [صورة]"
+                    else:
+                        icon = "📎 [مستند]"
+
+                    sz_str = f"{f.size / (1024*1024):.2f} MB" if f.size >= 1024*1024 else f"{f.size / 1024:.1f} KB"
+                    st.markdown(
+                        f"<div style='background: rgba(0, 229, 255, 0.08); border: 1px solid rgba(0, 229, 255, 0.3); border-radius: 8px; padding: 6px 12px; margin-bottom: 5px; display: inline-block; margin-inline-end: 8px;'>"
+                        f"<b>{icon}</b> {f.name} <span style='color: #00E5FF;'>({sz_str})</span>"
+                        f"</div>",
+                        unsafe_allow_html=True
+                    )
+                    # حفظ الملف محلياً
+                    save_path = os.path.join(emp_uploads_dir, f.name)
+                    try:
+                        with open(save_path, "wb") as out_f:
+                            out_f.write(f.getbuffer())
+                        emp_saved_attachments.append(save_path)
+                    except Exception as err:
+                        st.error(f"❌ خطأ في حفظ المرفق {f.name}: {err}")
+                st.markdown("</div>", unsafe_allow_html=True)
+                st.session_state.wa_emp_saved_attachments = emp_saved_attachments
+            else:
+                st.session_state.wa_emp_saved_attachments = []
+
+            has_attachments = bool(st.session_state.get('wa_emp_saved_attachments', []))
+
+            # 🛡️ إشعار وتنبيه الأمان لمكافحة الحظر عند وجود مرفقات
+            if has_attachments:
+                st.markdown(f"""
+                <div style="background: rgba(255, 170, 0, 0.08); border: 1.5px solid rgba(255, 170, 0, 0.4); border-radius: 12px; padding: 12px 18px; margin: 12px 0;">
+                    <div style="color: #FFA500; font-weight: 700; font-size: 0.95rem; margin-bottom: 4px;">
+                        🛡️ {'تم تفعيل درع الأمان التلقائي لمرفقات الوسائط (صور / فيديوهات / PDF)' if is_ar else 'Media Anti-Ban Shield Activated'}
+                    </div>
+                    <div style="color: #E0E0E0; font-size: 0.85rem; line-height: 1.5;">
+                        {'⚠️ <b>تنبيه لحماية الحساب من الحظر:</b> إرسال الوسائط والمستندات يتطلب وقتاً أطول لرفع البيانات ومعالجتها على خوادم واتساب ويخضع لرقابة صارمة من خوارزميات مكافحة السبام.<br>✅ <b>تم تفعيل فترات التهدئة الآمنة:</b> تم ضبط أدنى وقت انتظار بين <b>45 إلى 90 ثانية</b> مع استراحة دورية كل عدة رسائل لحماية رقمك تماماً من الحظر.' if is_ar else '⚠️ <b>Anti-ban notice:</b> Sending media & documents requires longer upload times and strict anti-spam pacing.<br>✅ Safe auto-delays and periodic batch breaks have been enabled to protect your account.'}
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+
             # 🛡️ Anti-ban Settings
-            st.markdown(f"#### ⚙️ {'إعدادات الأمان والتأخير' if is_ar else 'Safety & Delay Settings'}")
-            c_d1, c_d2, c_d3 = st.columns(3)
+            st.markdown(f"#### ⚙️ {'إعدادات الأمان والتأخير ومكافحة الحظر' if is_ar else 'Safety, Delay & Anti-Ban Settings'}")
+            c_d1, c_d2, c_d3, c_d4 = st.columns(4)
             with c_d1:
+                # إذا كانت الرسالة تحتوي مرفقات، الحد الأدنى الموصى به 45-60 ثانية لحماية الحساب من الحظر
+                def_min = 45 if has_attachments else 25
+                min_allowed = 30 if has_attachments else 20
                 emp_min_delay = st.number_input(
-                    "الحد الأدنى للتأخير (ثانية)" if is_ar else "Min delay (s)",
-                    min_value=20, max_value=300, value=25,
-                    help="الحد الأدنى الآمن 20-25 ثانية بين كل رسالة لحماية الحساب من الحظر",
+                    "أدنى تأخير (ثانية)" if is_ar else "Min delay (s)",
+                    min_value=min_allowed, max_value=300, value=def_min,
+                    help="الحد الأدنى الآمن للانتظار بين كل رسالة (أعلى عند إرسال المرفقات لحماية الرقم)",
                     key="emp_min_delay_val"
                 )
             with c_d2:
+                def_max = 90 if has_attachments else 45
+                min_max_allowed = max(emp_min_delay + 5, 45 if has_attachments else 25)
                 emp_max_delay = st.number_input(
-                    "الحد الأقصى للتأخير (ثانية)" if is_ar else "Max delay (s)",
-                    min_value=25, max_value=600, value=45,
-                    help="الحد الأقصى للتأخير العشوائي (يوصى 45-60 ثانية)",
+                    "أقصى تأخير (ثانية)" if is_ar else "Max delay (s)",
+                    min_value=min_max_allowed, max_value=600, value=max(def_max, min_max_allowed),
+                    help="الحد الأقصى للتأخير العشوائي بين الرسائل (لمحاكاة السلوك البشري الطبيعي)",
                     key="emp_max_delay_val"
                 )
             with c_d3:
+                def_break = 8 if has_attachments else 15
                 emp_batch_break = st.number_input(
                     "استراحة كل (رسائل)" if is_ar else "Pause every (msgs)",
-                    min_value=5, max_value=50, value=15,
-                    help="أخذ وقفة لمحاكاة السلوك البشري الطبيعي",
+                    min_value=3 if has_attachments else 5, max_value=50, value=def_break,
+                    help="التوقف لأخذ استراحة أمان لمحاكاة السلوك البشري الطبيعي",
                     key="emp_batch_break_val"
+                )
+            with c_d4:
+                def_pause_mins = 4 if has_attachments else 3
+                emp_batch_pause_mins = st.number_input(
+                    "مدة الاستراحة (دقائق)" if is_ar else "Break time (mins)",
+                    min_value=2, max_value=20, value=def_pause_mins,
+                    help="مدة الاستراحة الدورية بين الدفعات بالدقائق",
+                    key="emp_batch_pause_mins_val"
                 )
 
             # 🚀 Send / Stop Controls
@@ -645,8 +869,9 @@ def render_whatsapp_page():
                         st.toast("🛑 " + ("تم إيقاف الإرسال" if is_ar else "Sending stopped"))
                         st.rerun()
                 else:
-                    ready_to_send = (pending_count > 0) and bool(emp_message.strip())
-                    btn_send_label = f"📨 {'إرسال إلى' if is_ar else 'Send to'} {pending_count} {'عميل' if is_ar else 'clients'}"
+                    ready_to_send = (pending_count > 0) and (bool(emp_message.strip()) or has_attachments)
+                    att_label = f" ({len(st.session_state.wa_emp_saved_attachments)} مرفقات)" if has_attachments else ""
+                    btn_send_label = f"📨 {'إرسال إلى' if is_ar else 'Send to'} {pending_count} {'عميل' if is_ar else 'clients'}{att_label}"
                     if st.button(btn_send_label, disabled=not ready_to_send, type="primary", width='stretch', key="btn_start_emp_send"):
                         # فحص اتصال واتساب
                         wa_stat = st.session_state.wa_service.get_status() if st.session_state.wa_service else "Stopped"
@@ -658,7 +883,7 @@ def render_whatsapp_page():
                             st.rerun()
 
             # ══════════════════════════════════════════════════════════
-            # 🚀 حلقة الإرسال المباشرة لواتساب للعملاء
+            # 🚀 حلقة الإرسال المباشرة لواتساب للعملاء (مع دعم المرفقات والأمان)
             # ══════════════════════════════════════════════════════════
             if is_sending:
                 targets_to_send = st.session_state.wa_emp_targets
@@ -673,16 +898,26 @@ def render_whatsapp_page():
                 if curr_idx >= total_t:
                     st.session_state.wa_emp_running = False
                     st.balloons()
-                    st.success("🎉 " + ("اكتمل إرسال الرسائل لجميع العملاء بنجاح!" if is_ar else "All customer messages sent!"))
+                    st.success("🎉 " + ("اكتمل إرسال الرسائل والمرفقات لجميع العملاء بنجاح!" if is_ar else "All customer messages & attachments sent!"))
                     time.sleep(1)
                     st.rerun()
                 else:
                     current_client = targets_to_send[curr_idx]
                     c_name = current_client.get('name', 'عميل')
                     c_phone = current_client.get('phone', '')
+                    saved_attachments = st.session_state.get('wa_emp_saved_attachments', [])
 
-                    # بطاقة حالة الإرسال المباشرة
+                    # بطاقة حالة الإرسال المباشرة مع تفاصيل المرفقات
                     st.progress((curr_idx + 1) / total_t)
+                    att_info_html = ""
+                    if saved_attachments:
+                        att_names = ", ".join([os.path.basename(p) for p in saved_attachments])
+                        att_info_html = f"""
+                        <div style="margin-top: 6px; font-size: 0.88rem; color: #00E5FF;">
+                            📎 <b>{'المرفقات الملحقة بالرسالة' if is_ar else 'Attached files'}:</b> {att_names}
+                        </div>
+                        """
+
                     st.markdown(f"""
                     <div style="background: rgba(0, 255, 100, 0.05); padding: 16px 20px; border-radius: 14px; border: 1.5px solid rgba(0, 255, 100, 0.3); margin: 12px 0;">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
@@ -692,6 +927,7 @@ def render_whatsapp_page():
                         <div style="color: #FFFFFF; font-size: 0.95rem;">
                             👤 <strong>{c_name}</strong> · 📱 <span style="font-family: monospace; color: #00FF88;">{c_phone}</span>
                         </div>
+                        {att_info_html}
                     </div>
                     """, unsafe_allow_html=True)
 
@@ -700,19 +936,25 @@ def render_whatsapp_page():
 
                     # إضافة التوقيع العربي إذا لم يكن موجوداً
                     signature = "\n\nمع خالص التحية والتقدير،\nأبو فهد\nHR"
-                    if signature not in personalized_msg:
+                    if signature not in personalized_msg and personalized_msg.strip():
                         personalized_msg += signature
 
-                    # إرسال الرسالة عبر محرك واتساب
-                    with st.spinner(f"🚀 {'جاري الإرسال إلى' if is_ar else 'Sending to'} {c_name} ({c_phone})..."):
-                        ok_send, log_detail = st.session_state.wa_service.send_message(c_phone, personalized_msg)
+                    # إرسال الرسالة والمرفقات عبر محرك واتساب
+                    spin_text = f"🚀 {'جاري إرسال الرسالة والمرفقات إلى' if is_ar else 'Sending message & attachments to'} {c_name} ({c_phone})..." if saved_attachments else f"🚀 {'جاري الإرسال إلى' if is_ar else 'Sending to'} {c_name} ({c_phone})..."
+                    with st.spinner(spin_text):
+                        ok_send, log_detail = st.session_state.wa_service.send_message(
+                            c_phone,
+                            personalized_msg,
+                            attachment_path=saved_attachments if saved_attachments else None
+                        )
 
                     # تسجيل النتيجة في سجل الإرسال العام
+                    att_summary = f" (مع {len(saved_attachments)} مرفق)" if (saved_attachments and ok_send) else ""
                     log_entry = {
                         "idx": curr_idx + 1,
                         "name": c_name,
                         "phone": c_phone,
-                        "status": log_detail if ok_send else f"فشل ({log_detail})",
+                        "status": f"{log_detail}{att_summary}" if ok_send else f"فشل ({log_detail})",
                         "ok": ok_send,
                         "time": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                     }
@@ -731,30 +973,35 @@ def render_whatsapp_page():
                     else:
                         st.session_state.wa_emp_idx = curr_idx + 1
                         
-                        # حساب التأخير العشوائي الذكي بين الرسائل (حماية الحساب)
+                        # حساب التأخير العشوائي الذكي بين الرسائل (حماية الحساب ضد الحظر)
                         if st.session_state.wa_emp_idx < total_t:
                             # فحص استراحة الدفعات
                             is_break = (emp_batch_break > 0 and st.session_state.wa_emp_idx % emp_batch_break == 0)
                             if is_break:
-                                delay_sec = 180  # 3 دقائق استراحة بين الدفعات
-                                break_msg = "🛡️ استراحة دفعات لحماية الحساب (3 دقائق)"
+                                delay_sec = int(emp_batch_pause_mins * 60)
+                                break_msg = f"🛡️ استراحة دفعات أمان دورية لحماية الحساب ({emp_batch_pause_mins} دقيقة)"
                             else:
-                                low_s = max(20, int(emp_min_delay))
+                                low_s = max(30 if saved_attachments else 20, int(emp_min_delay))
                                 high_s = max(low_s + 5, int(emp_max_delay))
                                 delay_sec = random.randint(low_s, high_s)
-                                break_msg = f"⏳ انتظار عشوائي بين الرسائل ({delay_sec} ثانية)"
+                                # إضافة تشتيت عشوائي ذكي (Jitter) لمحاكاة السلوك البشري الطبيعي
+                                delay_sec = max(low_s, delay_sec + random.randint(-2, 3))
+                                media_tag = " (محملة بمرفقات)" if saved_attachments else ""
+                                break_msg = f"⏳ انتظار أمان ذكي لحماية الحساب من الحظر{media_tag} ({delay_sec} ثانية)"
 
-                            # عداد تنازلي تفاعلي
+                            # عداد تنازلي تفاعلي أنيق
                             timer_ph = st.empty()
+                            timer_color = "#FFA500" if saved_attachments else "#00E5FF"
                             for rem in range(delay_sec, 0, -1):
                                 if not st.session_state.get('wa_emp_running', False):
                                     break
                                 m, s = divmod(rem, 60)
                                 timer_str = f"{m:02d}:{s:02d}" if m > 0 else f"{s} ثانية"
                                 timer_ph.markdown(f"""
-                                <div style="background: rgba(0, 229, 255, 0.06); border: 1.5px solid rgba(0, 229, 255, 0.4); border-radius: 14px; padding: 15px; text-align: center; margin: 10px 0;">
-                                    <div style="color: #00E5FF; font-weight: 700;">{break_msg}</div>
-                                    <div style="font-size: 2.2rem; font-weight: 800; color: #FFFFFF; font-family: monospace;">{timer_str}</div>
+                                <div style="background: rgba(0, 229, 255, 0.05); border: 1.5px solid {timer_color}; border-radius: 14px; padding: 15px; text-align: center; margin: 10px 0;">
+                                    <div style="color: {timer_color}; font-weight: 700; font-size: 1.05rem;">{break_msg}</div>
+                                    <div style="font-size: 2.2rem; font-weight: 800; color: #FFFFFF; font-family: monospace; margin: 5px 0;">{timer_str}</div>
+                                    <div style="font-size: 0.8rem; color: #AAA;">🛡️ حماية متقدمة ضد الحظر التلقائي من خوارزميات واتساب</div>
                                 </div>
                                 """, unsafe_allow_html=True)
                                 time.sleep(1)
