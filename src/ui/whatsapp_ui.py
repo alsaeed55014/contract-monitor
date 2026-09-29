@@ -529,7 +529,7 @@ def render_whatsapp_page():
             from src.data.bengali_manager import BengaliDataManager
 
             # ── جلب البيانات من المصدرين ──────────────────────────────
-            all_sys_records = []  # list of dicts: {name, phone, city, job, source}
+            all_sys_records = []  # list of dicts: {name, phone, city, job, nature, source}
 
             # 1) طلبات العملاء (Google Sheet)
             try:
@@ -544,22 +544,25 @@ def render_whatsapp_page():
                                     if kw.lower() in str(c).lower():
                                         return c
                             return None
-                        name_c  = _find_col(["اسم", "name", "شركة", "company", "عميل"])
-                        phone_c = _find_col(["جوال", "موبايل", "تليفون", "هاتف", "phone", "mobile"])
-                        city_c  = _find_col(["مدينة", "city", "منطقة", "location"])
-                        job_c   = _find_col(["وظيفة", "مهنة", "طلب", "job", "category", "profession"])
+                        name_c   = _find_col(["اسم", "name", "شركة", "company", "عميل"])
+                        phone_c  = _find_col(["جوال", "موبايل", "تليفون", "هاتف", "phone", "mobile"])
+                        city_c   = _find_col(["مدينة", "city", "منطقة", "location"])
+                        job_c    = _find_col(["وظيفة", "مهنة", "طلب", "job", "category", "profession"])
+                        nature_c = _find_col(["طبيعة", "نوع العمل", "نشاط", "nature", "work type", "activity", "type"])
                         for _, row in cust_df.iterrows():
-                            r_name  = str(row[name_c]).strip()  if name_c  and pd.notna(row[name_c])  else "عميل"
-                            r_phone = str(row[phone_c]).strip() if phone_c and pd.notna(row[phone_c]) else ""
-                            r_city  = str(row[city_c]).strip()  if city_c  and pd.notna(row[city_c])  else ""
-                            r_job   = str(row[job_c]).strip()   if job_c   and pd.notna(row[job_c])   else ""
+                            r_name   = str(row[name_c]).strip()   if name_c   and pd.notna(row[name_c])   else "عميل"
+                            r_phone  = str(row[phone_c]).strip()  if phone_c  and pd.notna(row[phone_c])  else ""
+                            r_city   = str(row[city_c]).strip()   if city_c   and pd.notna(row[city_c])   else ""
+                            r_job    = str(row[job_c]).strip()    if job_c    and pd.notna(row[job_c])    else ""
+                            r_nature = str(row[nature_c]).strip() if nature_c and pd.notna(row[nature_c]) else ""
                             r_phone_clean = "".join(filter(str.isdigit, r_phone))
                             if r_phone_clean and len(r_phone_clean) >= 8:
                                 all_sys_records.append({
-                                    'name': r_name if r_name not in ('', 'nan') else 'عميل',
-                                    'phone': r_phone_clean,
-                                    'city': r_city,
-                                    'job': r_job,
+                                    'name':   r_name if r_name not in ('', 'nan') else 'عميل',
+                                    'phone':  r_phone_clean,
+                                    'city':   r_city,
+                                    'job':    r_job,
+                                    'nature': r_nature,
                                     'source': '📋 طلبات العملاء'
                                 })
             except Exception as _ce:
@@ -572,10 +575,11 @@ def render_whatsapp_page():
                     raw_p = "".join(filter(str.isdigit, str(e.get('mobile', ''))))
                     if raw_p and len(raw_p) >= 8:
                         all_sys_records.append({
-                            'name': str(e.get('name', 'عميل')).strip(),
-                            'phone': raw_p,
-                            'city': str(e.get('city', '')).strip(),
-                            'job': str(e.get('cafe', '')).strip(),
+                            'name':   str(e.get('name', 'عميل')).strip(),
+                            'phone':  raw_p,
+                            'city':   str(e.get('city', '')).strip(),
+                            'job':    str(e.get('cafe', '')).strip(),
+                            'nature': '',
                             'source': '🏢 Bengali Supply'
                         })
             except Exception as _be:
@@ -584,112 +588,142 @@ def render_whatsapp_page():
             if not all_sys_records:
                 st.warning("⚠️ لا توجد بيانات في النظام حالياً")
             else:
-                # ── خانة البحث ────────────────────────────────────────
-                st.markdown(f"**📊 إجمالي السجلات:** {len(all_sys_records)} سجل")
-                search_q = st.text_input(
-                    "🔍 ابحث بالاسم أو رقم التليفون أو المدينة أو المهنة...",
-                    key="wa_sys_search_box",
-                    placeholder="مثال: محمد  أو  0501234567  أو  الرياض  أو  مطعم"
+                # ── إحصائيات سريعة ────────────────────────────────────
+                _src_cust = sum(1 for r in all_sys_records if 'طلبات' in r['source'])
+                _src_beng = len(all_sys_records) - _src_cust
+                st.markdown(
+                    f"<div style='display:flex;gap:14px;margin-bottom:8px'>"
+                    f"<span style='background:rgba(0,229,255,0.1);border:1px solid rgba(0,229,255,0.3);"
+                    f"border-radius:8px;padding:4px 12px;font-size:.85rem'>📊 الإجمالي: <b>{len(all_sys_records)}</b></span>"
+                    f"<span style='background:rgba(0,229,255,0.1);border:1px solid rgba(0,229,255,0.3);"
+                    f"border-radius:8px;padding:4px 12px;font-size:.85rem'>📋 طلبات: <b>{_src_cust}</b></span>"
+                    f"<span style='background:rgba(0,229,255,0.1);border:1px solid rgba(0,229,255,0.3);"
+                    f"border-radius:8px;padding:4px 12px;font-size:.85rem'>🏢 Bengali: <b>{_src_beng}</b></span>"
+                    f"</div>",
+                    unsafe_allow_html=True
                 )
 
-                # ── تصفية النتائج ─────────────────────────────────────
+                # ── خانة البحث الشاملة (تشمل طبيعة العمل) ────────────
+                search_q = st.text_input(
+                    "🔍 ابحث بالاسم · رقم التليفون · المدينة · المهنة · طبيعة العمل · المصدر",
+                    key="wa_sys_search_box",
+                    placeholder="مثال:  محمد  أو  0501234567  أو  الرياض  أو  مطعم  أو  تنظيف"
+                )
+
+                # ── تصفية النتائج (تشمل طبيعة العمل) ─────────────────
                 if search_q and search_q.strip():
-                    q = search_q.strip().lower()
+                    q_low = search_q.strip().lower()
                     filtered = [
                         r for r in all_sys_records
-                        if q in r['name'].lower()
-                        or q in r['phone']
-                        or q in r['city'].lower()
-                        or q in r['job'].lower()
-                        or q in r['source'].lower()
+                        if q_low in r['name'].lower()
+                        or q_low in r['phone']
+                        or q_low in r['city'].lower()
+                        or q_low in r['job'].lower()
+                        or q_low in r.get('nature', '').lower()
+                        or q_low in r['source'].lower()
                     ]
                 else:
                     filtered = all_sys_records
 
-                st.markdown(f"**🔎 نتائج البحث:** {len(filtered)} سجل")
+                # ── شريط النتائج + أزرار اعتماد جماعي ────────────────
+                rc1, rc2, rc3 = st.columns([2, 1, 1])
+                with rc1:
+                    st.markdown(f"**🔎 نتائج البحث:** {len(filtered)} سجل")
+                with rc2:
+                    if filtered and st.button(
+                        f"⚡ إضافة كل النتائج ({len(filtered)}) للإرسال",
+                        key="btn_add_all_filtered",
+                        use_container_width=True,
+                        type="primary"
+                    ):
+                        existing_ph = {t['phone'] for t in st.session_state.get('wa_emp_targets', [])}
+                        new_list = list(st.session_state.get('wa_emp_targets', []))
+                        added_n = 0
+                        for r in filtered:
+                            if r['phone'] not in existing_ph:
+                                existing_ph.add(r['phone'])
+                                new_list.append({'name': r['name'], 'phone': r['phone'], 'is_sent': False})
+                                added_n += 1
+                        st.session_state.wa_emp_targets = new_list
+                        st.toast(f"✅ تمت إضافة {added_n} عميل لقائمة الإرسال")
+                        st.rerun()
+                with rc3:
+                    if st.session_state.get('wa_emp_targets'):
+                        if st.button("🗑️ مسح قائمة الإرسال", key="btn_clr_targets_from_search", use_container_width=True):
+                            st.session_state.wa_emp_targets = []
+                            st.toast("🗑️ تم مسح قائمة الإرسال")
+                            st.rerun()
 
                 if not filtered:
                     st.info("لا توجد نتائج مطابقة، جرّب كلمة بحث مختلفة.")
                 else:
-                    # ── عرض النتائج كجدول قابل للاختيار ─────────────
-                    # بناء DataFrame للعرض
-                    display_rows = []
-                    for i, r in enumerate(filtered):
-                        display_rows.append({
-                            '#': i + 1,
-                            'الاسم': r['name'],
-                            '📱 رقم التليفون': r['phone'],
-                            'المدينة': r['city'],
-                            'المهنة / النشاط': r['job'],
-                            'المصدر': r['source'],
-                        })
-                    disp_df = pd.DataFrame(display_rows)
+                    # ── بطاقة لكل سجل مع رقم بارز وزر إضافة/حذف فردي ─
+                    existing_ph_set = {t['phone'] for t in st.session_state.get('wa_emp_targets', [])}
+                    for idx_r, r in enumerate(filtered):
+                        already_added = r['phone'] in existing_ph_set
+                        card_border   = "rgba(0,255,136,0.45)" if already_added else "rgba(0,229,255,0.25)"
+                        card_bg       = "rgba(0,255,136,0.04)" if already_added else "rgba(0,229,255,0.03)"
+                        badge_color   = "#00FF88" if already_added else "#00E5FF"
 
-                    # multiselect باستخدام options مبسطة (الاسم + رقم الهاتف)
-                    options_list = [
-                        f"{r['name']} | 📱 {r['phone']} | {r['city']} | {r['source']}"
-                        for r in filtered
-                    ]
+                        extra_parts = []
+                        if r.get('city'):   extra_parts.append(f"📍 {r['city']}")
+                        if r.get('job'):    extra_parts.append(f"💼 {r['job']}")
+                        if r.get('nature'): extra_parts.append(f"🏗️ {r['nature']}")
+                        extra_parts.append(r['source'])
+                        extra_html = "  ·  ".join(extra_parts)
 
-                    # إظهار الجدول للمعاينة
-                    st.dataframe(
-                        disp_df,
-                        use_container_width=True,
-                        hide_index=True,
-                        column_config={
-                            '📱 رقم التليفون': st.column_config.TextColumn('📱 رقم التليفون', width='medium'),
-                        }
-                    )
+                        col_card, col_btn = st.columns([5, 1])
+                        with col_card:
+                            st.markdown(
+                                f"<div style='background:{card_bg};border:1.5px solid {card_border};"
+                                f"border-radius:10px;padding:10px 16px;margin-bottom:6px'>"
+                                f"<span style='font-weight:700;font-size:.95rem;color:#FFFFFF'>{r['name']}</span>"
+                                f"&nbsp;&nbsp;"
+                                f"<span style='font-family:monospace;font-size:1.05rem;font-weight:800;"
+                                f"color:{badge_color};background:rgba(0,0,0,0.3);padding:2px 10px;"
+                                f"border-radius:6px'>📱 {r['phone']}</span>"
+                                f"<div style='font-size:.78rem;color:#AAA;margin-top:4px'>{extra_html}</div>"
+                                f"</div>",
+                                unsafe_allow_html=True
+                            )
+                        with col_btn:
+                            if already_added:
+                                # زر الحذف من قائمة الإرسال
+                                if st.button("❌", key=f"sys_rm_{idx_r}_{r['phone']}",
+                                             help="حذف من قائمة الإرسال", use_container_width=True):
+                                    st.session_state.wa_emp_targets = [
+                                        t for t in st.session_state.get('wa_emp_targets', [])
+                                        if t['phone'] != r['phone']
+                                    ]
+                                    st.toast(f"🗑️ تم حذف {r['name']} من القائمة")
+                                    st.rerun()
+                            else:
+                                # زر الإضافة لقائمة الإرسال
+                                if st.button("➕", key=f"sys_add_{idx_r}_{r['phone']}",
+                                             help="إضافة لقائمة الإرسال", use_container_width=True):
+                                    st.session_state.wa_emp_targets = (
+                                        st.session_state.get('wa_emp_targets', []) +
+                                        [{'name': r['name'], 'phone': r['phone'], 'is_sent': False}]
+                                    )
+                                    st.toast(f"✅ تمت إضافة {r['name']} — 📱 {r['phone']}")
+                                    st.rerun()
 
-                    st.markdown("**اختر السجلات للإضافة:**")
-                    selected_sys = st.multiselect(
-                        "✅ حدد العملاء المراد إرسالهم",
-                        options=options_list,
-                        default=options_list,
-                        key="wa_emp_sys_multiselect_new",
-                        format_func=lambda x: x
-                    )
-
-                    btn_col1, btn_col2 = st.columns(2)
-                    with btn_col1:
-                        if st.button(
-                            f"📥 اعتماد المحددين ({len(selected_sys)})",
-                            type="primary",
-                            key="btn_load_sys_selected",
-                            use_container_width=True
-                        ):
-                            extracted = []
-                            seen_phones = set()
-                            for opt in selected_sys:
-                                # استخراج رقم الهاتف من الخيار
-                                try:
-                                    parts = opt.split('|')
-                                    raw_name = parts[0].strip()
-                                    raw_phone = parts[1].replace('📱', '').strip() if len(parts) > 1 else ''
-                                    c_phone = "".join(filter(str.isdigit, raw_phone))
-                                    if c_phone and len(c_phone) >= 8 and c_phone not in seen_phones:
-                                        seen_phones.add(c_phone)
-                                        extracted.append({'name': raw_name, 'phone': c_phone, 'is_sent': False})
-                                except Exception:
-                                    pass
-                            st.session_state.wa_emp_targets = extracted
-                            st.toast(f"✅ تم اعتماد {len(extracted)} عميل")
-                            st.rerun()
-                    with btn_col2:
-                        if st.button(
-                            f"⚡ اعتماد كافة نتائج البحث ({len(filtered)})",
-                            key="btn_load_sys_all_filtered",
-                            use_container_width=True
-                        ):
-                            extracted = []
-                            seen_phones = set()
-                            for r in filtered:
-                                if r['phone'] not in seen_phones:
-                                    seen_phones.add(r['phone'])
-                                    extracted.append({'name': r['name'], 'phone': r['phone'], 'is_sent': False})
-                            st.session_state.wa_emp_targets = extracted
-                            st.toast(f"✅ تم اعتماد كافة {len(extracted)} نتيجة بحث")
-                            st.rerun()
+                    # ── ملخص قائمة الإرسال الحالية ────────────────────
+                    curr_targets = st.session_state.get('wa_emp_targets', [])
+                    if curr_targets:
+                        st.markdown("---")
+                        pending_cnt = sum(1 for t in curr_targets if not t.get('is_sent', False))
+                        st.markdown(
+                            f"<div style='background:rgba(0,255,136,0.07);border:1.5px solid rgba(0,255,136,0.35);"
+                            f"border-radius:10px;padding:10px 16px;text-align:center'>"
+                            f"<span style='color:#00FF88;font-weight:700;font-size:1rem'>"
+                            f"✅ قائمة الإرسال جاهزة — {len(curr_targets)} عميل"
+                            f" ({pending_cnt} بانتظار الإرسال)"
+                            f"</span><br>"
+                            f"<span style='color:#AAA;font-size:.82rem'>تابع لأسفل لكتابة الرسالة وبدء الإرسال ⬇️</span>"
+                            f"</div>",
+                            unsafe_allow_html=True
+                        )
 
         else: # Manual input
             raw_txt = st.text_area(lbl['paste_numbers'], placeholder="05XXXXXXXX\n05YYYYYYYY...", height=120, key="wa_emp_manual_raw")
