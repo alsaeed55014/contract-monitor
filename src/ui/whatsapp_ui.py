@@ -6,7 +6,7 @@ import time
 from datetime import datetime
 # WhatsAppService is imported lazily inside render_whatsapp_page() to avoid blocking app startup with selenium
 from src.utils.phone_utils import validate_numbers, format_phone_number, save_to_local_desktop, render_pasha_export_button
-from src.core.i18n import t
+from src.core.i18n import t as _translate
 from src.config import WA_HISTORY_FILE, WA_TEMPLATES_FILE
 from src.ui.styles import get_base64_image
 import random
@@ -506,14 +506,14 @@ def render_whatsapp_page():
         'smart_msg_help': "سيتم إنشاء رسائل تلقائية بأسلوب مختلف لكل عميل لتجنب الحظر." if is_ar else "Generates unique variations for each message to avoid ban.",
         'job_title_label': "اسم الوظيفة (اختياري)" if is_ar else "Job Title (Optional)",
         'job_title_placeholder': "مثال: Driver, Nurse..." if is_ar else "e.g. Driver, Nurse...",
-        'wa_templates_title': t('wa_templates_title', lang),
-        'wa_save_as_template': t('wa_save_as_template', lang),
-        'wa_template_name': t('wa_template_name', lang),
-        'wa_manage_templates': t('wa_manage_templates', lang),
-        'wa_use_template': t('wa_use_template', lang),
-        'wa_delete_template': t('wa_delete_template', lang),
-        'wa_placeholders_guide': t('wa_placeholders_guide', lang),
-        'wa_scan_msg': t('wa_scan_msg', lang),
+        'wa_templates_title': _translate('wa_templates_title', lang),
+        'wa_save_as_template': _translate('wa_save_as_template', lang),
+        'wa_template_name': _translate('wa_template_name', lang),
+        'wa_manage_templates': _translate('wa_manage_templates', lang),
+        'wa_use_template': _translate('wa_use_template', lang),
+        'wa_delete_template': _translate('wa_delete_template', lang),
+        'wa_placeholders_guide': _translate('wa_placeholders_guide', lang),
+        'wa_scan_msg': _translate('wa_scan_msg', lang),
     }
 
     # === Mode Selection ===
