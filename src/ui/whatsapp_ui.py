@@ -408,6 +408,12 @@ def save_wa_history(history_set):
         pass
 
 def render_whatsapp_page():
+    # ========== HACK ضربة جزم لمنع UnboundLocalError بسبب ظل المتغير 't' ==========
+    # بدل ما نستخدم اسم 't' الملوث (اللي بيستخدمه اي حد فاكره كمتغير في اسفل الدالة)
+    # نقوم باستيراد الدالة هنا داخل نفس الدالة باسم مختلف تماماً + نستخدمها فوراً
+    # BEFORE: lbl['x'] = t(key, lang)  -> ERROR لأنه بايثون بيعتبر t متغير محلي من حلقات اسفل الدالة
+    # AFTER : نستخدم اسم مش هيحصل فيه صدام نهائياً
+    from src.core.i18n import t as _i18n_t_func
     from src.services.whatsapp_service import WhatsAppService
     from src.services.wa_worker_manager import WAWorkerManager
     lang = st.session_state.get('lang', 'ar')
@@ -506,14 +512,14 @@ def render_whatsapp_page():
         'smart_msg_help': "سيتم إنشاء رسائل تلقائية بأسلوب مختلف لكل عميل لتجنب الحظر." if is_ar else "Generates unique variations for each message to avoid ban.",
         'job_title_label': "اسم الوظيفة (اختياري)" if is_ar else "Job Title (Optional)",
         'job_title_placeholder': "مثال: Driver, Nurse..." if is_ar else "e.g. Driver, Nurse...",
-        'wa_templates_title': _translate('wa_templates_title', lang),
-        'wa_save_as_template': _translate('wa_save_as_template', lang),
-        'wa_template_name': _translate('wa_template_name', lang),
-        'wa_manage_templates': _translate('wa_manage_templates', lang),
-        'wa_use_template': _translate('wa_use_template', lang),
-        'wa_delete_template': _translate('wa_delete_template', lang),
-        'wa_placeholders_guide': _translate('wa_placeholders_guide', lang),
-        'wa_scan_msg': _translate('wa_scan_msg', lang),
+        'wa_templates_title': _i18n_t_func('wa_templates_title', lang),
+        'wa_save_as_template': _i18n_t_func('wa_save_as_template', lang),
+        'wa_template_name': _i18n_t_func('wa_template_name', lang),
+        'wa_manage_templates': _i18n_t_func('wa_manage_templates', lang),
+        'wa_use_template': _i18n_t_func('wa_use_template', lang),
+        'wa_delete_template': _i18n_t_func('wa_delete_template', lang),
+        'wa_placeholders_guide': _i18n_t_func('wa_placeholders_guide', lang),
+        'wa_scan_msg': _i18n_t_func('wa_scan_msg', lang),
     }
 
     # === Mode Selection ===
