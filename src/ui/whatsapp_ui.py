@@ -1220,9 +1220,9 @@ def render_whatsapp_page():
                 # --- مهم جداً: نستخدم القائمة الأصلية للبحث لتجنب أي عدم تطابق في الفهارس
                 current_client = None
                 current_full_index = None
-                for idx_full, t in enumerate(all_targets_full):
-                    if not t.get('is_sent', False):
-                        current_client = t
+                for idx_full, _trg in enumerate(all_targets_full):
+                    if not _trg.get('is_sent', False):
+                        current_client = _trg
                         current_full_index = idx_full
                         break
 
