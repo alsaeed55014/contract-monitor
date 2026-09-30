@@ -450,6 +450,7 @@ def render_whatsapp_page():
     if 'wa_emp_targets' not in st.session_state: st.session_state.wa_emp_targets = []
     if 'wa_emp_running' not in st.session_state: st.session_state.wa_emp_running = False
     if 'wa_emp_idx' not in st.session_state: st.session_state.wa_emp_idx = 0
+    if 'wa_temp_attachments' not in st.session_state: st.session_state.wa_temp_attachments = []
 
     st.markdown('<div class="programmer-signature-neon">By: Alsaeed Alwazzan</div>', unsafe_allow_html=True)
 
@@ -1075,21 +1076,25 @@ def render_whatsapp_page():
             )
             st.session_state.wa_emp_last_msg = emp_message
 
-            # 📎 مرفقات الرسالة للعملاء (PDF / فيديوهات / صور)
+            # 📎 مرفقات الرسالة للعملاء (صور / فيديوهات / مستندات PDF وملفات أخرى)
             st.markdown("---")
-            st.markdown(f"#### 📎 {'مرفقات الرسالة للعملاء (PDF / فيديوهات / صور)' if is_ar else 'Customer Attachments (PDF / Videos / Photos)'}")
-            st.caption("💡 يمكنك رفع ملفات PDF، مقاطع فيديو (MP4/MOV)، وصور (JPG/PNG) لإرسالها كمرفقات مع الرسالة المخصصة لكل عميل.")
+            st.markdown(f"#### 📎 {'مرفقات الرسالة للعملاء (صور 🖼️ + فيديوهات 🎥 + مستندات 📄 PDF وملفات أخرى)' if is_ar else 'Customer Attachments (Images 🖼️ + Videos 🎥 + PDFs 📄 & more)'}")
+            st.caption("💡 " + ("يمكنك رفع ملفات متعددة في نفس الوقت: صور (JPG/PNG/GIF/WEBP)، مقاطع فيديو (MP4/MOV/AVI/MKV/3GP)، مستندات (PDF/DOCX/XLSX/PPTX)، ملفات صوتية، وملفات مضغوطة." if is_ar else "You can upload multiple files: Images (JPG/PNG/GIF/WEBP), Videos (MP4/MOV/AVI/MKV/3GP), Docs (PDF/DOCX/XLSX/PPTX), Audio files, and Archives."))
 
             emp_uploaded_files = st.file_uploader(
-                "📎 " + ("اختر أو اسحب الملفات (PDF، فيديو، صور)" if is_ar else "Upload attachments (PDF, Video, Images)"),
-                type=["pdf", "png", "jpg", "jpeg", "webp", "mp4", "mov", "avi", "mkv", "doc", "docx", "xls", "xlsx"],
+                "📎 " + ("اختر أو اسحب الملفات (صور، فيديو، PDF، ومستندات أخرى)" if is_ar else "Upload files (Images, Videos, PDFs, & Docs)"),
+                type=["png", "jpg", "jpeg", "gif", "bmp", "webp",
+                      "mp4", "mov", "avi", "mkv", "3gp",
+                      "pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx",
+                      "mp3", "wav", "ogg",
+                      "zip", "rar", "7z", "txt", "csv"],
                 accept_multiple_files=True,
                 key="wa_emp_files_uploader"
             )
 
             # معالجة وحفظ المرفقات في مجلد مؤقت للجلسة
             emp_saved_attachments = []
-            if emp_uploaded_files:
+            if emp_uploaded_files and len(emp_uploaded_files) > 0:
                 base_dir = os.path.join(os.getcwd(), "whatsapp_session")
                 if not os.path.exists(base_dir):
                     base_dir_alt = os.path.join(os.getcwd(), ".whatsapp_session")
@@ -1099,22 +1104,28 @@ def render_whatsapp_page():
                 os.makedirs(emp_uploads_dir, exist_ok=True)
 
                 total_size_bytes = 0
-                st.markdown("<div style='margin: 8px 0;'>", unsafe_allow_html=True)
+                st.markdown("<div style='margin: 8px 0; display: flex; flex-wrap: wrap; gap: 8px;'>", unsafe_allow_html=True)
                 for f in emp_uploaded_files:
                     total_size_bytes += f.size
                     file_ext = os.path.splitext(f.name)[1].lower()
-                    if file_ext == '.pdf':
-                        icon = "📄 [PDF]"
+                    if file_ext in ['.png', '.jpg', '.jpeg', '.webp', '.gif', '.bmp']:
+                        icon = "🖼️ [صورة]"
                     elif file_ext in ['.mp4', '.mov', '.avi', '.mkv', '.3gp']:
                         icon = "🎥 [فيديو]"
-                    elif file_ext in ['.png', '.jpg', '.jpeg', '.webp', '.gif', '.bmp']:
-                        icon = "🖼️ [صورة]"
+                    elif file_ext == '.pdf':
+                        icon = "📄 [PDF]"
+                    elif file_ext in ['.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx', '.txt', '.csv']:
+                        icon = "📝 [مستند]"
+                    elif file_ext in ['.mp3', '.wav', '.ogg']:
+                        icon = "🎵 [صوت]"
+                    elif file_ext in ['.zip', '.rar', '.7z']:
+                        icon = "🗜️ [مضغوط]"
                     else:
-                        icon = "📎 [مستند]"
+                        icon = "📎 [ملف]"
 
                     sz_str = f"{f.size / (1024*1024):.2f} MB" if f.size >= 1024*1024 else f"{f.size / 1024:.1f} KB"
                     st.markdown(
-                        f"<div style='background: rgba(0, 229, 255, 0.08); border: 1px solid rgba(0, 229, 255, 0.3); border-radius: 8px; padding: 6px 12px; margin-bottom: 5px; display: inline-block; margin-inline-end: 8px;'>"
+                        f"<div style='background: rgba(0, 229, 255, 0.08); border: 1px solid rgba(0, 229, 255, 0.3); border-radius: 10px; padding: 7px 14px; display: inline-block;'>"
                         f"<b>{icon}</b> {f.name} <span style='color: #00E5FF;'>({sz_str})</span>"
                         f"</div>",
                         unsafe_allow_html=True
@@ -1949,15 +1960,89 @@ HR Manager"""
                     m_col2.button(lbl['wa_delete_template'], key=f"del_tpl_{t_name}", on_click=delete_tpl)
             st.info(lbl['wa_placeholders_guide'])
 
-        # Attachment
-        attachment = st.file_uploader(lbl['attach'], 
-                                      type=["png","jpg","jpeg","gif","bmp","webp",
-                                            "pdf","doc","docx","xls","xlsx","ppt","pptx",
-                                            "mp4","avi","mov","mkv","mp3","wav","ogg",
-                                            "zip","rar","7z","txt","csv"],
-                                      key="wa_attachment")
-        if attachment:
-            st.success(lbl['attached'].format(attachment.name, round(attachment.size/1024, 1)))
+        # 📎 مرفقات متعددة: صور، فيديوهات، مستندات PDF وملفات أخرى
+        st.markdown("---")
+        st.markdown(f"#### 📎 {'مرفقات الرسالة (صور 🖼️ + فيديوهات 🎥 + مستندات 📄 PDF وملفات)' if is_ar else 'Message Attachments (Images + Videos + PDFs & more)'}")
+        st.caption("💡 " + ("يمكنك رفع ملفات متعددة في نفس الوقت: صور (JPG/PNG/GIF/WEBP)، فيديوهات (MP4/MOV/AVI/MKV)، مستندات (PDF/DOCX/XLSX/PPTX)، وملفات أخرى." if is_ar else "You can upload multiple files at once: Images (JPG/PNG/GIF/WEBP), Videos (MP4/MOV/AVI/MKV), Documents (PDF/DOCX/XLSX/PPTX), and more."))
+
+        attachments_uploaded = st.file_uploader(
+            "📎 " + ("اختر أو اسحب الملفات (أو اضغط هنا للاختيار)" if is_ar else "Upload one or more files (click or drag)"),
+            type=["png","jpg","jpeg","gif","bmp","webp",
+                  "pdf","doc","docx","xls","xlsx","ppt","pptx",
+                  "mp4","avi","mov","mkv","3gp",
+                  "mp3","wav","ogg",
+                  "zip","rar","7z","txt","csv"],
+            accept_multiple_files=True,
+            key="wa_marketing_attachments"
+        )
+
+        # معالجة وحفظ المرفقات في مجلد الجلسة (قائمة مسارات)
+        marketing_attachments_paths = []
+        if attachments_uploaded and len(attachments_uploaded) > 0:
+            base_no_dot = os.path.join(os.getcwd(), "whatsapp_session")
+            base_with_dot = os.path.join(os.getcwd(), ".whatsapp_session")
+            temp_dir = base_no_dot if os.path.exists(base_no_dot) else (base_with_dot if os.path.exists(base_with_dot) else base_no_dot)
+            mrkt_uploads_dir = os.path.join(temp_dir, "marketing_temp_uploads")
+            os.makedirs(mrkt_uploads_dir, exist_ok=True)
+
+            total_size_bytes = 0
+            st.markdown("<div style='margin: 8px 0; display: flex; flex-wrap: wrap; gap: 8px;'>", unsafe_allow_html=True)
+            for f in attachments_uploaded:
+                total_size_bytes += f.size
+                file_ext = os.path.splitext(f.name)[1].lower()
+                if file_ext in ['.png', '.jpg', '.jpeg', '.webp', '.gif', '.bmp']:
+                    icon = "🖼️ [صورة]"
+                elif file_ext in ['.mp4', '.mov', '.avi', '.mkv', '.3gp']:
+                    icon = "🎥 [فيديو]"
+                elif file_ext == '.pdf':
+                    icon = "📄 [PDF]"
+                elif file_ext in ['.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx', '.txt', '.csv']:
+                    icon = "📝 [مستند]"
+                elif file_ext in ['.mp3', '.wav', '.ogg']:
+                    icon = "🎵 [صوت]"
+                elif file_ext in ['.zip', '.rar', '.7z']:
+                    icon = "🗜️ [مضغوط]"
+                else:
+                    icon = "📎 [ملف]"
+
+                sz_str = f"{f.size / (1024*1024):.2f} MB" if f.size >= 1024*1024 else f"{f.size / 1024:.1f} KB"
+                st.markdown(
+                    f"<div style='background: rgba(0, 229, 255, 0.08); border: 1px solid rgba(0, 229, 255, 0.3); border-radius: 10px; padding: 7px 14px; display: inline-block;'>"
+                    f"<b>{icon}</b> {f.name} <span style='color: #00E5FF;'>({sz_str})</span>"
+                    f"</div>",
+                    unsafe_allow_html=True
+                )
+                # حفظ الملف في مجلد مؤقت
+                save_path = os.path.join(mrkt_uploads_dir, f.name)
+                try:
+                    with open(save_path, "wb") as out_f:
+                        out_f.write(f.getbuffer())
+                    marketing_attachments_paths.append(save_path)
+                except Exception as att_err:
+                    st.error(f"❌ {'خطأ في حفظ الملف ' if is_ar else 'Failed to save file '}{f.name}: {str(att_err)}")
+            st.markdown("</div>", unsafe_allow_html=True)
+            st.session_state.wa_temp_attachments = marketing_attachments_paths
+            # حفظ متوافق مع الكود القديم (لو كان ملف واحد فقط)
+            if len(marketing_attachments_paths) == 1:
+                st.session_state.wa_temp_path = marketing_attachments_paths[0]
+        else:
+            st.session_state.wa_temp_attachments = []
+            st.session_state.wa_temp_path = None
+
+        mrkt_has_att = bool(st.session_state.get('wa_temp_attachments', []))
+
+        # 🛡️ تنبيهات الأمان عند وجود مرفقات في واتساب ماركتنج
+        if mrkt_has_att:
+            st.markdown(f"""
+            <div style="background: rgba(255, 170, 0, 0.08); border: 1.5px solid rgba(255, 170, 0, 0.4); border-radius: 12px; padding: 12px 18px; margin: 12px 0;">
+                <div style="color: #FFA500; font-weight: 700; font-size: 0.95rem; margin-bottom: 4px;">
+                    🛡️ {'تم تفعيل درع الأمان التلقائي لمرفقات الوسائط والملفات' if is_ar else 'Media & Files Anti-Ban Shield Activated'}
+                </div>
+                <div style="color: #E0E0E0; font-size: 0.85rem; line-height: 1.5;">
+                    {'⚠️ <b>تنبيه:</b> إرسال الصور/الفيديوهات/المستندات يتطلب وقتاً أطول في الرفع والمعالجة ويخضع لرقابة السبام.<br>✅ <b>نرجوع الالتزام بالفترات الأمنية الآتية:</b> أقصى سرعة 45-90 ثانية بين الرسائل، واستراحة دورية كل دفعة لحماية رقمك من الحظر.' if is_ar else '⚠️ <b>Notice:</b> Sending media/videos/docs requires longer upload times and strict anti-spam pacing.<br>✅ <b>Please keep safe delays:</b> 45-90s min between messages, with periodic batch breaks.'}
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
         
         st.markdown(lbl['settings_title'])
         col_s1, col_s2, col_s3, col_s4, col_s5 = st.columns(5)
@@ -1984,52 +2069,48 @@ HR Manager"""
             st.session_state.wa_done = False
 
         # ══════════════════════════════════════════════════════════
-        # 🚀 أزرار الإرسال / الإيقاف
+        # 🚀 أزرار الإرسال / الإيقاف (مع دعم المرفقات المتعددة)
         # ══════════════════════════════════════════════════════════
         btn1, btn2, btn3 = st.columns([1, 1, 2])
         with btn1:
             if st.session_state.get('wa_running', False):
                 if st.button(lbl['stop'], type="primary", width='stretch', key="wa_stop_btn"):
                     st.session_state.wa_running = False
+                    # تنظيف كافة المرفقات المؤقتة عند الإيقاف
+                    _temp_all = st.session_state.get('wa_temp_attachments', []) or []
+                    for _p in _temp_all:
+                        try:
+                            if os.path.exists(_p): os.remove(_p)
+                        except: pass
                     if st.session_state.get('wa_temp_path') and os.path.exists(st.session_state.wa_temp_path):
                         try: os.remove(st.session_state.wa_temp_path)
                         except: pass
+                    st.session_state.wa_temp_attachments = []
+                    st.session_state.wa_temp_path = None
                     st.toast("🛑 " + ("تم إيقاف الإرسال" if is_ar else "Sending stopped"))
                     st.rerun()
             else:
                 has_valid_msg = any(msg.strip() != "" for msg in st.session_state.wa_messages) or st.session_state.get('wa_smart_mode', False)
-                ready = len(final_targets) > 0 and has_valid_msg
+                mrkt_att_list = st.session_state.get('wa_temp_attachments', []) or []
+                mrkt_att_count = len(mrkt_att_list)
+                # يسمح بالإرسال لو فيه رسالة صالحة OR مرفقات (إرسال ملفات بدون رسالة نصية مسموح)
+                ready = len(final_targets) > 0 and (has_valid_msg or mrkt_att_count > 0)
 
                 if st.session_state.get('wa_done', False) and current_fp == st.session_state.get('wa_sent_fingerprint', ''):
                     st.button(lbl['sent_done'], disabled=True, width='stretch')
                 else:
-                    if st.button(lbl['send'].format(len(final_targets)), disabled=not ready, width='stretch', type="primary", key="wa_send_btn"):
+                    send_label_extra = f" ({mrkt_att_count} مرفقات)" if mrkt_att_count > 0 else ""
+                    btn_label = lbl['send'].format(len(final_targets)) + send_label_extra
+                    if st.button(btn_label, disabled=not ready, width='stretch', type="primary", key="wa_send_btn"):
                         # Check WhatsApp connection
                         wa_stat = st.session_state.wa_service.get_status() if st.session_state.wa_service else "Stopped"
                         if wa_stat != "Connected":
                             st.error("⚠️ " + ("يرجى تشغيل محرك واتساب ومسح الباركود أولاً للاتصال" if is_ar else "Please start WhatsApp engine and scan QR first to connect"))
                         else:
-                            temp_path = None
-                            if attachment:
-                                import tempfile
-                                suffix = os.path.splitext(attachment.name)[1]
-                                base_no_dot = os.path.join(os.getcwd(), "whatsapp_session")
-                                base_with_dot = os.path.join(os.getcwd(), ".whatsapp_session")
-                                temp_dir = base_no_dot if os.path.exists(base_no_dot) else (base_with_dot if os.path.exists(base_with_dot) else base_no_dot)
-                                os.makedirs(temp_dir, exist_ok=True)
-                                try:
-                                    t_file = tempfile.NamedTemporaryFile(delete=False, suffix=suffix, dir=temp_dir)
-                                    t_file.write(attachment.getvalue())
-                                    t_file.close()
-                                    temp_path = t_file.name
-                                    st.session_state.wa_temp_path = temp_path
-                                except Exception as att_err:
-                                    st.error(f"❌ {'فشل حفظ الملف المرفق: ' if is_ar else 'Failed to save attachment: '}{str(att_err)}")
-                                    temp_path = None
-                            else:
-                                # 🛡️ تنظيف المسار القديم إذا لم يوجد مرفق
-                                st.session_state.wa_temp_path = None
-
+                            # المرفقات محفوظة مسبقاً في wa_temp_attachments من قسم الرفع الأعلى
+                            # نضمن فقط وجود القائمة بشكل صحيح
+                            if not st.session_state.get('wa_temp_attachments'):
+                                st.session_state.wa_temp_attachments = []
                             st.session_state.wa_running = True
                             st.session_state.wa_idx = 0
                             st.session_state.wa_done = False
@@ -2091,22 +2172,67 @@ HR Manager"""
                     final_msg = re.sub(r'\n{3,}', '\n\n', final_msg).strip()
 
                 temp_path = st.session_state.get('wa_temp_path')
+                attachments_list = st.session_state.get('wa_temp_attachments') or []
+                # إنشاء قائمة المرفقات للخدمة: نعطي الأولوية للقائمة الكاملة
+                # ولو فاضت نستخدم temp_path القديمة للتوافق العكسي
+                wa_final_attachments = None
+                if attachments_list and len(attachments_list) > 0:
+                    wa_final_attachments = [p for p in attachments_list if p and os.path.exists(str(p))]
+                    if not wa_final_attachments and temp_path and os.path.exists(temp_path):
+                        wa_final_attachments = [temp_path]
+                elif temp_path and os.path.exists(temp_path):
+                    wa_final_attachments = [temp_path]
+
+                att_count_final = len(wa_final_attachments) if wa_final_attachments else 0
+                att_info_html_mrkt = ""
+                if att_count_final > 0:
+                    att_names = ", ".join([os.path.basename(p) for p in wa_final_attachments])
+                    att_info_html_mrkt = f"""
+                    <div style="margin-top: 8px; font-size: 0.88rem; color: #00E5FF;">
+                        📎 <b>{'المرفقات' if is_ar else 'Attachments'} ({att_count_final}):</b> {att_names}
+                    </div>
+                    """
+
+                # تحديث بطاقة الحالة لإظهار معلومات المرفقات إن وجدت
+                if att_count_final > 0:
+                    # إعادة طباعة البطاقة مع إضافة قسم المرفقات
+                    st.markdown(f"""
+                    <div style="background: rgba(0, 255, 100, 0.05); padding: 16px 20px; border-radius: 14px; border: 1.5px solid rgba(0, 255, 100, 0.3); margin: 12px 0; box-shadow: 0 0 15px rgba(0, 255, 100, 0.1);">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                            <span style="color: #00FF88; font-weight: 700; font-size: 1.05rem;">📤 {'جاري إرسال الرسالة + مرفقات' if is_ar else 'Sending Msg + Attachments'}: {curr_i + 1} / {total_targets}</span>
+                            <span style="color: #D4AF37; font-weight: 700; font-size: 1.05rem;">⌛ {'متبقٍ' if is_ar else 'Remaining'}: {total_targets - (curr_i + 1)}</span>
+                        </div>
+                        <div style="color: #FFFFFF; font-size: 0.95rem;">
+                            👤 <strong>{n}</strong> · 📱 <span style="font-family: monospace; color: #00FF88;">{p}</span>
+                        </div>
+                        {att_info_html_mrkt}
+                    </div>
+                    """, unsafe_allow_html=True)
 
                 # إضافة التوقيع الإنجليزي لواتساب ماركتنج
                 signature = "\n\nBest regards,\nAbu Fahd\nHR Manager"
                 if signature not in final_msg:
                     final_msg += signature
 
-                # 3. Send Message via WhatsApp Service
-                with st.spinner(f"🚀 {'جاري إرسال الرسالة إلى' if is_ar else 'Sending message to'} {n} ({p})..."):
-                    ok, log_msg = st.session_state.wa_service.send_message(p, final_msg, attachment_path=temp_path)
+                # 3. Send Message via WhatsApp Service (يدعم قائمة مرفقات أو مسار واحد)
+                if att_count_final > 0:
+                    spin_t = f"🚀 {'جاري إرسال الرسالة و' + str(att_count_final) + ' مرفقات إلى' if is_ar else 'Sending msg & ' + str(att_count_final) + ' attachments to'} {n} ({p})..."
+                else:
+                    spin_t = f"🚀 {'جاري إرسال الرسالة إلى' if is_ar else 'Sending message to'} {n} ({p})..."
+                with st.spinner(spin_t):
+                    ok, log_msg = st.session_state.wa_service.send_message(
+                        p,
+                        final_msg,
+                        attachment_path=wa_final_attachments if wa_final_attachments else temp_path
+                    )
 
                 # 4. Record Log
+                att_summary = f" (+{att_count_final} مرفق)" if (ok and att_count_final > 0) else ""
                 entry = {
                     "idx": curr_i + 1,
                     "name": n,
                     "phone": p,
-                    "status": log_msg if ok else f"فشل ({log_msg})",
+                    "status": f"{log_msg}{att_summary}" if ok else f"فشل ({log_msg})",
                     "ok": ok,
                     "time": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 }
@@ -2122,6 +2248,15 @@ HR Manager"""
                 # 🛡️ إيقاف فوري للحملة إذا تم إرجاع تنبيه أمان لمنع حظر الحساب وحفظ باقي الأرقام
                 if not ok and str(log_msg).startswith("🛑"):
                     st.session_state.wa_running = False
+                    # تنظيف المرفقات عند الإيقاف الأمني
+                    _temp_all = st.session_state.get('wa_temp_attachments', []) or []
+                    for _p in _temp_all:
+                        try:
+                            if os.path.exists(_p): os.remove(_p)
+                        except: pass
+                    if st.session_state.get('wa_temp_path') and os.path.exists(st.session_state.wa_temp_path):
+                        try: os.remove(st.session_state.wa_temp_path)
+                        except: pass
                     st.error(f"🛑 تم إيقاف الحملة لحماية الحساب من الحظر: {log_msg}")
                     st.toast("🛑 تم إيقاف الحملة لحماية الحساب", icon="⚠️")
                 else:
@@ -2132,11 +2267,19 @@ HR Manager"""
                     if st.session_state.wa_idx >= total_targets:
                         st.session_state.wa_running = False
                         st.session_state.wa_done = True
+                        # تنظيف كافة الملفات المؤقتة للمرفقات عند الانتهاء
+                        _cleanup_all = st.session_state.get('wa_temp_attachments', []) or []
+                        for _p in _cleanup_all:
+                            try:
+                                if os.path.exists(_p): os.remove(_p)
+                            except: pass
                         if temp_path and os.path.exists(temp_path):
                             try: os.remove(temp_path)
                             except: pass
+                        st.session_state.wa_temp_attachments = []
+                        st.session_state.wa_temp_path = None
                         st.balloons()
-                        st.success("🎉 " + ("اكتمل إرسال جميع الرسائل بنجاح!" if is_ar else "All messages sent successfully!"))
+                        st.success("🎉 " + ("اكتمل إرسال جميع الرسائل والمرفقات بنجاح!" if is_ar else "All messages & attachments sent successfully!"))
                         time.sleep(1)
                         st.rerun()
                     else:
