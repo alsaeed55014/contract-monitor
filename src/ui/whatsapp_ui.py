@@ -11,48 +11,79 @@ from src.config import WA_HISTORY_FILE, WA_TEMPLATES_FILE
 from src.ui.styles import get_base64_image
 import random
 
+def _extract_only_digits(raw):
+    """
+    مُنظّف هجائِم فائق للنص: يستخرج الأرقام فقط من أي نص مهما كان محتواه.
+    يعالج حالات مثل:
+    - "554688559 📱 · عميل"  -> "554688559"
+    - "050-123-4567 (جوال)"  -> "0501234567"
+    - "WhatsApp: +966 50 123 4567"  -> "966501234567"
+    """
+    if not raw:
+        return ""
+    arabic_to_western = str.maketrans('٠١٢٣٤٥٦٧٨٩', '0123456789')
+    s = str(raw).translate(arabic_to_western)
+    return "".join(filter(str.isdigit, s))
+
+
 def standardize_saudi_phone(phone):
     """
     توحيد تنسيق رقم الهاتف السعودي لصيغة +966XXXXXXXXXX
+    نسخة مطوّرة 2026 - تقاوم أشكال النص المختلط (أيقونات، نصوص، رموز، فراغات)
     
     يدعم الأشكال المختلفة:
     - 05XXXXXXXX (10 أرقام تبدأ بـ 05)
     - 5XXXXXXXX (9 أرقام تبدأ بـ 5)
     - 966XXXXXXXXXX (12 رقم تبدأ بـ 966)
     - +966XXXXXXXXXX (مع +)
+    - "554688559 📱 · عميل"  ->  يتم استخلاص الأرقام تلقائياً
     """
     if not phone:
         return None
     
-    # استخراج الأرقام فقط
-    digits = "".join(filter(str.isdigit, str(phone)))
+    # تنظيف خارق: استخراج الأرقام فقط مهما كان النص المحيط
+    digits = _extract_only_digits(phone)
     
-    if not digits:
+    if not digits or len(digits) < 8:
         return None
     
-    # حالة الرقم يبدأ بـ 05 (نحذف الـ 05 ونضيف +966)
+    # --- +966 مباشر (12 رقم تبدأ بـ 966)
+    if digits.startswith("966") and len(digits) >= 12:
+        return "+" + digits[:12]
+    
+    # --- 05XXXXXXXX (10 أرقام)
     if digits.startswith("05") and len(digits) == 10:
         return "+966" + digits[2:]
     
-    # حالة الرقم يبدأ بـ 5 فقط (9 أرقام)
+    # --- 5XXXXXXXX (9 أرقام يبدأ بـ 5)
     if digits.startswith("5") and len(digits) == 9:
         return "+966" + digits
     
-    # حالة الرقم يبدأ بـ 966 (12 رقم)
-    if digits.startswith("966") and len(digits) == 12:
-        return "+" + digits
-    
-    # حالة الرقم يبدأ بـ 966 ويزيد عن 12 رقم (نأخذ أول 12 رقم)
-    if digits.startswith("966") and len(digits) > 12:
-        return "+" + digits[:12]
-    
-    # حالة أخرى: نحاول إضافة +966 إذا كان الرقم 9 أرقام
-    if len(digits) == 9:
+    # --- 8 أرقام سعودي قديم يبدأ بـ 4,5,6,9
+    if len(digits) == 8 and digits[0] in ['4','5','6','9']:
         return "+966" + digits
     
-    # إذا كان الرقم صالحاً مسبقاً مع +
-    if digits.startswith("966") and len(digits) == 12:
-        return "+" + digits
+    # --- 11 رقماً تبدأ بـ 00966
+    if digits.startswith("00966") and len(digits) >= 14:
+        return "+" + digits[2:14]
+    
+    # --- 11 رقماً (بادئة + أو بدون) يبدأ بـ 0 -> نحذف صفر اليسار
+    if len(digits) >= 10 and digits.startswith("0"):
+        digits_no0 = digits.lstrip("0")
+        if digits_no0.startswith("5") and len(digits_no0) == 9:
+            return "+966" + digits_no0
+        if digits_no0.startswith("966") and len(digits_no0) >= 12:
+            return "+" + digits_no0[:12]
+    
+    # --- fallback: أرقام كثيرة نحاول إلحاقها بـ +966 لو مشتملة على 9 أرقام صالحة
+    # استخراج آخر 9 أرقام إذا بدأت بـ 5
+    if len(digits) >= 9:
+        tail9 = digits[-9:]
+        if tail9.startswith("5"):
+            return "+966" + tail9
+        tail12 = digits[-12:]
+        if tail12.startswith("966"):
+            return "+" + tail12
     
     return None
 
@@ -652,10 +683,16 @@ def render_whatsapp_page():
                         for _, row in df.iterrows():
                             c_name = str(row[name_col]).strip() if pd.notna(row[name_col]) else "عميل"
                             raw_p = str(row[phone_col]).strip() if pd.notna(row[phone_col]) else ""
-                            c_phone = "".join(filter(str.isdigit, raw_p))
+                            # تنظيف خارق ضد أيقونات ونصوص إضافية في الخلية
+                            c_phone = _extract_only_digits(raw_p)
                             if c_phone and len(c_phone) >= 8 and c_phone not in seen_phones:
                                 seen_phones.add(c_phone)
-                                extracted.append({'name': c_name if c_name != 'nan' else 'عميل', 'phone': c_phone, 'is_sent': False})
+                                formatted_p = standardize_saudi_phone(c_phone)
+                                extracted.append({
+                                    'name': c_name if c_name != 'nan' else 'عميل',
+                                    'phone': formatted_p if formatted_p else c_phone,
+                                    'is_sent': False
+                                })
                         st.session_state.wa_emp_targets = extracted
                         st.toast(f"✅ تم استخراج {len(extracted)} عميل بنجاح")
                         st.rerun()
@@ -692,13 +729,15 @@ def render_whatsapp_page():
                             r_city   = str(row[city_c]).strip()   if city_c   and pd.notna(row[city_c])   else ""
                             r_job    = str(row[job_c]).strip()    if job_c    and pd.notna(row[job_c])    else ""
                             r_nature = str(row[nature_c]).strip() if nature_c and pd.notna(row[nature_c]) else ""
-                            r_phone_clean = "".join(filter(str.isdigit, r_phone))
+                            # تنظيف خارق يحذف أيقونات، نصوص، رموز مثل "عميل" و 📱 و ·
+                            r_phone_clean = _extract_only_digits(r_phone)
                             # توحيد رقم الهاتف السعودي
                             r_phone_formatted = standardize_saudi_phone(r_phone_clean)
                             if r_phone_formatted:
                                 all_sys_records.append({
                                     'name':   r_name if r_name not in ('', 'nan') else 'عميل',
                                     'phone':  r_phone_formatted,
+                                    'phone_raw_display': _extract_only_digits(r_phone),
                                     'city':   r_city,
                                     'job':    r_job,
                                     'nature': r_nature,
@@ -711,13 +750,15 @@ def render_whatsapp_page():
             try:
                 bm = BengaliDataManager()
                 for e in (bm.get_employers() or []):
-                    raw_p = "".join(filter(str.isdigit, str(e.get('mobile', ''))))
+                    # تنظيف خارق ضد أيقونات ونصوص إضافية
+                    raw_p = _extract_only_digits(str(e.get('mobile', '')))
                     # توحيد رقم الهاتف السعودي
                     formatted_p = standardize_saudi_phone(raw_p)
                     if formatted_p:
                         all_sys_records.append({
                             'name':   str(e.get('name', 'عميل')).strip(),
                             'phone':  formatted_p,
+                            'phone_raw_display': raw_p,
                             'city':   str(e.get('city', '')).strip(),
                             'job':    str(e.get('cafe', '')).strip(),
                             'nature': '',
@@ -1168,39 +1209,59 @@ def render_whatsapp_page():
             # 🚀 حلقة الإرسال المباشرة لواتساب للعملاء (مع دعم المرفقات والأمان)
             # ══════════════════════════════════════════════════════════
             if is_sending:
-                targets_to_send = st.session_state.wa_emp_targets
-                # تصفية القائمة لإزالة العملاء الذين تم إرسالهم بالفعل
-                targets_to_send = [t for t in targets_to_send if not t.get('is_sent', False)]
-                total_t = len(targets_to_send)
-                curr_idx = st.session_state.get('wa_emp_idx', 0)
+                # --- إصلاح عداد الإرسال: نستخدم القائمة الكاملة دائماً وليس نسخة مفلترة
+                # --- لحساب الإجمالي الأصلي بدقة وتجنب خلط الفهارس
+                all_targets_full = st.session_state.wa_emp_targets
+                full_total = len(all_targets_full)
+                sent_count = sum(1 for t in all_targets_full if t.get('is_sent', False))
+                remaining_count = full_total - sent_count
 
-                # إعادة تعيين الفهرس إذا كان خارج النطاق
-                if curr_idx >= total_t:
-                    curr_idx = 0
-                    st.session_state.wa_emp_idx = 0
+                # --- إيجاد العميل الحالي (أول عميل لم يُرسل له بعد) بالبحث في القائمة الكاملة
+                # --- مهم جداً: نستخدم القائمة الأصلية للبحث لتجنب أي عدم تطابق في الفهارس
+                current_client = None
+                current_full_index = None
+                for idx_full, t in enumerate(all_targets_full):
+                    if not t.get('is_sent', False):
+                        current_client = t
+                        current_full_index = idx_full
+                        break
 
-                if total_t == 0:
+                if remaining_count == 0 or current_client is None:
                     st.session_state.wa_emp_running = False
                     st.balloons()
                     st.success("🎉 " + ("اكتمل إرسال الرسائل والمرفقات لجميع العملاء بنجاح!" if is_ar else "All customer messages & attachments sent!"))
                     time.sleep(1)
                     st.rerun()
                 else:
-                    current_client = targets_to_send[curr_idx]
                     c_name = current_client.get('name', 'عميل')
-                    c_phone = current_client.get('phone', '')
+                    c_phone_raw = current_client.get('phone', '')
                     
-                    # تأكد من تنسيق رقم الهاتف بشكل صحيح للإرسال
-                    if not c_phone.startswith('+'):
-                        c_phone = standardize_saudi_phone(c_phone) or c_phone
+                    # تنظيف وتوحيد رقم الهاتف قبل الإرسال (درع إضافي ضد أي تنسيق خاطئ)
+                    c_phone_clean_digits = _extract_only_digits(c_phone_raw)
+                    c_phone = standardize_saudi_phone(c_phone_clean_digits)
+                    if not c_phone:
+                        # fallback: استخدم الأرقام النقية فقط إذا فشل التوحيد
+                        if c_phone_clean_digits:
+                            c_phone = c_phone_clean_digits
+                        else:
+                            c_phone = str(c_phone_raw).strip()
+                    # تأكد من وجود + في البداية لو لم يكن موجود
+                    if c_phone and not c_phone.startswith('+') and c_phone[0].isdigit():
+                        c_phone = '+' + c_phone if len(c_phone) >= 11 else c_phone
                     
-                    # تحديث رقم الهاتف في البيانات للعرض الصحيح
-                    current_client['phone'] = c_phone
+                    # تحديث رقم الهاتف في البيانات للعرض الصحيح (بالقائمة الكاملة)
+                    all_targets_full[current_full_index]['phone'] = c_phone
                     
                     saved_attachments = st.session_state.get('wa_emp_saved_attachments', [])
 
+                    # رقم التقدم الحالي: عدد المرسلة + 1 (اللي بنرسلها دلوقتي) مقسوم على الإجمالي الأصلي
+                    progress_num = sent_count + 1
+                    progress_den = full_total
+                    remaining_after = full_total - progress_num
+
                     # بطاقة حالة الإرسال المباشرة مع تفاصيل المرفقات
-                    st.progress((curr_idx + 1) / total_t)
+                    progress_frac = progress_num / progress_den if progress_den > 0 else 0
+                    st.progress(progress_frac)
                     att_info_html = ""
                     if saved_attachments:
                         att_names = ", ".join([os.path.basename(p) for p in saved_attachments])
@@ -1213,8 +1274,8 @@ def render_whatsapp_page():
                     st.markdown(f"""
                     <div style="background: rgba(0, 255, 100, 0.05); padding: 16px 20px; border-radius: 14px; border: 1.5px solid rgba(0, 255, 100, 0.3); margin: 12px 0;">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                            <span style="color: #00FF88; font-weight: 700; font-size: 1.05rem;">📤 {'جاري الإرسال للعميل' if is_ar else 'Sending to'}: {curr_idx + 1} / {total_t}</span>
-                            <span style="color: #D4AF37; font-weight: 700; font-size: 1.05rem;">⌛ {'متبقٍ' if is_ar else 'Remaining'}: {total_t - (curr_idx + 1)}</span>
+                            <span style="color: #00FF88; font-weight: 700; font-size: 1.05rem;">📤 {'جاري الإرسال للعميل' if is_ar else 'Sending to'}: {progress_num} / {progress_den}</span>
+                            <span style="color: #D4AF37; font-weight: 700; font-size: 1.05rem;">⌛ {'متبقٍ' if is_ar else 'Remaining'}: {remaining_after}</span>
                         </div>
                         <div style="color: #FFFFFF; font-size: 0.95rem;">
                             👤 <strong>{c_name}</strong> · 📱 <span style="font-family: monospace; color: #00FF88;">{c_phone}</span>
@@ -1249,7 +1310,7 @@ def render_whatsapp_page():
                     # تسجيل النتيجة في سجل الإرسال العام
                     att_summary = f" (مع {len(saved_attachments)} مرفق)" if (saved_attachments and ok_send) else ""
                     log_entry = {
-                        "idx": curr_idx + 1,
+                        "idx": progress_num,
                         "name": c_name,
                         "phone": c_phone,
                         "status": f"{log_detail}{att_summary}" if ok_send else f"فشل ({log_detail})",
@@ -1259,7 +1320,8 @@ def render_whatsapp_page():
                     st.session_state.wa_logs.append(log_entry)
 
                     if ok_send:
-                        st.session_state.wa_emp_targets[curr_idx]['is_sent'] = True
+                        # وضع علامة الإرسال بالفهرس الصحيح في القائمة الكاملة (مهم جداً لصحة التقدم)
+                        st.session_state.wa_emp_targets[current_full_index]['is_sent'] = True
                         st.session_state.wa_history.add(c_phone)
                         save_wa_history(st.session_state.wa_history)
 
@@ -1269,12 +1331,15 @@ def render_whatsapp_page():
                         st.error(f"🛑 {log_detail}")
                         st.toast("🛑 تم إيقاف الإرسال لحماية الحساب من الحظر", icon="⚠️")
                     else:
-                        st.session_state.wa_emp_idx = curr_idx + 1
+                        # لا نعتمد على wa_emp_idx كفهرس مباشر - نحافظ عليه فقط للإشارة
+                        st.session_state.wa_emp_idx = current_full_index + 1
                         
                         # حساب التأخير العشوائي الذكي بين الرسائل (حماية الحساب ضد الحظر)
-                        if st.session_state.wa_emp_idx < total_t:
-                            # فحص استراحة الدفعات
-                            is_break = (emp_batch_break > 0 and st.session_state.wa_emp_idx % emp_batch_break == 0)
+                        still_remaining = full_total - (sent_count + (1 if ok_send else 0))
+                        if still_remaining > 0:
+                            # فحص استراحة الدفعات (بناءً على عدد المرسلة حتى الآن)
+                            total_sent_so_far = sent_count + (1 if ok_send else 0)
+                            is_break = (emp_batch_break > 0 and total_sent_so_far > 0 and total_sent_so_far % emp_batch_break == 0)
                             if is_break:
                                 delay_sec = int(emp_batch_pause_mins * 60)
                                 break_msg = f"🛡️ استراحة دفعات أمان دورية لحماية الحساب ({emp_batch_pause_mins} دقيقة)"
