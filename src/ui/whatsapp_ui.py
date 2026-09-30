@@ -1169,15 +1169,17 @@ def render_whatsapp_page():
             # ══════════════════════════════════════════════════════════
             if is_sending:
                 targets_to_send = st.session_state.wa_emp_targets
+                # تصفية القائمة لإزالة العملاء الذين تم إرسالهم بالفعل
+                targets_to_send = [t for t in targets_to_send if not t.get('is_sent', False)]
                 total_t = len(targets_to_send)
                 curr_idx = st.session_state.get('wa_emp_idx', 0)
 
-                # البحث عن أول رقم لم يتم إرساله بدءاً من curr_idx
-                while curr_idx < total_t and targets_to_send[curr_idx].get('is_sent', False):
-                    curr_idx += 1
-                st.session_state.wa_emp_idx = curr_idx
-
+                # إعادة تعيين الفهرس إذا كان خارج النطاق
                 if curr_idx >= total_t:
+                    curr_idx = 0
+                    st.session_state.wa_emp_idx = 0
+
+                if total_t == 0:
                     st.session_state.wa_emp_running = False
                     st.balloons()
                     st.success("🎉 " + ("اكتمل إرسال الرسائل والمرفقات لجميع العملاء بنجاح!" if is_ar else "All customer messages & attachments sent!"))
@@ -1187,6 +1189,14 @@ def render_whatsapp_page():
                     current_client = targets_to_send[curr_idx]
                     c_name = current_client.get('name', 'عميل')
                     c_phone = current_client.get('phone', '')
+                    
+                    # تأكد من تنسيق رقم الهاتف بشكل صحيح للإرسال
+                    if not c_phone.startswith('+'):
+                        c_phone = standardize_saudi_phone(c_phone) or c_phone
+                    
+                    # تحديث رقم الهاتف في البيانات للعرض الصحيح
+                    current_client['phone'] = c_phone
+                    
                     saved_attachments = st.session_state.get('wa_emp_saved_attachments', [])
 
                     # بطاقة حالة الإرسال المباشرة مع تفاصيل المرفقات
