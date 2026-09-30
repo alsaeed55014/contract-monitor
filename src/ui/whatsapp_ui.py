@@ -11,6 +11,51 @@ from src.config import WA_HISTORY_FILE, WA_TEMPLATES_FILE
 from src.ui.styles import get_base64_image
 import random
 
+def standardize_saudi_phone(phone):
+    """
+    توحيد تنسيق رقم الهاتف السعودي لصيغة +966XXXXXXXXXX
+    
+    يدعم الأشكال المختلفة:
+    - 05XXXXXXXX (10 أرقام تبدأ بـ 05)
+    - 5XXXXXXXX (9 أرقام تبدأ بـ 5)
+    - 966XXXXXXXXXX (12 رقم تبدأ بـ 966)
+    - +966XXXXXXXXXX (مع +)
+    """
+    if not phone:
+        return None
+    
+    # استخراج الأرقام فقط
+    digits = "".join(filter(str.isdigit, str(phone)))
+    
+    if not digits:
+        return None
+    
+    # حالة الرقم يبدأ بـ 05 (نحذف الـ 05 ونضيف +966)
+    if digits.startswith("05") and len(digits) == 10:
+        return "+966" + digits[2:]
+    
+    # حالة الرقم يبدأ بـ 5 فقط (9 أرقام)
+    if digits.startswith("5") and len(digits) == 9:
+        return "+966" + digits
+    
+    # حالة الرقم يبدأ بـ 966 (12 رقم)
+    if digits.startswith("966") and len(digits) == 12:
+        return "+" + digits
+    
+    # حالة الرقم يبدأ بـ 966 ويزيد عن 12 رقم (نأخذ أول 12 رقم)
+    if digits.startswith("966") and len(digits) > 12:
+        return "+" + digits[:12]
+    
+    # حالة أخرى: نحاول إضافة +966 إذا كان الرقم 9 أرقام
+    if len(digits) == 9:
+        return "+966" + digits
+    
+    # إذا كان الرقم صالحاً مسبقاً مع +
+    if digits.startswith("966") and len(digits) == 12:
+        return "+" + digits
+    
+    return None
+
 # --- Smart Message Templates (Updated 2026-03-20) ---
 SMART_PART_KEYS = ("header", "intro", "body_start", "body_end", "closing", "final_call", "signature")
 SMART_TEMPLATES = {
@@ -556,10 +601,12 @@ def render_whatsapp_page():
                             r_job    = str(row[job_c]).strip()    if job_c    and pd.notna(row[job_c])    else ""
                             r_nature = str(row[nature_c]).strip() if nature_c and pd.notna(row[nature_c]) else ""
                             r_phone_clean = "".join(filter(str.isdigit, r_phone))
-                            if r_phone_clean and len(r_phone_clean) >= 8:
+                            # توحيد رقم الهاتف السعودي
+                            r_phone_formatted = standardize_saudi_phone(r_phone_clean)
+                            if r_phone_formatted:
                                 all_sys_records.append({
                                     'name':   r_name if r_name not in ('', 'nan') else 'عميل',
-                                    'phone':  r_phone_clean,
+                                    'phone':  r_phone_formatted,
                                     'city':   r_city,
                                     'job':    r_job,
                                     'nature': r_nature,
@@ -573,10 +620,12 @@ def render_whatsapp_page():
                 bm = BengaliDataManager()
                 for e in (bm.get_employers() or []):
                     raw_p = "".join(filter(str.isdigit, str(e.get('mobile', ''))))
-                    if raw_p and len(raw_p) >= 8:
+                    # توحيد رقم الهاتف السعودي
+                    formatted_p = standardize_saudi_phone(raw_p)
+                    if formatted_p:
                         all_sys_records.append({
                             'name':   str(e.get('name', 'عميل')).strip(),
-                            'phone':  raw_p,
+                            'phone':  formatted_p,
                             'city':   str(e.get('city', '')).strip(),
                             'job':    str(e.get('cafe', '')).strip(),
                             'nature': '',
@@ -613,15 +662,35 @@ def render_whatsapp_page():
                 # ── تصفية النتائج (تشمل طبيعة العمل) ─────────────────
                 if search_q and search_q.strip():
                     q_low = search_q.strip().lower()
-                    filtered = [
-                        r for r in all_sys_records
-                        if q_low in r['name'].lower()
-                        or q_low in r['phone']
-                        or q_low in r['city'].lower()
-                        or q_low in r['job'].lower()
-                        or q_low in r.get('nature', '').lower()
-                        or q_low in r['source'].lower()
-                    ]
+                    # إزالة الأرقام من البحث للبحث بالأرقام أيضاً
+                    q_digits = "".join(filter(str.isdigit, search_q))
+                    
+                    filtered = []
+                    for r in all_sys_records:
+                        # البحث في الاسم
+                        if q_low in r['name'].lower():
+                            filtered.append(r)
+                            continue
+                        # البحث في المدينة
+                        elif q_low in r['city'].lower():
+                            filtered.append(r)
+                            continue
+                        # البحث في الوظيفة
+                        elif q_low in r['job'].lower():
+                            filtered.append(r)
+                            continue
+                        # البحث في طبيعة العمل
+                        elif q_low in r.get('nature', '').lower():
+                            filtered.append(r)
+                            continue
+                        # البحث في المصدر
+                        elif q_low in r['source'].lower():
+                            filtered.append(r)
+                            continue
+                        # البحث برقم الهاتف (مع دعم الأشكال المختلفة)
+                        elif q_digits and q_digits in r['phone'].replace('+', '').replace('966', ''):
+                            filtered.append(r)
+                            continue
                 else:
                     filtered = all_sys_records
 
@@ -640,8 +709,8 @@ def render_whatsapp_page():
                         new_list = list(st.session_state.get('wa_emp_targets', []))
                         added_n = 0
                         for r in filtered:
-                            # Format phone number properly
-                            formatted_phone = format_phone_number(r['phone'])
+                            # Phone is already standardized in the search results
+                            formatted_phone = r['phone']
                             
                             if formatted_phone not in existing_ph:
                                 existing_ph.add(formatted_phone)
@@ -716,8 +785,8 @@ def render_whatsapp_page():
                                 # زر الإضافة لقائمة الإرسال
                                 if st.button("➕", key=f"sys_add_{idx_r}_{r['phone']}",
                                              help="إضافة لقائمة الإرسال", use_container_width=True):
-                                    # Format phone number properly for WhatsApp
-                                    formatted_phone = format_phone_number(r['phone'])
+                                    # Phone is already standardized in the search results
+                                    formatted_phone = r['phone']
                                     
                                     # Use provided name or default
                                     final_name = r['name'] if r['name'] and r['name'] not in ('', 'nan', 'عميل') else ("السادة / عملائنا الكرام المحترمين" if is_ar else "Dear Valued Customers")
