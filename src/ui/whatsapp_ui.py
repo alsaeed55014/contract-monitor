@@ -907,9 +907,12 @@ def render_whatsapp_page():
                                     st.toast(f"✅ تمت إضافة {final_name} — 📱 {formatted_phone} — 🏙️ {r['city']}")
                                     st.rerun()
                         with col_btn:
+                            # تنظيف المفتاح بإزالة الرموز الخاصة من رقم الهاتف
+                            clean_phone_key = r['phone'].replace('+', '').replace('-', '').replace(' ', '')
+                            
                             if already_added:
                                 # زر الحذف من قائمة الإرسال
-                                if st.button("❌", key=f"sys_rm_{idx_r}_{r['phone']}",
+                                if st.button("❌", key=f"sys_rm_{idx_r}_{clean_phone_key}",
                                              help="حذف من قائمة الإرسال", use_container_width=True):
                                     st.session_state.wa_emp_targets = [
                                         t for t in st.session_state.get('wa_emp_targets', [])
@@ -919,7 +922,7 @@ def render_whatsapp_page():
                                     st.rerun()
                             else:
                                 # زر الإضافة لقائمة الإرسال
-                                if st.button("➕", key=f"sys_add_{idx_r}_{r['phone']}",
+                                if st.button("➕", key=f"sys_add_{idx_r}_{clean_phone_key}",
                                              help="إضافة لقائمة الإرسال", use_container_width=True):
                                     # Phone is already standardized in the search results
                                     formatted_phone = r['phone']
@@ -999,7 +1002,9 @@ def render_whatsapp_page():
                     with col_t2:
                         st.code(trg['phone'], language=None)
                     with col_t3:
-                        if st.button("❌", key=f"del_emp_trg_{idx_t}", help="حذف من القائمة"):
+                        # تنظيف المفتاح لإزالة الرموز الخاصة
+                        clean_phone_key = trg['phone'].replace('+', '').replace('-', '').replace(' ', '')
+                        if st.button("❌", key=f"del_emp_trg_{idx_t}_{clean_phone_key}", help="حذف من القائمة"):
                             # استخدام الهاتف للتعريف الفريد بدلاً من الفهرس
                             target_phone = trg['phone']
                             st.session_state.wa_emp_targets = [
@@ -1462,12 +1467,16 @@ def render_whatsapp_page():
                                     if trg['is_sent']: continue
                                     r_c1, r_c2 = st.columns([4, 1])
                                     # Use simplified display for sidebar
-                                    if r_c1.checkbox(f"{trg['name']} ({trg['phone'][-4:]})", value=False, key=f"trg_pending_{i}_{trg['phone']}"):
+                                    # تنظيف المفتاح لإزالة الرموز الخاصة
+                                    clean_phone_key = trg['phone'].replace('+', '').replace('-', '').replace(' ', '')
+                                    if r_c1.checkbox(f"{trg['name']} ({trg['phone'][-4:]})", value=False, key=f"trg_pending_{i}_{clean_phone_key}"):
                                         st.session_state.wa_review_targets[i]['is_sent'] = True
                                         st.session_state.wa_history.add(trg['phone'])
                                         save_wa_history(st.session_state.wa_history)
                                         st.rerun()
-                                    if r_c2.button("🗑️", key=f"trg_del_p_{i}_{trg['phone']}"):
+                                    # تنظيف المفتاح لإزالة الرموز الخاصة
+                                    clean_phone_key = trg['phone'].replace('+', '').replace('-', '').replace(' ', '')
+                                    if r_c2.button("🗑️", key=f"trg_del_p_{i}_{clean_phone_key}"):
                                         to_delete.append(i)
                             
                             if to_delete:
@@ -1497,7 +1506,9 @@ def render_whatsapp_page():
                                         st.session_state.wa_history.discard(clean_id)
                                         save_wa_history(st.session_state.wa_history)
                                         st.rerun()
-                                    if r_c4.button("🗑️", key=f"trg_del_e_{i}_{trg['phone']}"):
+                                    # تنظيف المفتاح لإزالة الرموز الخاصة
+                                    clean_phone_key = trg['phone'].replace('+', '').replace('-', '').replace(' ', '')
+                                    if r_c4.button("🗑️", key=f"trg_del_e_{i}_{clean_phone_key}"):
                                         deleted_item = st.session_state.wa_review_targets.pop(i)
                                         if st.session_state.wa_data is not None and 'idx' in deleted_item:
                                             st.session_state.wa_data = st.session_state.wa_data.drop(deleted_item['idx'])
