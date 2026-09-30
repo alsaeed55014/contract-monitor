@@ -640,9 +640,24 @@ def render_whatsapp_page():
                         new_list = list(st.session_state.get('wa_emp_targets', []))
                         added_n = 0
                         for r in filtered:
-                            if r['phone'] not in existing_ph:
-                                existing_ph.add(r['phone'])
-                                new_list.append({'name': r['name'], 'phone': r['phone'], 'is_sent': False})
+                            # Format phone number properly
+                            formatted_phone = format_phone_number(r['phone'])
+                            
+                            if formatted_phone not in existing_ph:
+                                existing_ph.add(formatted_phone)
+                                
+                                # Use provided name or default
+                                final_name = r['name'] if r['name'] and r['name'] not in ('', 'nan', 'عميل') else ("السادة / عملائنا الكرام المحترمين" if is_ar else "Dear Valued Customers")
+                                
+                                new_list.append({
+                                    'name': final_name,
+                                    'phone': formatted_phone,
+                                    'city': r['city'] or ("غير محدد" if is_ar else "Not specified"),
+                                    'job': r.get('job', ''),
+                                    'nature': r.get('nature', ''),
+                                    'source': r['source'],
+                                    'is_sent': False
+                                })
                                 added_n += 1
                         st.session_state.wa_emp_targets = new_list
                         st.toast(f"✅ تمت إضافة {added_n} عميل لقائمة الإرسال")
@@ -701,11 +716,28 @@ def render_whatsapp_page():
                                 # زر الإضافة لقائمة الإرسال
                                 if st.button("➕", key=f"sys_add_{idx_r}_{r['phone']}",
                                              help="إضافة لقائمة الإرسال", use_container_width=True):
+                                    # Format phone number properly for WhatsApp
+                                    formatted_phone = format_phone_number(r['phone'])
+                                    
+                                    # Use provided name or default
+                                    final_name = r['name'] if r['name'] and r['name'] not in ('', 'nan', 'عميل') else ("السادة / عملائنا الكرام المحترمين" if is_ar else "Dear Valued Customers")
+                                    
+                                    # Include city in the data
+                                    new_target = {
+                                        'name': final_name,
+                                        'phone': formatted_phone,
+                                        'city': r['city'] or ("غير محدد" if is_ar else "Not specified"),
+                                        'job': r.get('job', ''),
+                                        'nature': r.get('nature', ''),
+                                        'source': r['source'],
+                                        'is_sent': False
+                                    }
+                                    
                                     st.session_state.wa_emp_targets = (
                                         st.session_state.get('wa_emp_targets', []) +
-                                        [{'name': r['name'], 'phone': r['phone'], 'is_sent': False}]
+                                        [new_target]
                                     )
-                                    st.toast(f"✅ تمت إضافة {r['name']} — 📱 {r['phone']}")
+                                    st.toast(f"✅ تمت إضافة {final_name} — 📱 {formatted_phone} — 🏙️ {r['city']}")
                                     st.rerun()
 
                     # ── ملخص قائمة الإرسال الحالية ────────────────────
@@ -967,6 +999,12 @@ def render_whatsapp_page():
 
                     # تجهيز نص الرسالة وتخصيصه للعميل
                     personalized_msg = emp_message.replace("{Name}", c_name).replace("{name}", c_name).replace("{الاسم}", c_name)
+                    
+                    # إضافة المدينة إذا كانت موجودة
+                    c_city = current_client.get('city', '')
+                    if c_city and c_city != ('غير محدد' if is_ar else 'Not specified'):
+                        city_line = f"\n📍 {c_city}" if is_ar else f"\n📍 {c_city}"
+                        personalized_msg += city_line
 
                     # إضافة التوقيع العربي إذا لم يكن موجوداً
                     signature = "\n\nمع خالص التحية والتقدير،\nأبو فهد\nHR"
