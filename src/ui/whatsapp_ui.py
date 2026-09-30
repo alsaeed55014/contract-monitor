@@ -56,6 +56,98 @@ def standardize_saudi_phone(phone):
     
     return None
 
+# قاموس ترجمة ثنائي اللغة للبحث
+BILINGUAL_SEARCH_DICT = {
+    # وظائف شائعة - Jobs/Professions
+    "شيف": ["chef", "cook", "kitchen staff"],
+    "chef": ["شيف", "طباخ", "مطبخ"],
+    "حلويات": ["pastry", "baker", "confectionery", "sweet"],
+    "pastry": ["حلويات", "حلوياتي", "باني"],
+    "باني": ["baker", "pastry chef"],
+    "مطعم": ["restaurant", "cafe", "dining"],
+    "restaurant": ["مطعم", "مقهى", "كافي"],
+    "كافي": ["cafe", "coffee shop", "coffee"],
+    "مقهى": ["cafe", "coffee shop", "coffee"],
+    "نادل": ["waiter", "server", "waitress"],
+    "waiter": ["نادل", "خدم", "جارسون"],
+    "سائق": ["driver", "chauffeur"],
+    "driver": ["سائق", "قائد مركبة"],
+    "عامل": ["worker", "employee", "staff"],
+    "worker": ["عامل", "موظف", "مندوب"],
+    "نظافة": ["cleaning", "cleaner", "housekeeping"],
+    "cleaning": ["نظافة", "تنظيف", "عامل نظافة"],
+    "بناء": ["construction", "builder"],
+    "construction": ["بناء", "مقاولات", "عامل بناء"],
+    "كهربائي": ["electrician", "electrical"],
+    "electrician": ["كهربائي", "فني كهرباء"],
+    "سباك": ["plumber", "plumbing"],
+    "plumber": ["سباك", "سباكة"],
+    "نجار": ["carpenter", "woodwork"],
+    "carpenter": ["نجار", "نجارة"],
+    "ميكانيكي": ["mechanic", "mechanical"],
+    "mechanic": ["ميكانيكي", "فني ميكانيكا"],
+    "حارس": ["guard", "security", "watchman"],
+    "guard": ["حارس", "أمن", "حراسة"],
+    "مدرس": ["teacher", "tutor", "instructor"],
+    "teacher": ["مدرس", "معلم", "مربي"],
+    
+    # طبيعة العمل - Work Nature
+    "تنظيف": ["cleaning", "cleaner", "housekeeping"],
+    "خدم": ["service", "services", "customer service"],
+    "خدمة عملاء": ["customer service", "client service"],
+    "صيانة": ["maintenance", "repair", "fixing"],
+    "maintenance": ["صيانة", "إصلاح", "ترميم"],
+    "توريد": ["supply", "supplier", "logistics"],
+    "supply": ["توريد", "موردين", "لوجستيك"],
+    
+    # مدن - Cities
+    "الرياض": ["riyadh"],
+    "riyadh": ["الرياض"],
+    "جدة": ["jeddah"],
+    "jeddah": ["جدة"],
+    "مكة": ["makkah", "mecca"],
+    "makkah": ["مكة"],
+    "الدمام": ["dammam"],
+    "dammam": ["الدمام"],
+    "الخبر": ["khobar"],
+    "khobar": ["الخبر"],
+    "الطائف": ["taif"],
+    "taif": ["الطائف"],
+    "الزلفي": ["zulfy"],
+    "zulfy": ["الزلفي"],
+    "تبوك": ["tabuk"],
+    "tabuk": ["تبوك"],
+    "أبها": ["abha"],
+    "abha": ["أبها"],
+    
+    # عام - General
+    "شركة": ["company", "corporation", "firm"],
+    "company": ["شركة", "مؤسسة"],
+    "مؤسسة": ["foundation", "establishment", "institute"],
+    "foundation": ["مؤسسة", "جمعية"],
+}
+
+def get_bilingual_search_terms(search_text):
+    """
+    الحصول على مصطلحات البحث الثنائية اللغة
+    
+    يحول النص العربي إلى مصطلحات إنجليزية والعكس
+    """
+    if not search_text:
+        return []
+    
+    search_lower = search_text.lower().strip()
+    terms = [search_lower]
+    
+    # إضافة المصطلحات المترجمة
+    for key, translations in BILINGUAL_SEARCH_DICT.items():
+        if key in search_lower:
+            terms.extend(translations)
+        elif any(t in search_lower for t in translations):
+            terms.append(key)
+    
+    return list(set(terms))  # إزالة التكرار
+
 # --- Smart Message Templates (Updated 2026-03-20) ---
 SMART_PART_KEYS = ("header", "intro", "body_start", "body_end", "closing", "final_call", "signature")
 SMART_TEMPLATES = {
@@ -665,32 +757,42 @@ def render_whatsapp_page():
                     # إزالة الأرقام من البحث للبحث بالأرقام أيضاً
                     q_digits = "".join(filter(str.isdigit, search_q))
                     
+                    # الحصول على مصطلحات البحث الثنائية اللغة
+                    search_terms = get_bilingual_search_terms(search_q)
+                    
                     filtered = []
                     for r in all_sys_records:
-                        # البحث في الاسم
-                        if q_low in r['name'].lower():
-                            filtered.append(r)
-                            continue
-                        # البحث في المدينة
-                        elif q_low in r['city'].lower():
-                            filtered.append(r)
-                            continue
-                        # البحث في الوظيفة
-                        elif q_low in r['job'].lower():
-                            filtered.append(r)
-                            continue
-                        # البحث في طبيعة العمل
-                        elif q_low in r.get('nature', '').lower():
-                            filtered.append(r)
-                            continue
-                        # البحث في المصدر
-                        elif q_low in r['source'].lower():
-                            filtered.append(r)
-                            continue
+                        match_found = False
+                        
+                        # البحث بجميع المصطلحات المتاحة
+                        for term in search_terms:
+                            # البحث في الاسم
+                            if term in r['name'].lower():
+                                match_found = True
+                                break
+                            # البحث في المدينة
+                            elif term in r['city'].lower():
+                                match_found = True
+                                break
+                            # البحث في الوظيفة
+                            elif term in r['job'].lower():
+                                match_found = True
+                                break
+                            # البحث في طبيعة العمل
+                            elif term in r.get('nature', '').lower():
+                                match_found = True
+                                break
+                            # البحث في المصدر
+                            elif term in r['source'].lower():
+                                match_found = True
+                                break
+                        
                         # البحث برقم الهاتف (مع دعم الأشكال المختلفة)
-                        elif q_digits and q_digits in r['phone'].replace('+', '').replace('966', ''):
+                        if not match_found and q_digits and q_digits in r['phone'].replace('+', '').replace('966', ''):
+                            match_found = True
+                        
+                        if match_found:
                             filtered.append(r)
-                            continue
                 else:
                     filtered = all_sys_records
 
@@ -743,33 +845,67 @@ def render_whatsapp_page():
                 else:
                     # ── بطاقة لكل سجل مع رقم بارز وزر إضافة/حذف فردي ─
                     existing_ph_set = {t['phone'] for t in st.session_state.get('wa_emp_targets', [])}
-                    for idx_r, r in enumerate(filtered):
-                        already_added = r['phone'] in existing_ph_set
-                        card_border   = "rgba(0,255,136,0.45)" if already_added else "rgba(0,229,255,0.25)"
-                        card_bg       = "rgba(0,255,136,0.04)" if already_added else "rgba(0,229,255,0.03)"
-                        badge_color   = "#00FF88" if already_added else "#00E5FF"
+                    
+                    # تصفية النتائج لإظهار فقط غير المحذوفين
+                    filtered_display = [r for r in filtered if r['phone'] not in existing_ph_set]
+                    
+                    if not filtered_display:
+                        st.info("جميع النتائج تمت إضافتها بالفعل أو تم حذفها من القائمة.")
+                    else:
+                        for idx_r, r in enumerate(filtered_display):
+                            already_added = r['phone'] in existing_ph_set
+                            card_border   = "rgba(0,255,136,0.45)" if already_added else "rgba(0,229,255,0.25)"
+                            card_bg       = "rgba(0,255,136,0.04)" if already_added else "rgba(0,229,255,0.03)"
+                            badge_color   = "#00FF88" if already_added else "#00E5FF"
 
-                        extra_parts = []
-                        if r.get('city'):   extra_parts.append(f"📍 {r['city']}")
-                        if r.get('job'):    extra_parts.append(f"💼 {r['job']}")
-                        if r.get('nature'): extra_parts.append(f"🏗️ {r['nature']}")
-                        extra_parts.append(r['source'])
-                        extra_html = "  ·  ".join(extra_parts)
+                            extra_parts = []
+                            if r.get('city'):   extra_parts.append(f"📍 {r['city']}")
+                            if r.get('job'):    extra_parts.append(f"💼 {r['job']}")
+                            if r.get('nature'): extra_parts.append(f"🏗️ {r['nature']}")
+                            extra_parts.append(r['source'])
+                            extra_html = "  ·  ".join(extra_parts)
 
-                        col_card, col_btn = st.columns([5, 1])
-                        with col_card:
-                            st.markdown(
-                                f"<div style='background:{card_bg};border:1.5px solid {card_border};"
-                                f"border-radius:10px;padding:10px 16px;margin-bottom:6px'>"
-                                f"<span style='font-weight:700;font-size:.95rem;color:#FFFFFF'>{r['name']}</span>"
-                                f"&nbsp;&nbsp;"
-                                f"<span style='font-family:monospace;font-size:1.05rem;font-weight:800;"
-                                f"color:{badge_color};background:rgba(0,0,0,0.3);padding:2px 10px;"
-                                f"border-radius:6px'>📱 {r['phone']}</span>"
-                                f"<div style='font-size:.78rem;color:#AAA;margin-top:4px'>{extra_html}</div>"
-                                f"</div>",
-                                unsafe_allow_html=True
+                            col_card, col_btn = st.columns([5, 1])
+                            with col_card:
+                                st.markdown(
+                                    f"<div style='background:{card_bg};border:1.5px solid {card_border};"
+                                    f"border-radius:10px;padding:10px 16px;margin-bottom:6px'>"
+                                    f"<span style='font-weight:700;font-size:.95rem;color:#FFFFFF'>{r['name']}</span>"
+                                    f"&nbsp;&nbsp;"
+                                    f"<span style='font-family:monospace;font-size:1.05rem;font-weight:800;"
+                                    f"color:{badge_color};background:rgba(0,0,0,0.3);padding:2px 10px;"
+                                    f"border-radius:6px'>📱 {r['phone']}</span>"
+                                    f"<div style='font-size:.78rem;color:#AAA;margin-top:4px'>{extra_html}</div>"
+                                    f"</div>",
+                                    unsafe_allow_html=True
                             )
+                            with col_btn:
+                                # زر الإضافة لقائمة الإرسال فقط (حذف إمكانية الحذف من هنا)
+                                if st.button("➕", key=f"sys_add_{idx_r}_{r['phone']}",
+                                             help="إضافة لقائمة الإرسال", use_container_width=True):
+                                    # Phone is already standardized in the search results
+                                    formatted_phone = r['phone']
+                                    
+                                    # Use provided name or default
+                                    final_name = r['name'] if r['name'] and r['name'] not in ('', 'nan', 'عميل') else ("السادة / عملائنا الكرام المحترمين" if is_ar else "Dear Valued Customers")
+                                    
+                                    # Include city in the data
+                                    new_target = {
+                                        'name': final_name,
+                                        'phone': formatted_phone,
+                                        'city': r['city'] or ("غير محدد" if is_ar else "Not specified"),
+                                        'job': r.get('job', ''),
+                                        'nature': r.get('nature', ''),
+                                        'source': r['source'],
+                                        'is_sent': False
+                                    }
+                                    
+                                    st.session_state.wa_emp_targets = (
+                                        st.session_state.get('wa_emp_targets', []) +
+                                        [new_target]
+                                    )
+                                    st.toast(f"✅ تمت إضافة {final_name} — 📱 {formatted_phone} — 🏙️ {r['city']}")
+                                    st.rerun()
                         with col_btn:
                             if already_added:
                                 # زر الحذف من قائمة الإرسال
@@ -864,7 +1000,13 @@ def render_whatsapp_page():
                         st.code(trg['phone'], language=None)
                     with col_t3:
                         if st.button("❌", key=f"del_emp_trg_{idx_t}", help="حذف من القائمة"):
-                            st.session_state.wa_emp_targets.pop(idx_t)
+                            # استخدام الهاتف للتعريف الفريد بدلاً من الفهرس
+                            target_phone = trg['phone']
+                            st.session_state.wa_emp_targets = [
+                                t for t in st.session_state.wa_emp_targets 
+                                if t['phone'] != target_phone
+                            ]
+                            st.toast(f"🗑️ تم حذف {trg['name']} من القائمة")
                             st.rerun()
 
             # 📝 Message Composition
