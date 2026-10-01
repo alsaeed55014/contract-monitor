@@ -1430,10 +1430,10 @@ def render_whatsapp_page():
                         st.session_state.wa_emp_idx = current_full_index + 1
                         
                         # حساب التأخير العشوائي الذكي بين الرسائل (حماية الحساب ضد الحظر)
-                        still_remaining = full_total - (sent_count + (1 if ok_send else 0))
+                        still_remaining = full_total - (sent_count + (1 if send_success else 0))
                         if still_remaining > 0:
                             # فحص استراحة الدفعات (بناءً على عدد المرسلة حتى الآن)
-                            total_sent_so_far = sent_count + (1 if ok_send else 0)
+                            total_sent_so_far = sent_count + (1 if send_success else 0)
                             is_break = (emp_batch_break > 0 and total_sent_so_far > 0 and total_sent_so_far % emp_batch_break == 0)
                             if is_break:
                                 delay_sec = int(emp_batch_pause_mins * 60)
