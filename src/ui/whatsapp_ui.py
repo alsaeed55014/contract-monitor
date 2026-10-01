@@ -1304,6 +1304,12 @@ def render_whatsapp_page():
                     # تجهيز نص الرسالة وتخصيصه للعميل مع تنويع الصياغة
                     base_msg = emp_message.replace("{Name}", c_name).replace("{name}", c_name).replace("{الاسم}", c_name)
                     
+                    # إضافة المدينة قبل نص الرسالة إذا كانت موجودة
+                    c_city = current_client.get('city', '')
+                    if c_city and c_city != ('غير محدد' if is_ar else 'Not specified'):
+                        city_line = f"من {c_city}\n"
+                        base_msg = city_line + base_msg
+                    
                     # تنويع صياغة الرسالة للحفاظ على نفس المعنى مع تغيير الأسلوب
                     import random
                     message_variations = [
@@ -1314,17 +1320,6 @@ def render_whatsapp_page():
                         f"عزيزي {c_name}،\n{base_msg}",  # مع عزيزي
                     ]
                     personalized_msg = random.choice(message_variations)
-                    
-                    # إضافة المدينة إذا كانت موجودة
-                    c_city = current_client.get('city', '')
-                    if c_city and c_city != ('غير محدد' if is_ar else 'Not specified'):
-                        city_variations = [
-                            f"\n📍 {c_city}",
-                            f"\nمن {c_city}",
-                            f"\n- المدينة: {c_city}",
-                        ]
-                        city_line = random.choice(city_variations)
-                        personalized_msg += city_line
 
                     # إضافة التوقيع العربي مع تنويع
                     signature_variations = [
