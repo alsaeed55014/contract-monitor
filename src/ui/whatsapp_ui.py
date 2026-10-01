@@ -1162,9 +1162,9 @@ def render_whatsapp_page():
             st.markdown(f"#### ⚙️ {'إعدادات الأمان والتأخير ومكافحة الحظر' if is_ar else 'Safety, Delay & Anti-Ban Settings'}")
             c_d1, c_d2, c_d3, c_d4 = st.columns(4)
             with c_d1:
-                # إذا كانت الرسالة تحتوي مرفقات، الحد الأدنى الموصى به 45-60 ثانية لحماية الحساب من الحظر
-                def_min = 45 if has_attachments else 25
-                min_allowed = 30 if has_attachments else 20
+                # إعدادات التأخير والاستراحة للعملاء (طلبات العملاء & Bengali Supply)
+                def_min = 60
+                min_allowed = 20
                 emp_min_delay = st.number_input(
                     "أدنى تأخير (ثانية)" if is_ar else "Min delay (s)",
                     min_value=min_allowed, max_value=300, value=def_min,
@@ -1172,8 +1172,8 @@ def render_whatsapp_page():
                     key="emp_min_delay_val"
                 )
             with c_d2:
-                def_max = 90 if has_attachments else 45
-                min_max_allowed = max(emp_min_delay + 5, 45 if has_attachments else 25)
+                def_max = 120
+                min_max_allowed = max(emp_min_delay + 5, 25)
                 emp_max_delay = st.number_input(
                     "أقصى تأخير (ثانية)" if is_ar else "Max delay (s)",
                     min_value=min_max_allowed, max_value=600, value=max(def_max, min_max_allowed),
@@ -1181,15 +1181,15 @@ def render_whatsapp_page():
                     key="emp_max_delay_val"
                 )
             with c_d3:
-                def_break = 8 if has_attachments else 15
+                def_break = 6
                 emp_batch_break = st.number_input(
                     "استراحة كل (رسائل)" if is_ar else "Pause every (msgs)",
-                    min_value=3 if has_attachments else 5, max_value=50, value=def_break,
+                    min_value=3, max_value=50, value=def_break,
                     help="التوقف لأخذ استراحة أمان لمحاكاة السلوك البشري الطبيعي",
                     key="emp_batch_break_val"
                 )
             with c_d4:
-                def_pause_mins = 4 if has_attachments else 3
+                def_pause_mins = 5
                 emp_batch_pause_mins = st.number_input(
                     "مدة الاستراحة (دقائق)" if is_ar else "Break time (mins)",
                     min_value=2, max_value=20, value=def_pause_mins,
