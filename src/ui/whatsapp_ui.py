@@ -1355,8 +1355,8 @@ def render_whatsapp_page():
                             send_log = msg_log
                             st.toast(f"✅ {'تم إرسال الرسالة النصية' if is_ar else 'Text message sent'}")
                             
-                            # فاصل زمني قصير بعد الرسالة
-                            time.sleep(15)  # 15 ثانية فاصل آمن
+                            # فاصل زمني قصير جداً بعد الرسالة (3 ثواني فقط)
+                            time.sleep(3)
                         else:
                             send_success = False
                             send_log = msg_log
@@ -1379,10 +1379,9 @@ def render_whatsapp_page():
                             else:
                                 image_video_files.append(att)
                         
-                        # إرسال ملفات PDF أولاً
+                        # إرسال ملفات PDF أولاً بدون تأخير
                         for pdf in pdf_files:
                             try:
-                                time.sleep(20)  # فاصل 20 ثانية بين الملفات
                                 with st.spinner(f"📄 {'جاري إرسال ملف PDF' if is_ar else 'Sending PDF'}: {os.path.basename(pdf)}..."):
                                     pdf_ok, pdf_log = st.session_state.wa_service.send_message(
                                         c_phone,
@@ -1394,11 +1393,9 @@ def render_whatsapp_page():
                             except Exception as e:
                                 st.warning(f"⚠️ {'خطأ في إرسال PDF' if is_ar else 'Error sending PDF'}: {e}")
                         
-                        # إرسال الصور والفيديوهات بفواصل زمنية أطول
+                        # إرسال الصور والفيديوهات بدون تأخير
                         for idx, media in enumerate(image_video_files):
                             try:
-                                delay = 30 if idx == 0 else 45  # أول ملف 30 ثانية، الباقي 45 ثانية
-                                time.sleep(delay)
                                 with st.spinner(f"🖼️ {'جاري إرسال ملف وسائط' if is_ar else 'Sending media'}: {os.path.basename(media)}..."):
                                     media_ok, media_log = st.session_state.wa_service.send_message(
                                         c_phone,
@@ -1409,9 +1406,6 @@ def render_whatsapp_page():
                                     st.warning(f"⚠️ {'فشل إرسال ملف وسائط' if is_ar else 'Failed to send media'}: {os.path.basename(media)}")
                             except Exception as e:
                                 st.warning(f"⚠️ {'خطأ في إرسال ملف وسائط' if is_ar else 'Error sending media'}: {e}")
-                        
-                        # فاصل زمني بعد إرسال جميع المرفقات
-                        time.sleep(25)
                     
                     # تسجيل النتيجة في سجل الإرسال العام
                     att_summary = f" (مع {len(saved_attachments)} مرفق)" if (saved_attachments and send_success) else ""
@@ -2321,8 +2315,8 @@ HR Manager"""
                         send_log_mk = msg_log_mk
                         st.toast(f"✅ {'تم إرسال الرسالة النصية' if is_ar else 'Text message sent'}")
                         
-                        # فاصل زمني قصير بعد الرسالة
-                        time.sleep(15)  # 15 ثانية فاصل آمن
+                        # فاصل زمني قصير جداً بعد الرسالة (3 ثواني فقط)
+                        time.sleep(3)
                     else:
                         send_success_mk = False
                         send_log_mk = msg_log_mk
@@ -2346,10 +2340,9 @@ HR Manager"""
                         elif att:
                             image_video_files_mk.append(att)
                     
-                    # إرسال ملفات PDF أولاً
+                    # إرسال ملفات PDF أولاً بدون تأخير
                     for pdf in pdf_files_mk:
                         try:
-                            time.sleep(20)  # فاصل 20 ثانية بين الملفات
                             with st.spinner(f"📄 {'جاري إرسال ملف PDF' if is_ar else 'Sending PDF'}: {os.path.basename(pdf)}..."):
                                 pdf_ok_mk, pdf_log_mk = st.session_state.wa_service.send_message(
                                     p,
@@ -2361,11 +2354,9 @@ HR Manager"""
                         except Exception as e:
                             st.warning(f"⚠️ {'خطأ في إرسال PDF' if is_ar else 'Error sending PDF'}: {e}")
                     
-                    # إرسال الصور والفيديوهات بفواصل زمنية أطول
+                    # إرسال الصور والفيديوهات بدون تأخير
                     for idx, media in enumerate(image_video_files_mk):
                         try:
-                            delay = 30 if idx == 0 else 45  # أول ملف 30 ثانية، الباقي 45 ثانية
-                            time.sleep(delay)
                             with st.spinner(f"🖼️ {'جاري إرسال ملف وسائط' if is_ar else 'Sending media'}: {os.path.basename(media)}..."):
                                 media_ok_mk, media_log_mk = st.session_state.wa_service.send_message(
                                     p,
@@ -2376,9 +2367,6 @@ HR Manager"""
                                 st.warning(f"⚠️ {'فشل إرسال ملف وسائط' if is_ar else 'Failed to send media'}: {os.path.basename(media)}")
                         except Exception as e:
                             st.warning(f"⚠️ {'خطأ في إرسال ملف وسائط' if is_ar else 'Error sending media'}: {e}")
-                    
-                    # فاصل زمني بعد إرسال جميع المرفقات
-                    time.sleep(25)
                 
                 # 4. Record Log
                 att_summary = f" (+{att_count_final} مرفق)" if (send_success_mk and att_count_final > 0) else ""
