@@ -1301,17 +1301,39 @@ def render_whatsapp_page():
                     </div>
                     """, unsafe_allow_html=True)
 
-                    # تجهيز نص الرسالة وتخصيصه للعميل
-                    personalized_msg = emp_message.replace("{Name}", c_name).replace("{name}", c_name).replace("{الاسم}", c_name)
+                    # تجهيز نص الرسالة وتخصيصه للعميل مع تنويع الصياغة
+                    base_msg = emp_message.replace("{Name}", c_name).replace("{name}", c_name).replace("{الاسم}", c_name)
+                    
+                    # تنويع صياغة الرسالة للحفاظ على نفس المعنى مع تغيير الأسلوب
+                    import random
+                    message_variations = [
+                        base_msg,  # الصيغة الأصلية
+                        f"السلام عليكم ورحمة الله وبركاته،\n{base_msg}",  # مع السلام
+                        f"مرحباً {c_name}،\n{base_msg}",  # مع مرحباً
+                        f"تحية طيبة،\n{base_msg}",  # مع تحية طيبة
+                        f"عزيزي {c_name}،\n{base_msg}",  # مع عزيزي
+                    ]
+                    personalized_msg = random.choice(message_variations)
                     
                     # إضافة المدينة إذا كانت موجودة
                     c_city = current_client.get('city', '')
                     if c_city and c_city != ('غير محدد' if is_ar else 'Not specified'):
-                        city_line = f"\n📍 {c_city}" if is_ar else f"\n📍 {c_city}"
+                        city_variations = [
+                            f"\n📍 {c_city}",
+                            f"\nمن {c_city}",
+                            f"\n- المدينة: {c_city}",
+                        ]
+                        city_line = random.choice(city_variations)
                         personalized_msg += city_line
 
-                    # إضافة التوقيع العربي إذا لم يكن موجوداً
-                    signature = "\n\nمع خالص التحية والتقدير،\nأبو فهد\nHR"
+                    # إضافة التوقيع العربي مع تنويع
+                    signature_variations = [
+                        "\n\nمع خالص التحية والتقدير،\nأبو فهد\nHR",
+                        "\n\nتحياتي،\nأبو فهد\nHR",
+                        "\n\nوتفضلوا بقبول فائق الاحترام،\nأبو فهد\nHR",
+                        "\n\nشكراً لكم،\nأبو فهد\nHR",
+                    ]
+                    signature = random.choice(signature_variations)
                     if signature not in personalized_msg and personalized_msg.strip():
                         personalized_msg += signature
 
@@ -1410,9 +1432,9 @@ def render_whatsapp_page():
                         save_wa_history(st.session_state.wa_history)
 
                     # 🛡️ إيقاف فوري إذا كان خطأ أمان لحماية الحساب من الحظر
-                    if not ok_send and str(log_detail).startswith("🛑"):
+                    if not send_success and str(send_log).startswith("🛑"):
                         st.session_state.wa_emp_running = False
-                        st.error(f"🛑 {log_detail}")
+                        st.error(f"🛑 {send_log}")
                         st.toast("🛑 تم إيقاف الإرسال لحماية الحساب من الحظر", icon="⚠️")
                     else:
                         # لا نعتمد على wa_emp_idx كفهرس مباشر - نحافظ عليه فقط للإشارة
@@ -2281,30 +2303,95 @@ HR Manager"""
                 if signature not in final_msg:
                     final_msg += signature
 
-                # 3. Send Message via WhatsApp Service (يدعم قائمة مرفقات أو مسار واحد)
-                if att_count_final > 0:
-                    spin_t = f"🚀 {'جاري إرسال الرسالة و' + str(att_count_final) + ' مرفقات إلى' if is_ar else 'Sending msg & ' + str(att_count_final) + ' attachments to'} {n} ({p})..."
-                else:
-                    spin_t = f"🚀 {'جاري إرسال الرسالة إلى' if is_ar else 'Sending message to'} {n} ({p})..."
-                with st.spinner(spin_t):
-                    ok, log_msg = st.session_state.wa_service.send_message(
-                        p,
-                        final_msg,
-                        attachment_path=wa_final_attachments if wa_final_attachments else temp_path
-                    )
-
+                # 3. إرسال متعدد آمن: الرسالة أولاً ثم المرفقات بترتيب آمن
+                send_success_mk = False
+                send_log_mk = ""
+                
+                # الخطوة 1: إرسال الرسالة النصية أولاً
+                try:
+                    with st.spinner(f"📨 {'جاري إرسال الرسالة النصية إلى' if is_ar else 'Sending text message to'} {n} ({p})..."):
+                        msg_ok_mk, msg_log_mk = st.session_state.wa_service.send_message(
+                            p,
+                            final_msg,
+                            attachment_path=None  # رسالة نصية فقط بدون مرفقات
+                        )
+                    
+                    if msg_ok_mk:
+                        send_success_mk = True
+                        send_log_mk = msg_log_mk
+                        st.toast(f"✅ {'تم إرسال الرسالة النصية' if is_ar else 'Text message sent'}")
+                        
+                        # فاصل زمني قصير بعد الرسالة
+                        time.sleep(15)  # 15 ثانية فاصل آمن
+                    else:
+                        send_success_mk = False
+                        send_log_mk = msg_log_mk
+                        st.error(f"❌ {'فشل إرسال الرسالة' if is_ar else 'Failed to send message'}: {msg_log_mk}")
+                        
+                except Exception as e:
+                    send_success_mk = False
+                    send_log_mk = f"Exception: {str(e)}"
+                    st.error(f"❌ {'خطأ في إرسال الرسالة' if is_ar else 'Error sending message'}: {e}")
+                
+                # الخطوة 2: إرسال المرفقات بترتيب آمن (PDF أولاً ثم الصور/فيديوهات)
+                if send_success_mk and (wa_final_attachments or temp_path):
+                    # تصنيف المرفقات
+                    all_attachments = wa_final_attachments if wa_final_attachments else ([temp_path] if temp_path else [])
+                    pdf_files_mk = []
+                    image_video_files_mk = []
+                    
+                    for att in all_attachments:
+                        if att and att.lower().endswith('.pdf'):
+                            pdf_files_mk.append(att)
+                        elif att:
+                            image_video_files_mk.append(att)
+                    
+                    # إرسال ملفات PDF أولاً
+                    for pdf in pdf_files_mk:
+                        try:
+                            time.sleep(20)  # فاصل 20 ثانية بين الملفات
+                            with st.spinner(f"📄 {'جاري إرسال ملف PDF' if is_ar else 'Sending PDF'}: {os.path.basename(pdf)}..."):
+                                pdf_ok_mk, pdf_log_mk = st.session_state.wa_service.send_message(
+                                    p,
+                                    "",
+                                    attachment_path=pdf
+                                )
+                            if not pdf_ok_mk:
+                                st.warning(f"⚠️ {'فشل إرسال ملف PDF' if is_ar else 'Failed to send PDF'}: {os.path.basename(pdf)}")
+                        except Exception as e:
+                            st.warning(f"⚠️ {'خطأ في إرسال PDF' if is_ar else 'Error sending PDF'}: {e}")
+                    
+                    # إرسال الصور والفيديوهات بفواصل زمنية أطول
+                    for idx, media in enumerate(image_video_files_mk):
+                        try:
+                            delay = 30 if idx == 0 else 45  # أول ملف 30 ثانية، الباقي 45 ثانية
+                            time.sleep(delay)
+                            with st.spinner(f"🖼️ {'جاري إرسال ملف وسائط' if is_ar else 'Sending media'}: {os.path.basename(media)}..."):
+                                media_ok_mk, media_log_mk = st.session_state.wa_service.send_message(
+                                    p,
+                                    "",
+                                    attachment_path=media
+                                )
+                            if not media_ok_mk:
+                                st.warning(f"⚠️ {'فشل إرسال ملف وسائط' if is_ar else 'Failed to send media'}: {os.path.basename(media)}")
+                        except Exception as e:
+                            st.warning(f"⚠️ {'خطأ في إرسال ملف وسائط' if is_ar else 'Error sending media'}: {e}")
+                    
+                    # فاصل زمني بعد إرسال جميع المرفقات
+                    time.sleep(25)
+                
                 # 4. Record Log
-                att_summary = f" (+{att_count_final} مرفق)" if (ok and att_count_final > 0) else ""
+                att_summary = f" (+{att_count_final} مرفق)" if (send_success_mk and att_count_final > 0) else ""
                 entry = {
                     "idx": curr_i + 1,
                     "name": n,
                     "phone": p,
-                    "status": f"{log_msg}{att_summary}" if ok else f"فشل ({log_msg})",
-                    "ok": ok,
+                    "status": f"{send_log_mk}{att_summary}" if send_success_mk else f"فشل ({send_log_mk})",
+                    "ok": send_success_mk,
                     "time": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 }
                 st.session_state.wa_logs.append(entry)
-                if ok:
+                if send_success_mk:
                     st.session_state.wa_history.add(p)
                     save_wa_history(st.session_state.wa_history)
                     for r_i, r_trg in enumerate(st.session_state.wa_review_targets):
