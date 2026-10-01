@@ -1338,24 +1338,35 @@ def render_whatsapp_page():
                     
                     # الخطوة 1: إرسال الرسالة النصية أولاً
                     try:
-                        with st.spinner(f"📨 {'جاري إرسال الرسالة النصية إلى' if is_ar else 'Sending text message to'} {c_name} ({c_phone})..."):
-                            msg_ok, msg_log = st.session_state.wa_service.send_message(
-                                c_phone,
-                                personalized_msg,
-                                attachment_path=None  # رسالة نصية فقط بدون مرفقات
-                            )
-                        
-                        if msg_ok:
-                            send_success = True
-                            send_log = msg_log
-                            st.toast(f"✅ {'تم إرسال الرسالة النصية' if is_ar else 'Text message sent'}")
-                            
-                            # فاصل زمني قصير جداً بعد الرسالة (3 ثواني فقط)
-                            time.sleep(3)
-                        else:
+                        # التأكد من أن الرسالة تحتوي على محتوى
+                        if not personalized_msg or not personalized_msg.strip():
                             send_success = False
-                            send_log = msg_log
-                            st.error(f"❌ {'فشل إرسال الرسالة' if is_ar else 'Failed to send message'}: {msg_log}")
+                            send_log = "الرسالة فارغة"
+                            st.error("❌ الرسالة فارغة، يرجى إدخال نص الرسالة")
+                        # التأكد من أن رقم الهاتف صحيح
+                        elif not c_phone or len(c_phone) < 10:
+                            send_success = False
+                            send_log = "رقم الهاتف غير صحيح"
+                            st.error(f"❌ رقم الهاتف غير صحيح: {c_phone}")
+                        else:
+                            with st.spinner(f"📨 {'جاري إرسال الرسالة النصية إلى' if is_ar else 'Sending text message to'} {c_name} ({c_phone})..."):
+                                msg_ok, msg_log = st.session_state.wa_service.send_message(
+                                    c_phone,
+                                    personalized_msg,
+                                    attachment_path=None  # رسالة نصية فقط بدون مرفقات
+                                )
+                            
+                            if msg_ok:
+                                send_success = True
+                                send_log = msg_log
+                                st.toast(f"✅ {'تم إرسال الرسالة النصية' if is_ar else 'Text message sent'}")
+                                
+                                # فاصل زمني قصير جداً بعد الرسالة (3 ثواني فقط)
+                                time.sleep(3)
+                            else:
+                                send_success = False
+                                send_log = msg_log
+                                st.error(f"❌ {'فشل إرسال الرسالة' if is_ar else 'Failed to send message'}: {msg_log}")
                             
                     except Exception as e:
                         send_success = False
