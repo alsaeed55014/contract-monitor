@@ -1315,28 +1315,95 @@ def render_whatsapp_page():
                     if signature not in personalized_msg and personalized_msg.strip():
                         personalized_msg += signature
 
-                    # إرسال الرسالة والمرفقات عبر محرك واتساب
-                    spin_text = f"🚀 {'جاري إرسال الرسالة والمرفقات إلى' if is_ar else 'Sending message & attachments to'} {c_name} ({c_phone})..." if saved_attachments else f"🚀 {'جاري الإرسال إلى' if is_ar else 'Sending to'} {c_name} ({c_phone})..."
-                    with st.spinner(spin_text):
-                        ok_send, log_detail = st.session_state.wa_service.send_message(
-                            c_phone,
-                            personalized_msg,
-                            attachment_path=saved_attachments if saved_attachments else None
-                        )
-
+                    # إرسال متعدد: الرسالة أولاً ثم المرفقات بترتيب آمن
+                    send_success = False
+                    send_log = ""
+                    
+                    # الخطوة 1: إرسال الرسالة النصية أولاً
+                    try:
+                        with st.spinner(f"📨 {'جاري إرسال الرسالة النصية إلى' if is_ar else 'Sending text message to'} {c_name} ({c_phone})..."):
+                            msg_ok, msg_log = st.session_state.wa_service.send_message(
+                                c_phone,
+                                personalized_msg,
+                                attachment_path=None  # رسالة نصية فقط بدون مرفقات
+                            )
+                        
+                        if msg_ok:
+                            send_success = True
+                            send_log = msg_log
+                            st.toast(f"✅ {'تم إرسال الرسالة النصية' if is_ar else 'Text message sent'}")
+                            
+                            # فاصل زمني قصير بعد الرسالة
+                            time.sleep(15)  # 15 ثانية فاصل آمن
+                        else:
+                            send_success = False
+                            send_log = msg_log
+                            st.error(f"❌ {'فشل إرسال الرسالة' if is_ar else 'Failed to send message'}: {msg_log}")
+                            
+                    except Exception as e:
+                        send_success = False
+                        send_log = f"Exception: {str(e)}"
+                        st.error(f"❌ {'خطأ في إرسال الرسالة' if is_ar else 'Error sending message'}: {e}")
+                    
+                    # الخطوة 2: إرسال المرفقات بترتيب آمن (PDF أولاً ثم الصور/فيديوهات)
+                    if send_success and saved_attachments:
+                        # تصنيف المرفقات
+                        pdf_files = []
+                        image_video_files = []
+                        
+                        for att in saved_attachments:
+                            if att.lower().endswith('.pdf'):
+                                pdf_files.append(att)
+                            else:
+                                image_video_files.append(att)
+                        
+                        # إرسال ملفات PDF أولاً
+                        for pdf in pdf_files:
+                            try:
+                                time.sleep(20)  # فاصل 20 ثانية بين الملفات
+                                with st.spinner(f"📄 {'جاري إرسال ملف PDF' if is_ar else 'Sending PDF'}: {os.path.basename(pdf)}..."):
+                                    pdf_ok, pdf_log = st.session_state.wa_service.send_message(
+                                        c_phone,
+                                        "",
+                                        attachment_path=pdf
+                                    )
+                                if not pdf_ok:
+                                    st.warning(f"⚠️ {'فشل إرسال ملف PDF' if is_ar else 'Failed to send PDF'}: {os.path.basename(pdf)}")
+                            except Exception as e:
+                                st.warning(f"⚠️ {'خطأ في إرسال PDF' if is_ar else 'Error sending PDF'}: {e}")
+                        
+                        # إرسال الصور والفيديوهات بفواصل زمنية أطول
+                        for idx, media in enumerate(image_video_files):
+                            try:
+                                delay = 30 if idx == 0 else 45  # أول ملف 30 ثانية، الباقي 45 ثانية
+                                time.sleep(delay)
+                                with st.spinner(f"🖼️ {'جاري إرسال ملف وسائط' if is_ar else 'Sending media'}: {os.path.basename(media)}..."):
+                                    media_ok, media_log = st.session_state.wa_service.send_message(
+                                        c_phone,
+                                        "",
+                                        attachment_path=media
+                                    )
+                                if not media_ok:
+                                    st.warning(f"⚠️ {'فشل إرسال ملف وسائط' if is_ar else 'Failed to send media'}: {os.path.basename(media)}")
+                            except Exception as e:
+                                st.warning(f"⚠️ {'خطأ في إرسال ملف وسائط' if is_ar else 'Error sending media'}: {e}")
+                        
+                        # فاصل زمني بعد إرسال جميع المرفقات
+                        time.sleep(25)
+                    
                     # تسجيل النتيجة في سجل الإرسال العام
-                    att_summary = f" (مع {len(saved_attachments)} مرفق)" if (saved_attachments and ok_send) else ""
+                    att_summary = f" (مع {len(saved_attachments)} مرفق)" if (saved_attachments and send_success) else ""
                     log_entry = {
                         "idx": progress_num,
                         "name": c_name,
                         "phone": c_phone,
-                        "status": f"{log_detail}{att_summary}" if ok_send else f"فشل ({log_detail})",
-                        "ok": ok_send,
+                        "status": f"{send_log}{att_summary}" if send_success else f"فشل ({send_log})",
+                        "ok": send_success,
                         "time": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                     }
                     st.session_state.wa_logs.append(log_entry)
 
-                    if ok_send:
+                    if send_success:
                         # وضع علامة الإرسال بالفهرس الصحيح في القائمة الكاملة (مهم جداً لصحة التقدم)
                         st.session_state.wa_emp_targets[current_full_index]['is_sent'] = True
                         st.session_state.wa_history.add(c_phone)
