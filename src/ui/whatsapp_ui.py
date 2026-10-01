@@ -1430,6 +1430,10 @@ def render_whatsapp_page():
                         st.session_state.wa_emp_targets[current_full_index]['is_sent'] = True
                         st.session_state.wa_history.add(c_phone)
                         save_wa_history(st.session_state.wa_history)
+                    # إذا كان الرقم غير مسجل في واتساب، وضعه كمُرسل لتجنب إعادة المحاولة
+                    elif "غير مسجل" in send_log or "not on whatsapp" in send_log.lower():
+                        st.session_state.wa_emp_targets[current_full_index]['is_sent'] = True
+                        st.toast(f"⏭️ تم تخطي الرقم غير المسجل: {c_phone}")
 
                     # 🛡️ إيقاف فوري إذا كان خطأ أمان لحماية الحساب من الحظر
                     if not send_success and str(send_log).startswith("🛑"):

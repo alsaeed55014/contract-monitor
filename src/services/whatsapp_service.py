@@ -98,6 +98,7 @@ class WhatsAppService:
         # 🛡️ COMPTEURS ANTI-BAN – état global de la session
         self._daily_stats_file = os.path.join(self.base_session_dir, "wa_daily_stats.json")
         self._runtime_stats_file = os.path.join(self.base_session_dir, "wa_runtime_stats.json")
+        self._invalid_numbers_file = os.path.join(self.base_session_dir, "wa_invalid_numbers.json")
         os.makedirs(self.base_session_dir, exist_ok=True)
 
     # ============================================================
@@ -118,6 +119,31 @@ class WhatsAppService:
                 json.dump(data, f, ensure_ascii=False, indent=2)
             return True
         except:
+            return False
+
+    def _load_invalid_numbers(self):
+        """تحميل قائمة الأرقام غير المسجلة في واتساب"""
+        default = {"invalid_numbers": [], "last_updated": None}
+        return self._load_json_file(self._invalid_numbers_file, default)
+
+    def _save_invalid_number(self, phone):
+        """حفظ رقم غير مسجل في واتساب"""
+        try:
+            data = self._load_invalid_numbers()
+            if phone not in data["invalid_numbers"]:
+                data["invalid_numbers"].append(phone)
+                data["last_updated"] = datetime.now().isoformat()
+                self._save_json_file(self._invalid_numbers_file, data)
+                print(f"[{time.strftime('%H:%M:%S')}] 💾 Saved invalid number: {phone}")
+        except Exception as e:
+            print(f"[{time.strftime('%H:%M:%S')}] ❌ Error saving invalid number: {e}")
+
+    def _is_invalid_number(self, phone):
+        """التحقق مما إذا كان الرقم غير مسجل في واتساب"""
+        try:
+            data = self._load_invalid_numbers()
+            return phone in data["invalid_numbers"]
+        except Exception:
             return False
 
     def get_daily_stats(self):
@@ -716,6 +742,13 @@ class WhatsAppService:
             '//footer//*[@role="textbox"][@contenteditable="true"]',
             # 3. أي contenteditable داخل main مع استبعاد الشريط الجانبي
             '//*[@id="main"]//*[@contenteditable="true"]',
+            # 4. محددات إضافية للنسخ الجديدة من واتساب ويب
+            '//div[@data-testid="conversation-compose-box"]//div[@contenteditable="true"]',
+            '//*[@id="main"]//div[@data-testid="conversation-compose-box"]//div[@contenteditable="true"]',
+            '//footer//div[@data-testid="conversation-compose-box"]//div[@contenteditable="true"]',
+            # 5. محددات عامة أكثر
+            '//div[@role="textbox"][@contenteditable="true"]',
+            '//div[@spellcheck="true"][@contenteditable="true"]',
         ]
         for sel in selectors:
             try:
@@ -745,6 +778,57 @@ class WhatsAppService:
                         continue
             except Exception:
                 continue
+        
+        # محاولة أخيرة باستخدام JavaScript للعثور على العنصر
+        try:
+            js_result = self.driver.execute_script("""
+                // البحث عن صندوق الكتابة باستخدام JavaScript
+                var footer = document.querySelector('footer');
+                if (footer) {
+                    var inputs = footer.querySelectorAll('[contenteditable="true"]');
+                    for (var i = 0; i < inputs.length; i++) {
+                        var input = inputs[i];
+                        var rect = input.getBoundingClientRect();
+                        if (rect.width > 20 && rect.height > 10) {
+                            // التأكد من أنه ليس حقل البحث
+                            var dataTab = input.getAttribute('data-tab') || '';
+                            if (dataTab !== '3') {
+                                return input;
+                            }
+                        }
+                    }
+                }
+                // البحث في main
+                var main = document.getElementById('main');
+                if (main) {
+                    var inputs = main.querySelectorAll('[contenteditable="true"]');
+                    for (var i = 0; i < inputs.length; i++) {
+                        var input = inputs[i];
+                        var rect = input.getBoundingClientRect();
+                        if (rect.width > 20 && rect.height > 10) {
+                            var dataTab = input.getAttribute('data-tab') || '';
+                            if (dataTab !== '3') {
+                                // التأكد من أنه ليس في side
+                                var closestSide = input.closest('#side');
+                                if (!closestSide) {
+                                    return input;
+                                }
+                            }
+                        }
+                    }
+                }
+                return null;
+            """)
+            if js_result:
+                from selenium.webdriver.common.by import By
+                # تحويل WebElement من JavaScript إلى WebElement من Selenium
+                try:
+                    return js_result
+                except Exception:
+                    pass
+        except Exception as e:
+            print(f"[{time.strftime('%H:%M:%S')}] ❌ JS fallback error: {e}")
+        
         return None
 
     def _inject_text_to_input(self, msg_input, text: str) -> bool:
@@ -1108,6 +1192,11 @@ class WhatsAppService:
 
         self.simulate_human_browsing()
 
+        # التحقق مما إذا كان الرقم غير مسجل مسبقاً
+        if self._is_invalid_number(clean_phone):
+            print(f"[{time.strftime('%H:%M:%S')}] ⏭️ Skipping invalid number (cached): {clean_phone}")
+            return False, "رقم غير مسجل في واتساب (محفوظ مسبقاً)"
+
         try:
             clean_phone = self._normalize_phone(phone)
             if message:
@@ -1128,7 +1217,7 @@ class WhatsAppService:
                 target_url = f"https://web.whatsapp.com/send/?phone={clean_phone}&text={encoded_msg}"
             else:
                 target_url = f"https://web.whatsapp.com/send/?phone={clean_phone}"
-            print(f"[{time.strftime('%H:%M:%S')}] 🚀 Navigating to: {clean_phone}...")
+            print(f"[{time.strftime('%H:%M:%S')}] 🚀 Navigating to: {clean_phone} -> {target_url}")
 
             # محاولة التنقل الداخلي لتجنب إعادة تحميل الصفحة الكاملة
             navigated = False
@@ -1160,14 +1249,14 @@ class WhatsAppService:
             # فترة انتظار أولية لتهيئة واجهة المحادثة
             time.sleep(random.uniform(2.5, 4.0))
 
-            # ⏳ 3. حلقة انتظار ظهور صندوق الكتابة أو نافذة خطأ الرقم غير المسجل (حتى 35 ثانية)
+            # ⏳ 3. حلقة انتظار ظهور صندوق الكتابة أو نافذة خطأ الرقم غير المسجل (حتى 60 ثانية)
             wait_start = time.time()
             msg_input = None
             is_invalid_num = False
             invalid_reason = "رقم غير مسجل في الواتساب"
             invalid_detection_count = 0  # عداد للتحقق المتعدد من الرقم غير الصالح
 
-            while time.time() - wait_start < 35:
+            while time.time() - wait_start < 60:
                 self._auto_handle_popups()
 
                 # A. التحقق من ظهور نافذة رقم غير مسجل (مع تحقق متعدد لتجنب الأخطاء)
@@ -1220,15 +1309,26 @@ class WhatsAppService:
                     # إذا وجد صندوق الكتابة، الرقم صالح - إلغاء أي اكتشاف خاطئ للرقم غير الصالح
                     is_invalid_num = False
                     invalid_detection_count = 0
+                    print(f"[{time.strftime('%H:%M:%S')}] ✅ Input box found successfully")
                     break
 
                 # إذا لم يبدأ التنقل الداخلي، استخدام driver.get كإجراء احتياطي
-                if time.time() - wait_start > 6 and not msg_input:
+                if time.time() - wait_start > 8 and not msg_input:
                     try:
                         curr = self.driver.current_url or ""
                         if clean_phone not in curr:
                             self.driver.get(target_url)
-                            time.sleep(2.0)
+                            time.sleep(3.0)
+                    except Exception:
+                        pass
+                
+                # محاولة إضافية بعد 15 ثانية إذا لم يتم العثور على صندوق الكتابة
+                if time.time() - wait_start > 15 and not msg_input:
+                    try:
+                        self.driver.refresh()
+                        time.sleep(3.0)
+                        self.driver.get(target_url)
+                        time.sleep(3.0)
                     except Exception:
                         pass
 
@@ -1239,13 +1339,42 @@ class WhatsAppService:
                 self._dismiss_modals()
                 self.update_daily_stats(False, is_invalid_number=True)
                 print(f"[{time.strftime('%H:%M:%S')}] ❌ رقم غير مسجل: {clean_phone}")
+                
+                # حفظ الرقم في قائمة الأرقام غير المسجلة
+                self._save_invalid_number(clean_phone)
+                
                 return False, invalid_reason
 
             # فحص أخير إذا لم يتم العثور على صندوق الكتابة
             if not msg_input:
                 msg_input = self._find_input_box()
+                print(f"[{time.strftime('%H:%M:%S')}] 🔍 First attempt to find input box: {'FOUND' if msg_input else 'NOT FOUND'}")
+            
+            # محاولة إضافية: النقر على منطقة المحادثة لتفعيل صندوق الكتابة
+            if not msg_input:
+                try:
+                    from selenium.webdriver.common.by import By
+                    from selenium.webdriver.common.action_chains import ActionChains
+                    # محاولة النقر على منطقة المحادثة
+                    chat_area = self.driver.find_elements(By.XPATH, '//*[@id="main"]//div[@data-testid="conversation-panel"]')
+                    if chat_area and chat_area[0].is_displayed():
+                        print(f"[{time.strftime('%H:%M:%S')}] 🖱️ Clicking on chat area to activate input box")
+                        ActionChains(self.driver).move_to_element(chat_area[0]).click().perform()
+                        time.sleep(1.0)
+                        msg_input = self._find_input_box()
+                        print(f"[{time.strftime('%H:%M:%S')}] 🔍 After click attempt: {'FOUND' if msg_input else 'NOT FOUND'}")
+                except Exception as e:
+                    print(f"[{time.strftime('%H:%M:%S')}] ❌ Error clicking chat area: {e}")
 
             if not msg_input:
+                # محاولة أخيرة: طباعة معلومات الصفحة للتشخيص
+                try:
+                    page_title = self.driver.title
+                    current_url = self.driver.current_url
+                    print(f"[{time.strftime('%H:%M:%S')}] 📄 Page info - Title: {page_title}, URL: {current_url}")
+                except Exception:
+                    pass
+                
                 self._dismiss_modals()
                 self.update_daily_stats(False, is_invalid_number=False)
                 return False, "فشل في فتح المحادثة أو العثور على صندوق الرسائل (يرجى التأكد من استقرار الإنترنت)"
