@@ -812,26 +812,12 @@ def render_whatsapp_page():
                     for r in all_sys_records:
                         match_found = False
                         
-                        # البحث بجميع المصطلحات المتاحة
+                        # تجميع جميع الحقول في نص واحد للبحث عن النص الكامل
+                        full_text = f"{r['name']} {r['city']} {r['job']} {r.get('nature', '')} {r['source']}".lower()
+                        
+                        # البحث عن النص الكامل في الحقول المجمعة
                         for term in search_terms:
-                            # البحث في الاسم
-                            if term in r['name'].lower():
-                                match_found = True
-                                break
-                            # البحث في المدينة
-                            elif term in r['city'].lower():
-                                match_found = True
-                                break
-                            # البحث في الوظيفة
-                            elif term in r['job'].lower():
-                                match_found = True
-                                break
-                            # البحث في طبيعة العمل
-                            elif term in r.get('nature', '').lower():
-                                match_found = True
-                                break
-                            # البحث في المصدر
-                            elif term in r['source'].lower():
+                            if term in full_text:
                                 match_found = True
                                 break
                         
