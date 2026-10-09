@@ -270,18 +270,19 @@ class WhatsAppService:
             except: 
                 self.close()
 
-        # --- Clean Existing Locks ---
+        # --- Clean Existing Locks (always: stale locks are the #1 cause of
+        # "session not created: Chrome instance exited") ---
+        # Only wipe the whole profile when explicitly forced: it holds the
+        # WhatsApp login session (deleting it forces a QR re-scan).
         if force_clean and os.path.exists(self.session_path):
             shutil.rmtree(self.session_path, ignore_errors=True)
-        
+
         os.makedirs(self.session_path, exist_ok=True)
-        
-        # Aggressive cleaning of lock files that cause UC to hang
-        for lf in ["SingletonLock", "SingletonSocket", "SingletonCookie", "lockfile", "DevToolsActivePort"]:
-            p = os.path.join(self.session_path, lf)
-            try:
-                if os.path.exists(p): os.remove(p)
-            except: pass
+
+        # Kill leftover chromes that hold OUR profile, then drop lock files.
+        # (A zombie keeps the profile locked -> every new launch exits instantly.)
+        self._kill_zombies()
+        self._remove_chrome_locks()
         
         # --- Stealth & Environment Setup ---
         is_cloud = "/mount/" in __file__.replace("\\", "/") or os.path.exists("/mount")
@@ -314,8 +315,9 @@ class WhatsAppService:
             o.add_argument("--disable-renderer-backgrounding")
             o.add_argument("--memory-pressure-off")
             o.add_argument("--js-flags=--max-old-space-size=4096")
-            # إعدادات إضافية لمنع مشاكل Chrome
-            o.add_argument("--remote-debugging-port=9222")
+            # NOTE: no --remote-debugging-port on purpose. A fixed debug port
+            # collides with zombie Chrome processes and makes every launch
+            # exit instantly ("session not created"). Nothing connects to it.
             o.add_argument("--disable-software-rasterizer")
             o.add_argument("--disable-features=VizDisplayCompositor")
             o.add_argument("--disable-features=site-per-process")
@@ -377,12 +379,11 @@ class WhatsAppService:
             print(f"[{time.strftime('%H:%M:%S')}] Attempt 1 Error: {e1}")
             self.last_error = f"Primary Engine Err: {str(e1)[:120]}"
 
-        # 🚀 ATTEMPT 2: Fresh Session Cleanup & Retry
+        # 🚀 ATTEMPT 2: Scoped zombie cleanup & retry (keeps the WhatsApp login)
         try:
-            print(f"[{time.strftime('%H:%M:%S')}] Retrying with fresh session...")
+            print(f"[{time.strftime('%H:%M:%S')}] Retrying with zombie cleanup (profile kept)...")
             self._kill_zombies()
-            shutil.rmtree(self.session_path, ignore_errors=True)
-            os.makedirs(self.session_path, exist_ok=True)
+            self._remove_chrome_locks()
             
             from selenium import webdriver
             from selenium_stealth import stealth
@@ -430,6 +431,42 @@ class WhatsAppService:
 
         # 🚀 ATTEMPT 3: Undetected Chromedriver (UC) Fallback
         try:
+            import sys as _sys
+            try:
+                import distutils.version  # noqa: F401
+            except ImportError:
+                # Python 3.12+ without setuptools shim: uc 3.5.5 still does
+                # `from distutils.version import LooseVersion`. Provide a
+                # minimal compatible replacement so the import below works.
+                import types as _types
+
+                def _loose_parts(v):
+                    return [int(x) if x.isdigit() else x
+                            for x in re.split(r'(\d+)', str(v)) if x and x != '.']
+
+                class _LooseVersion:
+                    def __init__(self, vstring):
+                        self.vstring = str(vstring)
+                        self.version = _loose_parts(vstring)
+
+                    def __hok(self, other, op):
+                        o = other.version if isinstance(other, _LooseVersion) else _loose_parts(other)
+                        return op(self.version, o)
+
+                    def __eq__(self, o): return self.__hok(o, lambda a, b: a == b)
+                    def __ne__(self, o): return self.__hok(o, lambda a, b: a != b)
+                    def __lt__(self, o): return self.__hok(o, lambda a, b: a < b)
+                    def __le__(self, o): return self.__hok(o, lambda a, b: a <= b)
+                    def __gt__(self, o): return self.__hok(o, lambda a, b: a > b)
+                    def __ge__(self, o): return self.__hok(o, lambda a, b: a >= b)
+                    def __repr__(self): return f"LooseVersion('{self.vstring}')"
+
+                _dv = _types.ModuleType("distutils.version")
+                _dv.LooseVersion = _LooseVersion
+                _du = _types.ModuleType("distutils")
+                _du.version = _dv
+                _sys.modules.setdefault("distutils", _du)
+                _sys.modules.setdefault("distutils.version", _dv)
             import undetected_chromedriver as uc
             print(f"[{time.strftime('%H:%M:%S')}] UC Fallback Engine...")
             opts = create_chrome_options(with_user_dir=False)
@@ -490,15 +527,78 @@ class WhatsAppService:
             
         return None
 
+    def _remove_chrome_locks(self):
+        """Removes stale Chrome profile lock files (keeps login data intact)."""
+        try:
+            os.makedirs(self.session_path, exist_ok=True)
+            for lf in ["SingletonLock", "SingletonSocket", "SingletonCookie",
+                       "lockfile", "DevToolsActivePort"]:
+                p = os.path.join(self.session_path, lf)
+                try:
+                    if os.path.exists(p):
+                        os.remove(p)
+                except Exception:
+                    pass
+            # Default/ sub-profile may hold its own locks
+            for lf in ["SingletonLock", "SingletonSocket", "SingletonCookie",
+                       "lockfile", "DevToolsActivePort"]:
+                p = os.path.join(self.session_path, "Default", lf)
+                try:
+                    if os.path.exists(p):
+                        os.remove(p)
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
     def _kill_zombies(self):
+        """Kills leftover chromedriver processes and ONLY the chrome.exe
+        instances launched with OUR profile dir (never the user's browser)."""
         try:
             if os.name == 'nt':
                 os.system('taskkill /F /IM chromedriver.exe /T >nul 2>&1')
-                os.system('taskkill /F /IM chrome.exe /FI "WINDOWTITLE eq chrome*" /FI "MEMUSAGE gt 1" >nul 2>&1')
+                me = os.path.abspath(self.session_path).lower()
+                killed = 0
+                cmdlines = []
+                try:
+                    out = subprocess.check_output(
+                        ['wmic', 'process', 'where', "name='chrome.exe'",
+                         'get', 'ProcessId,CommandLine', '/format:csv'],
+                        stderr=subprocess.DEVNULL, text=True, errors='ignore',
+                        timeout=15)
+                    cmdlines = out.splitlines()
+                except Exception:
+                    try:
+                        out = subprocess.check_output(
+                            ['powershell', '-NoProfile', '-Command',
+                             "Get-CimInstance Win32_Process -Filter \"Name='chrome.exe'\" | "
+                             "ForEach-Object { \"$($_.ProcessId),$($_.CommandLine)\" }"],
+                            stderr=subprocess.DEVNULL, text=True, errors='ignore',
+                            timeout=20)
+                        cmdlines = out.splitlines()
+                    except Exception:
+                        cmdlines = []
+                for line in cmdlines:
+                    ll = line.lower()
+                    if 'chrome' not in ll or 'whatsapp_session' not in ll:
+                        continue
+                    if me not in ll and '--user-data-dir' not in ll:
+                        continue
+                    pid = line.strip().rsplit(',', 1)[-1].strip()
+                    if pid.isdigit():
+                        os.system(f'taskkill /F /PID {pid} /T >nul 2>&1')
+                        killed += 1
+                if killed:
+                    time.sleep(1.5)
             else:
                 os.system('pkill -f chromedriver > /dev/null 2>&1')
-                os.system('pkill -f chrome > /dev/null 2>&1')
-        except: pass
+                try:
+                    import shlex
+                    os.system(f'pkill -f {shlex.quote(os.path.basename(self.session_path))} > /dev/null 2>&1')
+                except Exception:
+                    pass
+        except Exception:
+            pass
 
     def keep_alive(self):
         """Pings Chrome JavaScript engine to prevent tab sleeping, renderer suspension, and DevTools timeout"""
