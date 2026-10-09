@@ -78,6 +78,23 @@ def strip_zero_width_chars(text: str) -> str:
         text = text.replace(ch, '')
     return text
 
+# --- توقيع العملاء العربي: نص ثابت حرفياً + محاذاة لليسار في آخر الرسالة ---
+EMP_SIG_CORE = "مع خالص التحية والتقدير،\nأبو فهد\nHR"
+# LRE (U+202A) ... PDF (U+202C): يجعل واتساب يعرض الكتلة باتجاه LTR (يسار)
+EMP_SIG_LEFT = "\n\n\u202Aمع خالص التحية والتقدير،\nأبو فهد\nHR\u202C"
+
+def split_emp_signature(message: str):
+    """يفصل التوقيع العربي من نهاية الرسالة (إن وجد) ليعاد إرفاقه حرفياً
+    بمحاذاة يسارية بعد التنويع والتنظيف (اللذين يعيدان صياغته أو يجردانه).
+    يُرجع (النص_بدون_التوقيع, كتلة_التوقيع_اليسارية أو "")."""
+    if not message:
+        return message, ""
+    body = message.replace("\u202A", "").replace("\u202C", "")
+    m = re.search(r'\n*مع خالص التحية والتقدير،\nأبو فهد\nHR\s*$', body)
+    if not m:
+        return message, ""
+    return body[:m.start()].rstrip(), EMP_SIG_LEFT
+
 def obfuscate_message(text: str) -> str:
     """تحليل Spintax وتغيير صياغة الرسائل وتنظيفها لضمان نص طبيعي وبشري 100%"""
     if not text: return ""
@@ -1466,8 +1483,14 @@ class WhatsAppService:
 
         try:
             clean_phone = self._normalize_phone(phone)
+            # 🕌 إخراج توقيع العملاء جانباً قبل التنويع/التنظيف ثم إعادته حرفياً
+            # بمحاذاة يسارية في الربع الأخير من الرسالة
+            _sig_block = ""
             if message:
+                message, _sig_block = split_emp_signature(message)
                 message = obfuscate_message(message)
+                if _sig_block:
+                    message = (message.rstrip() + _sig_block) if message.strip() else _sig_block.lstrip()
 
             if len(clean_phone) < 8:
                 self.update_daily_stats(False, is_invalid_number=True)

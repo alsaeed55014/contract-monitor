@@ -1491,6 +1491,8 @@ def render_whatsapp_page():
                     personalized_msg = emp_message.replace("{Name}", c_name).replace("{name}", c_name).replace("{الاسم}", c_name)
 
                     # إضافة التوقيع العربي إذا لم يكن موجوداً
+                    # (تطبيع أي محارف اتجاه قديمة؛ التغليف اليساري يتم في send_message)
+                    personalized_msg = personalized_msg.replace("\u202A", "").replace("\u202C", "")
                     signature = "\n\nمع خالص التحية والتقدير،\nأبو فهد\nHR"
                     if signature not in personalized_msg and personalized_msg.strip():
                         personalized_msg += signature
@@ -2323,15 +2325,17 @@ HR Manager"""
             with save_col1:
                 if st.button(
                     "💾 " + ("حفظ التغييرات وتحديث المعاينة" if is_ar else "Save Changes & Update Preview"),
-                    type="primary" if has_changes else "secondary",
+                    type="primary",
                     key="save_smart_parts",
                 ):
-                    templates_data_smart["smart"] = smart_parts
-                    save_templates(templates_data_smart)
-                    st.session_state.smart_parts_live = smart_parts
-                    st.session_state.smart_preview_nonce = st.session_state.get("smart_preview_nonce", 0) + 1
-                    st.toast("✅ " + ("تم حفظ التغييرات وتحديث المعاينة بنجاح!" if is_ar else "Changes saved and preview updated!"))
-                    st.rerun()
+                    _save_smart_parts_from_editor()
+                    _st = st.session_state.get("smart_save_status", {}) or {}
+                    if _st.get("ok"):
+                        st.toast("✅ " + ("تم حفظ التغييرات وتحديث المعاينة بنجاح!" if is_ar else "Changes saved and preview updated!"))
+                        st.rerun()
+                    else:
+                        _err = _st.get("error") or ("تعذر الكتابة" if is_ar else "write failed")
+                        st.error("❌ " + ("فشل الحفظ" if is_ar else "Save failed") + f": {_err}")
 
             with save_col2:
                 if has_changes:
