@@ -18,3 +18,113 @@
 2026-10-09 20:46:47,874 - ensuring close
 2026-10-09 20:48:01,504 - patching driver executable C:\Users\ا\appdata\roaming\undetected_chromedriver\undetected_chromedriver.exe
 2026-10-09 20:48:03,649 - ensuring close
+2026-10-09 23:58:33,016 - 🔍 _get_target_file_input: Found 1 file inputs
+2026-10-09 23:58:33,022 - 🔍 File input 1: accept='image/*'
+2026-10-09 23:58:33,022 - 🔍 _get_target_file_input: Document file, trying inputs from last to first
+2026-10-09 23:58:33,026 - ✅ _get_target_file_input: Selected document input with accept='image/*'
+2026-10-09 23:58:33,535 - 🔍 _get_target_file_input: Found 1 file inputs
+2026-10-09 23:58:33,539 - 🔍 File input 1: accept='*/*'
+2026-10-09 23:58:33,539 - 🔍 _get_target_file_input: Document file, trying inputs from last to first
+2026-10-09 23:58:33,542 - ✅ _get_target_file_input: Selected document input with accept='*/*'
+2026-10-10 00:14:42,942 - 🔍 _get_target_file_input: Found 1 file inputs
+2026-10-10 00:14:42,946 - 🔍 File input 1: accept='*/*'
+2026-10-10 00:14:42,947 - 🔍 _get_target_file_input: Document file, trying inputs from last to first
+2026-10-10 00:14:42,950 - ✅ _get_target_file_input: Selected document input with accept='*/*'
+2026-10-10 00:14:43,469 - 🔍 _get_target_file_input: Found 1 file inputs
+2026-10-10 00:14:43,475 - 🔍 File input 1: accept='*/*'
+2026-10-10 00:14:43,475 - 🔍 _get_target_file_input: Document file, trying inputs from last to first
+2026-10-10 00:14:43,478 - ✅ _get_target_file_input: Selected document input with accept='*/*'
+2026-10-10 00:14:45,476 - 🔍 _get_target_file_input: Found 2 file inputs
+2026-10-10 00:14:45,489 - 🔍 File input 1: accept='*'
+2026-10-10 00:14:45,493 - 🔍 File input 2: accept='*/*'
+2026-10-10 00:14:45,493 - 🔍 _get_target_file_input: Document file, trying inputs from last to first
+2026-10-10 00:14:45,497 - ✅ _get_target_file_input: Selected document input with accept='*/*'
+2026-10-10 00:14:46,006 - 🔍 _get_target_file_input: Found 2 file inputs
+2026-10-10 00:14:46,010 - 🔍 File input 1: accept='*/*'
+2026-10-10 00:14:46,014 - 🔍 File input 2: accept='*/*'
+2026-10-10 00:14:46,014 - 🔍 _get_target_file_input: Document file, trying inputs from last to first
+2026-10-10 00:14:46,018 - ✅ _get_target_file_input: Selected document input with accept='*/*'
+2026-10-10 00:14:46,037 - Connection pool is full, discarding connection: localhost. Connection pool size: 1
+2026-10-10 00:14:59,238 - Connection pool is full, discarding connection: localhost. Connection pool size: 1
+2026-10-10 00:20:40,455 - Retrying (Retry(total=2, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError("HTTPConnection(host='localhost', port=59522): Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it")': /session/a4a8123f8683143723ce267cd12632a2/window/handles
+2026-10-10 00:20:44,529 - Retrying (Retry(total=1, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError("HTTPConnection(host='localhost', port=59522): Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it")': /session/a4a8123f8683143723ce267cd12632a2/window/handles
+2026-10-10 00:20:48,634 - Retrying (Retry(total=0, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError("HTTPConnection(host='localhost', port=59522): Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it")': /session/a4a8123f8683143723ce267cd12632a2/window/handles
+2026-10-10 00:21:46,591 - 🔍 _get_target_file_input: Found 1 file inputs
+2026-10-10 00:21:46,596 - 🔍 File input 1: accept='image/*'
+2026-10-10 00:21:46,596 - 🔍 _get_target_file_input: Document file, trying inputs from last to first
+2026-10-10 00:21:46,601 - ✅ _get_target_file_input: Selected document input with accept='image/*'
+2026-10-10 00:21:47,110 - 🔍 _get_target_file_input: Found 1 file inputs
+2026-10-10 00:21:47,115 - 🔍 File input 1: accept='*/*'
+2026-10-10 00:21:47,115 - 🔍 _get_target_file_input: Document file, trying inputs from last to first
+2026-10-10 00:21:47,119 - ✅ _get_target_file_input: Selected document input with accept='*/*'
+2026-10-10 00:22:04,187 - Retrying (Retry(total=2, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError("HTTPConnection(host='localhost', port=49682): Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it")': /session/f3fe3a037bb3109231aacbf8637aef1b/elements
+2026-10-10 00:22:08,302 - Retrying (Retry(total=1, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError("HTTPConnection(host='localhost', port=49682): Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it")': /session/f3fe3a037bb3109231aacbf8637aef1b/elements
+2026-10-10 00:22:12,395 - Retrying (Retry(total=0, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError("HTTPConnection(host='localhost', port=49682): Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it")': /session/f3fe3a037bb3109231aacbf8637aef1b/elements
+2026-10-10 00:22:20,577 - Retrying (Retry(total=2, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError("HTTPConnection(host='localhost', port=49682): Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it")': /session/f3fe3a037bb3109231aacbf8637aef1b/elements
+2026-10-10 00:22:24,652 - Retrying (Retry(total=1, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError("HTTPConnection(host='localhost', port=49682): Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it")': /session/f3fe3a037bb3109231aacbf8637aef1b/elements
+2026-10-10 00:22:28,738 - Retrying (Retry(total=0, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError("HTTPConnection(host='localhost', port=49682): Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it")': /session/f3fe3a037bb3109231aacbf8637aef1b/elements
+2026-10-10 00:22:36,863 - Retrying (Retry(total=2, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError("HTTPConnection(host='localhost', port=49682): Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it")': /session/f3fe3a037bb3109231aacbf8637aef1b/elements
+2026-10-10 00:22:40,933 - Retrying (Retry(total=1, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError("HTTPConnection(host='localhost', port=49682): Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it")': /session/f3fe3a037bb3109231aacbf8637aef1b/elements
+2026-10-10 00:22:45,031 - Retrying (Retry(total=0, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError("HTTPConnection(host='localhost', port=49682): Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it")': /session/f3fe3a037bb3109231aacbf8637aef1b/elements
+2026-10-10 00:22:53,226 - Retrying (Retry(total=2, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError("HTTPConnection(host='localhost', port=49682): Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it")': /session/f3fe3a037bb3109231aacbf8637aef1b/elements
+2026-10-10 00:22:57,296 - Retrying (Retry(total=1, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError("HTTPConnection(host='localhost', port=49682): Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it")': /session/f3fe3a037bb3109231aacbf8637aef1b/elements
+2026-10-10 00:22:59,780 - Retrying (Retry(total=2, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError("HTTPConnection(host='localhost', port=49682): Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it")': /session/f3fe3a037bb3109231aacbf8637aef1b/window/handles
+2026-10-10 00:23:01,348 - Retrying (Retry(total=0, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError("HTTPConnection(host='localhost', port=49682): Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it")': /session/f3fe3a037bb3109231aacbf8637aef1b/elements
+2026-10-10 00:23:03,842 - Retrying (Retry(total=1, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError("HTTPConnection(host='localhost', port=49682): Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it")': /session/f3fe3a037bb3109231aacbf8637aef1b/window/handles
+2026-10-10 00:23:07,934 - Retrying (Retry(total=0, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError("HTTPConnection(host='localhost', port=49682): Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it")': /session/f3fe3a037bb3109231aacbf8637aef1b/window/handles
+2026-10-10 00:23:09,524 - Retrying (Retry(total=2, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError("HTTPConnection(host='localhost', port=49682): Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it")': /session/f3fe3a037bb3109231aacbf8637aef1b/elements
+2026-10-10 00:23:13,599 - Connection pool is full, discarding connection: localhost. Connection pool size: 1
+2026-10-10 00:23:13,599 - Retrying (Retry(total=1, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError("HTTPConnection(host='localhost', port=49682): Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it")': /session/f3fe3a037bb3109231aacbf8637aef1b/elements
+2026-10-10 00:23:17,698 - Retrying (Retry(total=0, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError("HTTPConnection(host='localhost', port=49682): Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it")': /session/f3fe3a037bb3109231aacbf8637aef1b/elements
+2026-10-10 00:23:25,891 - Retrying (Retry(total=2, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError("HTTPConnection(host='localhost', port=49682): Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it")': /session/f3fe3a037bb3109231aacbf8637aef1b/element/f.54A16232E48341F01CA699E0A2097252.d.90CC94FABA53A7CB4C6BD136010AE885.e.28/value
+2026-10-10 00:23:29,969 - Retrying (Retry(total=1, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError("HTTPConnection(host='localhost', port=49682): Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it")': /session/f3fe3a037bb3109231aacbf8637aef1b/element/f.54A16232E48341F01CA699E0A2097252.d.90CC94FABA53A7CB4C6BD136010AE885.e.28/value
+2026-10-10 00:23:34,050 - Retrying (Retry(total=0, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError("HTTPConnection(host='localhost', port=49682): Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it")': /session/f3fe3a037bb3109231aacbf8637aef1b/element/f.54A16232E48341F01CA699E0A2097252.d.90CC94FABA53A7CB4C6BD136010AE885.e.28/value
+2026-10-10 00:24:40,098 - 🔍 _get_target_file_input: Found 1 file inputs
+2026-10-10 00:24:40,103 - 🔍 File input 1: accept='image/*'
+2026-10-10 00:24:40,103 - 🔍 _get_target_file_input: Document file, trying inputs from last to first
+2026-10-10 00:24:40,107 - ✅ _get_target_file_input: Selected document input with accept='image/*'
+2026-10-10 00:24:40,628 - 🔍 _get_target_file_input: Found 1 file inputs
+2026-10-10 00:24:40,632 - 🔍 File input 1: accept='*/*'
+2026-10-10 00:24:40,633 - 🔍 _get_target_file_input: Document file, trying inputs from last to first
+2026-10-10 00:24:40,636 - ✅ _get_target_file_input: Selected document input with accept='*/*'
+2026-10-10 00:30:11,941 - 🔍 _get_target_file_input: Found 1 file inputs
+2026-10-10 00:30:11,946 - 🔍 File input 1: accept='image/*'
+2026-10-10 00:30:11,946 - 🔍 _get_target_file_input: Document file, trying inputs from last to first
+2026-10-10 00:30:11,951 - ✅ _get_target_file_input: Selected document input with accept='image/*'
+2026-10-10 00:30:12,469 - 🔍 _get_target_file_input: Found 1 file inputs
+2026-10-10 00:30:12,473 - 🔍 File input 1: accept='*/*'
+2026-10-10 00:30:12,473 - 🔍 _get_target_file_input: Document file, trying inputs from last to first
+2026-10-10 00:30:12,477 - ✅ _get_target_file_input: Selected document input with accept='*/*'
+2026-10-10 00:44:23,936 - 🔍 _get_target_file_input: Found 1 file inputs
+2026-10-10 00:44:23,940 - 🔍 File input 1: accept='image/*'
+2026-10-10 00:44:23,940 - 🔍 _get_target_file_input: Document file, trying inputs from last to first
+2026-10-10 00:44:23,945 - ✅ _get_target_file_input: Selected document input with accept='image/*'
+2026-10-10 00:44:24,452 - 🔍 _get_target_file_input: Found 1 file inputs
+2026-10-10 00:44:24,456 - 🔍 File input 1: accept='*/*'
+2026-10-10 00:44:24,456 - 🔍 _get_target_file_input: Document file, trying inputs from last to first
+2026-10-10 00:44:24,463 - ✅ _get_target_file_input: Selected document input with accept='*/*'
+2026-10-10 00:55:10,424 - 🔍 _get_target_file_input: Found 2 file inputs
+2026-10-10 00:55:10,429 - 🔍 File input 1: accept='image/*'
+2026-10-10 00:55:10,433 - 🔍 File input 2: accept='*'
+2026-10-10 00:55:10,433 - 🔍 _get_target_file_input: Document file, trying inputs from last to first
+2026-10-10 00:55:10,437 - ✅ _get_target_file_input: Selected document input with accept='*'
+2026-10-10 00:55:10,947 - 🔍 _get_target_file_input: Found 2 file inputs
+2026-10-10 00:55:10,951 - 🔍 File input 1: accept='*/*'
+2026-10-10 00:55:10,955 - 🔍 File input 2: accept='*/*'
+2026-10-10 00:55:10,955 - 🔍 _get_target_file_input: Document file, trying inputs from last to first
+2026-10-10 00:55:10,958 - ✅ _get_target_file_input: Selected document input with accept='*/*'
+2026-10-10 00:56:21,649 - 🔍 _get_target_file_input: Found 2 file inputs
+2026-10-10 00:56:21,654 - 🔍 File input 1: accept='*/*'
+2026-10-10 00:56:21,657 - 🔍 File input 2: accept='*'
+2026-10-10 00:56:21,657 - 🔍 _get_target_file_input: Document file, trying inputs from last to first
+2026-10-10 00:56:21,661 - ✅ _get_target_file_input: Selected document input with accept='*'
+2026-10-10 00:56:22,168 - 🔍 _get_target_file_input: Found 2 file inputs
+2026-10-10 00:56:22,173 - 🔍 File input 1: accept='*/*'
+2026-10-10 00:56:22,177 - 🔍 File input 2: accept='*/*'
+2026-10-10 00:56:22,177 - 🔍 _get_target_file_input: Document file, trying inputs from last to first
+2026-10-10 00:56:22,180 - ✅ _get_target_file_input: Selected document input with accept='*/*'
+2026-10-10 01:03:40,955 - Connection pool is full, discarding connection: localhost. Connection pool size: 1
+2026-10-10 01:03:43,136 - Connection pool is full, discarding connection: localhost. Connection pool size: 1
+2026-10-10 01:03:43,704 - Connection pool is full, discarding connection: localhost. Connection pool size: 1
+2026-10-10 02:19:46,471 - Connection pool is full, discarding connection: localhost. Connection pool size: 1
+2026-10-10 02:19:47,932 - Connection pool is full, discarding connection: localhost. Connection pool size: 1

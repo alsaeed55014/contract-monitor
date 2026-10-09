@@ -2,6 +2,8 @@ import streamlit as st
 import pandas as pd
 import json
 import os
+import re
+import html
 import time
 from datetime import datetime, timedelta
 # WhatsAppService is imported lazily inside render_whatsapp_page() to avoid blocking app startup with selenium
@@ -989,7 +991,6 @@ def render_whatsapp_page():
 
                 # ── تصفية النتائج باستخدام TranslationManager (مثل معالجة الطلبات) ─────────────────────────────────────
                 if search_q and search_q.strip():
-                    import re
                     from src.core.translation import TranslationManager
                     
                     def _normalize_phone(text):
@@ -1223,6 +1224,27 @@ def render_whatsapp_page():
                 key="wa_emp_msg_input"
             )
             st.session_state.wa_emp_last_msg = emp_message
+
+            # 👀 معاينة حية كما ستظهر في واتساب: رسالة واحدة (المتن + التوقيع)
+            try:
+                _pv = emp_message.replace("{Name}", "مثال").replace("{name}", "مثال").replace("{الاسم}", "مثال")
+                _pv = _pv.replace("\u202A", "").replace("\u202C", "").replace("\u2066", "").replace("\u2069", "")
+                _m = re.search(
+                    r'\n*((?:مع خالص التحية والتقدير|مع جزيل الشكر والتقدير|مع أطيب التحيات|مع فائق الاحترام|مع فائق الاحترام والتقدير|مع الفائق الاحترام والتقدير|مع خالص التقدير والاحترام|شاكرين ومقدرين|دمتم بخير)[،,]?\nأبو فهد\nHR)\s*$',
+                    _pv,
+                )
+                if not _m and _pv.strip():
+                    _pv = _pv.rstrip() + "\n\nمع خالص التحية والتقدير،\nأبو فهد\nHR"
+                _bh = "<br>".join(html.escape(_pv).split("\n"))
+                st.markdown(
+                    f"""<div style="background:#0b141a; border:1px solid rgba(255,255,255,0.12); border-radius:12px; padding:14px 16px; margin:6px 0 2px 0;">
+<div style="background:#005c4b; color:#e7ffdb; border-radius:8px; padding:10px 12px; font-size:0.92rem; line-height:1.9;">
+<div dir="rtl" style="text-align:right;">{_bh}</div></div>
+<div style="color:rgba(255,255,255,0.45); font-size:0.72rem; margin-top:6px;">{"👁️ رسالة واحدة كما ستصل في واتساب" if is_ar else "👁️ Single message as delivered in WhatsApp"}</div></div>""",
+                    unsafe_allow_html=True,
+                )
+            except Exception:
+                pass
 
             # 📎 مرفقات الرسالة للعملاء (PDF / فيديوهات / صور)
             st.markdown("---")
@@ -1487,19 +1509,25 @@ def render_whatsapp_page():
                     </div>
                     """, unsafe_allow_html=True)
 
-                    # تجهيز نص الرسالة وتخصيصه للعميل
+                    # تجهيز نص الرسالة وتخصيصه للعميل — رسالة واحدة (المتن + التوقيع)
                     personalized_msg = emp_message.replace("{Name}", c_name).replace("{name}", c_name).replace("{الاسم}", c_name)
-
-                    # إضافة التوقيع العربي إذا لم يكن موجوداً
-                    # (تطبيع أي محارف اتجاه قديمة؛ التغليف اليساري يتم في send_message)
-                    personalized_msg = personalized_msg.replace("\u202A", "").replace("\u202C", "")
-                    signature = "\n\nمع خالص التحية والتقدير،\nأبو فهد\nHR"
-                    if signature not in personalized_msg and personalized_msg.strip():
-                        personalized_msg += signature
+                    personalized_msg = personalized_msg.replace("\u202A", "").replace("\u202C", "").replace("\u2066", "").replace("\u2069", "")
+                    _has_sig = re.search(
+                        r'(?:مع خالص التحية والتقدير|مع جزيل الشكر والتقدير|مع أطيب التحيات|مع فائق الاحترام|مع فائق الاحترام والتقدير|مع الفائق الاحترام والتقدير|مع خالص التقدير والاحترام|شاكرين ومقدرين|دمتم بخير)[،,]?\nأبو فهد\nHR',
+                        personalized_msg,
+                    )
+                    if not _has_sig and personalized_msg.strip():
+                        personalized_msg = personalized_msg.rstrip() + "\n\nمع خالص التحية والتقدير،\nأبو فهد\nHR"
 
                     # إرسال الرسالة والمرفقات عبر محرك واتساب
                     spin_text = f"🚀 {'جاري إرسال الرسالة والمرفقات إلى' if is_ar else 'Sending message & attachments to'} {c_name} ({c_phone})..." if saved_attachments else f"🚀 {'جاري الإرسال إلى' if is_ar else 'Sending to'} {c_name} ({c_phone})..."
-                    
+                    import inspect as _insp
+                    try:
+                        _vg = "verbatim" in _insp.signature(st.session_state.wa_service.send_message).parameters
+                    except Exception:
+                        _vg = False
+                    _vkw = {"verbatim": True} if _vg else {}
+
                     # التحقق من حالة الخدمة قبل الإرسال
                     if not st.session_state.wa_service or not getattr(st.session_state.wa_service, 'driver', None):
                         ok_send = False
@@ -1510,7 +1538,8 @@ def render_whatsapp_page():
                             ok_send, log_detail = st.session_state.wa_service.send_message(
                                 c_phone,
                                 personalized_msg,
-                                attachment_path=saved_attachments if saved_attachments else None
+                                attachment_path=saved_attachments if saved_attachments else None,
+                                **_vkw,
                             )
 
                     # تسجيل النتيجة في سجل الإرسال العام مع تفاصيل المرفقات
@@ -2622,7 +2651,6 @@ HR Manager"""
                         final_msg = final_msg.replace("{" + str(k) + "}", str(val_k))
                     final_msg = final_msg.replace("{Name}", n).replace("{name}", n).replace("{الاسم}", n)
                     final_msg = final_msg.replace("{CV}", v).replace("{cv}", v).replace("{السيرة}", v)
-                    import re
                     final_msg = re.sub(r'\n{3,}', '\n\n', final_msg).strip()
 
                 temp_path = st.session_state.get('wa_temp_path')

@@ -105,7 +105,7 @@ class MessageVariationEngine:
     def clean_text(cls, text: str) -> str:
         """إزالة أي رموز غير مرئية قد تؤدي لحظر الحساب"""
         if not text: return ""
-        for ch in ['\u200b', '\u200c', '\u200d', '\ufeff', '\u200e', '\u200f', '\u202a', '\u202b', '\u202c', '\u202d', '\u202e']:
+        for ch in ['\u200b', '\u200c', '\u200d', '\ufeff', '\u200e', '\u200f', '\u202a', '\u202b', '\u202c', '\u202d', '\u202e', '\u2066', '\u2067', '\u2068', '\u2069']:
             text = text.replace(ch, '')
         return text
 
