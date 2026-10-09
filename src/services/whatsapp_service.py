@@ -298,7 +298,11 @@ class WhatsAppService:
         
         # --- Stealth & Environment Setup ---
         is_cloud = "/mount/" in __file__.replace("\\", "/") or os.path.exists("/mount")
-        use_headless = False  # تعطيل headless مؤقتاً لرؤية المشكلة
+        # Cloud containers have no X server/screen: headed Chrome dies instantly
+        # ("Missing X server or $DISPLAY"). Force headless there; the QR is
+        # shown from screenshots (get_qr_hd), so scanning still works.
+        # Local runs keep a visible browser for debugging.
+        use_headless = True if is_cloud else False
         ver = self._get_chrome_version()
         ua = self._get_random_ua(ver)
         binary = self._find_chrome_binary()
@@ -308,6 +312,7 @@ class WhatsAppService:
             o = StdOptions()
             if use_headless:
                 o.add_argument("--headless=new")
+                o.add_argument("--window-size=1366,768")
             o.add_argument("--no-sandbox")
             o.add_argument("--disable-dev-shm-usage")
             o.add_argument("--disable-gpu")
