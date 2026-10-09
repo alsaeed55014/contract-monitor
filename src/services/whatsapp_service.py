@@ -270,6 +270,18 @@ class WhatsAppService:
             except: 
                 self.close()
 
+        # Single-instance guard: two concurrent launches race for the same
+        # profile and BOTH exit instantly ("Chrome instance exited").
+        try:
+            _lock_path = os.path.join(self.base_session_dir, "wa_start.lock")
+            if os.path.exists(_lock_path):
+                if time.time() - os.path.getmtime(_lock_path) < 90:
+                    return False, "Engine start already in progress (another launch is running). Wait a minute and retry."
+            with open(_lock_path, "w") as _lf:
+                _lf.write(str(os.getpid()))
+        except Exception:
+            pass
+
         # --- Clean Existing Locks (always: stale locks are the #1 cause of
         # "session not created: Chrome instance exited") ---
         # Only wipe the whole profile when explicitly forced: it holds the
@@ -307,9 +319,11 @@ class WhatsAppService:
             o.add_argument("--disable-extensions")
             o.add_argument("--disable-infobars")
             o.add_argument("--ignore-certificate-errors")
-            o.add_argument("--disable-browser-side-navigation")
-            o.add_argument("--disable-features=IsolateOrigins,site-per-process")
             o.add_argument("--password-store=basic")
+            o.add_argument("--no-first-run")
+            o.add_argument("--no-default-browser-check")
+            o.add_argument("--disable-crash-reporter")
+            o.add_argument("--disable-features=IsolateOrigins,site-per-process,VizDisplayCompositor")
             o.add_argument("--disable-background-timer-throttling")
             o.add_argument("--disable-backgrounding-occluded-windows")
             o.add_argument("--disable-renderer-backgrounding")
@@ -319,8 +333,6 @@ class WhatsAppService:
             # collides with zombie Chrome processes and makes every launch
             # exit instantly ("session not created"). Nothing connects to it.
             o.add_argument("--disable-software-rasterizer")
-            o.add_argument("--disable-features=VizDisplayCompositor")
-            o.add_argument("--disable-features=site-per-process")
             o.add_experimental_option("excludeSwitches", ["enable-automation"])
             o.add_experimental_option('useAutomationExtension', False)
             if with_user_dir:
@@ -330,6 +342,7 @@ class WhatsAppService:
             return o
 
         # 🚀 ATTEMPT 1: Standard Stealth Selenium (Fastest & 100% Reliable across Cloud & Local)
+        _drv_log1 = ""
         try:
             print(f"[{time.strftime('%H:%M:%S')}] Launching Primary Stealth Engine (Headless: {use_headless})...")
             from selenium import webdriver
@@ -378,8 +391,12 @@ class WhatsAppService:
         except Exception as e1:
             print(f"[{time.strftime('%H:%M:%S')}] Attempt 1 Error: {e1}")
             self.last_error = f"Primary Engine Err: {str(e1)[:500]}"
+            _tail1 = self._driver_log_tail(_drv_log1)
+            if _tail1:
+                self.last_error += f" | driverlog: {_tail1}"
 
         # 🚀 ATTEMPT 2: Scoped zombie cleanup & retry (keeps the WhatsApp login)
+        _drv_log2 = ""
         try:
             print(f"[{time.strftime('%H:%M:%S')}] Retrying with zombie cleanup (profile kept)...")
             self._kill_zombies()
@@ -427,6 +444,9 @@ class WhatsAppService:
         except Exception as e2:
             print(f"[{time.strftime('%H:%M:%S')}] Attempt 2 Error: {e2}")
             self.last_error += f" | Attempt 2 Err: {str(e2)[:500]}"
+            _tail2 = self._driver_log_tail(_drv_log2)
+            if _tail2:
+                self.last_error += f" | driverlog2: {_tail2}"
 
         # 🚀 ATTEMPT 3: Undetected Chromedriver (UC) Fallback
         # NOTE: uc's patched driver rejects selenium *experimental options*
@@ -589,6 +609,22 @@ class WhatsAppService:
                 pass
         return service, log_path
 
+    def _driver_log_tail(self, log_path, n=12):
+        """Returns the last lines of the chromedriver verbose log.
+
+        Chrome's real crash reason (stderr) lives here, not in the
+        selenium exception message.
+        """
+        try:
+            if log_path and os.path.exists(log_path):
+                with open(log_path, "r", encoding="utf-8", errors="ignore") as f:
+                    lines = [ln.strip() for ln in f.readlines() if ln.strip()]
+                tail = " / ".join(lines[-n:])
+                return tail[-800:]
+        except Exception:
+            pass
+        return ""
+
     def _remove_chrome_locks(self):
         """Removes stale Chrome profile lock files (keeps login data intact)."""
         try:
@@ -651,7 +687,9 @@ class WhatsAppService:
                         os.system(f'taskkill /F /PID {pid} /T >nul 2>&1')
                         killed += 1
                 if killed:
-                    time.sleep(1.5)
+                    time.sleep(3)
+                else:
+                    time.sleep(1)
             else:
                 os.system('pkill -f chromedriver > /dev/null 2>&1')
                 try:
@@ -2320,3 +2358,9 @@ class WhatsAppService:
             try: self.driver.quit()
             except: pass
             self.driver = None
+        try:
+            _lp = os.path.join(self.base_session_dir, "wa_start.lock")
+            if os.path.exists(_lp):
+                os.remove(_lp)
+        except Exception:
+            pass
