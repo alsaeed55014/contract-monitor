@@ -12,3 +12,9 @@
 2026-10-09 10:53:09,251 - Retrying (Retry(total=2, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError("HTTPConnection(host='localhost', port=58044): Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it")': /session/0a5e829ea4558a8d9979aedc9b0e7a76/elements
 2026-10-09 10:53:13,308 - Retrying (Retry(total=1, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError("HTTPConnection(host='localhost', port=58044): Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it")': /session/0a5e829ea4558a8d9979aedc9b0e7a76/elements
 2026-10-09 10:53:17,373 - Retrying (Retry(total=0, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError("HTTPConnection(host='localhost', port=58044): Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it")': /session/0a5e829ea4558a8d9979aedc9b0e7a76/elements
+2026-10-09 20:46:18,217 - patching driver executable C:\Users\ا\appdata\roaming\undetected_chromedriver\undetected_chromedriver.exe
+2026-10-09 20:46:20,137 - ensuring close
+2026-10-09 20:46:44,378 - patching driver executable C:\Users\ا\appdata\roaming\undetected_chromedriver\undetected_chromedriver.exe
+2026-10-09 20:46:47,874 - ensuring close
+2026-10-09 20:48:01,504 - patching driver executable C:\Users\ا\appdata\roaming\undetected_chromedriver\undetected_chromedriver.exe
+2026-10-09 20:48:03,649 - ensuring close

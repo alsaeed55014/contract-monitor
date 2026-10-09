@@ -337,10 +337,10 @@ class WhatsAppService:
             from selenium.webdriver.chrome.service import Service
             
             std_opts = create_chrome_options(with_user_dir=True)
-            
-            # إضافة Service Configuration لمنع مشاكل DevToolsActivePort
-            service = Service()
-            service.creation_flags = 0x08000000  # CREATE_NO_WINDOW on Windows
+
+            # Service with verbose driver log (the log file reveals the real
+            # cause when Chrome exits during session creation).
+            service, _drv_log1 = self._new_service("attempt1")
             
             try:
                 self.driver = webdriver.Chrome(service=service, options=std_opts)
@@ -377,7 +377,7 @@ class WhatsAppService:
             return True, "Ready (Stealth Engine)"
         except Exception as e1:
             print(f"[{time.strftime('%H:%M:%S')}] Attempt 1 Error: {e1}")
-            self.last_error = f"Primary Engine Err: {str(e1)[:120]}"
+            self.last_error = f"Primary Engine Err: {str(e1)[:500]}"
 
         # 🚀 ATTEMPT 2: Scoped zombie cleanup & retry (keeps the WhatsApp login)
         try:
@@ -390,9 +390,8 @@ class WhatsAppService:
             from selenium.webdriver.chrome.service import Service
             
             std_opts = create_chrome_options(with_user_dir=True)
-            
-            service = Service()
-            service.creation_flags = 0x08000000
+
+            service, _drv_log2 = self._new_service("attempt2")
             
             try:
                 self.driver = webdriver.Chrome(service=service, options=std_opts)
@@ -427,9 +426,12 @@ class WhatsAppService:
             return True, "Ready (Fresh Session Engine)"
         except Exception as e2:
             print(f"[{time.strftime('%H:%M:%S')}] Attempt 2 Error: {e2}")
-            self.last_error += f" | Attempt 2 Err: {str(e2)[:100]}"
+            self.last_error += f" | Attempt 2 Err: {str(e2)[:500]}"
 
         # 🚀 ATTEMPT 3: Undetected Chromedriver (UC) Fallback
+        # NOTE: uc's patched driver rejects selenium *experimental options*
+        # ("unrecognized chrome option: excludeSwitches"), so UC gets an
+        # args-only options object (uc injects its own stealth switches).
         try:
             import sys as _sys
             try:
@@ -468,10 +470,23 @@ class WhatsAppService:
                 _sys.modules.setdefault("distutils", _du)
                 _sys.modules.setdefault("distutils.version", _dv)
             import undetected_chromedriver as uc
+            from selenium.webdriver.chrome.options import Options as _UCOpts
             print(f"[{time.strftime('%H:%M:%S')}] UC Fallback Engine...")
-            opts = create_chrome_options(with_user_dir=False)
+            uc_opts = _UCOpts()
+            for _a in [
+                "--no-sandbox",
+                "--disable-dev-shm-usage",
+                "--disable-gpu",
+                f"--user-agent={ua}",
+                "--lang=ar,en-US,en;q=0.9",
+                "--disable-blink-features=AutomationControlled",
+                "--disable-notifications",
+                "--disable-infobars",
+                "--password-store=basic",
+            ]:
+                uc_opts.add_argument(_a)
             self.driver = uc.Chrome(
-                options=opts,
+                options=uc_opts,
                 user_data_dir=self.session_path,
                 browser_executable_path=binary,
                 headless=use_headless,
@@ -482,7 +497,32 @@ class WhatsAppService:
             return True, "Ready (UC Engine)"
         except Exception as e3:
             print(f"[{time.strftime('%H:%M:%S')}] UC Fallback Error: {e3}")
-            self.last_error += f" | UC Err: {str(e3)[:100]}"
+            self.last_error += f" | UC Err: {str(e3)[:500]}"
+
+        # 🚀 ATTEMPT 4: Fresh temporary profile (diagnostic last resort).
+        # Proves whether the saved profile itself is the blocker. WhatsApp
+        # login will need a QR re-scan here, but the engine will run.
+        try:
+            import tempfile as _tf
+            print(f"[{time.strftime('%H:%M:%S')}] Trying fresh temporary profile...")
+            self._kill_zombies()
+            _tmp_profile = _tf.mkdtemp(prefix="wa_fresh_")
+            from selenium import webdriver as _wd
+            from selenium.webdriver.chrome.service import Service as _Svc
+            _fresh_opts = create_chrome_options(with_user_dir=False)
+            _fresh_opts.add_argument(f"--user-data-dir={_tmp_profile}")
+            if binary:
+                _fresh_opts.binary_location = binary
+            _svc4 = _Svc()
+            if os.name == 'nt':
+                _svc4.creation_flags = 0x08000000
+            self.driver = _wd.Chrome(service=_svc4, options=_fresh_opts)
+            self.driver.get("https://web.whatsapp.com")
+            self._wait_for_qr_or_login(timeout=15)
+            return True, "Ready (Fresh Temp Profile — rescan QR)"
+        except Exception as e4:
+            print(f"[{time.strftime('%H:%M:%S')}] Attempt 4 Error: {e4}")
+            self.last_error += f" | TempProfile Err: {str(e4)[:500]}"
             return False, self.last_error
 
     def _wait_for_qr_or_login(self, timeout=15):
@@ -526,6 +566,28 @@ class WhatsAppService:
             except: pass
             
         return None
+
+    def _new_service(self, tag="run"):
+        """ChromeDriver Service with a verbose log file.
+
+        When Chrome exits during session creation, the driver log reveals
+        the real cause (the exception message alone rarely does).
+        Returns (service, log_path).
+        """
+        from selenium.webdriver.chrome.service import Service
+        log_path = os.path.join(self.session_path, f"chromedriver_{tag}.log")
+        try:
+            os.makedirs(self.session_path, exist_ok=True)
+            service = Service(service_args=["--verbose"], log_output=log_path)
+        except Exception:
+            service = Service()
+            log_path = ""
+        if os.name == 'nt':
+            try:
+                service.creation_flags = 0x08000000  # CREATE_NO_WINDOW
+            except Exception:
+                pass
+        return service, log_path
 
     def _remove_chrome_locks(self):
         """Removes stale Chrome profile lock files (keeps login data intact)."""
