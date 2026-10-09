@@ -24,7 +24,6 @@ def get_saudi_time():
 # Get the absolute path of the directory containing app.py
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 ROOT_DIR = BASE_DIR
-PERSIST_FILE = os.path.join(BASE_DIR, 'src', '.persist_login.json')
 if BASE_DIR not in sys.path:
     sys.path.insert(0, BASE_DIR)
 
@@ -63,7 +62,45 @@ class AuthManager:
                 # Store error for UI feedback
                 self.load_error = str(e)
                 self.users = {}
-        
+
+        # Silent cloud mirror (background only, no UI): Streamlit Cloud wipes
+        # the local filesystem on sleep/wake (the "Yes, get this app back up!"
+        # button reboots from the repo), so users.json alone would revert and
+        # password changes / new users would be lost. The hidden AppUsers
+        # worksheet is the source of truth across restarts.
+        try:
+            from src.logic.users_cloud import pull_users, push_users
+            cloud = pull_users()
+            if isinstance(cloud, dict) and cloud:
+                local_only = [u for u in self.users if u not in cloud]
+                for uname, cdata in cloud.items():
+                    if uname in self.users and isinstance(self.users[uname], dict):
+                        av = self.users[uname].get("avatar")
+                        self.users[uname].update({k: v for k, v in cdata.items() if k != "avatar"})
+                        if av and not self.users[uname].get("avatar"):
+                            self.users[uname]["avatar"] = av
+                    else:
+                        self.users[uname] = cdata
+                try:
+                    with open(self.users_file, 'w', encoding='utf-8') as f:
+                        json.dump({"users": self.users}, f, ensure_ascii=False, indent=4)
+                except Exception:
+                    pass
+                # Converge: push back any local-only users so nothing is lost
+                if local_only:
+                    try:
+                        push_users(self.users)
+                    except Exception:
+                        pass
+            elif cloud is not None:
+                # Sheet reachable but empty (first run): seed it from local
+                try:
+                    push_users(self.users)
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
         # Ensure Default Admin
         if "admin" not in self.users:
             self.users["admin"] = {
@@ -83,6 +120,12 @@ class AuthManager:
                 json.dump({"users": self.users}, f, ensure_ascii=False, indent=4)
         except Exception as e:
             print(f"Error saving users: {e}")
+        # Silent background mirror so password changes / new users survive sleep/wake
+        try:
+            from src.logic.users_cloud import push_users
+            push_users(self.users)
+        except Exception as e:
+            print(f"[AUTH] cloud mirror failed: {e}")
 
     def hash_password(self, password):
         return hashlib.sha256(str(password).encode()).hexdigest()
@@ -203,18 +246,22 @@ DEVICE_PASS_COOKIE = "_rec_saved_pass"
 DEVICE_PERSIST_COOKIE = "_rec_saved_persist"
 
 def get_device_saved_credentials() -> Dict[str, Any]:
-    """Read saved credentials from client browser cookies (strictly isolated to this device)."""
+    """Read saved login convenience data from client browser cookies.
+
+    SECURITY: the raw password is NEVER stored nor returned. Only the
+    username (convenience prefill) and the persist flag are read. Silent
+    auto-login relies solely on the signed device token (verified via
+    verify_device_token), so no password ever sits in cookies/localStorage.
+    """
     if hasattr(st, "context") and hasattr(st.context, "cookies"):
         try:
             cookies = st.context.cookies
             is_p = cookies.get(DEVICE_PERSIST_COOKIE)
             if is_p in ["1", "true", "True"]:
                 raw_u = cookies.get(DEVICE_USER_COOKIE, "")
-                raw_p = cookies.get(DEVICE_PASS_COOKIE, "")
                 u = urllib.parse.unquote(raw_u) if raw_u else ""
-                p = urllib.parse.unquote(raw_p) if raw_p else ""
-                if u and p:
-                    return {"u": u, "p": p, "persist": True}
+                if u:
+                    return {"u": u, "p": "", "persist": True}
         except Exception:
             pass
     return {"u": "", "p": "", "persist": False}
@@ -2178,6 +2225,19 @@ if st.session_state.user is None and hasattr(st, "context") and hasattr(st.conte
                     "name": u_obj.get("name", valid_username)
                 }
                 st.session_state.last_login_time = time.time()
+                try:
+                    record_login_event(valid_username, dict(u_obj, username=valid_username))
+                except Exception:
+                    pass
+                # Renew the device token on every visit so "remember me"
+                # keeps working indefinitely (sliding 30-day window).
+                try:
+                    st.session_state._remember_refresh = {
+                        "u": valid_username,
+                        "tok": create_device_token(valid_username, days=30),
+                    }
+                except Exception:
+                    pass
     except Exception as e:
         print(f"[AUTH] Auto device login check error: {e}")
 
@@ -2683,7 +2743,14 @@ if ('Notification' in window && Notification.permission === 'default') {
 }
 
 // 2. Device-Isolated Remember Login System (localStorage per client device)
+// SECURITY: password is NEVER stored. Only the username (convenience) and the
+// persist flag are kept. Auto-login uses the signed server token only.
 (function() {
+    // One-time migration: wipe any legacy stored passwords on this browser
+    try {
+        localStorage.removeItem("_recruitment_device_p");
+        document.cookie = "_rec_saved_pass=; max-age=0; path=/; SameSite=Lax";
+    } catch (e) {}
     function setReactInputValue(input, val) {
         if (!input) return;
         const lastVal = input.value;
@@ -2708,7 +2775,6 @@ if ('Notification' in window && Notification.permission === 'default') {
     function initClientRemember() {
         try {
             const savedU = localStorage.getItem("_recruitment_device_u");
-            const savedP = localStorage.getItem("_recruitment_device_p");
             const savedPersist = localStorage.getItem("_recruitment_device_persist");
 
             const form = document.querySelector('form[data-testid="stForm"]') || document.querySelector('form');
@@ -2730,38 +2796,31 @@ if ('Notification' in window && Notification.permission === 'default') {
                 }
             });
 
-            // Pre-fill on this specific device only
-            if (savedPersist === "true" && savedU && savedP) {
+            // Pre-fill USERNAME only on this specific device — never the password,
+            // and never auto-check the box (it stays unchecked for anyone else).
+            if (savedPersist === "true" && savedU) {
                 if (userInput && !userInput.value) {
                     setReactInputValue(userInput, savedU);
                 }
-                if (passInput && !passInput.value) {
-                    setReactInputValue(passInput, savedP);
-                }
-                if (checkboxInput && !checkboxInput.checked) {
-                    checkboxInput.click();
-                }
             }
 
-            // Hook form submit buttons to save/clear localStorage
+            // Hook form submit buttons to save/clear localStorage (username only)
             const buttons = form.querySelectorAll('button');
             buttons.forEach(btn => {
                 if (!btn._remHook) {
                     btn._remHook = true;
                     btn.addEventListener('click', function() {
                         const curU = userInput ? userInput.value : '';
-                        const curP = passInput ? passInput.value : '';
                         const curPersist = checkboxInput ? checkboxInput.checked : false;
 
-                        if (curPersist && curU && curP) {
+                        if (curPersist && curU) {
                             localStorage.setItem("_recruitment_device_u", curU);
-                            localStorage.setItem("_recruitment_device_p", curP);
                             localStorage.setItem("_recruitment_device_persist", "true");
                         } else if (!curPersist) {
                             localStorage.removeItem("_recruitment_device_u");
-                            localStorage.removeItem("_recruitment_device_p");
                             localStorage.removeItem("_recruitment_device_persist");
                         }
+                        localStorage.removeItem("_recruitment_device_p");
                     }, true);
                 }
             });
@@ -2806,16 +2865,11 @@ if ('Notification' in window && Notification.permission === 'default') {
         
         saved = get_device_saved_credentials()
         saved_u = saved["u"]
-        saved_p = saved["p"]
-        saved_persist = saved["persist"]
 
-        # If saved credentials exist on this device and not yet in session_state:
+        # Username convenience prefill only. Password is NEVER prefilled and the
+        # box is NEVER pre-checked: it stays off for anyone opening the link.
         if user_key not in st.session_state and saved_u:
             st.session_state[user_key] = saved_u
-        if pass_key not in st.session_state and saved_p:
-            st.session_state[pass_key] = saved_p
-        if persist_key not in st.session_state and saved_persist:
-            st.session_state[persist_key] = True
 
         with st.form(f"login_form_{suffix}"):
             # Row 1: Profile Image next to Welcome Text
@@ -2828,17 +2882,15 @@ if ('Notification' in window && Notification.permission === 'default') {
                     b64 = get_base64_image(IMG_PATH)
                     st.markdown(f'<div style="text-align:right;"><img src="data:image/jpeg;base64,{b64}" class="profile-img-circular" style="width:80px; height:80px; border:2px solid #FFF; box-shadow: 0 0 15px #FFF;"></div>', unsafe_allow_html=True)
             
-            # Inputs - Pre-filled with saved credentials for THIS device only
+            # Inputs - username may be prefilled (convenience); password ALWAYS empty
             cur_u = st.session_state.get(user_key, saved_u)
-            cur_p = st.session_state.get(pass_key, saved_p)
-            cur_persist = st.session_state.get(persist_key, saved_persist)
 
             u = st.text_input(t("username", lang), value=cur_u, label_visibility="collapsed", placeholder=t("username", lang), key=user_key)
-            p = st.text_input(t("password", lang), value=cur_p, type="password", label_visibility="collapsed", placeholder=t("password", lang), key=pass_key)
+            p = st.text_input(t("password", lang), value="", type="password", label_visibility="collapsed", placeholder=t("password", lang), key=pass_key)
             
-            # Remember login on THIS device only
+            # Remember login on THIS device only (off by default for everyone)
             persist_txt = "هل تريد حفظ الدخول" if lang == 'ar' else "Do you want to stay logged in?"
-            persist = st.checkbox(persist_txt, value=cur_persist, key=persist_key)
+            persist = st.checkbox(persist_txt, value=bool(st.session_state.get(persist_key, False)), key=persist_key)
             
             submit = st.form_submit_button(t("login_btn", lang), width='stretch')
             lang_toggle = st.form_submit_button("En" if lang == "ar" else "عربي", width='stretch')
@@ -2854,13 +2906,14 @@ if ('Notification' in window && Notification.permission === 'default') {
                         user['username'] = u.lower().strip()
                         st.session_state.user = user
                         st.session_state.last_login_time = time.time()
+                        record_login_event(user['username'], user)
                         st.session_state.show_welcome = True
                         
-                        # Handle Remember Me for THIS device ONLY
+                        # Handle Remember Me for THIS device ONLY (signed token + username;
+                        # the raw password is NEVER stored anywhere)
                         should_persist = st.session_state.get(persist_key, False)
                         if should_persist:
                             enc_u = urllib.parse.quote(u.strip())
-                            enc_p = urllib.parse.quote(p.strip())
                             dev_token = create_device_token(user['username'], days=30)
                             st.html(f"""
                             <script>
@@ -2868,12 +2921,12 @@ if ('Notification' in window && Notification.permission === 'default') {
                                 var exp = "; max-age=31536000; path=/; SameSite=Lax";
                                 document.cookie = "{DEVICE_REMEMBER_COOKIE}={dev_token}" + exp;
                                 document.cookie = "{DEVICE_USER_COOKIE}={enc_u}" + exp;
-                                document.cookie = "{DEVICE_PASS_COOKIE}={enc_p}" + exp;
                                 document.cookie = "{DEVICE_PERSIST_COOKIE}=1" + exp;
+                                document.cookie = "{DEVICE_PASS_COOKIE}=; max-age=0; path=/; SameSite=Lax";
                                 try {{
                                     localStorage.setItem("_recruitment_device_u", "{u.strip()}");
-                                    localStorage.setItem("_recruitment_device_p", "{p.strip()}");
                                     localStorage.setItem("_recruitment_device_persist", "true");
+                                    localStorage.removeItem("_recruitment_device_p");
                                 }} catch(e) {{}}
                             }})();
                             </script>
@@ -3237,6 +3290,81 @@ def update_user_heartbeat(username, user_info=None):
     except Exception as e:
         pass
 
+LOGIN_HISTORY_FILE = os.path.join(BASE_DIR, "login_history.json")
+LOGIN_HISTORY_MAX = 2000
+
+def _login_display_name(username, user_obj=None):
+    """Display name for login records (Arabic name preferred)."""
+    u_clean = str(username).lower().strip() if username else "user"
+    if isinstance(user_obj, dict):
+        fn_ar = str(user_obj.get("first_name_ar", "") or "").strip()
+        fa_ar = str(user_obj.get("father_name_ar", "") or "").strip()
+        if fn_ar or fa_ar:
+            return f"{fn_ar} {fa_ar}".strip()
+        fn_en = str(user_obj.get("first_name_en", "") or "").strip()
+        fa_en = str(user_obj.get("father_name_en", "") or "").strip()
+        if fn_en or fa_en:
+            return f"{fn_en} {fa_en}".strip()
+    return u_clean
+
+def record_login_event(username, user_obj=None):
+    """Appends a login event (username + date + time) to login_history.json."""
+    try:
+        if not username:
+            return
+        u_clean = str(username).lower().strip()
+        now = get_saudi_time()
+        entry = {
+            "username": u_clean,
+            "display_name": _login_display_name(u_clean, user_obj),
+            "role": (user_obj.get("role", "") if isinstance(user_obj, dict) else ""),
+            "ts": time.time(),
+            "date": now.strftime("%Y-%m-%d"),
+            "time": now.strftime("%I:%M %p").replace("AM", "ص").replace("PM", "م"),
+        }
+        log = []
+        if os.path.exists(LOGIN_HISTORY_FILE):
+            try:
+                with open(LOGIN_HISTORY_FILE, "r", encoding="utf-8") as f:
+                    log = json.load(f).get("log", [])
+            except:
+                log = []
+        log.append(entry)
+        log = log[-LOGIN_HISTORY_MAX:]
+        with open(LOGIN_HISTORY_FILE, "w", encoding="utf-8") as f:
+            json.dump({"log": log}, f, ensure_ascii=False, indent=2)
+    except Exception:
+        pass
+
+def load_login_history():
+    """Returns login log list (oldest first)."""
+    try:
+        if os.path.exists(LOGIN_HISTORY_FILE):
+            with open(LOGIN_HISTORY_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                if isinstance(data, dict):
+                    return data.get("log", [])
+    except Exception:
+        pass
+    return []
+
+def clear_login_history():
+    """Clears the login history file."""
+    try:
+        with open(LOGIN_HISTORY_FILE, "w", encoding="utf-8") as f:
+            json.dump({"log": []}, f, ensure_ascii=False, indent=2)
+        return True
+    except Exception:
+        return False
+
+def get_last_login_map():
+    """Maps username -> latest login entry."""
+    latest = {}
+    for e in load_login_history():
+        if isinstance(e, dict) and e.get("username"):
+            latest[str(e["username"]).lower().strip()] = e
+    return latest
+
 def get_online_users_html(auth_manager, current_user, lang='ar'):
     """Generates clean HTML badges for online connected users."""
     try:
@@ -3263,11 +3391,21 @@ def get_online_users_html(auth_manager, current_user, lang='ar'):
             active_users.append({"username": curr_uname, "display_name": disp, "last_seen": now_ts})
             
         label = "المستخدمون المتصلون:" if lang == 'ar' else "Online Users:"
+        last_lbl = "آخر دخول" if lang == 'ar' else "Last login"
+        try:
+            last_map = get_last_login_map()
+        except Exception:
+            last_map = {}
         
         user_badges = []
         for u_info in active_users:
             uname = u_info.get("username", "user")
             disp_name = u_info.get("display_name", uname)
+            le = last_map.get(str(uname).lower().strip(), {}) if isinstance(last_map, dict) else {}
+            if le.get("date") and le.get("time"):
+                ll_txt = f"{last_lbl}: {le.get('date')} | {le.get('time')}"
+            else:
+                ll_txt = f"{last_lbl}: —"
             
             av_val = auth_manager.get_avatar(uname) if auth_manager and hasattr(auth_manager, 'get_avatar') else None
             if av_val:
@@ -3276,7 +3414,7 @@ def get_online_users_html(auth_manager, current_user, lang='ar'):
             else:
                 img_html = '<div style="width:22px;height:22px;border-radius:50%;background:linear-gradient(135deg,#D4AF37,#8B7520);display:flex;align-items:center;justify-content:center;font-size:12px;color:#fff;">👤</div>'
                 
-            badge = f'''<div style="display: flex; align-items: center; gap: 8px; background: rgba(212,175,55,0.1); padding: 5px 10px; border-radius: 20px; border: 1px solid rgba(212,175,55,0.3);">{img_html}<span style="color: #FFFFFF; font-size: 0.8rem; font-weight: 600; font-family: 'Cairo', sans-serif;">{disp_name}</span><span style="width: 8px; height: 8px; background-color: #22c55e; border-radius: 50%; display: inline-block; box-shadow: 0 0 6px #22c55e;"></span></div>'''
+            badge = f'''<div style="display: flex; align-items: center; gap: 8px; background: rgba(212,175,55,0.1); padding: 5px 10px; border-radius: 20px; border: 1px solid rgba(212,175,55,0.3);">{img_html}<span style="color: #FFFFFF; font-size: 0.8rem; font-weight: 600; font-family: 'Cairo', sans-serif;">{disp_name}</span><span style="color: rgba(255,255,255,0.55); font-size: 0.7rem; font-family: 'Cairo', sans-serif;">{ll_txt}</span><span style="width: 8px; height: 8px; background-color: #22c55e; border-radius: 50%; display: inline-block; box-shadow: 0 0 6px #22c55e;"></span></div>'''
             user_badges.append(badge)
             
         all_badges_html = "".join(user_badges)
@@ -3328,12 +3466,25 @@ def render_top_banner():
             st.markdown('</div>', unsafe_allow_html=True)
 
         with c2: # Profile
-            st.markdown(f'<div style="display:flex; align-items:center; gap:15px; margin-top:5px;">{avatar_html}<div><p style="margin:0; font-weight:700; color:white;">{welcome_prefix} {full_name}</p><p style="margin:0; font-size:0.75rem; color:#D4AF37;">{program_name}</p></div></div>', unsafe_allow_html=True)
+            try:
+                _lm = get_last_login_map()
+                _le = _lm.get(str(user.get('username', '')).lower().strip(), {}) if isinstance(_lm, dict) else {}
+                if _le.get("date") and _le.get("time"):
+                    _ll = f"{t('last_login', lang)}: {_le.get('date')} | {_le.get('time')}"
+                else:
+                    _ll = ""
+            except Exception:
+                _ll = ""
+            _ll_html = f'<p style="margin:0; font-size:0.7rem; color:rgba(255,255,255,0.55);">{_ll}</p>' if _ll else ''
+            st.markdown(f'<div style="display:flex; align-items:center; gap:15px; margin-top:5px;">{avatar_html}<div><p style="margin:0; font-weight:700; color:white;">{welcome_prefix} {full_name}</p><p style="margin:0; font-size:0.75rem; color:#D4AF37;">{program_name}</p>{_ll_html}</div></div>', unsafe_allow_html=True)
         
         with c3:
-            online_html = get_online_users_html(st.session_state.auth, user, lang)
-            if online_html:
-                st.markdown(online_html, unsafe_allow_html=True)
+            if isinstance(user, dict) and user.get("role") == "admin":
+                online_html = get_online_users_html(st.session_state.auth, user, lang)
+                if online_html:
+                    st.markdown(online_html, unsafe_allow_html=True)
+                else:
+                    st.write("")
             else:
                 st.write("")
             
@@ -3695,6 +3846,9 @@ def dashboard():
             if st.button(t("permissions", lang), width='stretch', disabled=_wa_lock_nav, key="nav_permissions"):
                 st.session_state.page = "permissions"
                 st.rerun()
+            if st.button("🕓 " + t("login_history", lang), width='stretch', disabled=_wa_lock_nav, key="nav_login_history"):
+                st.session_state.page = "login_history"
+                st.rerun()
             
             # Refresh Data button below Permissions for Admins
             refresh_notif = st.empty()
@@ -3762,6 +3916,7 @@ def dashboard():
         "translator": render_translator_content,
         "order_processing": render_order_processing_content,
         "permissions": render_permissions_content,
+        "login_history": render_login_history_content,
         "bengali_supply": render_bengali_supply_content,
         "whatsapp_marketing": render_whatsapp_page,
         "duplicate_remover": render_duplicate_remover_content
@@ -3773,7 +3928,7 @@ def dashboard():
         st.session_state.page = page
     
     # Permission check for restricted pages
-    if page in ["permissions"] and user.get("role") == "viewer":
+    if page in ["permissions", "login_history"] and user.get("role") == "viewer":
         st.error("🔒 لا تملك صلاحية الوصول لهذه الصفحة" if lang == 'ar' else "🔒 Access Denied")
         st.session_state.page = "dashboard"
         st.rerun()
@@ -4887,6 +5042,47 @@ def render_translator_content():
             </div>
         </div>
         """, unsafe_allow_html=True)
+
+def render_login_history_content():
+    """Admin-only login history log: view, clear, or keep records as-is."""
+    lang = st.session_state.lang
+    is_ar = lang == 'ar'
+    user = st.session_state.get("user", {})
+    if not isinstance(user, dict) or user.get("role") != "admin":
+        st.error("🔒 لا تملك صلاحية الوصول لهذه الصفحة" if is_ar else "🔒 Access Denied")
+        return
+    st.title("🕓 " + t("login_history_title", lang))
+    log = load_login_history()
+    rows = [e for e in log if isinstance(e, dict)]
+    rows = sorted(rows, key=lambda e: e.get("ts", 0), reverse=True)
+    st.markdown(f"**📊 {'إجمالي السجلات' if is_ar else 'Total records'}:** {len(rows)}")
+    if not rows:
+        st.info(t("no_login_history", lang))
+    else:
+        disp = pd.DataFrame([{
+            ("اسم المستخدم" if is_ar else "Username"): e.get("username", ""),
+            ("الاسم" if is_ar else "Name"): e.get("display_name", ""),
+            ("الدور" if is_ar else "Role"): e.get("role", ""),
+            ("التاريخ" if is_ar else "Date"): e.get("date", ""),
+            ("الوقت" if is_ar else "Time"): e.get("time", ""),
+        } for e in rows])
+        st.dataframe(disp, width="stretch", hide_index=True)
+    st.divider()
+    c1, c2 = st.columns(2)
+    with c1:
+        with st.popover(t("clear_history_btn", lang)):
+            st.warning(t("confirm_clear_history", lang))
+            if st.button("✅ " + ("نعم، امسح السجل" if is_ar else "Yes, clear history"), type="primary", width="stretch", key="confirm_clear_login_hist"):
+                if clear_login_history():
+                    show_toast(t("history_cleared", lang), "success")
+                    time.sleep(1)
+                    st.rerun()
+                else:
+                    show_toast(t("error", lang), "error")
+            if st.button("↩️ " + t("keep_history_btn", lang), width="stretch", key="keep_login_hist"):
+                st.rerun()
+    with c2:
+        st.caption("💡 " + (t("keep_history_btn", lang) + " — " + ("تبقى البيانات في السجل كما هي" if is_ar else "data stays in the log as is")))
 
 def render_permissions_content():
     lang = st.session_state.lang
@@ -6864,5 +7060,28 @@ if not st.session_state.user:
         login_screen()
 else:
     with main_container.container():
+        # One-time renewal of the "remember me" device cookie after auto-login
+        _rr = st.session_state.get("_remember_refresh")
+        if isinstance(_rr, dict) and _rr.get("tok"):
+            try:
+                del st.session_state._remember_refresh
+            except Exception:
+                pass
+            try:
+                import urllib.parse as _up
+                _rr_enc_u = _up.quote(str(_rr.get("u", "")).strip())
+                _rr_tok = _rr.get("tok", "")
+                st.html(f"""
+                <script>
+                (function() {{
+                    var exp = "; max-age=31536000; path=/; SameSite=Lax";
+                    document.cookie = "{DEVICE_REMEMBER_COOKIE}={_rr_tok}" + exp;
+                    document.cookie = "{DEVICE_USER_COOKIE}={_rr_enc_u}" + exp;
+                    document.cookie = "{DEVICE_PERSIST_COOKIE}=1" + exp;
+                }})();
+                </script>
+                """)
+            except Exception:
+                pass
         dashboard()
     silent_notification_monitor()

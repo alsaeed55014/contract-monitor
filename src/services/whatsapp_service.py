@@ -7,7 +7,25 @@ import random
 import subprocess
 import re
 import json
+import logging
 from datetime import datetime, date
+
+# إعداد logging للكتابة إلى ملف
+LOG_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'whatsapp_debug.log')
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(message)s',
+    handlers=[
+        logging.FileHandler(LOG_FILE, encoding='utf-8'),
+        logging.StreamHandler()  # أيضاً يطبع في terminal
+    ]
+)
+logger = logging.getLogger(__name__)
+
+def log_debug(message):
+    """دالة مساعدة للlogging - تكتب إلى الملف و terminal"""
+    print(message)
+    logger.info(message)
 
 
 
@@ -98,7 +116,6 @@ class WhatsAppService:
         # 🛡️ COMPTEURS ANTI-BAN – état global de la session
         self._daily_stats_file = os.path.join(self.base_session_dir, "wa_daily_stats.json")
         self._runtime_stats_file = os.path.join(self.base_session_dir, "wa_runtime_stats.json")
-        self._invalid_numbers_file = os.path.join(self.base_session_dir, "wa_invalid_numbers.json")
         os.makedirs(self.base_session_dir, exist_ok=True)
 
     # ============================================================
@@ -119,31 +136,6 @@ class WhatsAppService:
                 json.dump(data, f, ensure_ascii=False, indent=2)
             return True
         except:
-            return False
-
-    def _load_invalid_numbers(self):
-        """تحميل قائمة الأرقام غير المسجلة في واتساب"""
-        default = {"invalid_numbers": [], "last_updated": None}
-        return self._load_json_file(self._invalid_numbers_file, default)
-
-    def _save_invalid_number(self, phone):
-        """حفظ رقم غير مسجل في واتساب"""
-        try:
-            data = self._load_invalid_numbers()
-            if phone not in data["invalid_numbers"]:
-                data["invalid_numbers"].append(phone)
-                data["last_updated"] = datetime.now().isoformat()
-                self._save_json_file(self._invalid_numbers_file, data)
-                print(f"[{time.strftime('%H:%M:%S')}] 💾 Saved invalid number: {phone}")
-        except Exception as e:
-            print(f"[{time.strftime('%H:%M:%S')}] ❌ Error saving invalid number: {e}")
-
-    def _is_invalid_number(self, phone):
-        """التحقق مما إذا كان الرقم غير مسجل في واتساب"""
-        try:
-            data = self._load_invalid_numbers()
-            return phone in data["invalid_numbers"]
-        except Exception:
             return False
 
     def get_daily_stats(self):
@@ -293,7 +285,7 @@ class WhatsAppService:
         
         # --- Stealth & Environment Setup ---
         is_cloud = "/mount/" in __file__.replace("\\", "/") or os.path.exists("/mount")
-        use_headless = headless or is_cloud
+        use_headless = False  # تعطيل headless مؤقتاً لرؤية المشكلة
         ver = self._get_chrome_version()
         ua = self._get_random_ua(ver)
         binary = self._find_chrome_binary()
@@ -322,6 +314,13 @@ class WhatsAppService:
             o.add_argument("--disable-renderer-backgrounding")
             o.add_argument("--memory-pressure-off")
             o.add_argument("--js-flags=--max-old-space-size=4096")
+            # إعدادات إضافية لمنع مشاكل Chrome
+            o.add_argument("--remote-debugging-port=9222")
+            o.add_argument("--disable-software-rasterizer")
+            o.add_argument("--disable-features=VizDisplayCompositor")
+            o.add_argument("--disable-features=site-per-process")
+            o.add_experimental_option("excludeSwitches", ["enable-automation"])
+            o.add_experimental_option('useAutomationExtension', False)
             if with_user_dir:
                 o.add_argument(f"--user-data-dir={self.session_path}")
             if binary:
@@ -333,9 +332,19 @@ class WhatsAppService:
             print(f"[{time.strftime('%H:%M:%S')}] Launching Primary Stealth Engine (Headless: {use_headless})...")
             from selenium import webdriver
             from selenium_stealth import stealth
+            from selenium.webdriver.chrome.service import Service
             
             std_opts = create_chrome_options(with_user_dir=True)
-            self.driver = webdriver.Chrome(options=std_opts)
+            
+            # إضافة Service Configuration لمنع مشاكل DevToolsActivePort
+            service = Service()
+            service.creation_flags = 0x08000000  # CREATE_NO_WINDOW on Windows
+            
+            try:
+                self.driver = webdriver.Chrome(service=service, options=std_opts)
+            except Exception as e:
+                print(f"[{time.strftime('%H:%M:%S')}] ⚠️ Service configuration failed: {e}, retrying without service")
+                self.driver = webdriver.Chrome(options=std_opts)
             
             try:
                 self.driver.execute_cdp_cmd('Page.addScriptToEvaluateOnNewDocument', {
@@ -377,9 +386,18 @@ class WhatsAppService:
             
             from selenium import webdriver
             from selenium_stealth import stealth
+            from selenium.webdriver.chrome.service import Service
             
             std_opts = create_chrome_options(with_user_dir=True)
-            self.driver = webdriver.Chrome(options=std_opts)
+            
+            service = Service()
+            service.creation_flags = 0x08000000
+            
+            try:
+                self.driver = webdriver.Chrome(service=service, options=std_opts)
+            except Exception as e:
+                print(f"[{time.strftime('%H:%M:%S')}] ⚠️ Service configuration failed in retry: {e}, retrying without service")
+                self.driver = webdriver.Chrome(options=std_opts)
             
             try:
                 self.driver.execute_cdp_cmd('Page.addScriptToEvaluateOnNewDocument', {
@@ -669,7 +687,106 @@ class WhatsAppService:
             elif random.random() < 0.008:
                 time.sleep(random.uniform(0.5, 1.2))
 
+    def _find_attachment_send_button(self):
+        """العثور على زر إرسال المرفق في شاشة المعاينة (media preview drawer)"""
+        from selenium.webdriver.common.by import By
+        if not self.driver:
+            return None
+        
+        print(f"[{time.strftime('%H:%M:%S')}] 🔍 _find_attachment_send_button: Searching for attachment send button...")
+        
+        # أولاً، فحص جميع الأزرار في المعاينة
+        try:
+            all_buttons = self.driver.find_elements(By.XPATH, '//button')
+            visible_buttons = []
+            for btn in all_buttons:
+                try:
+                    if btn.is_displayed():
+                        btn_text = btn.text
+                        btn_aria = btn.get_attribute('aria-label')
+                        btn_data = btn.get_attribute('data-testid')
+                        btn_class = btn.get_attribute('class')
+                        if btn_text or btn_aria or btn_data:
+                            visible_buttons.append({
+                                'text': btn_text,
+                                'aria': btn_aria,
+                                'data': btn_data,
+                                'class': btn_class
+                            })
+                except Exception:
+                    continue
+            
+            if visible_buttons:
+                print(f"[{time.strftime('%H:%M:%S')}] 🔍 _find_attachment_send_button: Found {len(visible_buttons)} visible buttons")
+                for i, btn_info in enumerate(visible_buttons[:10]):  # First 10 buttons
+                    print(f"[{time.strftime('%H:%M:%S')}] 🔍 Button {i+1}: text='{btn_info['text']}', aria='{btn_info['aria']}', data='{btn_info['data']}', class='{btn_info['class']}'")
+        except Exception as e:
+            print(f"[{time.strftime('%H:%M:%S')}] ⚠️ _find_attachment_send_button: Error scanning buttons: {e}")
+        
+        # Selectors الخاصة بزر إرسال المرفق في شاشة المعاينة
+        selectors = [
+            # زر الإرسال في شاشة معاينة الوسائط
+            '//div[contains(@data-testid, "media-send-button")]',
+            '//div[contains(@data-testid, "drawer")]//button[contains(@data-testid, "send")]',
+            '//div[contains(@data-testid, "media-preview")]//button[contains(@data-testid, "send")]',
+            '//div[contains(@class, "media-send")]//button',
+            '//button[@data-icon="send"]/ancestor::div[contains(@class, "drawer")]',
+            '//button[@data-icon="send"]/ancestor::div[contains(@data-testid, "media-preview")]',
+            # أزرار الإرسال العامة في footer (بديل)
+            '//footer//button[@data-testid="compose-btn-send"]',
+            '//footer//button[contains(@data-testid, "send")]',
+            '//span[@data-icon="send"]/parent::button',
+        ]
+        
+        for i, sel in enumerate(selectors):
+            try:
+                elems = self.driver.find_elements(By.XPATH, sel)
+                for e in elems:
+                    try:
+                        if e.is_displayed():
+                            print(f"[{time.strftime('%H:%M:%S')}] ✅ _find_attachment_send_button: Found button with selector {i+1}: {sel}")
+                            return e
+                    except Exception:
+                        continue
+            except Exception:
+                continue
+        
+        print(f"[{time.strftime('%H:%M:%S')}] ❌ _find_attachment_send_button: No attachment send button found")
+        return None
+
     def _find_send_button(self):
+        """العثور على زر إرسال المرفق في شاشة المعاينة (media preview drawer)"""
+        from selenium.webdriver.common.by import By
+        if not self.driver:
+            return None
+        
+        # Selectors الخاصة بزر إرسال المرفق في شاشة المعاينة
+        selectors = [
+            # زر الإرسال في شاشة معاينة الوسائط
+            '//div[contains(@data-testid, "media-send-button")]',
+            '//div[contains(@data-testid, "drawer")]//button[contains(@data-testid, "send")]',
+            '//div[contains(@data-testid, "media-preview")]//button[contains(@data-testid, "send")]',
+            '//div[contains(@class, "media-send")]//button',
+            '//button[@data-icon="send"]/ancestor::div[contains(@class, "drawer")]',
+            '//button[@data-icon="send"]/ancestor::div[contains(@data-testid, "media-preview")]',
+            # أزرار الإرسال العامة في footer (بديل)
+            '//footer//button[@data-testid="compose-btn-send"]',
+            '//footer//button[contains(@data-testid, "send")]',
+            '//span[@data-icon="send"]/parent::button',
+        ]
+        
+        for sel in selectors:
+            try:
+                elems = self.driver.find_elements(By.XPATH, sel)
+                for e in elems:
+                    try:
+                        if e.is_displayed():
+                            return e
+                    except Exception:
+                        continue
+            except Exception:
+                continue
+        return None
         """العثور على زر الإرسال الحقيقي لواتساب ويب (نسخة 2024-2026) مع استبعاد أزرار الميكروفون والإيموجي والإرفاق تماماً"""
         from selenium.webdriver.common.by import By
         if not self.driver:
@@ -742,13 +859,6 @@ class WhatsAppService:
             '//footer//*[@role="textbox"][@contenteditable="true"]',
             # 3. أي contenteditable داخل main مع استبعاد الشريط الجانبي
             '//*[@id="main"]//*[@contenteditable="true"]',
-            # 4. محددات إضافية للنسخ الجديدة من واتساب ويب
-            '//div[@data-testid="conversation-compose-box"]//div[@contenteditable="true"]',
-            '//*[@id="main"]//div[@data-testid="conversation-compose-box"]//div[@contenteditable="true"]',
-            '//footer//div[@data-testid="conversation-compose-box"]//div[@contenteditable="true"]',
-            # 5. محددات عامة أكثر
-            '//div[@role="textbox"][@contenteditable="true"]',
-            '//div[@spellcheck="true"][@contenteditable="true"]',
         ]
         for sel in selectors:
             try:
@@ -778,57 +888,6 @@ class WhatsAppService:
                         continue
             except Exception:
                 continue
-        
-        # محاولة أخيرة باستخدام JavaScript للعثور على العنصر
-        try:
-            js_result = self.driver.execute_script("""
-                // البحث عن صندوق الكتابة باستخدام JavaScript
-                var footer = document.querySelector('footer');
-                if (footer) {
-                    var inputs = footer.querySelectorAll('[contenteditable="true"]');
-                    for (var i = 0; i < inputs.length; i++) {
-                        var input = inputs[i];
-                        var rect = input.getBoundingClientRect();
-                        if (rect.width > 20 && rect.height > 10) {
-                            // التأكد من أنه ليس حقل البحث
-                            var dataTab = input.getAttribute('data-tab') || '';
-                            if (dataTab !== '3') {
-                                return input;
-                            }
-                        }
-                    }
-                }
-                // البحث في main
-                var main = document.getElementById('main');
-                if (main) {
-                    var inputs = main.querySelectorAll('[contenteditable="true"]');
-                    for (var i = 0; i < inputs.length; i++) {
-                        var input = inputs[i];
-                        var rect = input.getBoundingClientRect();
-                        if (rect.width > 20 && rect.height > 10) {
-                            var dataTab = input.getAttribute('data-tab') || '';
-                            if (dataTab !== '3') {
-                                // التأكد من أنه ليس في side
-                                var closestSide = input.closest('#side');
-                                if (!closestSide) {
-                                    return input;
-                                }
-                            }
-                        }
-                    }
-                }
-                return null;
-            """)
-            if js_result:
-                from selenium.webdriver.common.by import By
-                # تحويل WebElement من JavaScript إلى WebElement من Selenium
-                try:
-                    return js_result
-                except Exception:
-                    pass
-        except Exception as e:
-            print(f"[{time.strftime('%H:%M:%S')}] ❌ JS fallback error: {e}")
-        
         return None
 
     def _inject_text_to_input(self, msg_input, text: str) -> bool:
@@ -1175,12 +1234,20 @@ class WhatsAppService:
         from selenium.webdriver.common.action_chains import ActionChains
         import urllib.parse
 
+        print(f"[{time.strftime('%H:%M:%S')}] ========== STARTING SEND MESSAGE ==========")
+        print(f"[{time.strftime('%H:%M:%S')}] Phone: {phone}")
+        print(f"[{time.strftime('%H:%M:%S')}] Has attachment: {attachment_path is not None}")
+        print(f"[{time.strftime('%H:%M:%S')}] Message length: {len(message) if message else 0}")
+
         if not self.driver:
+            print(f"[{time.strftime('%H:%M:%S')}] ❌ FAILED: Engine Offline (المحرك غير متصل)")
             return False, "Engine Offline (المحرك غير متصل)"
         try:
             _ = self.driver.window_handles
-        except Exception:
+            print(f"[{time.strftime('%H:%M:%S')}] ✅ OPEN_CHAT: Driver is connected")
+        except Exception as e:
             self.driver = None
+            print(f"[{time.strftime('%H:%M:%S')}] ❌ FAILED: Engine Disconnected - {e}")
             return False, "Engine Disconnected (المتصفح مغلق)"
 
         # 🛡️ 1. فحص حدود الأمان
@@ -1192,11 +1259,6 @@ class WhatsAppService:
 
         self.simulate_human_browsing()
 
-        # التحقق مما إذا كان الرقم غير مسجل مسبقاً
-        if self._is_invalid_number(clean_phone):
-            print(f"[{time.strftime('%H:%M:%S')}] ⏭️ Skipping invalid number (cached): {clean_phone}")
-            return False, "رقم غير مسجل في واتساب (محفوظ مسبقاً)"
-
         try:
             clean_phone = self._normalize_phone(phone)
             if message:
@@ -1204,6 +1266,7 @@ class WhatsAppService:
 
             if len(clean_phone) < 8:
                 self.update_daily_stats(False, is_invalid_number=True)
+                print(f"[{time.strftime('%H:%M:%S')}] ❌ FAILED: Invalid phone number ({phone})")
                 return False, f"رقم غير صالح ({phone})"
 
             # إغلاق أي نوافذ منبثقة سابقة
@@ -1217,7 +1280,7 @@ class WhatsAppService:
                 target_url = f"https://web.whatsapp.com/send/?phone={clean_phone}&text={encoded_msg}"
             else:
                 target_url = f"https://web.whatsapp.com/send/?phone={clean_phone}"
-            print(f"[{time.strftime('%H:%M:%S')}] 🚀 Navigating to: {clean_phone} -> {target_url}")
+            print(f"[{time.strftime('%H:%M:%S')}] 🚀 OPEN_CHAT: Navigating to: {clean_phone}...")
 
             # محاولة التنقل الداخلي لتجنب إعادة تحميل الصفحة الكاملة
             navigated = False
@@ -1236,27 +1299,31 @@ class WhatsAppService:
                         a.click();
                     """)
                     navigated = True
-            except Exception:
+                    print(f"[{time.strftime('%H:%M:%S')}] ✅ OPEN_CHAT: Navigated via JS link")
+            except Exception as e:
+                print(f"[{time.strftime('%H:%M:%S')}] ⚠️ OPEN_CHAT: JS navigation failed: {e}")
                 navigated = False
 
             if not navigated:
                 try:
                     self.driver.get(target_url)
+                    print(f"[{time.strftime('%H:%M:%S')}] ✅ OPEN_CHAT: Navigated via driver.get()")
                 except Exception as e_nav:
-                    print(f"[{time.strftime('%H:%M:%S')}] Navigation retry via JS: {e_nav}")
+                    print(f"[{time.strftime('%H:%M:%S')}] ⚠️ OPEN_CHAT: Navigation retry via JS: {e_nav}")
                     self.driver.execute_script(f"window.location.href = '{target_url}';")
 
             # فترة انتظار أولية لتهيئة واجهة المحادثة
             time.sleep(random.uniform(2.5, 4.0))
+            print(f"[{time.strftime('%H:%M:%S')}] ✅ OPEN_CHAT: Navigation completed, waiting for chat to load")
 
-            # ⏳ 3. حلقة انتظار ظهور صندوق الكتابة أو نافذة خطأ الرقم غير المسجل (حتى 60 ثانية)
+            # ⏳ 3. حلقة انتظار ظهور صندوق الكتابة أو نافذة خطأ الرقم غير المسجل (حتى 35 ثانية)
             wait_start = time.time()
             msg_input = None
             is_invalid_num = False
             invalid_reason = "رقم غير مسجل في الواتساب"
             invalid_detection_count = 0  # عداد للتحقق المتعدد من الرقم غير الصالح
 
-            while time.time() - wait_start < 60:
+            while time.time() - wait_start < 35:
                 self._auto_handle_popups()
 
                 # A. التحقق من ظهور نافذة رقم غير مسجل (مع تحقق متعدد لتجنب الأخطاء)
@@ -1309,26 +1376,15 @@ class WhatsAppService:
                     # إذا وجد صندوق الكتابة، الرقم صالح - إلغاء أي اكتشاف خاطئ للرقم غير الصالح
                     is_invalid_num = False
                     invalid_detection_count = 0
-                    print(f"[{time.strftime('%H:%M:%S')}] ✅ Input box found successfully")
                     break
 
                 # إذا لم يبدأ التنقل الداخلي، استخدام driver.get كإجراء احتياطي
-                if time.time() - wait_start > 8 and not msg_input:
+                if time.time() - wait_start > 6 and not msg_input:
                     try:
                         curr = self.driver.current_url or ""
                         if clean_phone not in curr:
                             self.driver.get(target_url)
-                            time.sleep(3.0)
-                    except Exception:
-                        pass
-                
-                # محاولة إضافية بعد 15 ثانية إذا لم يتم العثور على صندوق الكتابة
-                if time.time() - wait_start > 15 and not msg_input:
-                    try:
-                        self.driver.refresh()
-                        time.sleep(3.0)
-                        self.driver.get(target_url)
-                        time.sleep(3.0)
+                            time.sleep(2.0)
                     except Exception:
                         pass
 
@@ -1339,62 +1395,40 @@ class WhatsAppService:
                 self._dismiss_modals()
                 self.update_daily_stats(False, is_invalid_number=True)
                 print(f"[{time.strftime('%H:%M:%S')}] ❌ رقم غير مسجل: {clean_phone}")
-                
-                # حفظ الرقم في قائمة الأرقام غير المسجلة
-                self._save_invalid_number(clean_phone)
-                
                 return False, invalid_reason
 
             # فحص أخير إذا لم يتم العثور على صندوق الكتابة
             if not msg_input:
                 msg_input = self._find_input_box()
-                print(f"[{time.strftime('%H:%M:%S')}] 🔍 First attempt to find input box: {'FOUND' if msg_input else 'NOT FOUND'}")
-            
-            # محاولة إضافية: النقر على منطقة المحادثة لتفعيل صندوق الكتابة
-            if not msg_input:
-                try:
-                    from selenium.webdriver.common.by import By
-                    from selenium.webdriver.common.action_chains import ActionChains
-                    # محاولة النقر على منطقة المحادثة
-                    chat_area = self.driver.find_elements(By.XPATH, '//*[@id="main"]//div[@data-testid="conversation-panel"]')
-                    if chat_area and chat_area[0].is_displayed():
-                        print(f"[{time.strftime('%H:%M:%S')}] 🖱️ Clicking on chat area to activate input box")
-                        ActionChains(self.driver).move_to_element(chat_area[0]).click().perform()
-                        time.sleep(1.0)
-                        msg_input = self._find_input_box()
-                        print(f"[{time.strftime('%H:%M:%S')}] 🔍 After click attempt: {'FOUND' if msg_input else 'NOT FOUND'}")
-                except Exception as e:
-                    print(f"[{time.strftime('%H:%M:%S')}] ❌ Error clicking chat area: {e}")
 
             if not msg_input:
-                # محاولة أخيرة: طباعة معلومات الصفحة للتشخيص
-                try:
-                    page_title = self.driver.title
-                    current_url = self.driver.current_url
-                    print(f"[{time.strftime('%H:%M:%S')}] 📄 Page info - Title: {page_title}, URL: {current_url}")
-                except Exception:
-                    pass
-                
                 self._dismiss_modals()
                 self.update_daily_stats(False, is_invalid_number=False)
+                print(f"[{time.strftime('%H:%M:%S')}] ❌ FAILED: Could not find message input box")
                 return False, "فشل في فتح المحادثة أو العثور على صندوق الرسائل (يرجى التأكد من استقرار الإنترنت)"
+            
+            print(f"[{time.strftime('%H:%M:%S')}] ✅ MESSAGE_BOX_FOUND: Message input box found and ready")
 
             time.sleep(0.5)
 
             # 📊 قياس عدد الرسائل الصادرة في هذه المحادثة قبل الإرسال (Baseline)
-            _baseline_xpath = '//div[contains(@data-testid, "msg-out")] | //div[contains(@class, "message-out")]'
+            _baseline_xpath = '//div[contains(@data-testid, "msg-out")] | //div[contains(@class, "message-out")] | //div[contains(@class, "message-sent")] | //div[contains(@class, "outgoing")]'
             try:
                 _baseline_count = len(self.driver.find_elements(By.XPATH, _baseline_xpath))
-            except Exception:
+                print(f"[{time.strftime('%H:%M:%S')}] 📊 Baseline message count: {_baseline_count}")
+            except Exception as e:
+                print(f"[{time.strftime('%H:%M:%S')}] ⚠️ Error getting baseline count: {e}")
                 _baseline_count = -1
 
             # 📎 4. التعامل مع المرفقات (سواء ملف واحد أو قائمة ملفات PDF، فيديو، صور)
             raw_attachments = []
             if attachment_path:
+                print(f"[{time.strftime('%H:%M:%S')}] 📎 ATTACHMENT_STARTED: Processing attachments...")
                 if isinstance(attachment_path, (list, tuple, set)):
                     raw_attachments = [str(p) for p in attachment_path if p and os.path.exists(str(p))]
                 elif isinstance(attachment_path, str) and os.path.exists(attachment_path):
                     raw_attachments = [attachment_path]
+                print(f"[{time.strftime('%H:%M:%S')}] 📎 ATTACHMENT_STARTED: Found {len(raw_attachments)} attachments")
 
             if raw_attachments:
                 temp_dir = os.path.join(self.session_path, "temp_uploads")
@@ -1427,47 +1461,158 @@ class WhatsAppService:
                             continue
                     return False
 
+                def _select_document_option():
+                    """اختيار 'مستند' من قائمة الإرفاق للمستندات"""
+                    document_selectors = [
+                        '//span[contains(text(), "مستند")]/parent::button',
+                        '//span[contains(text(), "Document")]/parent::button',
+                        '//div[@title="Document"]',
+                        '//div[@title="مستند"]',
+                        '//button[contains(@aria-label, "Document")]',
+                        '//button[contains(@aria-label, "مستند")]',
+                    ]
+                    for sel in document_selectors:
+                        try:
+                            btns = self.driver.find_elements(By.XPATH, sel)
+                            if btns and btns[0].is_displayed():
+                                try:
+                                    ActionChains(self.driver).move_to_element(btns[0]).pause(0.2).click().perform()
+                                except Exception:
+                                    btns[0].click()
+                                print(f"[{time.strftime('%H:%M:%S')}] ✅ ATTACHMENT_SELECTED: Document option selected")
+                                return True
+                        except Exception:
+                            continue
+                    print(f"[{time.strftime('%H:%M:%S')}] ⚠️ ATTACHMENT_SELECTED: Document option not found, may use general file input")
+                    return False
+
                 media_exts = {'.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.mp4', '.mov', '.avi', '.mkv', '.3gp'}
+                document_exts = {'.pdf', '.doc', '.docx', '.txt', '.xls', '.xlsx', '.ppt', '.pptx', '.rtf', '.odt', '.ods', '.odp', '.csv', '.zip', '.rar', '.7z'}
 
                 def _get_target_file_input(ext):
-                    is_media = ext.lower() in media_exts
+                    ext_lower = ext.lower()
+                    is_media = ext_lower in media_exts
+                    is_document = ext_lower in document_exts
                     file_inputs = self.driver.find_elements(By.XPATH, '//input[@type="file"]')
                     if not file_inputs:
                         return None
-                    for finp in file_inputs:
-                        acc = (finp.get_attribute("accept") or "").lower()
-                        if is_media and ("image" in acc or "video" in acc):
+                    
+                    msg = f"🔍 _get_target_file_input: Found {len(file_inputs)} file inputs"
+                    print(f"[{time.strftime('%H:%M:%S')}] {msg}")
+                    logger.info(msg)
+                    
+                    for i, finp in enumerate(file_inputs):
+                        try:
+                            acc = (finp.get_attribute("accept") or "").lower()
+                            msg = f"🔍 File input {i+1}: accept='{acc}'"
+                            print(f"[{time.strftime('%H:%M:%S')}] {msg}")
+                            logger.info(msg)
+                        except Exception as e:
+                            msg = f"⚠️ Error getting accept attribute: {e}"
+                            print(f"[{time.strftime('%H:%M:%S')}] {msg}")
+                            logger.info(msg)
+                    
+                    # للمستندات: جرب جميع inputs من الأخير إلى الأول
+                    if is_document:
+                        msg = f"🔍 _get_target_file_input: Document file, trying inputs from last to first"
+                        print(f"[{time.strftime('%H:%M:%S')}] {msg}")
+                        logger.info(msg)
+                        # عكس القائمة لنجرب من الأخير إلى الأول
+                        for finp in reversed(file_inputs):
+                            acc = (finp.get_attribute("accept") or "").lower()
+                            # تجنب inputs للصور فقط أو الفيديو فقط
+                            if "image" in acc and "video" not in acc and "document" not in acc and "*" not in acc:
+                                continue
+                            if "video" in acc and "image" not in acc and "document" not in acc and "*" not in acc:
+                                continue
+                            msg = f"✅ _get_target_file_input: Selected document input with accept='{acc}'"
+                            print(f"[{time.strftime('%H:%M:%S')}] {msg}")
+                            logger.info(msg)
                             return finp
-                        elif not is_media and ("*" in acc or "document" in acc or ("image" not in acc and "video" not in acc)):
-                            return finp
-                    return file_inputs[0] if is_media else file_inputs[-1]
+                        # Fallback: آخر input
+                        msg = f"⚠️ _get_target_file_input: No suitable document input, using last input"
+                        print(f"[{time.strftime('%H:%M:%S')}] {msg}")
+                        logger.info(msg)
+                        return file_inputs[-1]
+                    
+                    # للصور/الفيديو: ابحث عن input للصور/الفيديو
+                    if is_media:
+                        for finp in file_inputs:
+                            acc = (finp.get_attribute("accept") or "").lower()
+                            if "image" in acc or "video" in acc:
+                                msg = f"✅ _get_target_file_input: Selected media input with accept='{acc}'"
+                                print(f"[{time.strftime('%H:%M:%S')}] {msg}")
+                                logger.info(msg)
+                                return finp
+                        msg = f"⚠️ _get_target_file_input: No media input, using first input"
+                        print(f"[{time.strftime('%H:%M:%S')}] {msg}")
+                        logger.info(msg)
+                        return file_inputs[0]
+                    
+                    # للملفات الأخرى: استخدام last input
+                    msg = f"⚠️ _get_target_file_input: Unknown file type, using last input"
+                    print(f"[{time.strftime('%H:%M:%S')}] {msg}")
+                    logger.info(msg)
+                    return file_inputs[-1]
 
                 caption_injected = False
                 created_temp_subfolders = []
 
                 try:
                     for att_idx, single_att in enumerate(raw_attachments):
+                        print(f"[{time.strftime('%H:%M:%S')}] 📎 ATTACHMENT_SELECTED: Processing attachment {att_idx + 1}/{len(raw_attachments)}: {os.path.basename(single_att)}")
                         ext = os.path.splitext(single_att)[1].lower()
 
                         # وقفة طبيعية لمحاكاة السلوك البشري إذا كان هناك أكثر من مرفق
                         if att_idx > 0:
                             time.sleep(random.uniform(2.5, 4.0))
 
-                        # فتح قائمة الإرفاق
+                        # فتح قائمة الإرفاق وجعل file inputs تظهر
+                        print(f"[{time.strftime('%H:%M:%S')}] 📎 ATTACHMENT_SELECTED: Opening attach menu to reveal file inputs...")
                         opened = _open_attach_menu()
                         if not opened:
+                            print(f"[{time.strftime('%H:%M:%S')}] ⚠️ ATTACHMENT_SELECTED: First attempt failed, retrying...")
                             time.sleep(0.8)
                             opened = _open_attach_menu()
                         if not opened:
+                            print(f"[{time.strftime('%H:%M:%S')}] ❌ ATTACHMENT_SELECTED: Failed to find attach button")
                             self.update_daily_stats(False, is_invalid_number=False)
                             return False, "فشل العثور على زر الإرفاق"
+                        print(f"[{time.strftime('%H:%M:%S')}] ✅ ATTACHMENT_SELECTED: Attach menu opened")
 
-                        time.sleep(1.2)
-
+                        # للمستندات: تغيير accept attribute لـ file input لقبول المستندات
+                        if ext.lower() in document_exts:
+                            print(f"[{time.strftime('%H:%M:%S')}] 📎 ATTACHMENT_SELECTED: Document detected, modifying file input to accept documents...")
+                            target_input = _get_target_file_input(ext)
+                            if target_input:
+                                try:
+                                    # تغيير accept attribute باستخدام JavaScript
+                                    modify_accept_script = """
+                                    (function() {
+                                        var inputs = document.querySelectorAll('input[type="file"]');
+                                        for (var i = 0; i < inputs.length; i++) {
+                                            inputs[i].setAttribute('accept', '*/*');
+                                        }
+                                        return 'Modified ' + inputs.length + ' inputs';
+                                    })();
+                                    """
+                                    result = self.driver.execute_script(modify_accept_script)
+                                    print(f"[{time.strftime('%H:%M:%S')}] ✅ ATTACHMENT_SELECTED: Modified file input accept: {result}")
+                                    time.sleep(0.5)
+                                except Exception as e:
+                                    print(f"[{time.strftime('%H:%M:%S')}] ⚠️ ATTACHMENT_SELECTED: Failed to modify accept: {e}")
+                            else:
+                                print(f"[{time.strftime('%H:%M:%S')}] ❌ ATTACHMENT_SELECTED: No file input found")
+                        else:
+                            time.sleep(0.5)
+                            target_input = _get_target_file_input(ext)
+                        
                         target_input = _get_target_file_input(ext)
                         if not target_input:
+                            print(f"[{time.strftime('%H:%M:%S')}] ❌ ATTACHMENT_SELECTED: Failed to find file input for ext: {ext}")
                             self.update_daily_stats(False, is_invalid_number=False)
                             return False, "فشل العثور على حقل رفع الملف"
+                        print(f"[{time.strftime('%H:%M:%S')}] ✅ ATTACHMENT_SELECTED: File input found for ext: {ext}")
 
                         # الحفاظ على الاسم الأصلي للملف داخل مجلد مؤقت فريد
                         orig_name = os.path.basename(single_att)
@@ -1476,9 +1621,62 @@ class WhatsAppService:
                         created_temp_subfolders.append(send_subfolder)
                         ready_path = os.path.join(send_subfolder, orig_name)
                         shutil.copy2(single_att, ready_path)
+                        print(f"[{time.strftime('%H:%M:%S')}] ✅ ATTACHMENT_UPLOAD_STARTED: File copied to temp: {ready_path}")
 
-                        target_input.send_keys(ready_path)
+                        # رفع الملف
+                        try:
+                            target_input.send_keys(ready_path)
+                            print(f"[{time.strftime('%H:%M:%S')}] ✅ PDF_UPLOAD_STARTED: File path sent to input successfully")
+                        except Exception as e:
+                            print(f"[{time.strftime('%H:%M:%S')}] ❌ PDF_UPLOAD_STARTED: Failed to send file path: {e}")
+                            self.update_daily_stats(False, is_invalid_number=False)
+                            return False, f"فشل رفع المرفق ({orig_name})"
+
                         time.sleep(2.5)
+                        print(f"[{time.strftime('%H:%M:%S')}] ⏳ PDF_UPLOAD_STARTED: Waiting for preview to appear...")
+                        
+                        # فحص رسالة خطأ "الملف غير مدعوم"
+                        try:
+                            error_msg = self.driver.find_elements(By.XPATH, '//*[contains(text(), "غير مدعوم") or contains(text(), "not supported")]')
+                            if error_msg:
+                                print(f"[{time.strftime('%H:%M:%S')}] ❌ PDF_UPLOAD_STARTED: WhatsApp shows 'file not supported' error")
+                                print(f"[{time.strftime('%H:%M:%S')}] ❌ PDF_UPLOAD_STARTED: Wrong file input was selected - file treated as image instead of document")
+                                logger.info("❌ PDF_UPLOAD_STARTED: WhatsApp shows 'file not supported' error")
+                                # حاول استخدام file input آخر
+                                print(f"[{time.strftime('%H:%M:%S')}] 🔧 PDF_UPLOAD_STARTED: Trying alternative file input...")
+                                try:
+                                    file_inputs = self.driver.find_elements(By.XPATH, '//input[@type="file"]')
+                                    if len(file_inputs) > 1:
+                                        # استخدم file input مختلف
+                                        for alt_input in reversed(file_inputs):
+                                            if alt_input != target_input:
+                                                try:
+                                                    alt_input.send_keys(ready_path)
+                                                    print(f"[{time.strftime('%H:%M:%S')}] ✅ PDF_UPLOAD_STARTED: Retried with alternative file input")
+                                                    logger.info("✅ PDF_UPLOAD_STARTED: Retried with alternative file input")
+                                                    time.sleep(2.5)
+                                                    # فحص مرة أخرى
+                                                    error_msg = self.driver.find_elements(By.XPATH, '//*[contains(text(), "غير مدعوم") or contains(text(), "not supported")]')
+                                                    if not error_msg:
+                                                        print(f"[{time.strftime('%H:%M:%S')}] ✅ PDF_UPLOAD_STARTED: Alternative input worked!")
+                                                        logger.info("✅ PDF_UPLOAD_STARTED: Alternative input worked!")
+                                                        break
+                                                except Exception as e:
+                                                    print(f"[{time.strftime('%H:%M:%S')}] ⚠️ PDF_UPLOAD_STARTED: Alternative input failed: {e}")
+                                                    continue
+                                except Exception as e:
+                                    print(f"[{time.strftime('%H:%M:%S')}] ⚠️ PDF_UPLOAD_STARTED: Failed to try alternative: {e}")
+                                
+                                # فحص نهائي
+                                error_msg = self.driver.find_elements(By.XPATH, '//*[contains(text(), "غير مدعوم") or contains(text(), "not supported")]')
+                                if error_msg:
+                                    print(f"[{time.strftime('%H:%M:%S')}] ❌ PDF_UPLOAD_STARTED: Still showing error after retry")
+                                    logger.info("❌ PDF_UPLOAD_STARTED: Still showing error after retry")
+                                    self.update_daily_stats(False, is_invalid_number=False)
+                                    return False, "الملف غير مدعوم من WhatsApp (تم تجربة جميع file inputs)"
+                        except Exception as e:
+                            print(f"[{time.strftime('%H:%M:%S')}] ⚠️ PDF_UPLOAD_STARTED: Error checking for error message: {e}")
+                            logger.info(f"⚠️ PDF_UPLOAD_STARTED: Error checking for error message: {e}")
 
                         # فحص شاشة المعاينة وصندوق النص المرفق
                         caption_input = None
@@ -1490,54 +1688,47 @@ class WhatsAppService:
                                 ' | //div[@role="textbox"]'
                                 ' | //div[contains(@data-testid, "media-caption-input-container")]//div[@contenteditable="true"]'
                             )))
-                        except Exception:
+                            print(f"[{time.strftime('%H:%M:%S')}] ✅ PDF_UPLOAD_COMPLETED: Caption input found")
+                        except Exception as e:
+                            print(f"[{time.strftime('%H:%M:%S')}] ⚠️ PDF_UPLOAD_COMPLETED: Caption input not found (may be document without caption): {e}")
                             caption_input = None
 
-                        # حقن نص الرسالة مع أول مرفق فقط
-                        if att_idx == 0 and message and caption_input:
-                            try:
-                                self._inject_text_to_input(caption_input, message)
-                                caption_injected = True
-                                time.sleep(1.0)
-                            except Exception:
-                                caption_injected = False
+                        # لا نحقن الرسالة كـ Caption مع المرفق لمنع المشاكل
+                        # سنرسل الرسالة في صندوق المحادثة بعد اختفاء المعاينة
+                        caption_injected = False
+                        print(f"[{time.strftime('%H:%M:%S')}] ℹ️ PDF_UPLOAD_COMPLETED: Skipping caption injection to avoid issues, will send in chat box after attachment")
 
-                        # النقر على زر إرسال المرفق
-                        sent_att_ok = False
-                        media_send_btn = self._find_send_button()
-                        if media_send_btn:
-                            try:
-                                ActionChains(self.driver).move_to_element(media_send_btn).pause(0.3).click().perform()
-                                sent_att_ok = True
-                            except Exception: pass
-                        if not sent_att_ok and caption_input:
-                            try:
-                                caption_input.send_keys(Keys.ENTER)
-                                sent_att_ok = True
-                            except Exception: pass
-                        if not sent_att_ok:
-                            try:
-                                alt_btns = self.driver.find_elements(By.XPATH, '//span[@data-icon="send"]/parent::* | //button[@aria-label="Send" or @aria-label="إرسال"]')
-                                if alt_btns and alt_btns[-1].is_displayed():
-                                    alt_btns[-1].click()
-                                    sent_att_ok = True
-                            except Exception: pass
-
-                        if not sent_att_ok:
-                            self.update_daily_stats(False, is_invalid_number=False)
-                            return False, f"فشل في الضغط على زر إرسال المرفق ({orig_name})"
-
-                        # ⏳ الانتظار حتى اكتمال رفع الوسائط وإغلاق شاشة المعاينة (حماية الحساب من قطع الرفع)
-                        up_start = time.time()
-                        while time.time() - up_start < 25:
+                        # التحقق من ظهور معاينة المرفق قبل البحث عن زر الإرسال
+                        print(f"[{time.strftime('%H:%M:%S')}] 🔍 PDF_PREVIEW_VISIBLE: Checking for attachment preview...")
+                        preview_visible = False
+                        try:
                             previews = self.driver.find_elements(By.XPATH,
                                 '//div[contains(@data-testid, "media-preview")] | '
                                 '//div[contains(@data-testid, "media-caption-input-container")] | '
                                 '//div[contains(@data-testid, "drawer-middle")]'
                             )
-                            if not previews or not any(p.is_displayed() for p in previews):
-                                break
-                            time.sleep(0.5)
+                            if previews and any(p.is_displayed() for p in previews):
+                                preview_visible = True
+                                print(f"[{time.strftime('%H:%M:%S')}] ✅ PDF_PREVIEW_VISIBLE: Attachment preview is visible")
+                            else:
+                                print(f"[{time.strftime('%H:%M:%S')}] ⚠️ PDF_PREVIEW_VISIBLE: Attachment preview not visible, waiting more...")
+                                time.sleep(5.0)  # زيادة من 3.0 إلى 5.0 ثانية
+                                # Check again
+                                previews = self.driver.find_elements(By.XPATH,
+                                    '//div[contains(@data-testid, "media-preview")] | '
+                                    '//div[contains(@data-testid, "media-caption-input-container")] | '
+                                    '//div[contains(@data-testid, "drawer-middle")]'
+                                )
+                                if previews and any(p.is_displayed() for p in previews):
+                                    preview_visible = True
+                                    print(f"[{time.strftime('%H:%M:%S')}] ✅ PDF_PREVIEW_VISIBLE: Attachment preview visible after retry")
+                        except Exception as e:
+                            print(f"[{time.strftime('%H:%M:%S')}] ⚠️ PDF_PREVIEW_VISIBLE: Error checking preview: {e}")
+
+                        if not preview_visible:
+                            print(f"[{time.strftime('%H:%M:%S')}] ❌ PDF_SEND_FAILED: Attachment preview not visible, cannot send")
+                            self.update_daily_stats(False, is_invalid_number=False)
+                            return False, "فشل ظهور معاينة المرفق، لا يمكن الإرسال"
 
                         # مهلة أمان إضافية بحسب حجم الملف ونوعه (فيديوهات / مستندات PDF) لضمان تسليمه لخوادم واتساب
                         try:
@@ -1546,26 +1737,219 @@ class WhatsAppService:
                             file_size_mb = 1.0
 
                         if ext in ['.mp4', '.mov', '.avi', '.mkv'] or file_size_mb > 5:
-                            time.sleep(min(8.0, 3.0 + file_size_mb * 0.4))
+                            print(f"[{time.strftime('%H:%M:%S')}] ⏳ PDF_UPLOAD_COMPLETED: Video/large file, waiting {min(10.0, 4.0 + file_size_mb * 0.5):.1f}s")
+                            time.sleep(min(10.0, 4.0 + file_size_mb * 0.5))
                         elif ext in ['.pdf', '.doc', '.docx']:
-                            time.sleep(min(5.0, 2.0 + file_size_mb * 0.3))
+                            print(f"[{time.strftime('%H:%M:%S')}] ⏳ PDF_UPLOAD_COMPLETED: Document, waiting {min(7.0, 3.0 + file_size_mb * 0.4):.1f}s")
+                            time.sleep(min(7.0, 3.0 + file_size_mb * 0.4))
                         else:
-                            time.sleep(1.5)
+                            print(f"[{time.strftime('%H:%M:%S')}] ⏳ PDF_UPLOAD_COMPLETED: Other file, waiting 3.0s")
+                            time.sleep(3.0)
+                        
+                        # تأخير إضافي لضمان استقرار WhatsApp قبل الإرسال
+                        print(f"[{time.strftime('%H:%M:%S')}] ⏳ PDF_UPLOAD_COMPLETED: Waiting for WhatsApp to stabilize before send...")
+                        time.sleep(2.0)
 
-                    # إذا لم يتم حقن نص الرسالة كـ Caption (مثلاً مستند بدون حقل شرح)، إرسال النص في المحادثة
+                        # مهلة أمان إضافية بحسب حجم الملف ونوعه (فيديوهات / مستندات PDF) لضمان تسليمه لخوادم واتساب
+                        try:
+                            file_size_mb = os.path.getsize(ready_path) / (1024 * 1024)
+                        except Exception:
+                            file_size_mb = 1.0
+
+                        if ext in ['.mp4', '.mov', '.avi', '.mkv'] or file_size_mb > 5:
+                            print(f"[{time.strftime('%H:%M:%S')}] ⏳ PDF_UPLOAD_COMPLETED: Video/large file, waiting {min(10.0, 4.0 + file_size_mb * 0.5):.1f}s")
+                            time.sleep(min(10.0, 4.0 + file_size_mb * 0.5))
+                        elif ext in ['.pdf', '.doc', '.docx']:
+                            print(f"[{time.strftime('%H:%M:%S')}] ⏳ PDF_UPLOAD_COMPLETED: Document, waiting {min(7.0, 3.0 + file_size_mb * 0.4):.1f}s")
+                            time.sleep(min(7.0, 3.0 + file_size_mb * 0.4))
+                        else:
+                            print(f"[{time.strftime('%H:%M:%S')}] ⏳ PDF_UPLOAD_COMPLETED: Other file, waiting 3.0s")
+                            time.sleep(3.0)
+                        
+                        # تأخير إضافي لضمان استقرار WhatsApp قبل الإرسال
+                        print(f"[{time.strftime('%H:%M:%S')}] ⏳ PDF_UPLOAD_COMPLETED: Waiting for WhatsApp to stabilize before send...")
+                        time.sleep(2.0)
+
+                        # النقر على زر إرسال المرفق
+                        sent_att_ok = False
+                        media_send_btn = self._find_attachment_send_button()  # استخدام الدالة الجديدة
+                        print(f"[{time.strftime('%H:%M:%S')}] 🔘 ATTACHMENT_SEND_BUTTON_FOUND: Attachment send button found: {media_send_btn is not None}")
+                        if media_send_btn:
+                            try:
+                                ActionChains(self.driver).move_to_element(media_send_btn).pause(0.5).click().perform()
+                                sent_att_ok = True
+                                print(f"[{time.strftime('%H:%M:%S')}] ✅ ATTACHMENT_SEND_BUTTON_CLICKED: Clicked attachment send button")
+                                time.sleep(1.0)  # Wait after click
+                                
+                                # فحص فوري: هل المعاينة ما زالت ظاهرة؟
+                                try:
+                                    previews_after_click = self.driver.find_elements(By.XPATH,
+                                        '//div[contains(@data-testid, "media-preview")] | '
+                                        '//div[contains(@data-testid, "media-caption-input-container")] | '
+                                        '//div[contains(@data-testid, "drawer-middle")]'
+                                    )
+                                    preview_visible_after = previews_after_click and any(p.is_displayed() for p in previews_after_click)
+                                    print(f"[{time.strftime('%H:%M:%S')}] 🔍 ATTACHMENT_SEND_BUTTON_CLICKED: Preview visible after click: {preview_visible_after}")
+                                except Exception as e:
+                                    print(f"[{time.strftime('%H:%M:%S')}] ⚠️ ATTACHMENT_SEND_BUTTON_CLICKED: Error checking preview after click: {e}")
+                            except Exception as e:
+                                print(f"[{time.strftime('%H:%M:%S')}] ⚠️ ATTACHMENT_SEND_BUTTON_CLICKED: ActionChains click failed: {e}")
+                                try:
+                                    media_send_btn.click()
+                                    sent_att_ok = True
+                                    print(f"[{time.strftime('%H:%M:%S')}] ✅ ATTACHMENT_SEND_BUTTON_CLICKED: Clicked directly")
+                                    time.sleep(1.0)
+                                except Exception as e2:
+                                    print(f"[{time.strftime('%H:%M:%S')}] ⚠️ ATTACHMENT_SEND_BUTTON_CLICKED: Direct click failed: {e2}")
+                        else:
+                            print(f"[{time.strftime('%H:%M:%S')}] ❌ ATTACHMENT_SEND_BUTTON_FOUND: Could not find attachment send button, trying regular send button")
+                            # Fallback to regular send button
+                            media_send_btn = self._find_send_button()
+                            if media_send_btn:
+                                try:
+                                    ActionChains(self.driver).move_to_element(media_send_btn).pause(0.5).click().perform()
+                                    sent_att_ok = True
+                                    print(f"[{time.strftime('%H:%M:%S')}] ✅ ATTACHMENT_SEND_BUTTON_CLICKED: Clicked regular send button as fallback")
+                                    time.sleep(1.0)
+                                except Exception as e:
+                                    print(f"[{time.strftime('%H:%M:%S')}] ⚠️ ATTACHMENT_SEND_BUTTON_CLICKED: Fallback click failed: {e}")
+                        
+                        if not sent_att_ok and caption_input:
+                            try:
+                                caption_input.send_keys(Keys.ENTER)
+                                sent_att_ok = True
+                                print(f"[{time.strftime('%H:%M:%S')}] ✅ ATTACHMENT_SEND_BUTTON_CLICKED: Pressed ENTER on caption input")
+                            except Exception as e:
+                                print(f"[{time.strftime('%H:%M:%S')}] ⚠️ ATTACHMENT_SEND_BUTTON_CLICKED: ENTER on caption failed: {e}")
+                        if not sent_att_ok:
+                            try:
+                                alt_btns = self.driver.find_elements(By.XPATH, '//span[@data-icon="send"]/parent::* | //button[@aria-label="Send" or @aria-label="إرسال"]')
+                                if alt_btns and alt_btns[-1].is_displayed():
+                                    alt_btns[-1].click()
+                                    sent_att_ok = True
+                                    print(f"[{time.strftime('%H:%M:%S')}] ✅ ATTACHMENT_SEND_BUTTON_CLICKED: Clicked alternative send button")
+                            except Exception as e:
+                                print(f"[{time.strftime('%H:%M:%S')}] ⚠️ ATTACHMENT_SEND_BUTTON_CLICKED: Alternative button failed: {e}")
+
+                        if not sent_att_ok:
+                            self.update_daily_stats(False, is_invalid_number=False)
+                            print(f"[{time.strftime('%H:%M:%S')}] ❌ PDF_SEND_FAILED: فشل في الضغط على زر إرسال المرفق ({orig_name})")
+                            return False, f"فشل في الضغط على زر إرسال المرفق ({orig_name})"
+
+                        # ⏳ الانتظار حتى اكتمال رفع الوسائط وإغلاق شاشة المعاينة بعد الإرسال
+                        up_start = time.time()
+                        print(f"[{time.strftime('%H:%M:%S')}] ⏳ PDF_SEND_CONFIRMED: Waiting for attachment preview to close (message sent)...")
+                        preview_closed = False
+                        while time.time() - up_start < 45:  # زيادة من 30 إلى 45 ثانية
+                            previews = self.driver.find_elements(By.XPATH,
+                                '//div[contains(@data-testid, "media-preview")] | '
+                                '//div[contains(@data-testid, "media-caption-input-container")] | '
+                                '//div[contains(@data-testid, "drawer-middle")]'
+                            )
+                            if not previews or not any(p.is_displayed() for p in previews):
+                                print(f"[{time.strftime('%H:%M:%S')}] ✅ PDF_SEND_CONFIRMED: Attachment preview closed, PDF sent successfully")
+                                preview_closed = True
+                                break
+                            time.sleep(1.0)  # زيادة من 0.5 إلى 1.0 ثانية
+                        else:
+                            print(f"[{time.strftime('%H:%M:%S')}] ⚠️ PDF_SEND_CONFIRMED: Preview still visible after timeout, but assuming sent")
+                            # Consider it sent anyway to avoid blocking
+                        
+                        # فحص إضافي: التأكد من أن المرفق تم إرساله (عنصر message)
+                        if preview_closed:
+                            try:
+                                # البحث عن رسالة المرفق في المحادثة
+                                time.sleep(2.0)
+                                attachment_msgs = self.driver.find_elements(By.XPATH,
+                                    '//div[contains(@data-testid, "msg-out")]//div[contains(@class, "message-document")] | '
+                                    '//div[contains(@data-testid, "msg-out")]//div[contains(@class, "message-image")] | '
+                                    '//div[contains(@data-testid, "msg-out")]//div[contains(@class, "message-video")]'
+                                )
+                                if attachment_msgs:
+                                    print(f"[{time.strftime('%H:%M:%S')}] ✅ PDF_SEND_CONFIRMED: Found {len(attachment_msgs)} attachment messages in chat")
+                                else:
+                                    print(f"[{time.strftime('%H:%M:%S')}] ⚠️ PDF_SEND_CONFIRMED: No attachment message found in chat (attachment may not have been sent)")
+                            except Exception as e:
+                                print(f"[{time.strftime('%H:%M:%S')}] ⚠️ PDF_SEND_CONFIRMED: Error checking attachment messages: {e}")
+
+                    # لا نرسل الرسالة مرة أخرى في صندوق المحادثة إذا تم إرسالها كـ Caption مع المرفق
+                    # لأن الضغط على زر الإرسال في شاشة المعاينة يرسل الرسالة + المرفق معاً
                     if message and not caption_injected:
-                        time.sleep(1.5)
+                        print(f"[{time.strftime('%H:%M:%S')}] 📝 MESSAGE_TYPED: Message not injected as caption, sending in chat box...")
+                        time.sleep(3.0)  # Wait for preview to close fully - زيادة من 2.0 إلى 3.0
                         chat_box = self._find_input_box()
                         if chat_box:
+                            print(f"[{time.strftime('%H:%M:%S')}] ✅ MESSAGE_TYPED: Chat box found after preview closed")
                             if self._inject_text_to_input(chat_box, message):
-                                time.sleep(0.6)
+                                print(f"[{time.strftime('%H:%M:%S')}] ✅ MESSAGE_TYPED: Message injected into chat box")
+                                time.sleep(1.5)  # زيادة من 0.8 إلى 1.5
                                 snd = self._find_send_button()
                                 if snd:
-                                    try: snd.click()
-                                    except: chat_box.send_keys(Keys.ENTER)
+                                    print(f"[{time.strftime('%H:%M:%S')}] 🔘 SEND_CLICKED: Clicking send button in chat box...")
+                                    try: 
+                                        snd.click()
+                                        print(f"[{time.strftime('%H:%M:%S')}] ✅ SEND_CLICKED: Send button clicked")
+                                        # Wait for send to complete
+                                        time.sleep(3.0)  # زيادة من 2.0 إلى 3.0
+                                    except Exception as e:
+                                        print(f"[{time.strftime('%H:%M:%S')}] ⚠️ SEND_CLICKED: Click failed: {e}, trying ENTER...")
+                                        chat_box.send_keys(Keys.ENTER)
+                                        print(f"[{time.strftime('%H:%M:%S')}] ✅ SEND_CLICKED: ENTER pressed")
+                                        time.sleep(3.0)  # زيادة من 2.0 إلى 3.0
                                 else:
+                                    print(f"[{time.strftime('%H:%M:%S')}] ⚠️ SEND_CLICKED: Send button not found, trying ENTER...")
                                     chat_box.send_keys(Keys.ENTER)
-                                time.sleep(1.5)
+                                    print(f"[{time.strftime('%H:%M:%S')}] ✅ SEND_CLICKED: ENTER pressed")
+                                    time.sleep(3.0)  # زيادة من 2.0 إلى 3.0
+                            else:
+                                print(f"[{time.strftime('%H:%M:%S')}] ❌ MESSAGE_TYPED: Failed to inject message into chat box")
+                        else:
+                            print(f"[{time.strftime('%H:%M:%S')}] ❌ MESSAGE_TYPED: Chat box not found after preview closed")
+                    else:
+                        print(f"[{time.strftime('%H:%M:%S')}] ℹ️ MESSAGE_TYPED: No message to send or already sent separately")
+                        # Wait a bit to ensure attachment processing is complete
+                        time.sleep(2.0)
+                    
+                    print(f"[{time.strftime('%H:%M:%S')}] ✅ ATTACHMENT_SEND_COMPLETED: All attachments processed successfully")
+                    
+                    # 🔍 التحقق من الإرسال بعد معالجة المرفقات
+                    print(f"[{time.strftime('%H:%M:%S')}] 🔍 SEND_CONFIRMED: Verifying message send after attachments...")
+                    verify_start = time.time()
+                    VERIFY_TIMEOUT = 30
+                    sent_verified = False
+                    
+                    # Wait a bit first for the message to appear
+                    time.sleep(2.0)
+                    
+                    while time.time() - verify_start < VERIFY_TIMEOUT:
+                        _count_increased = False
+                        try:
+                            _now_msgs = self.driver.find_elements(By.XPATH, _baseline_xpath)
+                            if _baseline_count >= 0 and len(_now_msgs) > _baseline_count:
+                                _count_increased = True
+                                print(f"[{time.strftime('%H:%M:%S')}] ✅ SEND_CONFIRMED: Message count increased from {_baseline_count} to {len(_now_msgs)}")
+                            else:
+                                print(f"[{time.strftime('%H:%M:%S')}] ⏳ SEND_CONFIRMED: Current count: {len(_now_msgs)}, Baseline: {_baseline_count}")
+                        except Exception as e:
+                            print(f"[{time.strftime('%H:%M:%S')}] ⚠️ SEND_CONFIRMED: Error checking message count: {e}")
+                            _count_increased = False
+                        
+                        if _count_increased:
+                            sent_verified = True
+                            print(f"[{time.strftime('%H:%M:%S')}] ✅ SEND_CONFIRMED: Message count increased, send verified")
+                            break
+                        
+                        time.sleep(1.0)
+                    
+                    if not sent_verified:
+                        print(f"[{time.strftime('%H:%M:%S')}] ❌ SEND_CONFIRMED: Could not verify send after {VERIFY_TIMEOUT}s, message not confirmed sent")
+                        self.update_daily_stats(False, is_invalid_number=False)
+                        return False, "فشل التحقق من الإرسال، الرسالة لم تُرسل"
+                    
+                    # Return success after attachments
+                    self.update_daily_stats(True, is_invalid_number=False)
+                    print(f"[{time.strftime('%H:%M:%S')}] ✅ SEND_CONFIRMED: تم الإرسال بنجاح إلى: {clean_phone}")
+                    return True, "تم الإرسال بنجاح"
                 finally:
                     # تنظيف المجلدات المؤقتة المنشأة لهذا الإرسال
                     for sub in created_temp_subfolders:
@@ -1597,28 +1981,30 @@ class WhatsAppService:
                         injected = self._inject_text_to_input(msg_input, message)
 
                 if not injected:
-                    print(f"[{time.strftime('%H:%M:%S')}] ❌ All injection methods failed")
+                    print(f"[{time.strftime('%H:%M:%S')}] ❌ FAILED: All injection methods failed")
                     return False, "فشل في إدخال الرسالة في صندوق الكتابة"
 
-                print(f"[{time.strftime('%H:%M:%S')}] ✅ Message ready in input box")
+                print(f"[{time.strftime('%H:%M:%S')}] ✅ MESSAGE_TYPED: Message ready in input box")
                 time.sleep(random.uniform(0.6, 1.2))
 
                 # إرسال الرسالة: النقر على زر الإرسال المكتشف بدقة
                 sent_ok = False
                 send_btn = self._find_send_button()
-                print(f"[{time.strftime('%H:%M:%S')}] 🔘 Send button found: {send_btn is not None}")
+                print(f"[{time.strftime('%H:%M:%S')}] 🔘 SEND_CLICKED: Send button found: {send_btn is not None}")
 
                 if send_btn and send_btn.is_displayed():
                     try:
                         ActionChains(self.driver).move_to_element(send_btn).pause(0.2).click().perform()
                         sent_ok = True
-                        print(f"[{time.strftime('%H:%M:%S')}] ✅ Clicked send button via ActionChains")
+                        print(f"[{time.strftime('%H:%M:%S')}] ✅ SEND_CLICKED: Clicked send button via ActionChains")
                     except Exception as e:
+                        print(f"[{time.strftime('%H:%M:%S')}] ⚠️ SEND_CLICKED: ActionChains click failed: {e}")
                         try:
                             send_btn.click()
                             sent_ok = True
-                            print(f"[{time.strftime('%H:%M:%S')}] ✅ Clicked send button directly")
+                            print(f"[{time.strftime('%H:%M:%S')}] ✅ SEND_CLICKED: Clicked send button directly")
                         except Exception as e2:
+                            print(f"[{time.strftime('%H:%M:%S')}] ⚠️ SEND_CLICKED: Direct click failed: {e2}")
                             try:
                                 self.driver.execute_script("""
                                     var btn = arguments[0];
@@ -1627,33 +2013,39 @@ class WhatsAppService:
                                     btn.dispatchEvent(new MouseEvent('click', {bubbles: true, cancelable: true}));
                                 """, send_btn)
                                 sent_ok = True
-                                print(f"[{time.strftime('%H:%M:%S')}] ✅ Clicked send button via JS")
+                                print(f"[{time.strftime('%H:%M:%S')}] ✅ SEND_CLICKED: Clicked send button via JS")
                             except Exception as e3:
-                                print(f"[{time.strftime('%H:%M:%S')}] ❌ JS click failed: {e3}")
+                                print(f"[{time.strftime('%H:%M:%S')}] ❌ SEND_CLICKED: JS click failed: {e3}")
+                else:
+                    print(f"[{time.strftime('%H:%M:%S')}] ⚠️ SEND_CLICKED: Send button not found or not visible")
 
                 # إذا لم يكن زر الإرسال متاحاً أو فشل النقر عليه، نستخدم ENTER كبديل وحيد
                 if not sent_ok:
+                    print(f"[{time.strftime('%H:%M:%S')}] 🔑 SEND_CLICKED: Trying ENTER key as fallback...")
                     try:
                         self.driver.execute_script("arguments[0].focus();", msg_input)
                         msg_input.click()
                         time.sleep(0.2)
                         msg_input.send_keys(Keys.ENTER)
                         sent_ok = True
-                        print(f"[{time.strftime('%H:%M:%S')}] ✅ Pressed ENTER key on input box")
+                        print(f"[{time.strftime('%H:%M:%S')}] ✅ SEND_CLICKED: Pressed ENTER key on input box")
                     except Exception as e:
+                        print(f"[{time.strftime('%H:%M:%S')}] ⚠️ SEND_CLICKED: ENTER key failed: {e}")
                         try:
                             ActionChains(self.driver).move_to_element(msg_input).click().send_keys(Keys.ENTER).perform()
                             sent_ok = True
-                            print(f"[{time.strftime('%H:%M:%S')}] ✅ Pressed ENTER via ActionChains")
+                            print(f"[{time.strftime('%H:%M:%S')}] ✅ SEND_CLICKED: Pressed ENTER via ActionChains")
                         except Exception as e2:
-                            print(f"[{time.strftime('%H:%M:%S')}] ❌ ENTER via ActionChains failed: {e2}")
+                            print(f"[{time.strftime('%H:%M:%S')}] ❌ SEND_CLICKED: ENTER via ActionChains failed: {e2}")
 
-                print(f"[{time.strftime('%H:%M:%S')}] 📊 Send operation completed: {sent_ok}")
+                print(f"[{time.strftime('%H:%M:%S')}] 📊 SEND_CLICKED: Send operation completed: {sent_ok}")
 
             # 🔍 6. حلقة التحقق المحسّن من الإرسال الفعلي (أكثر تساهلاً ودقة)
             sent_verified = False
             verify_start = time.time()
-            VERIFY_TIMEOUT = 25  # وقت كافٍ للتحقق
+            VERIFY_TIMEOUT = 30  # زيادة وقت التحقق إلى 30 ثانية
+            
+            print(f"[{time.strftime('%H:%M:%S')}] 🔍 SEND_CONFIRMED: Starting verification loop (text message path)...")
 
             while time.time() - verify_start < VERIFY_TIMEOUT:
                 # أ. فحص تفريغ صندوق الكتابة
@@ -1672,6 +2064,7 @@ class WhatsAppService:
                     _now_msgs = self.driver.find_elements(By.XPATH, _baseline_xpath)
                     if _baseline_count >= 0 and len(_now_msgs) > _baseline_count:
                         _count_increased = True
+                        print(f"[{time.strftime('%H:%M:%S')}] ✅ SEND_CONFIRMED: Message count increased from {_baseline_count} to {len(_now_msgs)}")
                 except Exception:
                     _count_increased = False
 
@@ -1742,18 +2135,19 @@ class WhatsAppService:
 
             if sent_verified:
                 self.update_daily_stats(True, is_invalid_number=False)
-                print(f"[{time.strftime('%H:%M:%S')}] ✅ تم الإرسال بنجاح إلى: {clean_phone}")
+                print(f"[{time.strftime('%H:%M:%S')}] ✅ SEND_CONFIRMED: تم الإرسال بنجاح إلى: {clean_phone}")
                 return True, "تم الإرسال بنجاح"
             else:
                 self.update_daily_stats(False, is_invalid_number=False)
-                print(f"[{time.strftime('%H:%M:%S')}] ❌ فشل الإرسال إلى: {clean_phone}")
+                print(f"[{time.strftime('%H:%M:%S')}] ❌ FAILED: فشل التحقق من الإرسال إلى: {clean_phone}")
+                print(f"[{time.strftime('%H:%M:%S')}] 🔍 Debug: sent_ok={sent_ok}, _count_increased={_count_increased}, _send_btn_gone={_send_btn_gone}, _has_new_msgout={_has_new_msgout}, _has_send_icon={_has_send_icon}")
                 return False, "فشل الإرسال (لم يتم إرسال الرسالة من المتصفح)"
 
         except Exception as e:
             import traceback
             tb = traceback.format_exc()
-            print(f"[send_message EXCEPTION] {e}")
-            print(tb[:1000])
+            print(f"[{time.strftime('%H:%M:%S')}] ❌ EXCEPTION in send_message: {e}")
+            print(f"[{time.strftime('%H:%M:%S')}] Traceback: {tb}")
             short_err = str(e)[:120]
             self.last_error = f"send_message: {short_err}"
             self.update_daily_stats(False, is_invalid_number=False)

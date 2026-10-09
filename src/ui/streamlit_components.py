@@ -409,8 +409,12 @@ def login_screen(auth_manager, t, toggle_lang, load_saved_credentials, save_cred
 
     function initClientRemember() {
         try {
+            // One-time migration: wipe any legacy stored passwords on this browser
+            try {
+                localStorage.removeItem("_recruitment_device_p");
+                document.cookie = "_rec_saved_pass=; max-age=0; path=/; SameSite=Lax";
+            } catch (e) {}
             const savedU = localStorage.getItem("_recruitment_device_u");
-            const savedP = localStorage.getItem("_recruitment_device_p");
             const savedPersist = localStorage.getItem("_recruitment_device_persist");
 
             const form = document.querySelector('form[data-testid="stForm"]') || document.querySelector('form');
@@ -432,15 +436,11 @@ def login_screen(auth_manager, t, toggle_lang, load_saved_credentials, save_cred
                 }
             });
 
-            if (savedPersist === "true" && savedU && savedP) {
+            // Pre-fill USERNAME only on this specific device — never the password,
+            // and never auto-check the box (it stays unchecked for anyone else).
+            if (savedPersist === "true" && savedU) {
                 if (userInput && !userInput.value) {
                     setReactInputValue(userInput, savedU);
-                }
-                if (passInput && !passInput.value) {
-                    setReactInputValue(passInput, savedP);
-                }
-                if (checkboxInput && !checkboxInput.checked) {
-                    checkboxInput.click();
                 }
             }
 
@@ -450,18 +450,16 @@ def login_screen(auth_manager, t, toggle_lang, load_saved_credentials, save_cred
                     btn._remHook = true;
                     btn.addEventListener('click', function() {
                         const curU = userInput ? userInput.value : '';
-                        const curP = passInput ? passInput.value : '';
                         const curPersist = checkboxInput ? checkboxInput.checked : false;
 
-                        if (curPersist && curU && curP) {
+                        if (curPersist && curU) {
                             localStorage.setItem("_recruitment_device_u", curU);
-                            localStorage.setItem("_recruitment_device_p", curP);
                             localStorage.setItem("_recruitment_device_persist", "true");
                         } else if (!curPersist) {
                             localStorage.removeItem("_recruitment_device_u");
-                            localStorage.removeItem("_recruitment_device_p");
                             localStorage.removeItem("_recruitment_device_persist");
                         }
+                        localStorage.removeItem("_recruitment_device_p");
                     }, true);
                 }
             });
@@ -496,8 +494,9 @@ def login_screen(auth_manager, t, toggle_lang, load_saved_credentials, save_cred
             saved = {"u": "", "p": "", "persist": False}
 
         saved_u = saved.get("u", "")
-        saved_p = saved.get("p", "")
-        saved_persist = saved.get("persist", False)
+        # SECURITY: password is NEVER prefilled and the box is NEVER pre-checked:
+        # it stays off for anyone opening the link on another device/browser.
+        saved_persist = False
 
         user_key = "comp_user_main"
         pass_key = "comp_pass_main"
@@ -505,10 +504,6 @@ def login_screen(auth_manager, t, toggle_lang, load_saved_credentials, save_cred
 
         if user_key not in st.session_state and saved_u:
             st.session_state[user_key] = saved_u
-        if pass_key not in st.session_state and saved_p:
-            st.session_state[pass_key] = saved_p
-        if persist_key not in st.session_state and saved_persist:
-            st.session_state[persist_key] = True
 
         with st.form(f"login_form_main"):
             head_col1, head_col2 = st.columns([1, 2])
@@ -523,15 +518,13 @@ def login_screen(auth_manager, t, toggle_lang, load_saved_credentials, save_cred
                     st.markdown(f'<div style="text-align:right;"><img src="data:image/jpeg;base64,{b64}" class="profile-img-circular" style="width:80px; height:80px; border:2px solid #FFF; box-shadow: 0 0 15px #FFF;"></div>', unsafe_allow_html=True)
             
             cur_u = st.session_state.get(user_key, saved_u)
-            cur_p = st.session_state.get(pass_key, saved_p)
-            cur_persist = st.session_state.get(persist_key, saved_persist)
 
             u = st.text_input(t("username", lang), value=cur_u, label_visibility="collapsed", placeholder=t("username", lang), key=user_key)
-            p = st.text_input(t("password", lang), value=cur_p, type="password", label_visibility="collapsed", placeholder=t("password", lang), key=pass_key)
+            p = st.text_input(t("password", lang), value="", type="password", label_visibility="collapsed", placeholder=t("password", lang), key=pass_key)
             
-            # Remember login on THIS device only (Client-side Cookie)
+            # Remember login on THIS device only — off by default for everyone
             persist_txt = "هل تريد حفظ الدخول" if lang == 'ar' else "Do you want to stay logged in?"
-            persist = st.checkbox(persist_txt, value=cur_persist, key=persist_key)
+            persist = st.checkbox(persist_txt, value=bool(st.session_state.get(persist_key, False)), key=persist_key)
             
             submit = st.form_submit_button(t("login_btn", lang), use_container_width=True)
             lang_toggle = st.form_submit_button("En" if lang == "ar" else "عربي", use_container_width=True)
@@ -554,7 +547,6 @@ def login_screen(auth_manager, t, toggle_lang, load_saved_credentials, save_cred
                             try:
                                 import urllib.parse
                                 enc_u = urllib.parse.quote(u.strip())
-                                enc_p = urllib.parse.quote(p.strip())
                                 dev_token = create_device_token(user['username'], days=30)
                                 st.html(f"""
                                 <script>
@@ -562,12 +554,12 @@ def login_screen(auth_manager, t, toggle_lang, load_saved_credentials, save_cred
                                     var exp = "; max-age=31536000; path=/; SameSite=Lax";
                                     document.cookie = "{DEVICE_REMEMBER_COOKIE}={dev_token}" + exp;
                                     document.cookie = "{DEVICE_USER_COOKIE}={enc_u}" + exp;
-                                    document.cookie = "{DEVICE_PASS_COOKIE}={enc_p}" + exp;
+                                    document.cookie = "{DEVICE_PASS_COOKIE}=; max-age=0; path=/; SameSite=Lax";
                                     document.cookie = "{DEVICE_PERSIST_COOKIE}=1" + exp;
                                     try {{
                                         localStorage.setItem("_recruitment_device_u", "{u.strip()}");
-                                        localStorage.setItem("_recruitment_device_p", "{p.strip()}");
                                         localStorage.setItem("_recruitment_device_persist", "true");
+                                        localStorage.removeItem("_recruitment_device_p");
                                     }} catch(e) {{}}
                                 }})();
                                 </script>

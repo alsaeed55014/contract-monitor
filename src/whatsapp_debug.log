@@ -1,0 +1,14 @@
+2026-10-08 00:14:13,748 - Test log entry
+2026-10-08 00:50:35,055 - patching driver executable C:\Users\ا\appdata\roaming\undetected_chromedriver\undetected_chromedriver.exe
+2026-10-08 03:30:44,059 - Connection pool is full, discarding connection: localhost. Connection pool size: 1
+2026-10-08 03:30:44,584 - Connection pool is full, discarding connection: localhost. Connection pool size: 1
+2026-10-08 03:30:44,999 - Connection pool is full, discarding connection: localhost. Connection pool size: 1
+2026-10-08 04:09:33,080 - Connection pool is full, discarding connection: localhost. Connection pool size: 1
+2026-10-08 04:27:48,994 - 🔍 _get_target_file_input: Found 1 file inputs
+2026-10-08 04:27:49,018 - 🔍 File input 1: accept='image/*'
+2026-10-08 04:27:49,020 - 🔍 _get_target_file_input: Document file, trying inputs from last to first
+2026-10-08 04:27:49,039 - ✅ _get_target_file_input: Selected document input with accept='image/*'
+2026-10-09 10:53:04,756 - Connection pool is full, discarding connection: localhost. Connection pool size: 1
+2026-10-09 10:53:09,251 - Retrying (Retry(total=2, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError("HTTPConnection(host='localhost', port=58044): Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it")': /session/0a5e829ea4558a8d9979aedc9b0e7a76/elements
+2026-10-09 10:53:13,308 - Retrying (Retry(total=1, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError("HTTPConnection(host='localhost', port=58044): Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it")': /session/0a5e829ea4558a8d9979aedc9b0e7a76/elements
+2026-10-09 10:53:17,373 - Retrying (Retry(total=0, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError("HTTPConnection(host='localhost', port=58044): Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it")': /session/0a5e829ea4558a8d9979aedc9b0e7a76/elements
