@@ -2865,9 +2865,12 @@ if ('Notification' in window && Notification.permission === 'default') {
         
         saved = get_device_saved_credentials()
         saved_u = saved["u"]
+        # Persist flag is per-device (this browser's own cookies only):
+        # the box appears checked solely for the owner who enabled it,
+        # and stays off for anyone opening the link elsewhere.
+        saved_persist = bool(saved.get("persist", False))
 
-        # Username convenience prefill only. Password is NEVER prefilled and the
-        # box is NEVER pre-checked: it stays off for anyone opening the link.
+        # Username convenience prefill only. Password is NEVER prefilled.
         if user_key not in st.session_state and saved_u:
             st.session_state[user_key] = saved_u
 
@@ -2888,9 +2891,10 @@ if ('Notification' in window && Notification.permission === 'default') {
             u = st.text_input(t("username", lang), value=cur_u, label_visibility="collapsed", placeholder=t("username", lang), key=user_key)
             p = st.text_input(t("password", lang), value="", type="password", label_visibility="collapsed", placeholder=t("password", lang), key=pass_key)
             
-            # Remember login on THIS device only (off by default for everyone)
+            # Remember login on THIS device only (checked only if THIS
+            # browser saved it; password field always starts empty)
             persist_txt = "هل تريد حفظ الدخول" if lang == 'ar' else "Do you want to stay logged in?"
-            persist = st.checkbox(persist_txt, value=bool(st.session_state.get(persist_key, False)), key=persist_key)
+            persist = st.checkbox(persist_txt, value=bool(st.session_state.get(persist_key, saved_persist)), key=persist_key)
             
             submit = st.form_submit_button(t("login_btn", lang), width='stretch')
             lang_toggle = st.form_submit_button("En" if lang == "ar" else "عربي", width='stretch')

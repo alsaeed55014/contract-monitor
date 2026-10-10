@@ -494,9 +494,9 @@ def login_screen(auth_manager, t, toggle_lang, load_saved_credentials, save_cred
             saved = {"u": "", "p": "", "persist": False}
 
         saved_u = saved.get("u", "")
-        # SECURITY: password is NEVER prefilled and the box is NEVER pre-checked:
-        # it stays off for anyone opening the link on another device/browser.
-        saved_persist = False
+        # SECURITY: password is NEVER prefilled. The box reflects THIS
+        # browser's own saved choice only (off for anyone else).
+        saved_persist = bool(saved.get("persist", False))
 
         user_key = "comp_user_main"
         pass_key = "comp_pass_main"
@@ -522,9 +522,10 @@ def login_screen(auth_manager, t, toggle_lang, load_saved_credentials, save_cred
             u = st.text_input(t("username", lang), value=cur_u, label_visibility="collapsed", placeholder=t("username", lang), key=user_key)
             p = st.text_input(t("password", lang), value="", type="password", label_visibility="collapsed", placeholder=t("password", lang), key=pass_key)
             
-            # Remember login on THIS device only — off by default for everyone
+            # Remember login on THIS device only (checked only if THIS
+            # browser saved it; password field always starts empty)
             persist_txt = "هل تريد حفظ الدخول" if lang == 'ar' else "Do you want to stay logged in?"
-            persist = st.checkbox(persist_txt, value=bool(st.session_state.get(persist_key, False)), key=persist_key)
+            persist = st.checkbox(persist_txt, value=bool(st.session_state.get(persist_key, saved_persist)), key=persist_key)
             
             submit = st.form_submit_button(t("login_btn", lang), use_container_width=True)
             lang_toggle = st.form_submit_button("En" if lang == "ar" else "عربي", use_container_width=True)
