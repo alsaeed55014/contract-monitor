@@ -133,6 +133,32 @@ def split_emp_signature(message: str):
     core = m.group(1)
     return body[:m.start()].rstrip(), "\n\n\u2066" + core + "\u2069"
 
+_EN_SIG_RE = re.compile(
+    r'\n*((?:Best regards|Kind regards|Warm regards|Sincerely|With respect),?\nAbu Fahd\nHR Manager)\s*$'
+)
+
+def split_en_signature(message: str):
+    """يفصل التوقيع الإنجليزي من نهاية رسائل الماركتنج ليعاد إرفاقه حرفياً
+    (التنويع كان يحوله لـ 'With respect,,' المشوهة).
+    يُرجع (النص_بدون_التوقيع, كتلة_التوقيع أو "")."""
+    if not message:
+        return message, ""
+    m = _EN_SIG_RE.search(message)
+    if not m:
+        return message, ""
+    return message[:m.start()].rstrip(), "\n\n" + m.group(1)
+
+def strip_bidi_controls(text: str) -> str:
+    """يزيل محارف التحكم بالاتجاه المضمّنة/المعزولة (RLO/LRO/RLE/LRE/RLI/LRI/
+    FSI/PDI/PDF) التي تتسرب من النسخ واللصق فتقلب محاذاة الأسطر في واتساب.
+    يُبقي LRM/RLM (محايدتان) والنص نفسه دون أي تغيير مرئي."""
+    if not text:
+        return text
+    for ch in ['\u202a', '\u202b', '\u202c', '\u202d', '\u202e',
+               '\u2066', '\u2067', '\u2068', '\u2069']:
+        text = text.replace(ch, '')
+    return text
+
 def obfuscate_message(text: str) -> str:
     """تحليل Spintax وتغيير صياغة الرسائل وتنظيفها لضمان نص طبيعي وبشري 100%"""
     if not text: return ""
@@ -1617,13 +1643,18 @@ class WhatsAppService:
             # 🕌 إخراج توقيع العملاء جانباً قبل التنويع/التنظيف ثم إعادته حرفياً
             # بمحاذاة يسارية في الربع الأخير من الرسالة
             _sig_block = ""
+            _sig_en = ""
             if message:
                 message, _sig_block = split_emp_signature(message)
+                message, _sig_en = split_en_signature(message)
                 if verbatim:
                     # نص العميل حرفياً: Spintax فقط، بلا تنويع ولا تنظيف
                     message = parse_spintax(message)
                 else:
+                    message = strip_bidi_controls(message)
                     message = obfuscate_message(message)
+                if _sig_en:
+                    message = (message.rstrip() + _sig_en) if message.strip() else _sig_en.lstrip()
                 if _sig_block:
                     message = (message.rstrip() + _sig_block) if message.strip() else _sig_block.lstrip()
 

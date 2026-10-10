@@ -644,6 +644,7 @@ def render_whatsapp_page():
     if 'wa_emp_idx' not in st.session_state: st.session_state.wa_emp_idx = 0
 
     st.markdown('<div class="programmer-signature-neon">By: Alsaeed Alwazzan</div>', unsafe_allow_html=True)
+    st.caption("build b1011c")
 
     # === Bilingual Labels ===
     lbl = {
@@ -2654,6 +2655,12 @@ HR Manager"""
                     final_msg = re.sub(r'\n{3,}', '\n\n', final_msg).strip()
 
                 temp_path = st.session_state.get('wa_temp_path')
+
+                # إزالة سطر HR Manager المكرر في الأعلى إن كان التوقيع نفسه
+                # موجوداً بالأسفل (تكرار واضح) — مع الحفاظ على باقي المتن
+                _sig_tail_re = r'(?:Best regards|Kind regards|Warm regards|Sincerely|With respect),?\nAbu Fahd\nHR Manager\s*$'
+                if re.search(r'^HR Manager\s*(\n|$)', final_msg) and re.search(_sig_tail_re, final_msg):
+                    final_msg = re.sub(r'^HR Manager\s*\n+', '', final_msg, count=1)
 
                 # إضافة التوقيع الإنجليزي لواتساب ماركتنج
                 signature = "\n\nBest regards,\nAbu Fahd\nHR Manager"

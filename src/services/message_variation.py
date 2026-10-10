@@ -86,7 +86,7 @@ class MessageVariationEngine:
          ['if you are still actively seeking a position.', 'if you are currently open to new job opportunities.', 'if you are available for new employment options.', 'if you are still interested in a new role.']),
 
         (r'(Best regards|Kind regards|Warm regards|Sincerely|With respect)',
-         ['Best regards,', 'Kind regards,', 'Warm regards,', 'Sincerely,', 'With respect,']),
+         ['Best regards', 'Kind regards', 'Warm regards', 'Sincerely', 'With respect']),
     ]
 
     @classmethod
