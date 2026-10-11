@@ -194,3 +194,57 @@ def clean_date_display(df):
             df[col] = df[col].apply(_parse_to_date_str)
             
     return df
+
+def sort_by_reg_date_desc(df):
+    """Sort any data table newest-first by registration date (الأحدث أولاً).
+
+    Finds the registration/timestamp column (original or translated names),
+    parses dates robustly (Arabic-Indic digits, ص/م markers), sorts newest
+    first with undated rows last. Returns the frame unchanged when there is
+    no date column or nothing to sort — safe to call on every table.
+    Index labels are preserved, so row-selection mappings keep working.
+    """
+    try:
+        if df is None or getattr(df, "empty", True):
+            return df
+        cols = [c for c in df.columns if not str(c).startswith("__")]
+        keys = ["طابع زمني", "تاريخ التسجيل", "وقت التسجيل", "timestamp",
+                "registration date", "تاريخ التقديم", "date submitted",
+                "تاريخ الإدخال", "insertion date", "تاريخ الطلب",
+                "أنشئ في", "created"]
+        ts_col = None
+        for c in cols:
+            cl = str(c).lower().strip()
+            if any(k in cl for k in keys):
+                ts_col = c
+                break
+        if ts_col is None:
+            return df
+
+        _ar2w = str.maketrans('٠١٢٣٤٥٦٧٨٩', '0123456789')
+
+        def _parse(v):
+            try:
+                if v is None:
+                    return pd.NaT
+                s = str(v).translate(_ar2w).strip()
+                if not s or s.lower() == "nan":
+                    return pd.NaT
+                if 'ص' in s or 'م' in s:
+                    mk = 'AM' if 'ص' in s else 'PM'
+                    s = re.sub(r'[صم]', '', s).strip() + " " + mk
+                try:
+                    from dateutil import parser as _prs
+                    return pd.Timestamp(_prs.parse(s, dayfirst=False))
+                except Exception:
+                    return pd.to_datetime(s, errors='coerce')
+            except Exception:
+                return pd.NaT
+
+        out = df.copy()
+        out["__reg_sort__"] = out[ts_col].apply(_parse)
+        out = out.sort_values(by="__reg_sort__", ascending=False,
+                              kind="mergesort", na_position="last")
+        return out.drop(columns=["__reg_sort__"], errors="ignore")
+    except Exception:
+        return df

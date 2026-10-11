@@ -65,7 +65,6 @@ TRANSLATIONS = {
     "close": {"ar": "إغلاق", "en": "Close"},
 
     # Translator
-    "customer_requests_title": {"ar": "إدارة طلبات العملاء", "en": "Customer Requests Management"},
     "translator_title": {"ar": "ترجمة الملفات الاحترافية", "en": "Professional File Translator"},
     "translator_desc": {"ar": "ارفع ملف السيرة الذاتية (PDF) ليتم استخراج النص وترجمته للعربية.", "en": "Upload a CV (PDF) to translate it from English to Arabic automatically."},
     "translator_desc_new": {"ar": "ارفع ملفاتك (Word, PDF, صور, BDF) وسيتم ترجمتها تلقائياً مع الحفاظ على التنسيق الأصلي.", "en": "Upload your files (Word, PDF, Images, BDF) for automatic translation while preserving original formatting."},

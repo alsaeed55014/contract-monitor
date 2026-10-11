@@ -36,12 +36,14 @@ try:
     from src.core.contracts import ContractManager
     from src.data.bengali_manager import BengaliDataManager
     from src.utils.phone_utils import create_pasha_whatsapp_excel, format_phone_number, save_to_local_desktop, render_pasha_export_button, is_local_windows_pc
+    from src.utils.data_utils import sort_by_reg_date_desc
     from src.core.matcher import CandidateMatcher, format_match_result, _find_city_region, _fuzzy_match, REGION_PROXIMITY, REGION_MAP
 except ImportError:
     # Fallback for different environment path configurations
     from core.contracts import ContractManager
     from data.bengali_manager import BengaliDataManager
     from utils.phone_utils import create_pasha_whatsapp_excel, format_phone_number, save_to_local_desktop, render_pasha_export_button, is_local_windows_pc
+    from utils.data_utils import sort_by_reg_date_desc
     from core.matcher import CandidateMatcher, format_match_result, _find_city_region, _fuzzy_match, REGION_PROXIMITY, REGION_MAP
 
 # 2. Local Auth Class to prevent Import/Sync Errors
@@ -3813,12 +3815,6 @@ def dashboard():
                 st.session_state.page = page_name
                 st.rerun()
         
-        # Role-based navigation
-        if user.get("role") != "viewer":
-            if st.button(t("customer_requests", lang), width='stretch', disabled=_wa_lock_nav, key="nav_customer_requests"):
-                st.session_state.page = "order_processing"
-                st.rerun()
-        
         if st.button(t("order_processing", lang), width='stretch', disabled=_wa_lock_nav, key="nav_order_processing"):
             st.session_state.page = "order_processing"
             st.rerun()
@@ -3925,11 +3921,6 @@ def dashboard():
         "whatsapp_marketing": render_whatsapp_page,
         "duplicate_remover": render_duplicate_remover_content
     }
-    
-    # Handle legacy page name
-    if page == "customer_requests":
-        page = "order_processing"
-        st.session_state.page = page
     
     # Permission check for restricted pages
     if page in ["permissions", "login_history"] and user.get("role") == "viewer":
@@ -4228,6 +4219,8 @@ def render_dashboard_content():
         status_key = 'حالة العقد' if lang == 'ar' else 'Contract Status'
         show_cols = [status_key] + [c for c in cols if c in d.columns and not str(c).startswith('__')]
         d_final = d[show_cols].copy()
+        # 📊 تبويبات الرئيسية: الترتيب من عمود حالة العقد (الأيام) من الأصغر للأكبر —
+        # الفرز الرقمي تم أعلاه (__days_sort) وينعكس نصاً في عمود الحالة
         
         # --- Step 1: Render Table Translator FIRST (so it can find original column names like 'nationality') ---
         d_final = render_table_translator(d_final, key_prefix=f"dash_{tab_id}")
@@ -4583,6 +4576,9 @@ def render_search_content():
                     except:
                         pass
             
+            # 📅 ترتيب موحد: الأحدث بتاريخ التسجيل أولاً في كل الجداول
+            res = sort_by_reg_date_desc(res)
+
             # Show count in UI
             count_found = len(res)
             if count_found > 0:
