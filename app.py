@@ -2830,128 +2830,121 @@ def render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search", 
 
 def login_screen():
     # Client-side Device Remember Script (Isolates storage strictly to this specific device/browser)
+    # NOTE: delivered as small sequential blocks — one large script block is
+    # not activated reliably by the renderer.
     st.html("""
 <script>
-// 1. Request notification permission on page load
 if ('Notification' in window && Notification.permission === 'default') {
     Notification.requestPermission().then(function(permission) {
         console.log('Notification permission:', permission);
     });
 }
+</script>
+""", unsafe_allow_javascript=True)
 
-// 2. Device-Isolated Remember Login System (localStorage per client device)
-// SCOPE: this browser only. Username + password are kept in THIS browser's
-// localStorage when the box is checked — they never leave the device, never
-// go into cookies, and never appear for anyone opening the link elsewhere.
+    st.html("""
+<script>
 (function() {
-    function setReactInputValue(input, val) {
+    function setV(input, val) {
         if (!input) return;
-        const lastVal = input.value;
-        const descriptor = Object.getOwnPropertyDescriptor(input, 'value');
-        const setter = descriptor ? descriptor.set : null;
-        const proto = Object.getPrototypeOf(input);
-        const protoSetter = Object.getOwnPropertyDescriptor(proto, 'value')?.set;
-        
-        if (protoSetter && setter !== protoSetter) {
-            protoSetter.call(input, val);
-        } else if (setter) {
-            setter.call(input, val);
-        } else {
-            input.value = val;
-        }
+        var lastVal = input.value;
+        try {
+            var nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+            if (nativeSetter) { nativeSetter.call(input, val); }
+            else { input.value = val; }
+        } catch (e) { input.value = val; }
         if (lastVal !== val) {
             input.dispatchEvent(new Event('input', { bubbles: true }));
             input.dispatchEvent(new Event('change', { bubbles: true }));
         }
     }
-
-    function initClientRemember() {
+    function fillRemember() {
         try {
-            const savedU = localStorage.getItem("_recruitment_device_u");
-            const savedP = localStorage.getItem("_recruitment_device_p");
-            const savedPersist = localStorage.getItem("_recruitment_device_persist");
-
-            const form = document.querySelector('form[data-testid="stForm"]') || document.querySelector('form');
-            if (!form) return;
-
-            const inputs = form.querySelectorAll('input');
-            let userInput = null;
-            let passInput = null;
-            let checkboxInput = null;
-
-            inputs.forEach(input => {
-                const t = (input.getAttribute('type') || 'text').toLowerCase();
-                if (t === 'password') {
-                    passInput = input;
-                } else if (t === 'checkbox') {
-                    checkboxInput = input;
-                } else if (t === 'text' || t === '') {
-                    userInput = input;
+            var savedU = localStorage.getItem("_recruitment_device_u");
+            var savedP = localStorage.getItem("_recruitment_device_p");
+            var savedPersist = localStorage.getItem("_recruitment_device_persist");
+            if (savedPersist !== "true") return;
+            var forms = Array.from(document.querySelectorAll('div[data-testid="stForm"]'));
+            if (!forms.length) {
+                var f = document.querySelector('form[data-testid="stForm"]') || document.querySelector('form');
+                if (f) forms = [f];
+            }
+            forms.forEach(function(form) {
+                var inputs = form.querySelectorAll('input');
+                var ui = null, pi = null, ci = null;
+                inputs.forEach(function(input) {
+                    var t = (input.getAttribute('type') || 'text').toLowerCase();
+                    if (t === 'password') { pi = input; }
+                    else if (t === 'checkbox') { ci = input; }
+                    else if (t === 'text' || t === '') { ui = input; }
+                });
+                if (ui && !ui._remFilled && !ui.value && savedU) { setV(ui, savedU); ui._remFilled = true; }
+                if (pi && !pi._remFilled && !pi.value && savedP) { setV(pi, savedP); pi._remFilled = true; }
+                if (ci && !ci._remChecked && !ci.checked) {
+                    ci.checked = true;
+                    ci.dispatchEvent(new Event('input', { bubbles: true }));
+                    ci.dispatchEvent(new Event('change', { bubbles: true }));
+                    ci._remChecked = true;
                 }
             });
+        } catch (err) { console.error("fill error:", err); }
+    }
+    setTimeout(fillRemember, 200);
+    setTimeout(fillRemember, 800);
+    setTimeout(fillRemember, 2000);
+})();
+</script>
+""", unsafe_allow_javascript=True)
 
-            // Pre-fill on this specific device only (username + password),
-            // and reflect the owner's own checkbox choice. Each element is
-            // filled once so manual edits are never overwritten.
-            if (savedPersist === "true") {
-                if (userInput && !userInput._remFilled && !userInput.value && savedU) {
-                    setReactInputValue(userInput, savedU);
-                    userInput._remFilled = true;
-                }
-                if (passInput && !passInput._remFilled && !passInput.value && savedP) {
-                    setReactInputValue(passInput, savedP);
-                    passInput._remFilled = true;
-                }
-                if (checkboxInput && !checkboxInput._remChecked && !checkboxInput.checked) {
-                    checkboxInput.checked = true;
-                    checkboxInput.dispatchEvent(new Event('input', { bubbles: true }));
-                    checkboxInput.dispatchEvent(new Event('change', { bubbles: true }));
-                    checkboxInput._remChecked = true;
-                }
+    st.html("""
+<script>
+(function() {
+    function hookRemember() {
+        try {
+            var forms = Array.from(document.querySelectorAll('div[data-testid="stForm"]'));
+            if (!forms.length) {
+                var f = document.querySelector('form[data-testid="stForm"]') || document.querySelector('form');
+                if (f) forms = [f];
             }
-
-            // Hook form submit buttons to save/clear localStorage (this device only)
-            const buttons = form.querySelectorAll('button');
-            buttons.forEach(btn => {
-                if (!btn._remHook) {
+            forms.forEach(function(form) {
+                var inputs = form.querySelectorAll('input');
+                var ui = null, pi = null, ci = null;
+                inputs.forEach(function(input) {
+                    var t = (input.getAttribute('type') || 'text').toLowerCase();
+                    if (t === 'password') { pi = input; }
+                    else if (t === 'checkbox') { ci = input; }
+                    else if (t === 'text' || t === '') { ui = input; }
+                });
+                var buttons = form.querySelectorAll('button');
+                buttons.forEach(function(btn) {
+                    if (btn._remHook) return;
                     btn._remHook = true;
                     btn.addEventListener('click', function() {
-                        const curU = userInput ? userInput.value : '';
-                        const curP = passInput ? passInput.value : '';
-                        const curPersist = checkboxInput ? checkboxInput.checked : false;
-
-                        if (curPersist && curU) {
+                        var curU = ui ? ui.value : '';
+                        var curP = pi ? pi.value : '';
+                        var curC = ci ? ci.checked : false;
+                        if (curC && curU) {
                             localStorage.setItem("_recruitment_device_u", curU);
                             localStorage.setItem("_recruitment_device_persist", "true");
-                            if (curP) {
-                                localStorage.setItem("_recruitment_device_p", curP);
-                            } else {
-                                localStorage.removeItem("_recruitment_device_p");
-                            }
-                        } else if (!curPersist) {
+                            if (curP) { localStorage.setItem("_recruitment_device_p", curP); }
+                            else { localStorage.removeItem("_recruitment_device_p"); }
+                        } else if (!curC) {
                             localStorage.removeItem("_recruitment_device_u");
                             localStorage.removeItem("_recruitment_device_p");
                             localStorage.removeItem("_recruitment_device_persist");
                         }
                     }, true);
-                }
+                });
             });
-        } catch (err) {
-            console.error("Local remember error:", err);
-        }
+        } catch (err) { console.error("hook error:", err); }
     }
-
-    setTimeout(initClientRemember, 60);
-    setTimeout(initClientRemember, 250);
-    setTimeout(initClientRemember, 600);
-    setTimeout(initClientRemember, 1500);
-
-    const observer = new MutationObserver(function() {
-        initClientRemember();
-    });
-    if (document.body) {
-        observer.observe(document.body, { childList: true, subtree: true });
-    }
+    setTimeout(hookRemember, 200);
+    setTimeout(hookRemember, 800);
+    setTimeout(hookRemember, 2000);
+    try {
+        var remObs = new MutationObserver(function() { hookRemember(); });
+        if (document.body) { remObs.observe(document.body, { childList: true, subtree: true }); }
+    } catch (e) {}
 })();
 </script>
 """, unsafe_allow_javascript=True)
