@@ -1373,6 +1373,82 @@ def get_css(lang='ar'):
             font-size: 0.95rem;
             text-shadow: 0 2px 4px rgba(0,0,0,0.5);
         }}
+
+        /* 15) Responsive: flexible layout for PC / Laptop / Tablet / Mobile */
+        html {{ -webkit-text-size-adjust: 100% !important; }}
+
+        /* ---- Tablet (<=1024px): breathe, shrink heroes ---- */
+        @media screen and (max-width: 1024px) {{
+            .main .block-container {{ padding: 1.5rem 1.2rem 3rem 1.2rem !important; }}
+            .luxury-main-title {{ font-size: 18px !important; }}
+            .translator-hero {{ padding: 25px 22px !important; margin-bottom: 20px !important; }}
+            .translator-title {{ font-size: 1.6rem !important; }}
+        }}
+
+        /* ---- Mobile (<=768px): stack columns, enlarge touch targets ---- */
+        @media screen and (max-width: 768px) {{
+            .main .block-container {{ padding: 1rem 0.8rem 4rem 0.8rem !important; max-width: 100% !important; }}
+
+            /* Stack every Streamlit column row vertically (badge scroller keeps
+               its own nowrap rule which outranks this one) */
+            div[data-testid="stHorizontalBlock"] {{ flex-wrap: wrap !important; gap: 0.5rem !important; }}
+            div[data-testid="stHorizontalBlock"] > div[data-testid="column"] {{
+                flex: 1 1 100% !important;
+                min-width: 100% !important;
+                max-width: 100% !important;
+            }}
+
+            /* Titles & heroes */
+            .luxury-main-title {{ font-size: 16px !important; letter-spacing: 0 !important; }}
+            .glowing-title {{ font-size: 1.3rem !important; }}
+            .translator-hero {{ padding: 20px 14px !important; border-radius: 14px !important; }}
+            .translator-title {{ font-size: 1.3rem !important; }}
+
+            /* Prevent iOS auto-zoom on focus (needs >=16px inputs) */
+            div[data-testid="stTextInput"] input,
+            div[data-testid="stTextArea"] textarea,
+            div[data-testid="stNumberInput"] input,
+            div[data-testid="stSelectbox"] div[data-baseweb="select"] {{
+                font-size: 16px !important;
+            }}
+
+            /* Tables stay usable: internal scroll + compact text */
+            [data-testid="stDataFrame"], [data-testid="stTable"] {{
+                font-size: 0.8rem !important;
+                margin: 12px 0 !important;
+            }}
+
+            /* Banners & cards: center stacked content */
+            .persistent-top-banner {{ text-align: center !important; }}
+            .banner-avatar {{ width: 60px !important; height: 60px !important; }}
+
+            /* Login/profile media */
+            .profile-img-circular {{ width: 64px !important; height: 64px !important; }}
+
+            /* Drop GPU-heavy blur on phones (solid bg is faster to paint) */
+            div[data-testid="stForm"] {{
+                backdrop-filter: none !important;
+                -webkit-backdrop-filter: none !important;
+                background: rgba(10, 10, 10, 0.94) !important;
+            }}
+        }}
+
+        /* ---- Small phones (<=480px): tighten further ---- */
+        @media screen and (max-width: 480px) {{
+            .main .block-container {{ padding: 0.8rem 0.5rem 4rem 0.5rem !important; }}
+            .luxury-main-title {{ font-size: 14px !important; }}
+            .glowing-title {{ font-size: 1.1rem !important; }}
+            .translator-hero {{ padding: 16px 10px !important; }}
+            .stButton button, div[data-testid="stFormSubmitButton"] button {{
+                font-size: 0.8rem !important;
+                padding: 0.55rem 1rem !important;
+            }}
+            [data-testid="stDataFrame"], [data-testid="stTable"] {{
+                font-size: 0.72rem !important;
+            }}
+            .banner-avatar {{ width: 48px !important; height: 48px !important; }}
+            .profile-img-circular {{ width: 56px !important; height: 56px !important; }}
+        }}
     </style>
     """
 
