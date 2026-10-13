@@ -249,10 +249,9 @@ DEVICE_PERSIST_COOKIE = "_rec_saved_persist"
 def get_device_saved_credentials() -> Dict[str, Any]:
     """Read saved login convenience data from client browser cookies.
 
-    Cookies carry only the username (prefill) and the persist flag.
-    Password is stored encrypted in localStorage for convenience filling.
-    Silent auto-login relies solely on the signed device token
-    (verified via verify_device_token).
+    Cookies carry username, encrypted password, and persist flag.
+    All data is stored client-side (this browser only) to survive restarts.
+    There is no silent auto-login: the login form is always shown explicitly.
     """
     if hasattr(st, "context") and hasattr(st.context, "cookies"):
         try:
@@ -260,17 +259,14 @@ def get_device_saved_credentials() -> Dict[str, Any]:
             is_p = cookies.get(DEVICE_PERSIST_COOKIE)
             if is_p in ["1", "true", "True"]:
                 raw_u = cookies.get(DEVICE_USER_COOKIE, "")
+                raw_p = cookies.get("_rec_saved_pass_enc", "")
                 u = urllib.parse.unquote(raw_u) if raw_u else ""
+                p = urllib.parse.unquote(raw_p) if raw_p else ""
                 if u:
-                    return {"u": u, "p": "", "persist": True}
+                    return {"u": u, "p": p, "persist": True}
         except Exception:
             pass
     return {"u": "", "p": "", "persist": False}
-
-def get_localstorage_persist() -> bool:
-    """Check if persist flag is set in localStorage via JavaScript."""
-    # This is a placeholder - we'll read this via JS instead
-    return False
 
 def create_device_token(username: str, days: int = 30) -> str:
     """Create a signed client-only authentication token for the specific device."""
@@ -2299,36 +2295,9 @@ if 'tm' not in st.session_state:
 if 'user' not in st.session_state:
     st.session_state.user = None
 
-# Device-Specific Auto Login via Client Cookie (Never shared across devices)
-if st.session_state.user is None and hasattr(st, "context") and hasattr(st.context, "cookies"):
-    try:
-        cookie_token = st.context.cookies.get(DEVICE_REMEMBER_COOKIE)
-        if cookie_token:
-            valid_username = verify_device_token(cookie_token)
-            if valid_username and valid_username in st.session_state.auth.users:
-                u_obj = st.session_state.auth.users[valid_username]
-                st.session_state.user = {
-                    "username": valid_username,
-                    "role": u_obj.get("role", "viewer"),
-                    "permissions": u_obj.get("permissions", {}),
-                    "name": u_obj.get("name", valid_username)
-                }
-                st.session_state.last_login_time = time.time()
-                try:
-                    record_login_event(valid_username, dict(u_obj, username=valid_username))
-                except Exception:
-                    pass
-                # Renew the device token on every visit so "remember me"
-                # keeps working indefinitely (sliding 30-day window).
-                try:
-                    st.session_state._remember_refresh = {
-                        "u": valid_username,
-                        "tok": create_device_token(valid_username, days=30),
-                    }
-                except Exception:
-                    pass
-    except Exception as e:
-        print(f"[AUTH] Auto device login check error: {e}")
+# NOTE: no silent auto-login by design — the login form is always shown.
+# The "remember me" box only prefills username/password/checkbox state on
+# this browser; the user always presses دخول explicitly.
 
 if 'lang' not in st.session_state:
     st.session_state.lang = 'ar'
@@ -2349,46 +2318,16 @@ if query_params.get('logout') == 'inactive':
     <script>
     (function() {{
         var exp0 = "; max-age=0; path=/;";
-        // Only clear the remember token (current session), NOT localStorage
+        // Only clear the remember token (current session), NOT cookies
         document.cookie = "{DEVICE_REMEMBER_COOKIE}=" + exp0;
         document.cookie = "{DEVICE_USER_COOKIE}=" + exp0;
         document.cookie = "{DEVICE_PERSIST_COOKIE}=" + exp0;
-        // Do NOT clear localStorage - preserve user's "Remember Me" preference
+        // Do NOT clear _rec_saved_* cookies - preserve user's "Remember Me" preference
     }})();
     </script>
     """, unsafe_allow_javascript=True)
     st.query_params.clear()
     st.rerun()
-
-# Auto-login using device token (if available and valid)
-# This provides seamless auto-login when the user has "Remember Me" enabled
-if not st.session_state.get('user') and not st.session_state.get('_auto_login_attempted'):
-    st.session_state._auto_login_attempted = True
-    remember_token = None
-    if hasattr(st, "context") and hasattr(st.context, "cookies"):
-        try:
-            cookies = st.context.cookies
-            remember_token = cookies.get(DEVICE_REMEMBER_COOKIE)
-        except Exception:
-            pass
-    
-    if remember_token:
-        username = verify_device_token(remember_token)
-        if username:
-            # Token is valid - we can auto-login
-            user_data = st.session_state.auth.users.get(username.lower())
-            if user_data:
-                user_data['username'] = username.lower()
-                st.session_state.user = user_data
-                st.session_state.last_login_time = time.time()
-                record_login_event(username, user_data)
-                st.session_state.show_welcome = True
-                
-                # Renew the token for another 30 days
-                new_token = create_device_token(username, days=30)
-                enc_u = urllib.parse.quote(username.strip())
-                st.session_state._remember_refresh = {"u": username, "tok": new_token}
-                st.rerun()
 
 # 5. Apply Dynamic Styles Based on Language
 st.markdown(get_css(st.session_state.lang), unsafe_allow_html=True)
@@ -2906,12 +2845,20 @@ if ('Notification' in window && Notification.permission === 'default') {
     function atob_utf8(str) {
         return decodeURIComponent(escape(window.atob(str)));
     }
+    function getCookie(name) {
+        var value = "; " + document.cookie;
+        var parts = value.split("; " + name + "=");
+        if (parts.length == 2) return parts.pop().split(";").shift();
+        return null;
+    }
     function fillRemember() {
         try {
-            var savedU = localStorage.getItem("_recruitment_device_u");
-            var savedP = localStorage.getItem("_recruitment_device_p");
-            var savedPersist = localStorage.getItem("_recruitment_device_persist");
-            if (savedPersist !== "true") return;
+            var savedU = getCookie("_rec_saved_user");
+            var savedP = getCookie("_rec_saved_pass_enc");
+            var savedPersist = getCookie("_rec_saved_persist");
+            if (savedPersist !== "1") return;
+            if (savedU) savedU = decodeURIComponent(savedU);
+            if (savedP) savedP = decodeURIComponent(savedP);
             var forms = Array.from(document.querySelectorAll('div[data-testid="stForm"]'));
             if (!forms.length) {
                 var f = document.querySelector('form[data-testid="stForm"]') || document.querySelector('form');
@@ -2959,6 +2906,18 @@ if ('Notification' in window && Notification.permission === 'default') {
     function btoa_utf8(str) {
         return window.btoa(unescape(encodeURIComponent(str)));
     }
+    function setCookie(name, value, days) {
+        var expires = "";
+        if (days) {
+            var date = new Date();
+            date.setTime(date.getTime() + (days * 24 * 60 * 60 * 1000));
+            expires = "; expires=" + date.toUTCString();
+        }
+        document.cookie = name + "=" + (value || "") + expires + "; path=/; SameSite=Lax";
+    }
+    function deleteCookie(name) {
+        document.cookie = name + '=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT;';
+    }
     function hookRemember() {
         try {
             var forms = Array.from(document.querySelectorAll('div[data-testid="stForm"]'));
@@ -2984,20 +2943,20 @@ if ('Notification' in window && Notification.permission === 'default') {
                         var curP = pi ? pi.value : '';
                         var curC = ci ? ci.checked : false;
                         if (curC && curU) {
-                            localStorage.setItem("_recruitment_device_u", curU);
-                            localStorage.setItem("_recruitment_device_persist", "true");
+                            setCookie("_rec_saved_user", encodeURIComponent(curU), 365);
+                            setCookie("_rec_saved_persist", "1", 365);
                             if (curP) {
                                 try {
                                     var encodedP = btoa_utf8(curP);
-                                    localStorage.setItem("_recruitment_device_p", encodedP);
+                                    setCookie("_rec_saved_pass_enc", encodeURIComponent(encodedP), 365);
                                 } catch(e) { console.error("encode error:", e); }
                             } else {
-                                localStorage.removeItem("_recruitment_device_p");
+                                deleteCookie("_rec_saved_pass_enc");
                             }
                         } else if (!curC) {
-                            localStorage.removeItem("_recruitment_device_u");
-                            localStorage.removeItem("_recruitment_device_p");
-                            localStorage.removeItem("_recruitment_device_persist");
+                            deleteCookie("_rec_saved_user");
+                            deleteCookie("_rec_saved_pass_enc");
+                            deleteCookie("_rec_saved_persist");
                         }
                     }, true);
                 });
@@ -3011,25 +2970,6 @@ if ('Notification' in window && Notification.permission === 'default') {
         var remObs = new MutationObserver(function() { hookRemember(); });
         if (document.body) { remObs.observe(document.body, { childList: true, subtree: true }); }
     } catch (e) {}
-})();
-</script>
-""", unsafe_allow_javascript=True)
-
-    # Script to sync localStorage to cookies on page load (to ensure cookie is set if localStorage has data)
-    st.html("""
-<script>
-(function() {
-    try {
-        var savedPersist = localStorage.getItem("_recruitment_device_persist");
-        var savedU = localStorage.getItem("_recruitment_device_u");
-        if (savedPersist === "true" && savedU) {
-            // Set cookie to match localStorage
-            var exp = "; max-age=31536000; path=/; SameSite=Lax";
-            document.cookie = "_rec_saved_persist=1" + exp;
-            document.cookie = "_rec_saved_user=" + encodeURIComponent(savedU) + exp;
-            console.log("Synced localStorage to cookies");
-        }
-    } catch(e) { console.error("sync error:", e); }
 })();
 </script>
 """, unsafe_allow_javascript=True)
@@ -3107,19 +3047,19 @@ if ('Notification' in window && Notification.permission === 'default') {
                         record_login_event(user['username'], user)
                         st.session_state.show_welcome = True
                         
-                        # Handle Remember Me for THIS device ONLY: signed token +
-                        # username in cookies. Username/password/persist flag in
-                        # this browser's localStorage are saved by the form's
-                        # click-hook from the live fields (untouched here).
+                        # Handle Remember Me for THIS device ONLY: username +
+                        # persist flag in cookies (for field defaults).
+                        # Username/password/persist flag in this browser's
+                        # localStorage are saved by the form's click-hook
+                        # from the live fields (untouched here). No auto-login:
+                        # the login form is always shown explicitly.
                         should_persist = st.session_state.get(persist_key, False)
                         if should_persist:
                             enc_u = urllib.parse.quote(u.strip())
-                            dev_token = create_device_token(user['username'], days=30)
                             st.html(f"""
                             <script>
                             (function() {{
                                 var exp = "; max-age=31536000; path=/; SameSite=Lax";
-                                document.cookie = "{DEVICE_REMEMBER_COOKIE}={dev_token}" + exp;
                                 document.cookie = "{DEVICE_USER_COOKIE}={enc_u}" + exp;
                                 document.cookie = "{DEVICE_PERSIST_COOKIE}=1" + exp;
                             }})();
@@ -3133,11 +3073,7 @@ if ('Notification' in window && Notification.permission === 'default') {
                                 document.cookie = "{DEVICE_REMEMBER_COOKIE}=" + exp0;
                                 document.cookie = "{DEVICE_USER_COOKIE}=" + exp0;
                                 document.cookie = "{DEVICE_PERSIST_COOKIE}=" + exp0;
-                                try {{
-                                    localStorage.removeItem("_recruitment_device_u");
-                                    localStorage.removeItem("_recruitment_device_p");
-                                    localStorage.removeItem("_recruitment_device_persist");
-                                }} catch(e) {{}}
+                                document.cookie = "_rec_saved_pass_enc=" + exp0;
                             }})();
                             </script>
                             """, unsafe_allow_javascript=True)
@@ -4107,11 +4043,7 @@ def dashboard():
                     document.cookie = "_recruitment_remember_token=" + exp0;
                     document.cookie = "_rec_saved_user=" + exp0;
                     document.cookie = "_rec_saved_persist=" + exp0;
-                    try {
-                        localStorage.removeItem("_recruitment_device_u");
-                        localStorage.removeItem("_recruitment_device_p");
-                        localStorage.removeItem("_recruitment_device_persist");
-                    } catch(e) {}
+                    document.cookie = "_rec_saved_pass_enc=" + exp0;
                 })();
                 </script>
                 """, unsafe_allow_javascript=True)
@@ -7292,28 +7224,5 @@ if not st.session_state.user:
         login_screen()
 else:
     with main_container.container():
-        # One-time renewal of the "remember me" device cookie after auto-login
-        _rr = st.session_state.get("_remember_refresh")
-        if isinstance(_rr, dict) and _rr.get("tok"):
-            try:
-                del st.session_state._remember_refresh
-            except Exception:
-                pass
-            try:
-                import urllib.parse as _up
-                _rr_enc_u = _up.quote(str(_rr.get("u", "")).strip())
-                _rr_tok = _rr.get("tok", "")
-                st.html(f"""
-                <script>
-                (function() {{
-                    var exp = "; max-age=31536000; path=/; SameSite=Lax";
-                    document.cookie = "{DEVICE_REMEMBER_COOKIE}={_rr_tok}" + exp;
-                    document.cookie = "{DEVICE_USER_COOKIE}={_rr_enc_u}" + exp;
-                    document.cookie = "{DEVICE_PERSIST_COOKIE}=1" + exp;
-                }})();
-                </script>
-                """, unsafe_allow_javascript=True)
-            except Exception:
-                pass
         dashboard()
     silent_notification_monitor()
