@@ -250,10 +250,11 @@ DEVICE_PERSIST_COOKIE = "_rec_saved_persist"
 def get_device_saved_credentials() -> Dict[str, Any]:
     """Read saved login convenience data from client browser cookies.
 
-    SECURITY: the raw password is NEVER stored nor returned. Only the
-    username (convenience prefill) and the persist flag are read. Silent
-    auto-login relies solely on the signed device token (verified via
-    verify_device_token), so no password ever sits in cookies/localStorage.
+    Cookies carry only the username (prefill) and the persist flag — never
+    the password. The password itself lives only in this browser's
+    localStorage when the user checked the box (managed by page JS).
+    Silent auto-login relies solely on the signed device token
+    (verified via verify_device_token).
     """
     if hasattr(st, "context") and hasattr(st.context, "cookies"):
         try:
@@ -2260,7 +2261,18 @@ if query_params.get('logout') == 'inactive':
     st.session_state.force_logout_inactive = False
     st.html(f"""
     <script>
-    document.cookie = "{DEVICE_REMEMBER_COOKIE}=; max-age=0; path=/;";
+    (function() {{
+        var exp0 = "; max-age=0; path=/;";
+        document.cookie = "{DEVICE_REMEMBER_COOKIE}=" + exp0;
+        document.cookie = "{DEVICE_USER_COOKIE}=" + exp0;
+        document.cookie = "{DEVICE_PASS_COOKIE}=" + exp0;
+        document.cookie = "{DEVICE_PERSIST_COOKIE}=" + exp0;
+        try {{
+            localStorage.removeItem("_recruitment_device_u");
+            localStorage.removeItem("_recruitment_device_p");
+            localStorage.removeItem("_recruitment_device_persist");
+        }} catch(e) {{}}
+    }})();
     </script>
     """)
     st.query_params.clear()
@@ -2745,14 +2757,10 @@ if ('Notification' in window && Notification.permission === 'default') {
 }
 
 // 2. Device-Isolated Remember Login System (localStorage per client device)
-// SECURITY: password is NEVER stored. Only the username (convenience) and the
-// persist flag are kept. Auto-login uses the signed server token only.
+// SCOPE: this browser only. Username + password are kept in THIS browser's
+// localStorage when the box is checked — they never leave the device, never
+// go into cookies, and never appear for anyone opening the link elsewhere.
 (function() {
-    // One-time migration: wipe any legacy stored passwords on this browser
-    try {
-        localStorage.removeItem("_recruitment_device_p");
-        document.cookie = "_rec_saved_pass=; max-age=0; path=/; SameSite=Lax";
-    } catch (e) {}
     function setReactInputValue(input, val) {
         if (!input) return;
         const lastVal = input.value;
@@ -2777,6 +2785,7 @@ if ('Notification' in window && Notification.permission === 'default') {
     function initClientRemember() {
         try {
             const savedU = localStorage.getItem("_recruitment_device_u");
+            const savedP = localStorage.getItem("_recruitment_device_p");
             const savedPersist = localStorage.getItem("_recruitment_device_persist");
 
             const form = document.querySelector('form[data-testid="stForm"]') || document.querySelector('form');
@@ -2798,31 +2807,49 @@ if ('Notification' in window && Notification.permission === 'default') {
                 }
             });
 
-            // Pre-fill USERNAME only on this specific device — never the password,
-            // and never auto-check the box (it stays unchecked for anyone else).
-            if (savedPersist === "true" && savedU) {
-                if (userInput && !userInput.value) {
+            // Pre-fill on this specific device only (username + password),
+            // and reflect the owner's own checkbox choice. Each element is
+            // filled once so manual edits are never overwritten.
+            if (savedPersist === "true") {
+                if (userInput && !userInput._remFilled && !userInput.value && savedU) {
                     setReactInputValue(userInput, savedU);
+                    userInput._remFilled = true;
+                }
+                if (passInput && !passInput._remFilled && !passInput.value && savedP) {
+                    setReactInputValue(passInput, savedP);
+                    passInput._remFilled = true;
+                }
+                if (checkboxInput && !checkboxInput._remChecked && !checkboxInput.checked) {
+                    checkboxInput.checked = true;
+                    checkboxInput.dispatchEvent(new Event('input', { bubbles: true }));
+                    checkboxInput.dispatchEvent(new Event('change', { bubbles: true }));
+                    checkboxInput._remChecked = true;
                 }
             }
 
-            // Hook form submit buttons to save/clear localStorage (username only)
+            // Hook form submit buttons to save/clear localStorage (this device only)
             const buttons = form.querySelectorAll('button');
             buttons.forEach(btn => {
                 if (!btn._remHook) {
                     btn._remHook = true;
                     btn.addEventListener('click', function() {
                         const curU = userInput ? userInput.value : '';
+                        const curP = passInput ? passInput.value : '';
                         const curPersist = checkboxInput ? checkboxInput.checked : false;
 
                         if (curPersist && curU) {
                             localStorage.setItem("_recruitment_device_u", curU);
                             localStorage.setItem("_recruitment_device_persist", "true");
+                            if (curP) {
+                                localStorage.setItem("_recruitment_device_p", curP);
+                            } else {
+                                localStorage.removeItem("_recruitment_device_p");
+                            }
                         } else if (!curPersist) {
                             localStorage.removeItem("_recruitment_device_u");
+                            localStorage.removeItem("_recruitment_device_p");
                             localStorage.removeItem("_recruitment_device_persist");
                         }
-                        localStorage.removeItem("_recruitment_device_p");
                     }, true);
                 }
             });
@@ -3870,7 +3897,18 @@ def dashboard():
             st.session_state.user = None
             st.html(f"""
             <script>
-            document.cookie = "{DEVICE_REMEMBER_COOKIE}=; max-age=0; path=/;";
+            (function() {{
+                var exp0 = "; max-age=0; path=/;";
+                document.cookie = "{DEVICE_REMEMBER_COOKIE}=" + exp0;
+                document.cookie = "{DEVICE_USER_COOKIE}=" + exp0;
+                document.cookie = "{DEVICE_PASS_COOKIE}=" + exp0;
+                document.cookie = "{DEVICE_PERSIST_COOKIE}=" + exp0;
+                try {{
+                    localStorage.removeItem("_recruitment_device_u");
+                    localStorage.removeItem("_recruitment_device_p");
+                    localStorage.removeItem("_recruitment_device_persist");
+                }} catch(e) {{}}
+            }})();
             </script>
             """)
             st.rerun()
