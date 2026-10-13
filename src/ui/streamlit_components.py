@@ -481,7 +481,7 @@ def login_screen(auth_manager, t, toggle_lang, load_saved_credentials, save_cred
     }
 })();
 </script>
-""")
+""", unsafe_allow_javascript=True)
 
     st.markdown(f'<div class="luxury-main-title">{title_text}</div>', unsafe_allow_html=True)
     
@@ -564,7 +564,7 @@ def login_screen(auth_manager, t, toggle_lang, load_saved_credentials, save_cred
                                     }} catch(e) {{}}
                                 }})();
                                 </script>
-                                """)
+                                """, unsafe_allow_javascript=True)
                             except Exception:
                                 pass
                         else:
@@ -583,7 +583,7 @@ def login_screen(auth_manager, t, toggle_lang, load_saved_credentials, save_cred
                                 } catch(e) {}
                             })();
                             </script>
-                            """)
+                            """, unsafe_allow_javascript=True)
                         
                         st.success("جاري الدخول... | Loading..." if lang == 'ar' else "Loading... | Entering")
                         st.rerun()

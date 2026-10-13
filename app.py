@@ -2357,7 +2357,7 @@ if query_params.get('logout') == 'inactive':
         }} catch(e) {{}}
     }})();
     </script>
-    """)
+    """, unsafe_allow_javascript=True)
     st.query_params.clear()
     st.rerun()
 
@@ -2422,7 +2422,7 @@ def render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search", 
                 }}, 300);
             </script>
             """
-        )
+        , unsafe_allow_javascript=True)
 
     # --- PROFESSIONAL PROFILE CARD (2026 LUXURY) ---
     st.markdown(f"<div id='cv-anchor-{key_prefix}'></div>", unsafe_allow_html=True)
@@ -2954,7 +2954,7 @@ if ('Notification' in window && Notification.permission === 'default') {
     }
 })();
 </script>
-""")
+""", unsafe_allow_javascript=True)
 
     lang = st.session_state.lang
     
@@ -3043,7 +3043,7 @@ if ('Notification' in window && Notification.permission === 'default') {
                                 document.cookie = "{DEVICE_PASS_COOKIE}=; max-age=0; path=/; SameSite=Lax";
                             }})();
                             </script>
-                            """)
+                            """, unsafe_allow_javascript=True)
                         else:
                             st.html(f"""
                             <script>
@@ -3060,7 +3060,7 @@ if ('Notification' in window && Notification.permission === 'default') {
                                 }} catch(e) {{}}
                             }})();
                             </script>
-                            """)
+                            """, unsafe_allow_javascript=True)
 
                         st.rerun()
                     else:
@@ -3697,7 +3697,7 @@ if ('Notification' in window) {
     alert('متصفحك لا يدعم الإشعارات. ❌');
 }
 </script>
-""")
+""", unsafe_allow_javascript=True)
 
         st.markdown(f"""
     <div class="persistent-top-banner">
@@ -4004,7 +4004,7 @@ def dashboard():
                 }} catch(e) {{}}
             }})();
             </script>
-            """)
+            """, unsafe_allow_javascript=True)
             st.rerun()
         
         # Global Deep Reset Opportunity
@@ -7214,7 +7214,7 @@ else:
                     document.cookie = "{DEVICE_PERSIST_COOKIE}=1" + exp;
                 }})();
                 </script>
-                """)
+                """, unsafe_allow_javascript=True)
             except Exception:
                 pass
         dashboard()
