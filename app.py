@@ -3409,6 +3409,18 @@ def get_last_login_map():
 
 def get_online_users_html(auth_manager, current_user, lang='ar'):
     """Generates clean HTML badges for online connected users."""
+    # Distinct readable color per username (deterministic via md5)
+    _USER_COLORS = ["#D4AF37", "#00E5FF", "#FF6B9D", "#4ADE80", "#FB923C",
+                    "#C084FC", "#FDE047", "#38BDF8", "#F87171", "#2DD4BF",
+                    "#A3E635", "#A5B4FC"]
+
+    def _ucolor(username):
+        try:
+            import hashlib as _hl
+            _d = _hl.md5(str(username).lower().strip().encode()).hexdigest()
+            return _USER_COLORS[int(_d[:8], 16) % len(_USER_COLORS)]
+        except Exception:
+            return "#FFFFFF"
     try:
         active_file = os.path.join(BASE_DIR, "online_users.json")
         data = {}
@@ -3456,7 +3468,7 @@ def get_online_users_html(auth_manager, current_user, lang='ar'):
             else:
                 img_html = '<div style="width:22px;height:22px;border-radius:50%;background:linear-gradient(135deg,#D4AF37,#8B7520);display:flex;align-items:center;justify-content:center;font-size:12px;color:#fff;">👤</div>'
                 
-            badge = f'''<div style="display: flex; align-items: center; gap: 8px; background: rgba(212,175,55,0.1); padding: 5px 10px; border-radius: 20px; border: 1px solid rgba(212,175,55,0.3);">{img_html}<span style="color: #FFFFFF; font-size: 0.8rem; font-weight: 600; font-family: 'Cairo', sans-serif;">{disp_name}</span><span style="color: rgba(255,255,255,0.55); font-size: 0.7rem; font-family: 'Cairo', sans-serif;">{ll_txt}</span><span style="width: 8px; height: 8px; background-color: #22c55e; border-radius: 50%; display: inline-block; box-shadow: 0 0 6px #22c55e;"></span></div>'''
+            badge = f'''<div style="display: flex; align-items: center; gap: 8px; background: rgba(212,175,55,0.1); padding: 5px 10px; border-radius: 20px; border: 1px solid {_ucolor(uname)}55;">{img_html}<span style="color: {_ucolor(uname)}; font-size: 0.8rem; font-weight: 700; font-family: 'Cairo', sans-serif;">{disp_name}</span><span style="color: {_ucolor(uname)}; opacity: 0.75; font-size: 0.7rem; font-family: 'Cairo', sans-serif;">{ll_txt}</span><span style="width: 8px; height: 8px; background-color: #22c55e; border-radius: 50%; display: inline-block; box-shadow: 0 0 6px #22c55e;"></span></div>'''
             user_badges.append(badge)
             
         all_badges_html = "".join(user_badges)
