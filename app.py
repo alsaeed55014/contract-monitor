@@ -1458,6 +1458,14 @@ def _normalize_arabic_text(text):
                  .replace("ى", "ي"))
 
 def _get_nationality_code(val):
+    try:
+        return _get_nationality_code_cached(val)
+    except Exception:
+        return None
+
+
+@st.cache_data(ttl=600, show_spinner=False)
+def _get_nationality_code_cached(val):
     if not val or pd.isna(val): return None
     s_val = str(val).strip().lower()
     
@@ -1691,9 +1699,6 @@ def render_table_translator(df, key_prefix="table"):
 
     if not cols_to_translate:
         return df
-
-    from src.core.translation import TranslationManager
-    tm = TranslationManager()
 
     # --- Record Count Header & Nationality Stats ---
     lang = st.session_state.get('lang', 'ar')
@@ -1946,6 +1951,8 @@ div[data-testid="stHorizontalBlock"]:has(.nat-flag-badge) .nat-clear-badge .stBu
     
     target_lang = st.session_state.get(t_state_key)
     if target_lang in ['ar', 'tl']:
+        from src.core.translation import TranslationManager
+        tm = st.session_state.get('tm') or TranslationManager()
         spinner_msg = "جارِ الترجمة..." if target_lang == 'ar' else "Isinasalin sa Tagalog..."
         with st.spinner(spinner_msg):
             for col in cols_to_translate:
@@ -3268,16 +3275,18 @@ def check_notifications():
                     })
                     st.session_state.notif_triggered = True
 
-        # Save current counts to file for persistence
-        try:
-            with open(NOTIF_STATE_FILE, 'w') as f:
-                json.dump({
-                    'worker_count': current_worker_count,
-                    'cust_count': current_cust_count,
-                    'last_check': get_saudi_time().isoformat()
-                }, f)
-        except Exception as e:
-            print(f"[DEBUG] Failed to save notification state: {e}")
+        # Save counts only when they actually changed (was: rewrite on every rerun)
+        if (current_worker_count != saved_worker_count
+                or current_cust_count != saved_cust_count):
+            try:
+                with open(NOTIF_STATE_FILE, 'w') as f:
+                    json.dump({
+                        'worker_count': current_worker_count,
+                        'cust_count': current_cust_count,
+                        'last_check': get_saudi_time().isoformat()
+                    }, f)
+            except Exception as e:
+                print(f"[DEBUG] Failed to save notification state: {e}")
 
         # Store counts in session for comparison on next check
         st.session_state.last_seen_worker_count = current_worker_count
@@ -4719,15 +4728,16 @@ def render_search_content():
             # Smart Translator Button
             res_display = render_table_translator(res_display, key_prefix="search_res")
             
-            # Use on_select to capture row selection
+            # Use on_select to capture row selection (style computed ONCE)
             df_height = min((len(res_display) + 1) * 35 + 40, 600)
+            _search_styled = style_df(res_display)
             event = st.dataframe(
-                style_df(res_display), 
+                _search_styled,
                 width='content',
                 on_select="rerun",
                 selection_mode="single-row",
                 hide_index=True,
-                column_config=__apply_pinned_columns(style_df(res_display), column_config),
+                column_config=__apply_pinned_columns(_search_styled, column_config),
                 key=f"search_results_table_{st.session_state.get('search_entry_count', 0)}",
                 height=df_height
             )
@@ -5319,9 +5329,10 @@ def render_permissions_content():
             t_col("Role", lang): v.get('role', 'viewer')
         })
     
-    # Stylized DataFrame
+    # Stylized DataFrame (styled once)
     df_users = pd.DataFrame(table_data)
-    st.dataframe(style_df(df_users), width='content', column_config=__apply_pinned_columns(style_df(df_users)))
+    _users_styled = style_df(df_users)
+    st.dataframe(_users_styled, width='content', column_config=__apply_pinned_columns(_users_styled))
 
 def render_order_processing_content():
     """Order Processing: Matches Customer Requests with available Workers."""
