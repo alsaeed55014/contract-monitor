@@ -3025,8 +3025,10 @@ if ('Notification' in window && Notification.permission === 'default') {
                         record_login_event(user['username'], user)
                         st.session_state.show_welcome = True
                         
-                        # Handle Remember Me for THIS device ONLY (signed token + username;
-                        # the raw password is NEVER stored anywhere)
+                        # Handle Remember Me for THIS device ONLY: signed token +
+                        # username in cookies. Username/password/persist flag in
+                        # this browser's localStorage are saved by the form's
+                        # click-hook from the live fields (untouched here).
                         should_persist = st.session_state.get(persist_key, False)
                         if should_persist:
                             enc_u = urllib.parse.quote(u.strip())
@@ -3039,11 +3041,6 @@ if ('Notification' in window && Notification.permission === 'default') {
                                 document.cookie = "{DEVICE_USER_COOKIE}={enc_u}" + exp;
                                 document.cookie = "{DEVICE_PERSIST_COOKIE}=1" + exp;
                                 document.cookie = "{DEVICE_PASS_COOKIE}=; max-age=0; path=/; SameSite=Lax";
-                                try {{
-                                    localStorage.setItem("_recruitment_device_u", "{u.strip()}");
-                                    localStorage.setItem("_recruitment_device_persist", "true");
-                                    localStorage.removeItem("_recruitment_device_p");
-                                }} catch(e) {{}}
                             }})();
                             </script>
                             """)
