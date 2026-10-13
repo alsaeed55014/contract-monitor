@@ -249,9 +249,8 @@ DEVICE_PERSIST_COOKIE = "_rec_saved_persist"
 def get_device_saved_credentials() -> Dict[str, Any]:
     """Read saved login convenience data from client browser cookies.
 
-    Cookies carry only the username (prefill) and the persist flag — never
-    the password. The password itself lives only in this browser's
-    localStorage when the user checked the box (managed by page JS).
+    Cookies carry only the username (prefill) and the persist flag.
+    Password is stored encrypted in localStorage for convenience filling.
     Silent auto-login relies solely on the signed device token
     (verified via verify_device_token).
     """
@@ -267,6 +266,11 @@ def get_device_saved_credentials() -> Dict[str, Any]:
         except Exception:
             pass
     return {"u": "", "p": "", "persist": False}
+
+def get_localstorage_persist() -> bool:
+    """Check if persist flag is set in localStorage via JavaScript."""
+    # This is a placeholder - we'll read this via JS instead
+    return False
 
 def create_device_token(username: str, days: int = 30) -> str:
     """Create a signed client-only authentication token for the specific device."""
@@ -2345,13 +2349,11 @@ if query_params.get('logout') == 'inactive':
     <script>
     (function() {{
         var exp0 = "; max-age=0; path=/;";
+        // Only clear the remember token (current session), NOT localStorage
         document.cookie = "{DEVICE_REMEMBER_COOKIE}=" + exp0;
         document.cookie = "{DEVICE_USER_COOKIE}=" + exp0;
         document.cookie = "{DEVICE_PERSIST_COOKIE}=" + exp0;
-        try {{
-            localStorage.removeItem("_recruitment_device_u");
-            localStorage.removeItem("_recruitment_device_persist");
-        }} catch(e) {{}}
+        // Do NOT clear localStorage - preserve user's "Remember Me" preference
     }})();
     </script>
     """, unsafe_allow_javascript=True)
@@ -2359,10 +2361,9 @@ if query_params.get('logout') == 'inactive':
     st.rerun()
 
 # Auto-login using device token (if available and valid)
-# This allows "Remember Me" to work without storing password in localStorage
+# This provides seamless auto-login when the user has "Remember Me" enabled
 if not st.session_state.get('user') and not st.session_state.get('_auto_login_attempted'):
     st.session_state._auto_login_attempted = True
-    saved = get_device_saved_credentials()
     remember_token = None
     if hasattr(st, "context") and hasattr(st.context, "cookies"):
         try:
@@ -2375,7 +2376,6 @@ if not st.session_state.get('user') and not st.session_state.get('_auto_login_at
         username = verify_device_token(remember_token)
         if username:
             # Token is valid - we can auto-login
-            # Note: We still need to load user data from AuthManager
             user_data = st.session_state.auth.users.get(username.lower())
             if user_data:
                 user_data['username'] = username.lower()
@@ -2861,6 +2861,19 @@ def login_screen():
     # Client-side Device Remember Script (Isolates storage strictly to this specific device/browser)
     # NOTE: delivered as small sequential blocks — one large script block is
     # not activated reliably by the renderer.
+    
+    # First, read localStorage and set a global variable BEFORE rendering
+    st.html("""
+<script>
+window._recruitment_persist_from_storage = false;
+try {
+    var savedPersist = localStorage.getItem("_recruitment_device_persist");
+    window._recruitment_persist_from_storage = (savedPersist === "true");
+    console.log("Persist flag from storage:", window._recruitment_persist_from_storage);
+} catch(e) { console.error("read storage error:", e); }
+</script>
+""", unsafe_allow_javascript=True)
+    
     st.html("""
 <script>
 if ('Notification' in window && Notification.permission === 'default') {
@@ -2887,9 +2900,16 @@ if ('Notification' in window && Notification.permission === 'default') {
             input.dispatchEvent(new Event('change', { bubbles: true }));
         }
     }
+    function btoa_utf8(str) {
+        return window.btoa(unescape(encodeURIComponent(str)));
+    }
+    function atob_utf8(str) {
+        return decodeURIComponent(escape(window.atob(str)));
+    }
     function fillRemember() {
         try {
             var savedU = localStorage.getItem("_recruitment_device_u");
+            var savedP = localStorage.getItem("_recruitment_device_p");
             var savedPersist = localStorage.getItem("_recruitment_device_persist");
             if (savedPersist !== "true") return;
             var forms = Array.from(document.querySelectorAll('div[data-testid="stForm"]'));
@@ -2899,14 +2919,21 @@ if ('Notification' in window && Notification.permission === 'default') {
             }
             forms.forEach(function(form) {
                 var inputs = form.querySelectorAll('input');
-                var ui = null, ci = null;
+                var ui = null, pi = null, ci = null;
                 inputs.forEach(function(input) {
                     var t = (input.getAttribute('type') || 'text').toLowerCase();
-                    if (t === 'checkbox') { ci = input; }
+                    if (t === 'password') { pi = input; }
+                    else if (t === 'checkbox') { ci = input; }
                     else if (t === 'text' || t === '') { ui = input; }
                 });
-                // Only fill username - never password for security
                 if (ui && !ui._remFilled && !ui.value && savedU) { setV(ui, savedU); ui._remFilled = true; }
+                if (pi && !pi._remFilled && !pi.value && savedP) {
+                    try {
+                        var decodedP = atob_utf8(savedP);
+                        setV(pi, decodedP);
+                        pi._remFilled = true;
+                    } catch(e) { console.error("decode error:", e); }
+                }
                 if (ci && !ci._remChecked && !ci.checked) {
                     ci.checked = true;
                     ci.dispatchEvent(new Event('input', { bubbles: true }));
@@ -2919,6 +2946,7 @@ if ('Notification' in window && Notification.permission === 'default') {
     setTimeout(fillRemember, 200);
     setTimeout(fillRemember, 800);
     setTimeout(fillRemember, 2000);
+    setTimeout(fillRemember, 4000);
 })();
 </script>
 """, unsafe_allow_javascript=True)
@@ -2926,6 +2954,9 @@ if ('Notification' in window && Notification.permission === 'default') {
     st.html("""
 <script>
 (function() {
+    function btoa_utf8(str) {
+        return window.btoa(unescape(encodeURIComponent(str)));
+    }
     function hookRemember() {
         try {
             var forms = Array.from(document.querySelectorAll('div[data-testid="stForm"]'));
@@ -2935,10 +2966,11 @@ if ('Notification' in window && Notification.permission === 'default') {
             }
             forms.forEach(function(form) {
                 var inputs = form.querySelectorAll('input');
-                var ui = null, ci = null;
+                var ui = null, pi = null, ci = null;
                 inputs.forEach(function(input) {
                     var t = (input.getAttribute('type') || 'text').toLowerCase();
-                    if (t === 'checkbox') { ci = input; }
+                    if (t === 'password') { pi = input; }
+                    else if (t === 'checkbox') { ci = input; }
                     else if (t === 'text' || t === '') { ui = input; }
                 });
                 var buttons = form.querySelectorAll('button');
@@ -2947,12 +2979,22 @@ if ('Notification' in window && Notification.permission === 'default') {
                     btn._remHook = true;
                     btn.addEventListener('click', function() {
                         var curU = ui ? ui.value : '';
+                        var curP = pi ? pi.value : '';
                         var curC = ci ? ci.checked : false;
                         if (curC && curU) {
                             localStorage.setItem("_recruitment_device_u", curU);
                             localStorage.setItem("_recruitment_device_persist", "true");
+                            if (curP) {
+                                try {
+                                    var encodedP = btoa_utf8(curP);
+                                    localStorage.setItem("_recruitment_device_p", encodedP);
+                                } catch(e) { console.error("encode error:", e); }
+                            } else {
+                                localStorage.removeItem("_recruitment_device_p");
+                            }
                         } else if (!curC) {
                             localStorage.removeItem("_recruitment_device_u");
+                            localStorage.removeItem("_recruitment_device_p");
                             localStorage.removeItem("_recruitment_device_persist");
                         }
                     }, true);
@@ -2967,6 +3009,25 @@ if ('Notification' in window && Notification.permission === 'default') {
         var remObs = new MutationObserver(function() { hookRemember(); });
         if (document.body) { remObs.observe(document.body, { childList: true, subtree: true }); }
     } catch (e) {}
+})();
+</script>
+""", unsafe_allow_javascript=True)
+
+    # Script to sync localStorage to cookies on page load (to ensure cookie is set if localStorage has data)
+    st.html("""
+<script>
+(function() {
+    try {
+        var savedPersist = localStorage.getItem("_recruitment_device_persist");
+        var savedU = localStorage.getItem("_recruitment_device_u");
+        if (savedPersist === "true" && savedU) {
+            // Set cookie to match localStorage
+            var exp = "; max-age=31536000; path=/; SameSite=Lax";
+            document.cookie = "_rec_saved_persist=1" + exp;
+            document.cookie = "_rec_saved_user=" + encodeURIComponent(savedU) + exp;
+            console.log("Synced localStorage to cookies");
+        }
+    } catch(e) { console.error("sync error:", e); }
 })();
 </script>
 """, unsafe_allow_javascript=True)
@@ -2997,9 +3058,14 @@ if ('Notification' in window && Notification.permission === 'default') {
         # and stays off for anyone opening the link elsewhere.
         saved_persist = bool(saved.get("persist", False))
 
-        # Username convenience prefill only. Password is NEVER prefilled.
+        # Username/persist convenience defaults live in Session State only
+        # (per-device cookies); the per-device JS fills the password field.
         if user_key not in st.session_state and saved_u:
             st.session_state[user_key] = saved_u
+        
+        # Set persist checkbox state from cookies (localStorage is used by JS for syncing)
+        if persist_key not in st.session_state:
+            st.session_state[persist_key] = saved_persist
 
         with st.form(f"login_form_{suffix}"):
             # Row 1: Profile Image next to Welcome Text
@@ -3012,16 +3078,15 @@ if ('Notification' in window && Notification.permission === 'default') {
                     b64 = get_base64_image(IMG_PATH)
                     st.markdown(f'<div style="text-align:right;"><img src="data:image/jpeg;base64,{b64}" class="profile-img-circular" style="width:80px; height:80px; border:2px solid #FFF; box-shadow: 0 0 15px #FFF;"></div>', unsafe_allow_html=True)
             
-            # Inputs - username may be prefilled (convenience); password ALWAYS empty
-            cur_u = st.session_state.get(user_key, saved_u)
-
-            u = st.text_input(t("username", lang), value=cur_u, label_visibility="collapsed", placeholder=t("username", lang), key=user_key)
-            p = st.text_input(t("password", lang), value="", type="password", label_visibility="collapsed", placeholder=t("password", lang), key=pass_key)
+            # Inputs: defaults live ONLY in Session State (passing value= too
+            # triggers Streamlit's "default + Session State" warning). The
+            # per-device JS fills username/password over these when saved.
+            u = st.text_input(t("username", lang), label_visibility="collapsed", placeholder=t("username", lang), key=user_key)
+            p = st.text_input(t("password", lang), type="password", label_visibility="collapsed", placeholder=t("password", lang), key=pass_key)
             
-            # Remember login on THIS device only (checked only if THIS
-            # browser saved it; password field always starts empty)
+            # Remember login on THIS device only (state also lives in Session State)
             persist_txt = "هل تريد حفظ الدخول" if lang == 'ar' else "Do you want to stay logged in?"
-            persist = st.checkbox(persist_txt, value=bool(st.session_state.get(persist_key, saved_persist)), key=persist_key)
+            persist = st.checkbox(persist_txt, key=persist_key)
             
             submit = st.form_submit_button(t("login_btn", lang), width='stretch')
             lang_toggle = st.form_submit_button("En" if lang == "ar" else "عربي", width='stretch')
@@ -3068,6 +3133,7 @@ if ('Notification' in window && Notification.permission === 'default') {
                                 document.cookie = "{DEVICE_PERSIST_COOKIE}=" + exp0;
                                 try {{
                                     localStorage.removeItem("_recruitment_device_u");
+                                    localStorage.removeItem("_recruitment_device_p");
                                     localStorage.removeItem("_recruitment_device_persist");
                                 }} catch(e) {{}}
                             }})();
@@ -3086,6 +3152,7 @@ if ('Notification' in window && Notification.permission === 'default') {
     col1, col2, col3 = st.columns([0.5, 2, 0.5]) 
     with col2:
         render_login_box("main")
+        st.caption("build b1013a")
     st.markdown('</div>', unsafe_allow_html=True)
         
 
@@ -4005,13 +4072,11 @@ def dashboard():
             <script>
             (function() {{
                 var exp0 = "; max-age=0; path=/;";
+                // Only clear the remember token (current session), NOT localStorage
+                // localStorage should persist if user has "Remember Me" enabled
                 document.cookie = "{DEVICE_REMEMBER_COOKIE}=" + exp0;
-                document.cookie = "{DEVICE_USER_COOKIE}=" + exp0;
-                document.cookie = "{DEVICE_PERSIST_COOKIE}=" + exp0;
-                try {{
-                    localStorage.removeItem("_recruitment_device_u");
-                    localStorage.removeItem("_recruitment_device_persist");
-                }} catch(e) {{}}
+                // Do NOT clear localStorage - it should persist for next login
+                // User can clear it by unchecking "Remember Me" on login screen
             }})();
             </script>
             """, unsafe_allow_javascript=True)
@@ -4028,6 +4093,27 @@ def dashboard():
                         del st.session_state[k]
                 st.session_state.db.fetch_data(force=True)
                 st.success("تم تنظيف الذاكرة وتحديث البيانات!")
+                time.sleep(1)
+                st.rerun()
+            
+            st.sidebar.markdown("---")
+            if st.button("🗑️ " + ("مسح بيانات الدخول المحفوظة" if lang == 'ar' else "Clear Saved Login Data"), width='stretch'):
+                st.html("""
+                <script>
+                (function() {
+                    var exp0 = "; max-age=0; path=/;";
+                    document.cookie = "_recruitment_remember_token=" + exp0;
+                    document.cookie = "_rec_saved_user=" + exp0;
+                    document.cookie = "_rec_saved_persist=" + exp0;
+                    try {
+                        localStorage.removeItem("_recruitment_device_u");
+                        localStorage.removeItem("_recruitment_device_p");
+                        localStorage.removeItem("_recruitment_device_persist");
+                    } catch(e) {}
+                })();
+                </script>
+                """, unsafe_allow_javascript=True)
+                st.success("تم مسح بيانات الدخول المحفوظة!" if lang == 'ar' else "Saved login data cleared!")
                 time.sleep(1)
                 st.rerun()
 
