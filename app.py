@@ -2929,7 +2929,9 @@ if ('Notification' in window && Notification.permission === 'default') {
                 if (ui && !ui._remFilled && !ui.value && savedU) { setV(ui, savedU); ui._remFilled = true; }
                 if (pi && !pi._remFilled && !pi.value && savedP) {
                     try {
-                        var decodedP = atob_utf8(savedP);
+                        var decodedP = savedP;
+                        try { decodedP = atob_utf8(savedP); }
+                        catch (e2) { decodedP = savedP; }
                         setV(pi, decodedP);
                         pi._remFilled = true;
                     } catch(e) { console.error("decode error:", e); }
