@@ -116,7 +116,7 @@ class WAWorkerManager:
     def send_job(self, targets: list, messages: list, delay: int, batch_size: int,
                  batch_delay: int, is_smart: bool, custom_job: str,
                  attachment_path: str = None, msg_switch_threshold: int = 1,
-                 start_from: int = 0):
+                 start_from: int = 0, username: str = "shared"):
         """أرسل وظيفة إرسال للعامل الخلفي"""
         import uuid
         job = {
@@ -132,6 +132,7 @@ class WAWorkerManager:
             "attachment_path": attachment_path,
             "msg_switch_threshold": msg_switch_threshold,
             "start_from": start_from,
+            "username": username,
             "submitted_at": datetime.now().isoformat()
         }
         _save(WA_WORKER_JOB_FILE, job)

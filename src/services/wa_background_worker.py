@@ -23,6 +23,11 @@ sys.path.insert(0, BASE_DIR)  # ✅ Inserté TOUT EN HAUT avant les imports loca
 from src.services.whatsapp_service import ANTIBAN
 # ✅ Utilisation des MEMES FICHIERS que whatsapp_ui.py via src/config
 from src.config import WA_HISTORY_FILE as CONFIG_WA_HISTORY_FILE
+from src.services.whatsapp_service import wa_username_key, wa_session_id_for
+
+def wa_history_file_for(username="shared"):
+    """Per-user sent-numbers history (isolated per app username)."""
+    return os.path.join(BASE_DIR, f"whatsapp_history_{wa_username_key(username)}.json")
 
 WA_WORKER_JOB_FILE  = os.path.join(BASE_DIR, "wa_worker_job.json")    # الأوامر من Streamlit للعامل
 WA_WORKER_STATE_FILE = os.path.join(BASE_DIR, "wa_worker_state.json") # حالة العامل لـ Streamlit
@@ -66,12 +71,12 @@ def append_log(entry: dict):
     logs.append(entry)
     save_json(WA_WORKER_LOG_FILE, logs[-500:])  # احتفظ بآخر 500 سجل فقط
 
-def load_history():
-    data = load_json(WA_HISTORY_FILE, [])
+def load_history(username="shared"):
+    data = load_json(wa_history_file_for(username), [])
     return set(data) if isinstance(data, list) else set()
 
-def save_history(history_set):
-    save_json(WA_HISTORY_FILE, list(history_set))
+def save_history(history_set, username="shared"):
+    save_json(wa_history_file_for(username), list(history_set))
 
 # ─── نظام مكافحة الحظر المتقدم ─────────────────────────────────
 
@@ -148,8 +153,10 @@ def run_worker():
     from src.services.whatsapp_service import WhatsAppService
 
     wa = None
+    wa_owner = None
     anti_ban = AntiBanEngine()
     history = load_history()
+    history_owner = "shared"
     last_job_id = None
 
     while True:
@@ -171,6 +178,17 @@ def run_worker():
             # ── التحقق من وجود وظيفة إرسال ──
             if job.get("command") == "send" and job.get("job_id") != last_job_id:
                 job_id     = job.get("job_id")
+                job_username = wa_username_key(job.get("username") or "shared")
+                # Switch engine to the submitting user's isolated session/history
+                if wa is not None and wa_owner != job_username:
+                    try:
+                        wa.close()
+                    except Exception:
+                        pass
+                    wa = None
+                if history_owner != job_username:
+                    history = load_history(job_username)
+                    history_owner = job_username
                 targets    = job.get("targets", [])
                 messages   = job.get("messages", [""])
                 base_delay = int(job.get("delay", 60))
@@ -189,9 +207,10 @@ def run_worker():
                 print(f"[{time.strftime('%H:%M:%S')}] 🛡️ Planchers appliqués: min {ANTIBAN['MIN_INTER_MESSAGE_SEC']}s inter-message, {ANTIBAN['DAILY_HARD_LIMIT_ESTABLISHED']} msg/jour max")
                 update_state("starting", current_idx=start_from, total=total)
 
-                # ── تشغيل المحرك إذا لم يكن يعمل ──
+                # ── تشغيل المحرك إذا لم يكن يعمل (بجلسة المستخدم صاحب المهمة) ──
                 if wa is None:
-                    wa = WhatsAppService()
+                    wa = WhatsAppService(session_id=wa_session_id_for(job_username))
+                    wa_owner = job_username
 
                 # 🛡️ Worker headless mode:
                 # - على بيئة السحابة (Linux): headless إلزامي
@@ -207,7 +226,8 @@ def run_worker():
                     if wa:
                         try: wa.close()
                         except: pass
-                        wa = WhatsAppService()
+                        wa = WhatsAppService(session_id=wa_session_id_for(job_username))
+                        wa_owner = job_username
                     driver_ok, driver_msg = wa.start_driver(headless=(not run_headless), force_clean=False)
 
                 if not driver_ok:
@@ -243,7 +263,7 @@ def run_worker():
                 msg_idx = 0
                 msg_sent_count = 0
                 anti_ban = AntiBanEngine()
-                history = load_history()
+                history = load_history(job_username)
                 anti_ban_triggered = False
                 anti_ban_reason = ""
 
@@ -380,7 +400,7 @@ def run_worker():
 
                     if ok:
                         history.add(phone)
-                        save_history(history)
+                        save_history(history, job_username)
                         anti_ban.sent_count_session += 1
                         msg_sent_count += 1
                         if msg_sent_count >= switch_threshold:

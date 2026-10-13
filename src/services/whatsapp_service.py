@@ -28,6 +28,20 @@ def log_debug(message):
     logger.info(message)
 
 
+def wa_username_key(username) -> str:
+    """Sanitized per-user key for isolated WhatsApp data (safe for paths)."""
+    try:
+        key = re.sub(r'[^a-z0-9_]', '_', str(username or '').lower().strip())
+    except Exception:
+        key = ""
+    return (key or "shared")[:32]
+
+
+def wa_session_id_for(username) -> str:
+    """Chrome profile dir name for a given app username: user_<name>/."""
+    return f"user_{wa_username_key(username)}"
+
+
 
 def _copy_text_to_clipboard(text: str) -> bool:
     """نسخ النص إلى حافظة ويندوز بدعم كامل لليونيكود واللغة العربية والإيموجي والأسطر المتعددة"""
@@ -194,10 +208,11 @@ class WhatsAppService:
         self.driver = None
         self.last_error = ""
 
-        # 🛡️ COMPTEURS ANTI-BAN – état global de la session
-        self._daily_stats_file = os.path.join(self.base_session_dir, "wa_daily_stats.json")
-        self._runtime_stats_file = os.path.join(self.base_session_dir, "wa_runtime_stats.json")
-        os.makedirs(self.base_session_dir, exist_ok=True)
+        # 🛡️ COMPTEURS ANTI-BAN – état global de la session (per-user: isolated
+        # inside the user's own session dir so users never share limits)
+        self._daily_stats_file = os.path.join(self.session_path, "wa_daily_stats.json")
+        self._runtime_stats_file = os.path.join(self.session_path, "wa_runtime_stats.json")
+        os.makedirs(self.session_path, exist_ok=True)
 
     # ============================================================
     # 🛡️ GESTION DES LIMITES QUOTIDIENNES, TAUX D'ÉCHEC, ETC.
@@ -355,7 +370,7 @@ class WhatsAppService:
         # profile and BOTH exit instantly ("Chrome instance exited").
         # Stale locks (dead owner) are removed instead of blocking.
         try:
-            _lock_path = os.path.join(self.base_session_dir, "wa_start.lock")
+            _lock_path = os.path.join(self.session_path, "wa_start.lock")
             if os.path.exists(_lock_path):
                 _owner = 0
                 try:
@@ -748,53 +763,47 @@ class WhatsAppService:
             pass
 
     def _kill_zombies(self):
-        """Kills leftover chromedriver processes and ONLY the chrome.exe
-        instances launched with OUR profile dir (never the user's browser)."""
+        """Kills leftover chromedriver/chrome processes belonging ONLY to THIS
+        user's own session dir (other app users' browsers are never touched)."""
         try:
+            me = os.path.abspath(self.session_path).lower()
             if os.name == 'nt':
-                os.system('taskkill /F /IM chromedriver.exe /T >nul 2>&1')
-                me = os.path.abspath(self.session_path).lower()
-                killed = 0
                 cmdlines = []
                 try:
                     out = subprocess.check_output(
-                        ['wmic', 'process', 'where', "name='chrome.exe'",
-                         'get', 'ProcessId,CommandLine', '/format:csv'],
+                        ['powershell', '-NoProfile', '-Command',
+                         "Get-CimInstance Win32_Process | Where-Object { $_.Name -eq 'chrome.exe' -or $_.Name -eq 'chromedriver.exe' } | "
+                         "ForEach-Object { \"$($_.Name)|$($_.ProcessId)|$($_.CommandLine)\" }"],
                         stderr=subprocess.DEVNULL, text=True, errors='ignore',
-                        timeout=15)
+                        timeout=20)
                     cmdlines = out.splitlines()
                 except Exception:
                     try:
                         out = subprocess.check_output(
-                            ['powershell', '-NoProfile', '-Command',
-                             "Get-CimInstance Win32_Process -Filter \"Name='chrome.exe'\" | "
-                             "ForEach-Object { \"$($_.ProcessId),$($_.CommandLine)\" }"],
+                            ['wmic', 'process', 'get', 'Name,ProcessId,CommandLine', '/format:csv'],
                             stderr=subprocess.DEVNULL, text=True, errors='ignore',
-                            timeout=20)
+                            timeout=15)
                         cmdlines = out.splitlines()
                     except Exception:
                         cmdlines = []
+                killed = 0
                 for line in cmdlines:
                     ll = line.lower()
-                    if 'chrome' not in ll or 'whatsapp_session' not in ll:
+                    if me not in ll:
                         continue
-                    if me not in ll and '--user-data-dir' not in ll:
-                        continue
-                    pid = line.strip().rsplit(',', 1)[-1].strip()
+                    parts = line.strip().rsplit('|', 2)
+                    pid = parts[1].strip() if len(parts) == 3 else line.strip().rsplit(',', 1)[-1].strip()
                     if pid.isdigit():
                         os.system(f'taskkill /F /PID {pid} /T >nul 2>&1')
                         killed += 1
-                if killed:
-                    time.sleep(3)
-                else:
-                    time.sleep(1)
+                time.sleep(3 if killed else 1)
             else:
-                os.system('pkill -f chromedriver > /dev/null 2>&1')
                 try:
                     import shlex
-                    os.system(f'pkill -f {shlex.quote(os.path.basename(self.session_path))} > /dev/null 2>&1')
+                    os.system(f'pkill -f {shlex.quote(me)} > /dev/null 2>&1')
                 except Exception:
                     pass
+                time.sleep(1)
         except Exception:
             pass
 
@@ -2748,7 +2757,7 @@ class WhatsAppService:
             except: pass
             self.driver = None
         try:
-            _lp = os.path.join(self.base_session_dir, "wa_start.lock")
+            _lp = os.path.join(self.session_path, "wa_start.lock")
             if os.path.exists(_lp):
                 os.remove(_lp)
         except Exception:

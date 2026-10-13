@@ -225,21 +225,71 @@ def generate_smart_message(name, cv_link, custom_job="", templates=None, stable=
 
     return msg
 
-def load_wa_history():
-    if os.path.exists(WA_HISTORY_FILE):
+def load_wa_history(username=None):
+    if username is None:
+        username = get_wa_username()
+    _f = wa_history_file_for(username)
+    if os.path.exists(_f):
         try:
-            with open(WA_HISTORY_FILE, 'r', encoding='utf-8') as f:
+            with open(_f, 'r', encoding='utf-8') as f:
                 return set(json.load(f))
         except:
             return set()
     return set()
 
-def save_wa_history(history_set):
+def save_wa_history(history_set, username=None):
+    if username is None:
+        username = get_wa_username()
     try:
-        with open(WA_HISTORY_FILE, 'w', encoding='utf-8') as f:
+        with open(wa_history_file_for(username), 'w', encoding='utf-8') as f:
             json.dump(list(history_set), f, ensure_ascii=False)
     except:
         pass
+
+
+def get_wa_username():
+    """Current app username, sanitized — each user gets isolated WhatsApp data."""
+    try:
+        from src.services.whatsapp_service import wa_username_key
+        u = (st.session_state.get("user") or {}).get("username", "")
+        return wa_username_key(u)
+    except Exception:
+        return "shared"
+
+
+def wa_history_file_for(username=None):
+    """Per-user sent-numbers history file (shared global file no longer used)."""
+    base = os.path.dirname(WA_HISTORY_FILE)
+    return os.path.join(base, f"whatsapp_history_{username or get_wa_username()}.json")
+
+
+def ensure_wa_service():
+    """Return the WhatsAppService for the CURRENT user, creating it with an
+    isolated per-user Chrome profile (QR/login per username).
+
+    On user switch: closes the previous user's driver and resets per-user
+    runtime state so sessions never leak across users.
+    """
+    from src.services.whatsapp_service import WhatsAppService, wa_session_id_for
+    uname = get_wa_username()
+    svc = st.session_state.get("wa_service")
+    if svc is not None and st.session_state.get("wa_service_owner") != uname:
+        try:
+            if getattr(svc, "driver", None) and hasattr(svc, "close"):
+                svc.close()
+        except Exception:
+            pass
+        svc = None
+        st.session_state["wa_service"] = None
+        for _k in ("wa_history", "wa_review_targets", "wa_running", "wa_idx",
+                   "wa_done", "wa_emp_targets", "wa_emp_running", "wa_emp_idx",
+                   "wa_data", "wa_from_worker_db", "wa_emp_saved_attachments"):
+            st.session_state.pop(_k, None)
+    if svc is None:
+        svc = WhatsAppService(session_id=wa_session_id_for(uname))
+        st.session_state["wa_service"] = svc
+        st.session_state["wa_service_owner"] = uname
+    return st.session_state["wa_service"]
 
 
 def _find_df_col(columns, keys):
@@ -596,7 +646,7 @@ def _adopt_wa_worker_targets(targets):
     st.session_state.wa_running = False
 
 def render_whatsapp_page():
-    from src.services.whatsapp_service import WhatsAppService
+    from src.services.whatsapp_service import WhatsAppService, wa_session_id_for
     from src.services.wa_worker_manager import WAWorkerManager
     from src.core.translation import TranslationManager
     lang = st.session_state.get('lang', 'ar')
@@ -617,18 +667,18 @@ def render_whatsapp_page():
     mgr: WAWorkerManager = st.session_state.wa_worker_mgr
 
     # للوضع القديم (المتزامن) نبقيه للتوافق
+    # 🛡️ خدمة مستقلة لكل مستخدم (بروفايل/باركود خاص) + تبديل تلقائي عند تغير المستخدم
     # 🛡️ لا نُنشئ خدمة جديدة إذا كان هناك driver نشط — ذلك يُفقد الاتصال
-    if 'wa_service' not in st.session_state or st.session_state.wa_service is None:
-        st.session_state.wa_service = WhatsAppService()
-    elif not getattr(st.session_state.wa_service, 'driver', None):
+    st.session_state.wa_service = ensure_wa_service()
+    if not getattr(st.session_state.wa_service, 'driver', None):
         # لا يوجد driver نشط — نتحقق من توافق الـ API فقط
         try:
             import inspect
             sig = inspect.signature(st.session_state.wa_service.send_message)
             if 'attachment_path' not in sig.parameters:
-                st.session_state.wa_service = WhatsAppService()
+                st.session_state.wa_service = ensure_wa_service()
         except Exception:
-            st.session_state.wa_service = WhatsAppService()
+            st.session_state.wa_service = ensure_wa_service()
     # إذا كان driver نشطاً → نُبقي الكائن كما هو بدون أي تعديل
 
     if 'wa_logs' not in st.session_state: st.session_state.wa_logs = []
@@ -749,8 +799,8 @@ def render_whatsapp_page():
         with ec2:
             if st.button(lbl['start_engine'], type="primary", width='stretch', key="emp_start_engine"):
                 with st.spinner(lbl['starting']):
-                    if st.session_state.wa_service is None:
-                        st.session_state.wa_service = WhatsAppService()
+                    # خدمة المستخدم الحالي (تُنشأ ببروفايله الخاص عند الحاجة)
+                    st.session_state.wa_service = ensure_wa_service()
                     if hasattr(st.session_state.wa_service, 'close'):
                         try: st.session_state.wa_service.close()
                         except Exception: pass
@@ -764,8 +814,8 @@ def render_whatsapp_page():
             if st.button(lbl['full_reset'], width='stretch', key="emp_full_reset",
                          help="سيتم مسح بيانات تسجيل الدخول بالكامل. ستحتاج لمسح الباركود مرة أخرى." if is_ar else "This will clear all login data. You'll need to scan the QR again."):
                 with st.spinner(lbl['resetting']):
-                    if st.session_state.wa_service is None:
-                        st.session_state.wa_service = WhatsAppService()
+                    # خدمة المستخدم الحالي (تُنشأ ببروفايله الخاص عند الحاجة)
+                    st.session_state.wa_service = ensure_wa_service()
                     if hasattr(st.session_state.wa_service, 'close'):
                         try: st.session_state.wa_service.close()
                         except Exception: pass
@@ -1316,14 +1366,14 @@ def render_whatsapp_page():
                             st.session_state.wa_emp_saved_attachments = emp_saved_attachments
                             st.rerun()
             
-            # معالجة الملفات المرفوعة حديثاً
+            # معالجة الملفات المرفوعة حديثاً (مجلد خاص بكل مستخدم)
             if emp_uploaded_files:
                 base_dir = os.path.join(os.getcwd(), "whatsapp_session")
                 if not os.path.exists(base_dir):
                     base_dir_alt = os.path.join(os.getcwd(), ".whatsapp_session")
                     if os.path.exists(base_dir_alt):
                         base_dir = base_dir_alt
-                emp_uploads_dir = os.path.join(base_dir, "emp_temp_uploads")
+                emp_uploads_dir = os.path.join(base_dir, f"user_{get_wa_username()}", "emp_temp_uploads")
                 os.makedirs(emp_uploads_dir, exist_ok=True)
 
                 total_size_bytes = 0
@@ -1670,8 +1720,8 @@ def render_whatsapp_page():
     with c2:
         if st.button(lbl['start_engine'], type="primary", width='stretch'):
             with st.spinner(lbl['starting']):
-                if st.session_state.wa_service is None:
-                    st.session_state.wa_service = WhatsAppService()
+                # خدمة المستخدم الحالي (تُنشأ ببروفايله الخاص عند الحاجة)
+                st.session_state.wa_service = ensure_wa_service()
                 if hasattr(st.session_state.wa_service, 'close'):
                     try: st.session_state.wa_service.close()
                     except Exception: pass
@@ -1685,8 +1735,8 @@ def render_whatsapp_page():
         help_msg = "سيتم مسح بيانات تسجيل الدخول بالكامل. ستحتاج لمسح الباركود مرة أخرى." if is_ar else "This will clear all login data. You will need to scan the QR code again."
         if st.button(lbl['full_reset'], width='stretch', help=help_msg):
             with st.spinner(lbl['resetting']):
-                if st.session_state.wa_service is None:
-                    st.session_state.wa_service = WhatsAppService()
+                # خدمة المستخدم الحالي (تُنشأ ببروفايله الخاص عند الحاجة)
+                st.session_state.wa_service = ensure_wa_service()
                 if hasattr(st.session_state.wa_service, 'close'):
                     try: st.session_state.wa_service.close()
                     except Exception: pass
