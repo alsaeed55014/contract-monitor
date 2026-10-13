@@ -244,7 +244,6 @@ class AuthManager:
 DEVICE_REMEMBER_COOKIE = "_recruitment_remember_token"
 DEVICE_REMEMBER_SECRET = b"alwazzan_luxury_recruitment_salt_2026_auth"
 DEVICE_USER_COOKIE = "_rec_saved_user"
-DEVICE_PASS_COOKIE = "_rec_saved_pass"
 DEVICE_PERSIST_COOKIE = "_rec_saved_persist"
 
 def get_device_saved_credentials() -> Dict[str, Any]:
@@ -2348,11 +2347,9 @@ if query_params.get('logout') == 'inactive':
         var exp0 = "; max-age=0; path=/;";
         document.cookie = "{DEVICE_REMEMBER_COOKIE}=" + exp0;
         document.cookie = "{DEVICE_USER_COOKIE}=" + exp0;
-        document.cookie = "{DEVICE_PASS_COOKIE}=" + exp0;
         document.cookie = "{DEVICE_PERSIST_COOKIE}=" + exp0;
         try {{
             localStorage.removeItem("_recruitment_device_u");
-            localStorage.removeItem("_recruitment_device_p");
             localStorage.removeItem("_recruitment_device_persist");
         }} catch(e) {{}}
     }})();
@@ -2360,6 +2357,38 @@ if query_params.get('logout') == 'inactive':
     """, unsafe_allow_javascript=True)
     st.query_params.clear()
     st.rerun()
+
+# Auto-login using device token (if available and valid)
+# This allows "Remember Me" to work without storing password in localStorage
+if not st.session_state.get('user') and not st.session_state.get('_auto_login_attempted'):
+    st.session_state._auto_login_attempted = True
+    saved = get_device_saved_credentials()
+    remember_token = None
+    if hasattr(st, "context") and hasattr(st.context, "cookies"):
+        try:
+            cookies = st.context.cookies
+            remember_token = cookies.get(DEVICE_REMEMBER_COOKIE)
+        except Exception:
+            pass
+    
+    if remember_token:
+        username = verify_device_token(remember_token)
+        if username:
+            # Token is valid - we can auto-login
+            # Note: We still need to load user data from AuthManager
+            user_data = st.session_state.auth.users.get(username.lower())
+            if user_data:
+                user_data['username'] = username.lower()
+                st.session_state.user = user_data
+                st.session_state.last_login_time = time.time()
+                record_login_event(username, user_data)
+                st.session_state.show_welcome = True
+                
+                # Renew the token for another 30 days
+                new_token = create_device_token(username, days=30)
+                enc_u = urllib.parse.quote(username.strip())
+                st.session_state._remember_refresh = {"u": username, "tok": new_token}
+                st.rerun()
 
 # 5. Apply Dynamic Styles Based on Language
 st.markdown(get_css(st.session_state.lang), unsafe_allow_html=True)
@@ -2861,7 +2890,6 @@ if ('Notification' in window && Notification.permission === 'default') {
     function fillRemember() {
         try {
             var savedU = localStorage.getItem("_recruitment_device_u");
-            var savedP = localStorage.getItem("_recruitment_device_p");
             var savedPersist = localStorage.getItem("_recruitment_device_persist");
             if (savedPersist !== "true") return;
             var forms = Array.from(document.querySelectorAll('div[data-testid="stForm"]'));
@@ -2871,15 +2899,14 @@ if ('Notification' in window && Notification.permission === 'default') {
             }
             forms.forEach(function(form) {
                 var inputs = form.querySelectorAll('input');
-                var ui = null, pi = null, ci = null;
+                var ui = null, ci = null;
                 inputs.forEach(function(input) {
                     var t = (input.getAttribute('type') || 'text').toLowerCase();
-                    if (t === 'password') { pi = input; }
-                    else if (t === 'checkbox') { ci = input; }
+                    if (t === 'checkbox') { ci = input; }
                     else if (t === 'text' || t === '') { ui = input; }
                 });
+                // Only fill username - never password for security
                 if (ui && !ui._remFilled && !ui.value && savedU) { setV(ui, savedU); ui._remFilled = true; }
-                if (pi && !pi._remFilled && !pi.value && savedP) { setV(pi, savedP); pi._remFilled = true; }
                 if (ci && !ci._remChecked && !ci.checked) {
                     ci.checked = true;
                     ci.dispatchEvent(new Event('input', { bubbles: true }));
@@ -2908,11 +2935,10 @@ if ('Notification' in window && Notification.permission === 'default') {
             }
             forms.forEach(function(form) {
                 var inputs = form.querySelectorAll('input');
-                var ui = null, pi = null, ci = null;
+                var ui = null, ci = null;
                 inputs.forEach(function(input) {
                     var t = (input.getAttribute('type') || 'text').toLowerCase();
-                    if (t === 'password') { pi = input; }
-                    else if (t === 'checkbox') { ci = input; }
+                    if (t === 'checkbox') { ci = input; }
                     else if (t === 'text' || t === '') { ui = input; }
                 });
                 var buttons = form.querySelectorAll('button');
@@ -2921,16 +2947,12 @@ if ('Notification' in window && Notification.permission === 'default') {
                     btn._remHook = true;
                     btn.addEventListener('click', function() {
                         var curU = ui ? ui.value : '';
-                        var curP = pi ? pi.value : '';
                         var curC = ci ? ci.checked : false;
                         if (curC && curU) {
                             localStorage.setItem("_recruitment_device_u", curU);
                             localStorage.setItem("_recruitment_device_persist", "true");
-                            if (curP) { localStorage.setItem("_recruitment_device_p", curP); }
-                            else { localStorage.removeItem("_recruitment_device_p"); }
                         } else if (!curC) {
                             localStorage.removeItem("_recruitment_device_u");
-                            localStorage.removeItem("_recruitment_device_p");
                             localStorage.removeItem("_recruitment_device_persist");
                         }
                     }, true);
@@ -3033,7 +3055,6 @@ if ('Notification' in window && Notification.permission === 'default') {
                                 document.cookie = "{DEVICE_REMEMBER_COOKIE}={dev_token}" + exp;
                                 document.cookie = "{DEVICE_USER_COOKIE}={enc_u}" + exp;
                                 document.cookie = "{DEVICE_PERSIST_COOKIE}=1" + exp;
-                                document.cookie = "{DEVICE_PASS_COOKIE}=; max-age=0; path=/; SameSite=Lax";
                             }})();
                             </script>
                             """, unsafe_allow_javascript=True)
@@ -3044,11 +3065,9 @@ if ('Notification' in window && Notification.permission === 'default') {
                                 var exp0 = "; max-age=0; path=/;";
                                 document.cookie = "{DEVICE_REMEMBER_COOKIE}=" + exp0;
                                 document.cookie = "{DEVICE_USER_COOKIE}=" + exp0;
-                                document.cookie = "{DEVICE_PASS_COOKIE}=" + exp0;
                                 document.cookie = "{DEVICE_PERSIST_COOKIE}=" + exp0;
                                 try {{
                                     localStorage.removeItem("_recruitment_device_u");
-                                    localStorage.removeItem("_recruitment_device_p");
                                     localStorage.removeItem("_recruitment_device_persist");
                                 }} catch(e) {{}}
                             }})();
@@ -3988,11 +4007,9 @@ def dashboard():
                 var exp0 = "; max-age=0; path=/;";
                 document.cookie = "{DEVICE_REMEMBER_COOKIE}=" + exp0;
                 document.cookie = "{DEVICE_USER_COOKIE}=" + exp0;
-                document.cookie = "{DEVICE_PASS_COOKIE}=" + exp0;
                 document.cookie = "{DEVICE_PERSIST_COOKIE}=" + exp0;
                 try {{
                     localStorage.removeItem("_recruitment_device_u");
-                    localStorage.removeItem("_recruitment_device_p");
                     localStorage.removeItem("_recruitment_device_persist");
                 }} catch(e) {{}}
             }})();
