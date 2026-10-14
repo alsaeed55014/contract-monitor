@@ -37,25 +37,6 @@ GENDER_MAP = {
     "أنثى": "🚺", "female": "🚺"
 }
 
-def get_flag_emoji(nat_name):
-    """Converts nationality name to emoji flag."""
-    nat_name = str(nat_name).lower().strip()
-    flags = {
-        'مصر': '🇪🇬', 'مصري': '🇪🇬', 'egypt': '🇪🇬',
-        'السودان': '🇸🇩', 'سوداني': '🇸🇩', 'sudan': '🇸🇩',
-        'باكستان': '🇵🇰', 'باكستاني': '🇵🇰', 'pakistan': '🇵🇰',
-        'الهند': '🇮🇳', 'هندي': '🇮🇳', 'india': '🇮🇳',
-        'اليمن': '🇾🇪', 'يمني': '🇾🇪', 'yemen': '🇾🇪',
-        'بنجلاديش': '🇧🇩', 'بنجالي': '🇧🇩', 'bangladesh': '🇧🇩',
-        'الفلبين': '🇵🇭', 'فلبيني': '🇵🇭', 'philippines': '🇵🇭',
-        'كينيا': '🇰🇪', 'كيني': '🇰🇪', 'kenya': '🇰🇪',
-        'أوغندا': '🇺🇬', 'أوغندي': '🇺🇬', 'uganda': '🇺🇬',
-        'إثيوبيا': '🇪🇹', 'إثيوبي': '🇪🇹', 'ethiopia': '🇪🇹',
-    }
-    for k, v in flags.items():
-        if k in nat_name: return v
-    return '🏁'
-
 def auto_translate(val, target_lang='en'):
     if not val or not isinstance(val, (str, object)):
         return val

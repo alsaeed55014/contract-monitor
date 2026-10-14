@@ -22,12 +22,6 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-def log_debug(message):
-    """دالة مساعدة للlogging - تكتب إلى الملف و terminal"""
-    print(message)
-    logger.info(message)
-
-
 def wa_username_key(username) -> str:
     """Sanitized per-user key for isolated WhatsApp data (safe for paths)."""
     try:

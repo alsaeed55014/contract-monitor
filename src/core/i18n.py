@@ -1,4 +1,16 @@
 
+import re
+import hashlib
+
+# Cache for AI (machine) translations of worker values EN -> AR.
+# Persists per-process; mirrored into st.session_state.translation_cache when available.
+_AI_TVAL_CACHE = {}
+
+_AI_TVAL_ERROR_SIGS = (
+    "error 500", "server error", "that's an error", "that’s an error",
+    "translation error", "<html", "<!doctype",
+)
+
 TRANSLATIONS = {
     # Login
     "welcome_back": {"ar": "أهلاً بك", "en": "WELCOME BACK"},
@@ -61,6 +73,8 @@ TRANSLATIONS = {
     "preview_cv": {"ar": "معاينة", "en": "Preview"},
     "selected_worker": {"ar": "العامل المختار", "en": "Selected Worker"},
     "translate_cv_btn": {"ar": "ترجمة السيرة الذاتية لهذا العامل", "en": "Translate this Worker's CV"},
+    "full_worker_info_btn": {"ar": "معلومات كاملة عن العامل", "en": "Full Worker Information"},
+    "full_worker_info_title": {"ar": "البيانات الكاملة المسجلة للعامل", "en": "Complete Registered Worker Data"},
     "loading_cv": {"ar": "جاري جلب السيرة الذاتية...", "en": "Fetching CV..."},
     "close": {"ar": "إغلاق", "en": "Close"},
 
@@ -352,8 +366,285 @@ TRANSLATIONS = {
         "العامل نقل الكفالة بعد كم يوم": {"ar": "نقل الكفالة بعد (يوم)", "en": "Transfer Days After"},
         "عدد ساعات العمل": {"ar": "ساعات العمل", "en": "Working Hours"},
         "هل توجد اجازة اسبوعي": {"ar": "إجازة أسبوعية", "en": "Weekly Holiday"},
-        "ملاحظات اضافيه": {"ar": "ملاحظات إضافية", "en": "Additional Notes"}
+        "ملاحظات اضافيه": {"ar": "ملاحظات إضافية", "en": "Additional Notes"},
+        
+        # Additional common column translations
+        "Do you speak Arabic?": {"ar": "هل تتحدث العربية؟", "en": "Speaks Arabic"},
+        "Do you speak Arabic": {"ar": "هل تتحدث العربية؟", "en": "Speaks Arabic"},
+        "speaks arabic": {"ar": "هل تتحدث العربية؟", "en": "Speaks Arabic"},
+        "Which job are you looking for?": {"ar": "الوظيفة المطلوبة", "en": "Job Requested"},
+        "Which job are you looking for": {"ar": "الوظيفة المطلوبة", "en": "Job Requested"},
+        "What other jobs can you do": {"ar": "مهارات أخرى", "en": "Other Skills"},
+        "What other jobs can you do?": {"ar": "مهارات أخرى", "en": "Other Skills"},
+        "What is the occupation listed on your Iqama": {"ar": "المهنة في الإقامة", "en": "Iqama Profession"},
+        "What is the occupation listed on your Iqama?": {"ar": "المهنة في الإقامة", "en": "Iqama Profession"},
+        "your Iqama Valid": {"ar": "هل الإقامة سارية؟", "en": "Iqama Valid"},
+        "your Iqama Valid?": {"ar": "هل الإقامة سارية؟", "en": "Iqama Valid"},
+        "If the Iqama is valid, how many months are left?": {"ar": "المدة المتبقية في الإقامة", "en": "Iqama Remaining"},
+        "If the Iqama expired how many months ago?": {"ar": "مدة انتهاء الإقامة", "en": "Iqama Expired Since"},
+        "How many times did you transfer your sponsorship": {"ar": "عدد مرات نقل الكفالة", "en": "Transfer Count"},
+        "How many times did you transfer your sponsorship?": {"ar": "عدد مرات نقل الكفالة", "en": "Transfer Count"},
+        "Are you ready to work immediately": {"ar": "هل أنت جاهز للعمل فوراً؟", "en": "Ready Immediately"},
+        "Are you ready to work immediately?": {"ar": "هل أنت جاهز للعمل فوراً؟", "en": "Ready Immediately"},
+        "ready to work immediately": {"ar": "جاهز للعمل فوراً", "en": "Ready Immediately"},
+        "Can you work outside your city": {"ar": "هل يمكنك العمل خارج مدينتك؟", "en": "Work Outside City"},
+        "Can you work outside your city?": {"ar": "هل يمكنك العمل خارج مدينتك؟", "en": "Work Outside City"},
+        "Do you have Card Baladiya": {"ar": "هل لديك كرت بلدية؟", "en": "Baladiya Card"},
+        "Do you have Card Baladiya?": {"ar": "هل لديك كرت بلدية؟", "en": "Baladiya Card"},
+        "Is the Card Baladiya valid": {"ar": "هل الكرت ساري؟", "en": "Card Valid"},
+        "Is the Card Baladiya valid?": {"ar": "هل الكرت ساري؟", "en": "Card Valid"},
+        "how many months Card Baladiya valid": {"ar": "مدة صلاحية الكرت (أشهر)", "en": "Card Validity (Months)"},
+        "how many months Card Baladiya expires": {"ar": "متى ينتهي الكرت (أشهر)", "en": "Card Expiry (Months)"},
+        "Do you have to report Huroob": {"ar": "هل لديك بلاغ هروب؟", "en": "Huroob Report"},
+        "Do you have to report Huroob?": {"ar": "هل لديك بلاغ هروب؟", "en": "Huroob Report"},
+        "Will your employer accept to transfer your sponsorship": {"ar": "هل يقبل الكفيل النقل؟", "en": "Sponsorship Transfer"},
+        "Will your employer accept to transfer your sponsorship?": {"ar": "هل يقبل الكفيل النقل؟", "en": "Sponsorship Transfer"},
+        "Do you have any financial obligations towards your previous sponsor": {"ar": "هل لديك التزامات مالية للكفيل السابق؟", "en": "Financial Obligations"},
+        "Do you have any financial obligations towards your previous sponsor?": {"ar": "هل لديك التزامات مالية للكفيل السابق؟", "en": "Financial Obligations"},
+        "Are you married and do your children reside with you in Saudi Arabia": {"ar": "الحالة الاجتماعية وهل العائلة معك؟", "en": "Marital Status & Family"},
+        "Are you married and do your children reside with you in Saudi Arabia?": {"ar": "الحالة الاجتماعية وهل العائلة معك؟", "en": "Marital Status & Family"},
+        "Iqama ID number": {"ar": "رقم الإقامة", "en": "Iqama ID"},
+        "Iqama ID number": {"ar": "رقم الإقامة", "en": "Iqama ID"},
+        "Age": {"ar": "العمر", "en": "Age"},
+        "your Age": {"ar": "العمر", "en": "Age"},
+        "Are you working now": {"ar": "هل تعمل حالياً؟", "en": "Are you working now?"},
+        "Are you working now?": {"ar": "هل تعمل حالياً؟", "en": "Are you working now?"},
+        "Experience in this field": {"ar": "الخبرة في هذا المجال", "en": "Experience in this field"},
+        "Experience in this field": {"ar": "الخبرة في هذا المجال", "en": "Experience in this field"},
+        "How much experience do you have in this field": {"ar": "الخبرة في هذا المجال", "en": "Experience"},
+        "How much experience do you have in this field?": {"ar": "الخبرة في هذا المجال", "en": "Experience"},
+        "Experience (Other)": {"ar": "الخبرة (أخرى)", "en": "Experience (Other)"},
+        "How much experience do you have in this field?_1": {"ar": "الخبرة (أخرى)", "en": "Experience (Other)"},
+        "How much experience do you have in this field?_1": {"ar": "الخبرة (أخرى)", "en": "Experience (Other)"},
+        "Is your contract expired": {"ar": "هل العقد منتهي؟", "en": "Is your contract expired?"},
+        "Is your contract expired?": {"ar": "هل العقد منتهي؟", "en": "Is your contract expired?"},
+        "When is your contract end date": {"ar": "تاريخ انتهاء العقد", "en": "Contract End Date"},
+        "When is your contract end date?": {"ar": "تاريخ انتهاء العقد", "en": "Contract End Date"},
+        "Are you in Saudi Arabia now": {"ar": "هل أنت في السعودية؟", "en": "In KSA?"},
+        "Are you in Saudi Arabia now": {"ar": "هل أنت في السعودية؟", "en": "In KSA?"},
+        "Which city in Saudi Arabia are you in": {"ar": "المدينة", "en": "City"},
+        "Which city in Saudi Arabia are you in": {"ar": "المدينة", "en": "City"},
+        "What is the name of the area where you live": {"ar": "المنطقة/الحي", "en": "Area"},
+        "What is the name of the area where you live": {"ar": "المنطقة/الحي", "en": "Area"},
+        "If you are Huroob, how many days or months have you been Huroob": {"ar": "مدة الهروب", "en": "Huroob Duration"},
+        "If you are Huroob, how many days or months have you been Huroob": {"ar": "مدة الهروب", "en": "Huroob Duration"},
     }
+}
+
+# Value translations for data values (not column names)
+VALUE_TRANSLATIONS = {
+    # Yes/No - Common values
+    "yes": {"ar": "نعم", "en": "Yes"},
+    "no": {"ar": "لا", "en": "No"},
+    "true": {"ar": "نعم", "en": "True"},
+    "false": {"ar": "لا", "en": "False"},
+    "y": {"ar": "نعم", "en": "Y"},
+    "n": {"ar": "لا", "en": "N"},
+    
+    # Gender
+    "male": {"ar": "ذكر", "en": "Male"},
+    "female": {"ar": "أنثى", "en": "Female"},
+    "m": {"ar": "ذكر", "en": "M"},
+    "f": {"ar": "أنثى", "en": "F"},
+    
+    # Status/State
+    "active": {"ar": "ساري", "en": "Active"},
+    "expired": {"ar": "منتهي", "en": "Expired"},
+    "valid": {"ar": "ساري", "en": "Valid"},
+    "invalid": {"ar": "غير ساري", "en": "Invalid"},
+    "urgent": {"ar": "عاجل", "en": "Urgent"},
+    "pending": {"ar": "قيد الانتظار", "en": "Pending"},
+    "completed": {"ar": "مكتمل", "en": "Completed"},
+    "approved": {"ar": "موافق عليه", "en": "Approved"},
+    "rejected": {"ar": "مرفوض", "en": "Rejected"},
+    "available": {"ar": "متاح", "en": "Available"},
+    "unavailable": {"ar": "غير متاح", "en": "Unavailable"},
+    "ready": {"ar": "جاهز", "en": "Ready"},
+    "not ready": {"ar": "غير جاهز", "en": "Not Ready"},
+    
+    # Common Arabic responses
+    "نعم": {"ar": "نعم", "en": "Yes"},
+    "لا": {"ar": "لا", "en": "No"},
+    "ساري": {"ar": "ساري", "en": "Valid"},
+    "منتهي": {"ar": "منتهي", "en": "Expired"},
+    "عاجل": {"ar": "عاجل", "en": "Urgent"},
+    
+    # Marital status
+    "single": {"ar": "أعزب/عزباء", "en": "Single"},
+    "married": {"ar": "متزوج", "en": "Married"},
+    "divorced": {"ar": "مطلق", "en": "Divorced"},
+    "widowed": {"ar": "أرمل", "en": "Widowed"},
+    "separated": {"ar": "منفصل", "en": "Separated"},
+    
+    # Religion
+    "muslim": {"ar": "مسلم", "en": "Muslim"},
+    "christian": {"ar": "مسيحي", "en": "Christian"},
+    "hindu": {"ar": "هندوسي", "en": "Hindu"},
+    "buddhist": {"ar": "بوذي", "en": "Buddhist"},
+    "catholic": {"ar": "كاثوليكي", "en": "Catholic"},
+    "protestant": {"ar": "بروتستانتي", "en": "Protestant"},
+    "other": {"ar": "أخرى", "en": "Other"},
+    
+    # Working status
+    "working": {"ar": "يعمل", "en": "Working"},
+    "not working": {"ar": "لا يعمل", "en": "Not Working"},
+    "currently working": {"ar": "يعمل حالياً", "en": "Currently Working"},
+    "not currently working": {"ar": "لا يعمل حالياً", "en": "Not Currently Working"},
+    "unemployed": {"ar": "عاطل", "en": "Unemployed"},
+    "employed": {"ar": "موظف", "en": "Employed"},
+    
+    # Iqama status
+    "iqama valid": {"ar": "الإقامة سارية", "en": "Iqama Valid"},
+    "iqama expired": {"ar": "الإقامة منتهية", "en": "Iqama Expired"},
+    "valid iqama": {"ar": "إقامة سارية", "en": "Valid Iqama"},
+    "expired iqama": {"ar": "إقامة منتهية", "en": "Expired Iqama"},
+    
+    # Contract status
+    "contract active": {"ar": "العقد ساري", "en": "Contract Active"},
+    "contract expired": {"ar": "العقد منتهي", "en": "Contract Expired"},
+    "contract not expired": {"ar": "العقد غير منتهي", "en": "Contract Not Expired"},
+    
+    # Transfer status
+    "transfer accept": {"ar": "يقبل النقل", "en": "Accept Transfer"},
+    "accept transfer": {"ar": "يقبل النقل", "en": "Accept Transfer"},
+    "transfer not accept": {"ar": "لا يقبل النقل", "en": "Not Accept Transfer"},
+    "sponsor accept": {"ar": "الكفيل يقبل", "en": "Sponsor Accepts"},
+    "sponsor not accept": {"ar": "الكفيل لا يقبل", "en": "Sponsor Not Accept"},
+    "first time": {"ar": "المرة الأولى", "en": "First Time"},
+    "second time": {"ar": "المرة الثانية", "en": "Second Time"},
+    "third time": {"ar": "المرة الثالثة", "en": "Third Time"},
+    "more than 3": {"ar": "أكثر من 3", "en": "More Than 3"},
+    
+    # Work location
+    "inside city": {"ar": "داخل المدينة", "en": "Inside City"},
+    "outside city": {"ar": "خارج المدينة", "en": "Outside City"},
+    "can work outside": {"ar": "يمكن العمل خارج", "en": "Can Work Outside"},
+    "cannot work outside": {"ar": "لا يمكن العمل خارج", "en": "Cannot Work Outside"},
+    
+    # Obligations
+    "financial obligations": {"ar": "التزامات مالية", "en": "Financial Obligations"},
+    "has obligations": {"ar": "له التزامات", "en": "Has Obligations"},
+    "no obligations": {"ar": "لا توجد التزامات", "en": "No Obligations"},
+    
+    # Huroob status
+    "huroob": {"ar": "هروب", "en": "Huroob"},
+    "has huroob": {"ar": "يوجد بلاغ هروب", "en": "Has Huroob"},
+    "no huroob": {"ar": "لا يوجد بلاغ هروب", "en": "No Huroob"},
+    
+    # Common time-related
+    "immediately": {"ar": "فوراً", "en": "Immediately"},
+    "as soon as possible": {"ar": "في أسرع وقت", "en": "As Soon As Possible"},
+    "within 1 week": {"ar": "خلال أسبوع", "en": "Within 1 Week"},
+    "within 2 weeks": {"ar": "خلال أسبوعين", "en": "Within 2 Weeks"},
+    "within 1 month": {"ar": "خلال شهر", "en": "Within 1 Month"},
+    
+    # Education level
+    "high school": {"ar": "ثانوية عامة", "en": "High School"},
+    "college": {"ar": "كلية", "en": "College"},
+    "university": {"ar": "جامعة", "en": "University"},
+    "bachelor": {"ar": "بكالوريوس", "en": "Bachelor"},
+    "master": {"ar": "ماجستير", "en": "Master"},
+    "phd": {"ar": "دكتوراه", "en": "PhD"},
+    "diploma": {"ar": "دبلوم", "en": "Diploma"},
+    "vocational": {"ar": "مهني", "en": "Vocational"},
+    "elementary": {"ar": "ابتدائية", "en": "Elementary"},
+    "primary": {"ar": "ابتدائية", "en": "Primary"},
+    "secondary": {"ar": "ثانوية", "en": "Secondary"},
+    
+    # Common skills
+    "cooking": {"ar": "طبخ", "en": "Cooking"},
+    "cleaning": {"ar": "تنظيف", "en": "Cleaning"},
+    "washing": {"ar": "غسيل", "en": "Washing"},
+    "ironing": {"ar": "كي", "en": "Ironing"},
+    "childcare": {"ar": "رعاية الأطفال", "en": "Childcare"},
+    "elderly care": {"ar": "رعاية المسنين", "en": "Elderly Care"},
+    "driving": {"ar": "قيادة", "en": "Driving"},
+    "sewing": {"ar": "خياطة", "en": "Sewing"},
+    "gardening": {"ar": "بستنة", "en": "Gardening"},
+    "english": {"ar": "الإنجليزية", "en": "English"},
+    "arabic": {"ar": "العربية", "en": "Arabic"},
+    "hindi": {"ar": "الهندية", "en": "Hindi"},
+    "tagalog": {"ar": "التغالوغية", "en": "Tagalog"},
+    "basic": {"ar": "أساسي", "en": "Basic"},
+    "intermediate": {"ar": "متوسط", "en": "Intermediate"},
+    "advanced": {"ar": "متقدم", "en": "Advanced"},
+    "fluent": {"ar": "طلاقة", "en": "Fluent"},
+    "good": {"ar": "جيد", "en": "Good"},
+    "fair": {"ar": "مقبول", "en": "Fair"},
+    "poor": {"ar": "ضعيف", "en": "Poor"},
+    
+    # Common jobs/professions
+    "driver": {"ar": "سائق", "en": "Driver"},
+    "domestic helper": {"ar": "عاملة منزلية", "en": "Domestic Helper"},
+    "housemaid": {"ar": "عاملة منزلية", "en": "Housemaid"},
+    "nanny": {"ar": "مربية أطفال", "en": "Nanny"},
+    "cook": {"ar": "طباخ", "en": "Cook"},
+    "cleaner": {"ar": "نظافة", "en": "Cleaner"},
+    "gardener": {"ar": "بستاني", "en": "Gardener"},
+    "security": {"ar": "أمن", "en": "Security"},
+    "electrician": {"ar": "كهربائي", "en": "Electrician"},
+    "plumber": {"ar": "سباك", "en": "Plumber"},
+    "carpenter": {"ar": "نجار", "en": "Carpenter"},
+    "painter": {"ar": "دهان", "en": "Painter"},
+    "mechanic": {"ar": "ميكانيكي", "en": "Mechanic"},
+    "technician": {"ar": "فني", "en": "Technician"},
+    "sales": {"ar": "مبيعات", "en": "Sales"},
+    "accountant": {"ar": "محاسب", "en": "Accountant"},
+    "receptionist": {"ar": "استقبال", "en": "Receptionist"},
+    "waiter": {"ar": "نادل", "en": "Waiter"},
+    "barista": {"ar": "باريستا", "en": "Barista"},
+    "cashier": {"ar": "كاشير", "en": "Cashier"},
+    "assistant": {"ar": "مساعد", "en": "Assistant"},
+    "supervisor": {"ar": "مشرف", "en": "Supervisor"},
+    "manager": {"ar": "مدير", "en": "Manager"},
+    "general worker": {"ar": "عامل عام", "en": "General Worker"},
+    "laborer": {"ar": "عامل", "en": "Laborer"},
+    "construction": {"ar": "بناء", "en": "Construction"},
+    "factory": {"ar": "مصنع", "en": "Factory"},
+    "warehouse": {"ar": "مستودع", "en": "Warehouse"},
+    
+    # Card/baladiya
+    "baladiya card": {"ar": "كرت البلدية", "en": "Baladiya Card"},
+    "has card": {"ar": "يوجد كرت", "en": "Has Card"},
+    "no card": {"ar": "لا يوجد كرت", "en": "No Card"},
+    "card valid": {"ar": "الكرت ساري", "en": "Card Valid"},
+    "card expired": {"ar": "الكرت منتهي", "en": "Card Expired"},
+    
+    # Common locations
+    "riyadh": {"ar": "الرياض", "en": "Riyadh"},
+    "jeddah": {"ar": "جدة", "en": "Jeddah"},
+    "dammam": {"ar": "الدمام", "en": "Dammam"},
+    "makkah": {"ar": "مكة", "en": "Makkah"},
+    "madinah": {"ar": "المدينة", "en": "Madinah"},
+    "tabuk": {"ar": "تبوك", "en": "Tabuk"},
+    "abha": {"ar": "أبها", "en": "Abha"},
+    "khobar": {"ar": "الخبر", "en": "Khobar"},
+    
+    # Nationalities (expanded)
+    "filipino": {"ar": "فلبيني", "en": "Filipino"},
+    "filipina": {"ar": "فلبينية", "en": "Filipina"},
+    "indian": {"ar": "هندي", "en": "Indian"},
+    "indonesian": {"ar": "إندونيسي", "en": "Indonesian"},
+    "srilankan": {"ar": "سريلانكي", "en": "Sri Lankan"},
+    "bangladeshi": {"ar": "بنغلاديشي", "en": "Bangladeshi"},
+    "nepali": {"ar": "نيبالي", "en": "Nepali"},
+    "pakistan": {"ar": "باكستاني", "en": "Pakistani"},
+    "egyptian": {"ar": "مصري", "en": "Egyptian"},
+    "syrian": {"ar": "سوري", "en": "Syrian"},
+    "yemeni": {"ar": "يمني", "en": "Yemeni"},
+    "sudanese": {"ar": "سوداني", "en": "Sudanese"},
+    
+    # Time periods
+    "1 month": {"ar": "شهر واحد", "en": "1 Month"},
+    "2 months": {"ar": "شهران", "en": "2 Months"},
+    "3 months": {"ar": "3 أشهر", "en": "3 Months"},
+    "6 months": {"ar": "6 أشهر", "en": "6 Months"},
+    "1 year": {"ar": "سنة واحدة", "en": "1 Year"},
+    "2 years": {"ar": "سنتان", "en": "2 Years"},
+    "less than 1 year": {"ar": "أقل من سنة", "en": "Less Than 1 Year"},
+    "more than 1 year": {"ar": "أكثر من سنة", "en": "More Than 1 Year"},
+    "less than 6 months": {"ar": "أقل من 6 أشهر", "en": "Less Than 6 Months"},
+    "more than 6 months": {"ar": "أكثر من 6 أشهر", "en": "More Than 6 Months"},
 }
 
 def t(key, lang="ar"):
@@ -386,3 +677,173 @@ def t_col(col_name, lang="ar"):
     if "contract end" in col_lower: return "تاريخ انتهاء العقد"
     
     return col_name
+
+def _tval_is_excluded_field(field_name):
+    """Fields whose values must stay as-is (never machine-translated).
+
+    - Full name stays in English per product requirement.
+    - Links, phone numbers and ID numbers are not translatable text.
+    """
+    if not field_name:
+        return False
+    fl = str(field_name).lower()
+    if any(k in fl for k in ["full name", "الاسم الكامل", "name:", "الاسم:", "worker name", "اسم العامل"]):
+        return True
+    if any(k in fl for k in ["cv", "سيرة", "link", "رابط", "url", "http", "drive"]):
+        return True
+    if any(k in fl for k in ["phone", "mobile", "جوال", "هاتف", "موبايل", "whatsapp"]):
+        return True
+    if any(k in fl for k in ["iqama id", "رقم الإقامة", "passport", "جواز", "id number"]):
+        return True
+    return False
+
+
+def _should_ai_translate(val_str, field_name=None):
+    """Decide whether an Arabic-UI value needs machine translation EN -> AR."""
+    if not val_str:
+        return False
+    s = str(val_str).strip()
+    if len(s) < 3:
+        return False
+    # Only values containing English letters need translation.
+    # Pure Arabic / numbers / dates / phones are returned as-is.
+    if not re.search(r'[a-zA-Z]', s):
+        return False
+    if _tval_is_excluded_field(field_name):
+        return False
+    low = s.lower()
+    if any(e in low for e in _AI_TVAL_ERROR_SIGS):
+        return False
+    # URLs / emails are not translatable text.
+    if s.startswith("http://") or s.startswith("https://") or "drive.google.com" in low:
+        return False
+    if "@" in s and "." in s and " " not in s:
+        return False
+    # Pure numbers / phones / dates / symbols.
+    if re.match(r'^[\+\d\s\-\(\)\./:,#%*!=@&]+$', s):
+        return False
+    if not re.search(r'[a-zA-Z\u0600-\u06FF]', s):
+        return False
+    return True
+
+
+def _ai_translate_en_to_ar(val_str):
+    """Translate an English worker value to natural Arabic (cached).
+
+    Uses the app's multi-engine TranslationService (Google first), so the
+    result is a full-sentence natural translation, not word-by-word.
+    Returns None on any failure so the caller can fall back to the original.
+    """
+    s = str(val_str).strip()
+    if not s:
+        return None
+    cache_key = "ai_ar_" + hashlib.md5(s.encode("utf-8")).hexdigest()
+    # 1. Streamlit session cache (survives reruns).
+    try:
+        import streamlit as st
+        sess_cache = st.session_state.get("translation_cache", {})
+        cached = sess_cache.get(cache_key)
+        if cached and not any(e in str(cached).lower() for e in _AI_TVAL_ERROR_SIGS):
+            return cached
+    except Exception:
+        pass
+    # 2. Process-level cache.
+    if cache_key in _AI_TVAL_CACHE:
+        return _AI_TVAL_CACHE[cache_key]
+    # 3. Machine translation.
+    try:
+        from src.core.file_translator import TranslationService
+        svc = TranslationService(source_lang="en", target_lang="ar")
+        res = svc.translate_text(s)
+        if res:
+            res = res.strip()
+            if res and res.lower() != s.lower() \
+                    and not any(e in res.lower() for e in _AI_TVAL_ERROR_SIGS):
+                _AI_TVAL_CACHE[cache_key] = res
+                try:
+                    import streamlit as st
+                    if "translation_cache" not in st.session_state:
+                        st.session_state.translation_cache = {}
+                    st.session_state.translation_cache[cache_key] = res
+                except Exception:
+                    pass
+                return res
+    except Exception:
+        pass
+    return None
+
+def t_val(value, lang="ar", field_name=None):
+    """
+    Translates a data value to the target language.
+    
+    Args:
+        value: The value to translate
+        lang: Target language ('ar' or 'en')
+        field_name: Optional field name for context-aware translation
+    
+    Returns:
+        Translated value if translation exists, otherwise original value
+    """
+    if lang == 'en':
+        return value
+    
+    if value is None:
+        return value
+    
+    # Skip translation for pandas NA
+    try:
+        import pandas as pd
+        if pd.isna(value):
+            return value
+    except ImportError:
+        pass
+    
+    val_str = str(value).strip()
+    if not val_str or val_str.lower() in ["nan", "none", "null", "<na>", "nat"]:
+        return value
+    
+    # Skip translation for full name fields (keep original)
+    if field_name:
+        field_lower = str(field_name).lower()
+        # Don't translate full name fields
+        if any(kw in field_lower for kw in ["full name", "الاسم الكامل", "name:", "الاسم:"]):
+            return value
+        # Don't translate URL fields
+        if any(kw in field_lower for kw in ["cv", "سيرة", "link", "رابط", "url", "http"]):
+            return value
+    
+    # Try exact match (case-insensitive)
+    val_lower = val_str.lower()
+    translation = VALUE_TRANSLATIONS.get(val_lower, {}).get("ar")
+    if translation:
+        return translation
+    
+    # Try partial match for values containing known words
+    for key, trans in VALUE_TRANSLATIONS.items():
+        if key in val_lower and val_lower.replace(key, "").strip() in ["", ",", " ", ".", "/", "-"]:
+            # If the value is mostly the known word
+            return trans.get("ar", val_str)
+    
+    # Special handling for field-specific translations
+    if field_name:
+        field_lower = str(field_name).lower()
+        
+        # Nationality handling (use existing system if available)
+        if "nationality" in field_lower or "جنسية" in field_lower:
+            try:
+                from src.core.i18n import _get_nationality_code, get_country_display_name
+                nat_code = _get_nationality_code(value)
+                if nat_code:
+                    return get_country_display_name(nat_code, 'ar')
+            except Exception:
+                pass
+
+    # AI fallback: natural full-sentence translation EN -> AR for any
+    # free-text English value the dictionary did not cover.
+    # (Full name / links / phones / IDs are excluded in the helper.)
+    if lang == "ar" and _should_ai_translate(val_str, field_name):
+        ai_result = _ai_translate_en_to_ar(val_str)
+        if ai_result:
+            return ai_result
+
+    return value

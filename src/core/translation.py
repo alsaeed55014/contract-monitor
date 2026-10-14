@@ -576,7 +576,3 @@ AR_TO_EN = {
     "لا توجد خبرة": "No experience",
     "خبرة": "Experience",
 }
-
-def translate_to_english(keyword: str):
-    keyword = keyword.strip().lower()
-    return AR_TO_EN.get(keyword, [])

@@ -487,6 +487,13 @@ def get_css(lang='ar'):
             transition: all 0.4s cubic-bezier(0.165, 0.84, 0.44, 1) !important;
             box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5) !important;
             width: 100% !important; /* Default to full width for better mobile behavior */
+            min-height: 48px !important;
+            display: inline-flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            text-align: center !important;
+            white-space: normal !important;
+            line-height: 1.3 !important;
         }}
 
         /* Mobile specific button refinements */
@@ -495,6 +502,7 @@ def get_css(lang='ar'):
                 padding: 0.6rem 1.2rem !important;
                 font-size: 0.85rem !important;
                 letter-spacing: 1px !important;
+                min-height: 46px !important;
             }}
         }}
 
@@ -504,6 +512,28 @@ def get_css(lang='ar'):
             border-color: var(--luxury-gold) !important;
             box-shadow: 0 0 25px rgba(212, 175, 55, 0.5) !important;
             transform: translateY(-3px) scale(1.02) !important;
+        }}
+
+        /* Streamlit Dialog / Modal Luxury Styling */
+        div[data-testid="stDialog"] div[role="dialog"] {{
+            background: rgba(14, 14, 14, 0.96) !important;
+            border: 1.5px solid rgba(212, 175, 55, 0.4) !important;
+            border-radius: 20px !important;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.9), 0 0 35px rgba(212, 175, 55, 0.25) !important;
+            backdrop-filter: blur(20px) !important;
+            color: #FFFFFF !important;
+            max-width: 900px !important;
+        }}
+        div[data-testid="stDialog"] div[role="dialog"] h2,
+        div[data-testid="stDialog"] div[role="dialog"] [data-testid="stDialogHeader"] {{
+            color: var(--luxury-gold) !important;
+            font-family: 'Cinzel', 'Cairo', serif !important;
+            border-bottom: 1px solid rgba(212, 175, 55, 0.2) !important;
+            padding-bottom: 10px !important;
+        }}
+        div[data-testid="stDialog"] button[aria-label="Close"],
+        div[data-testid="stDialog"] button[aria-label="close"] {{
+            color: var(--luxury-gold) !important;
         }}
 
         /* Primary Search Variation */
@@ -1476,13 +1506,28 @@ FLAG_MAP = {
     "سيراليون": "sl",
     "بوروندي": "bi",
     # English
-    "indian": "in", "filipino": "ph", "nepi": "np", "nepali": "np", "nepal": "np",
-    "bangla": "bd", "bangladeshi": "bd", "pakistan": "pk", "pakistani": "pk",
-    "egypt": "eg", "egyptian": "eg", "sudan": "sd", "sudanese": "sd",
-    "sri lanka": "lk", "sri lankan": "lk", "kenya": "ke", "kenyan": "ke",
-    "uganda": "ug", "ugandan": "ug", "ethiopia": "et", "ethiopian": "et",
-    "indonesian": "id", "indonesia": "id", "rwandan": "rw", "rwanda": "rw",
-    "afghan": "af", "afghanistan": "af", "nigerian": "ng", "nigeria": "ng"
+    "indian": "in", "india": "in", "in": "in",
+    "filipino": "ph", "filipina": "ph", "philippines": "ph", "philippine": "ph", "ph": "ph",
+    "nepi": "np", "nepali": "np", "nepal": "np", "np": "np",
+    "bangla": "bd", "bangladeshi": "bd", "bangladesh": "bd", "bd": "bd",
+    "pakistan": "pk", "pakistani": "pk", "pk": "pk",
+    "egypt": "eg", "egyptian": "eg", "eg": "eg",
+    "sudan": "sd", "sudanese": "sd", "sd": "sd",
+    "sri lanka": "lk", "sri lankan": "lk", "lk": "lk",
+    "kenya": "ke", "kenyan": "ke", "ke": "ke",
+    "uganda": "ug", "ugandan": "ug", "ug": "ug",
+    "ethiopia": "et", "ethiopian": "et", "et": "et",
+    "indonesian": "id", "indonesia": "id", "id": "id",
+    "morocco": "ma", "moroccan": "ma", "ma": "ma",
+    "yemen": "ye", "yemeni": "ye", "ye": "ye",
+    "rwandan": "rw", "rwanda": "rw", "rw": "rw",
+    "afghan": "af", "afghanistan": "af", "af": "af",
+    "nigerian": "ng", "nigeria": "ng", "ng": "ng",
+    "ghana": "gh", "ghanaian": "gh", "gh": "gh",
+    "vietnam": "vn", "vietnamese": "vn", "vn": "vn",
+    "sierra leone": "sl", "sierra leonean": "sl", "sl": "sl",
+    "burundi": "bi", "burundian": "bi", "bi": "bi",
+    "saudi": "sa", "saudi arabia": "sa", "sa": "sa"
 }
 
 GENDER_MAP = {
@@ -2248,7 +2293,7 @@ try:
     from src.core.translation import TranslationManager
     from src.data.db_client import DBClient
     from src.config import USERS_FILE, ASSETS_DIR
-    from src.core.i18n import t, t_col # Added t_col
+    from src.core.i18n import t, t_col, t_val
     from src.ui.whatsapp_ui import render_whatsapp_page
 except ImportError as e:
     # Diagnostic: Check if 'src' exists
@@ -2624,9 +2669,538 @@ def render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search", 
         st.success(msg_success)
         st.code(summary, language="markdown")
         st.markdown("</div>", unsafe_allow_html=True)
-        
-    if st.button("✨ " + ("إنشاء ملخص العامل" if lang == 'ar' else "Create Worker Summary"), width='stretch', key=f"btn_summary_mk_{key_prefix}_{worker_id}"):
-        show_worker_summary_modal()
+
+    # === Full Worker Information Modal & Button === #
+    def luxury_modal_dialog(title):
+        try:
+            return st.dialog(title, width="large")
+        except TypeError:
+            return st.dialog(title)
+
+    @luxury_modal_dialog("📋 " + (t('full_worker_info_title', lang) if lang == 'ar' else "Complete Registered Worker Data"))
+    def show_worker_full_info_modal():
+        is_ar = (lang == 'ar')
+        d = 'rtl' if is_ar else 'ltr'
+        a = 'right' if is_ar else 'left'
+
+        # 1. Fetch complete worker data directly from the DB / worker_row
+        if isinstance(worker_row, pd.DataFrame):
+            w_series = worker_row.iloc[0]
+        elif isinstance(worker_row, pd.Series):
+            w_series = worker_row
+        elif isinstance(worker_row, dict):
+            w_series = pd.Series(worker_row)
+        else:
+            w_series = pd.Series(dict(worker_row))
+
+        full_data = w_series.to_dict()
+
+        # Enhance with complete database record if DBClient is connected
+        try:
+            if hasattr(st.session_state, 'db') and st.session_state.db is not None:
+                db_df = st.session_state.db.fetch_data()
+                if db_df is not None and not db_df.empty:
+                    sheet_row = full_data.get('__sheet_row', full_data.get('__sheet_row_backup'))
+                    matched_db_row = None
+                    if sheet_row and '__sheet_row' in db_df.columns:
+                        m = db_df[db_df['__sheet_row'] == sheet_row]
+                        if not m.empty: matched_db_row = m.iloc[0]
+                    if matched_db_row is None and sheet_row and '__sheet_row_backup' in db_df.columns:
+                        m = db_df[db_df['__sheet_row_backup'] == sheet_row]
+                        if not m.empty: matched_db_row = m.iloc[0]
+                    if matched_db_row is None and worker_name and worker_name != "Worker":
+                        for nk in ["Full Name:", "الاسم الكامل", "Name", "الاسم"]:
+                            if nk in db_df.columns:
+                                m = db_df[db_df[nk].astype(str).str.strip() == str(worker_name).strip()]
+                                if not m.empty:
+                                    matched_db_row = m.iloc[0]
+                                    break
+                    if matched_db_row is not None:
+                        db_dict = matched_db_row.to_dict()
+                        for k, v in full_data.items():
+                            if k not in db_dict or pd.isna(db_dict[k]) or str(db_dict[k]).strip() == "":
+                                if pd.notnull(v) and str(v).strip() != "":
+                                    db_dict[k] = v
+                        full_data = db_dict
+        except Exception:
+            pass
+
+        # 2. Filter out internal system columns and format fields
+        raw_fields = []
+        for col_name in full_data.keys():
+            col_str = str(col_name).strip()
+            if not col_str or col_str.startswith('__') or col_str.startswith('🚩_') or col_str.lower().startswith('unnamed:'):
+                continue
+
+            # Remove "كيف عرفت عنا؟" / "How did you know us?"
+            _c_low = col_str.lower()
+            if any(kw in _c_low for kw in ["كيف عرفت عنا", "how did you know", "how did you hear"]):
+                continue
+
+            raw_val = full_data.get(col_name)
+            if raw_val is None or pd.isna(raw_val):
+                clean_val = ""
+            elif isinstance(raw_val, float) and raw_val.is_integer():
+                clean_val = str(int(raw_val))
+            else:
+                clean_val = str(raw_val).strip()
+                if clean_val.lower() in ["nan", "none", "null", "<na>", "nat"]:
+                    clean_val = ""
+
+            # Remove trailing time if datetime date only
+            if clean_val.endswith(" 00:00:00"):
+                clean_val = clean_val.replace(" 00:00:00", "")
+
+            # Translation of value (for Arabic UI)
+            if is_ar and clean_val:
+                clean_val = t_val(clean_val, 'ar', col_str)
+
+            # Translation of column header
+            trans_label = t_col(col_str, lang) if is_ar else col_str
+
+            is_empty_val = (clean_val == "" or clean_val in ["---", "-"])
+            is_url_val = (clean_val.startswith("http://") or clean_val.startswith("https://") or "drive.google.com" in clean_val)
+
+            raw_fields.append({
+                "col_key": col_str,
+                "label": trans_label,
+                "orig_label": col_str,
+                "value": clean_val,
+                "is_empty": is_empty_val,
+                "is_url": is_url_val
+            })
+
+        if not raw_fields:
+            st.warning("⚠️ لا توجد بيانات مسجلة لهذا العامل في قاعدة البيانات." if is_ar else "⚠️ No recorded data found for this worker.")
+            return
+
+        # 3. Categorize fields into logical sections while ensuring 100% inclusion
+        def classify_field(item):
+            t_str = f"{item['orig_label']} {item['label']}".lower()
+            if any(w in t_str for w in ["name", "اسم", "nationality", "جنسية", "age", "عمر", "gender", "جنس", "social", "marital", "متزوج", "religion", "ديانة", "عائلة", "أطفال", "children"]):
+                return "personal"
+            if any(w in t_str for w in ["job", "وظيفة", "profession", "occupation", "مهنة", "experience", "خبرة", "skill", "مهارة", "speak", "arabic", "عربية", "لغة", "qualification", "مؤهل"]):
+                return "quals"
+            if any(w in t_str for w in ["iqama", "إقامة", "sponsor", "كفالة", "كفيل", "transfer", "نقل", "baladiya", "بلدية", "card", "كرت", "huroob", "هروب", "obligation", "التزام", "contract", "عقد"]):
+                return "legal"
+            if any(w in t_str for w in ["city", "مدينة", "area", "حي", "منطقة", "location", "موقع", "phone", "جوال", "هاتف", "mobile", "outside", "خارج", "immediately", "فوراً", "ready", "جاهز", "working now", "تعمل حالياً"]):
+                return "contact"
+            return "other"
+
+        sections_def = [
+            ("personal", "👤 البيانات الشخصية والأساسية" if is_ar else "👤 Personal & Basic Information"),
+            ("quals", "💼 المؤهلات والمهنة والخبرات" if is_ar else "💼 Qualifications & Experience"),
+            ("legal", "🆔 الإقامة والجاهزية ونقل الكفالة" if is_ar else "🆔 Iqama, Legal & Sponsorship"),
+            ("contact", "📍 الموقع والتواصل والجاهزية" if is_ar else "📍 Location, Contact & Availability"),
+            ("other", "📋 بيانات وحقول مسجلة أخرى" if is_ar else "📋 Other Recorded Data Fields")
+        ]
+
+        # 4. Header Bar with Worker Name and Counts
+        total_fields_count = len(raw_fields)
+        filled_count = len([f for f in raw_fields if not f["is_empty"]])
+        empty_count = total_fields_count - filled_count
+
+        empty_badge_html = f"<span style='background: rgba(255, 255, 255, 0.08); color: #BBB; border: 1px solid rgba(255, 255, 255, 0.18); padding: 4px 12px; border-radius: 20px; font-size: 0.85rem; font-weight: 600;'>{'⚪ غير مسجل:' if is_ar else 'Empty:'} {empty_count}</span>" if empty_count > 0 else ""
+        header_banner_html = (
+            f"<div style='direction: {d}; text-align: {a}; margin-bottom: 20px; "
+            f"background: linear-gradient(135deg, rgba(212, 175, 55, 0.15) 0%, rgba(20, 20, 20, 0.85) 100%); "
+            f"border: 1px solid rgba(212, 175, 55, 0.35); border-radius: 16px; padding: 18px 22px; "
+            f"box-shadow: 0 10px 25px rgba(0,0,0,0.5);'>"
+            f"<div style='display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;'>"
+            f"<h3 style='color: #D4AF37; margin: 0; font-family: Cinzel, Cairo, serif; font-size: 1.4rem; letter-spacing: 1px;'>"
+            f"👤 {worker_name}"
+            f"</h3>"
+            f"<div style='display: flex; gap: 10px; flex-wrap: wrap;'>"
+            f"<span style='background: rgba(212, 175, 55, 0.2); color: #D4AF37; border: 1px solid rgba(212, 175, 55, 0.4); padding: 4px 12px; border-radius: 20px; font-size: 0.85rem; font-weight: 600;'>"
+            f"{'📊 إجمالي الحقول:' if is_ar else 'Total Fields:'} {total_fields_count}"
+            f"</span>"
+            f"<span style='background: rgba(0, 255, 65, 0.15); color: #00FF41; border: 1px solid rgba(0, 255, 65, 0.3); padding: 4px 12px; border-radius: 20px; font-size: 0.85rem; font-weight: 600;'>"
+            f"{'✅ مسجل:' if is_ar else 'Filled:'} {filled_count}"
+            f"</span>"
+            f"{empty_badge_html}"
+            f"</div>"
+            f"</div>"
+            f"</div>"
+        )
+        st.html(header_banner_html)
+
+        # 5. Quick Live Search inside Modal
+        filter_query = st.text_input(
+            "🔍 " + ("بحث سريع في الحقول..." if is_ar else "Quick search in fields..."),
+            key=f"search_full_info_{key_prefix}_{worker_id}",
+            placeholder="اكتب اسم الحقل أو القيمة للتصفية..." if is_ar else "Type to filter by field name or value..."
+        )
+
+        display_fields = raw_fields
+        if filter_query and filter_query.strip():
+            fq = filter_query.strip().lower()
+            display_fields = [
+                f for f in raw_fields 
+                if fq in f["label"].lower() or fq in f["orig_label"].lower() or fq in f["value"].lower()
+            ]
+
+        # 6. Presentation Tabs
+        tab_cards, tab_table, tab_copy = st.tabs([
+            "🗂️ " + ("عرض البطاقات المنظمة" if is_ar else "Categorized Cards"),
+            "📊 " + ("جدول البيانات الكامل" if is_ar else "Full Data Table"),
+            "📄 " + ("نص شامل للنسخ" if is_ar else "Copyable Text Report")
+        ])
+
+        with tab_cards:
+            for sec_key, sec_title in sections_def:
+                sec_items = [item for item in display_fields if classify_field(item) == sec_key]
+                if not sec_items:
+                    continue
+                
+                sec_hdr_html = (
+                    f"<div style='margin: 20px 0 10px 0; padding-bottom: 6px; border-bottom: 1px solid rgba(212, 175, 55, 0.3); direction: {d}; text-align: {a};'>"
+                    f"<span style='color: #D4AF37; font-size: 1.1rem; font-weight: 700; font-family: Cairo, sans-serif;'>"
+                    f"{sec_title} ({len(sec_items)})"
+                    f"</span>"
+                    f"</div>"
+                )
+                st.html(sec_hdr_html)
+
+                col1, col2 = st.columns(2)
+                for idx_item, item in enumerate(sec_items):
+                    col_target = col1 if (idx_item % 2 == 0) else col2
+                    with col_target:
+                        v_str = item["value"]
+                        orig_lbl = item["orig_label"]
+                        lbl = item["label"]
+                        col_key_lower = orig_lbl.lower()
+
+                        # ── Detect field type ──────────────────────────────
+                        _col_all = f"{orig_lbl} {lbl}".lower()
+                        _v_low = v_str.lower().strip()
+
+                        _is_nat_field = any(kw in _col_all for kw in [
+                            "nationality", "الجنسية", "جنسية", "national"
+                        ])
+                        _is_gender_field = (
+                            any(kw in _col_all for kw in ["gender", "النوع", "نوع الجنس", "sex"])
+                            or (_col_all.strip() in ["الجنس", "جنس", "gender"])
+                            or ("الجنس" in _col_all and not _is_nat_field)
+                        ) and not _is_nat_field
+
+                        # 1. الوظيفة المطلوبة (برتقالي #FFA500)
+                        _is_job_field = any(kw in _col_all for kw in [
+                            "الوظيفة المطلوبة", "which job", "job requested", "الوظيفة المستهدفة"
+                        ]) and not any(kw in _col_all for kw in ["المهنة في الإقامة", "مهارات"])
+
+                        # 2. مهارات أخرى (برتقالي #FFA500)
+                        _is_skills_field = any(kw in _col_all for kw in [
+                            "مهارات أخرى", "مهارات اخرى", "what other jobs", "other skills"
+                        ]) or (_col_all.strip() == "مهارات")
+
+                        # 3. المهنة في الإقامة (برتقالي #FFA500)
+                        _is_iqama_prof_field = any(kw in _col_all for kw in [
+                            "المهنة في الإقامة", "المهنة في الاقامة", "occupation listed on your iqama", "iqama profession", "مهنة الإقامة"
+                        ])
+
+                        # 4. هل العقد منتهي؟ وتاريخ انتهاء العقد (منتهي = أخضر #00FF66 / غير منتهي = أحمر #FF3333)
+                        _is_contract_field = any(kw in _col_all for kw in [
+                            "تاريخ انتهاء العقد", "contract end date", "انتهاء العقد", "هل العقد منتهي", "حالة العقد", "contract status", "contract end"
+                        ])
+
+                        # 5. التزامات مالية للكفيل السابق (نعم = أحمر #FF3333)
+                        _is_fin_obl_field = any(kw in _col_all for kw in [
+                            "التزامات مالية", "financial obligations", "الكفيل السابق"
+                        ]) and "نقل" not in _col_all
+
+                        # 6. بلاغ هروب (نعم = أحمر #FF3333)
+                        _is_huroob_field = any(kw in _col_all for kw in [
+                            "بلاغ هروب", "huroob", "هروب"
+                        ]) and "مدة" not in _col_all and "duration" not in _col_all
+
+                        # 7. هل يقبل الكفيل النقل (نعم = أخضر #00FF66 / لا أو لااعرف = أحمر #FF3333)
+                        _is_transfer_accept_field = any(kw in _col_all for kw in [
+                            "يقبل الكفيل", "accept to transfer", "يقبل النقل"
+                        ]) or (("transfer" in _col_all or "نقل" in _col_all) and any(kw in _col_all for kw in ["accept", "يقبل", "employer", "كفيل"]) and "عدد" not in _col_all and "times" not in _col_all)
+
+                        # 8. عدد مرات نقل الكفالة (First time = أخضر #00FF66)
+                        _is_transfer_count_field = any(kw in _col_all for kw in [
+                            "عدد مرات نقل", "times did you transfer", "transfer count", "مرات نقل الكفالة"
+                        ])
+
+                        # 9. هل الإقامة سارية؟ (لا = أحمر #FF3333 / نعم = أخضر #00FF66)
+                        _is_iqama_valid_field = any(kw in _col_all for kw in [
+                            "هل الإقامة سارية", "هل الاقامة سارية", "الإقامة سارية", "الاقامة سارية",
+                            "iqama valid", "is your iqama valid", "your iqama valid", "is the iqama valid"
+                        ]) and not any(kw in _col_all for kw in [
+                            "مدة", "متى", "مهنة", "how many", "when", "occupation", "remaining", "left", "expired", "متبقية"
+                        ])
+
+                        # 10. مدة انتهاء الإقامة (أحمر #FF3333)
+                        _is_iqama_expired_duration_field = any(kw in _col_all for kw in [
+                            "مدة انتهاء الإقامة", "مدة انتهاء الاقامة", "انتهاء الإقامة", "انتهاء الاقامة",
+                            "iqama expired", "if the iqama expired"
+                        ]) and not any(kw in _col_all for kw in [
+                            "عقد", "contract", "متبقية", "remaining", "left", "baladiya", "بلدية", "هل الإقامة سارية", "هل الاقامة سارية", "iqama valid"
+                        ])
+
+                        # 11. هل تعمل حالياً؟ (لا = أخضر #00FF66)
+                        _is_working_now_field = any(kw in _col_all for kw in [
+                            "تعمل حالياً", "تعمل حاليا", "يعمل حالياً", "يعمل حاليا", "العمل حالياً", "العمل حاليا",
+                            "working now", "currently working", "are you working"
+                        ])
+
+                        # 12. هل يمكنك العمل خارج مدينتك؟ (نعم = أخضر #00FF66)
+                        _is_work_outside_field = any(kw in _col_all for kw in [
+                            "خارج مدينتك", "خارج المدينة", "outside your city", "outside city", "work outside"
+                        ])
+
+                        # ── Gender: colored icon ───────────────────────────
+                        _gender_prefix = ""
+                        if _is_gender_field and v_str and not _is_nat_field:
+                            _is_female = (
+                                _v_low in ["f", "female", "أنثى", "انثى", "اناث", "أناث", "نساء", "بنت", "girl", "woman", "lady"]
+                                or any(w in _v_low for w in ["female", "أنثى", "انثى", "اناث", "أناث", "امرأة", "امراة"])
+                            )
+                            _is_male = (
+                                not _is_female and (
+                                    _v_low in ["m", "male", "ذكر", "رجل", "رجال", "ولد", "boy", "man"]
+                                    or any(w in _v_low for w in ["male", "ذكر", "رجل"])
+                                )
+                            )
+                            if _is_female:
+                                _gender_prefix = (
+                                    "<span style='display:inline-flex; align-items:center; gap:5px; "
+                                    "background: rgba(255, 105, 180, 0.18); color: #FF69B4; "
+                                    "border: 1px solid rgba(255, 105, 180, 0.5); "
+                                    "border-radius: 20px; padding: 2px 10px; font-size: 1rem; font-weight: 700; "
+                                    "margin-left: 6px;'>♀ أنثى</span>"
+                                )
+                            elif _is_male:
+                                _gender_prefix = (
+                                    "<span style='display:inline-flex; align-items:center; gap:5px; "
+                                    "background: rgba(100, 180, 255, 0.18); color: #64B4FF; "
+                                    "border: 1px solid rgba(100, 180, 255, 0.5); "
+                                    "border-radius: 20px; padding: 2px 10px; font-size: 1rem; font-weight: 700; "
+                                    "margin-left: 6px;'>♂ ذكر</span>"
+                                )
+
+                        # ── Nationality: country name + flag emoji ───────────
+                        _nat_flag = ""
+                        _nat_country_name = ""
+                        if _is_nat_field and v_str and not item["is_empty"]:
+                            try:
+                                _nat_code = _get_nationality_code(v_str)
+                                if not _nat_code and len(_v_low) == 2 and _v_low in COUNTRY_NAMES_DISPLAY:
+                                    _nat_code = _v_low
+                                if _nat_code:
+                                    _nat_flag = _country_code_to_emoji(_nat_code)
+                                    _c_disp = get_country_display_name(_nat_code, 'ar' if is_ar else 'en')
+                                    _nat_country_name = _c_disp if _c_disp else v_str
+                                else:
+                                    _nat_country_name = v_str
+                            except Exception:
+                                _nat_country_name = v_str
+
+                        # ── Build val_html ─────────────────────────────────
+                        if item["is_empty"]:
+                            val_html = f"<span style='color: rgba(255,255,255,0.35); font-style: italic;'>{'غير مسجل' if is_ar else 'Not recorded'}</span>"
+                        elif item["is_url"]:
+                            link_lbl = "فتح رابط السيرة الذاتية" if ("cv" in orig_lbl.lower() or "سيرة" in orig_lbl.lower()) else ("فتح الرابط المرفق" if is_ar else "Open Link")
+                            val_html = f"<a href='{v_str}' target='_blank' style='color: #00FF66; text-decoration: underline; font-weight: 600;'>🔗 {link_lbl}</a>"
+                        elif _is_nat_field:
+                            _disp_name = _nat_country_name if _nat_country_name else v_str
+                            if _nat_flag:
+                                val_html = (
+                                    f"<span style='display:inline-flex; align-items:center; gap:8px;'>"
+                                    f"<span style='color: #FFFFFF; font-weight: 600;'>{_disp_name}</span>"
+                                    f"<span style='font-size: 1.4rem; line-height: 1;'>{_nat_flag}</span>"
+                                    f"</span>"
+                                )
+                            else:
+                                val_html = f"<span style='color: #FFFFFF; font-weight: 600;'>{_disp_name}</span>"
+                        elif _is_gender_field and _gender_prefix:
+                            val_html = _gender_prefix
+                        elif _is_iqama_valid_field:
+                            # هل الإقامة سارية؟ لا = أحمر #FF3333 / نعم = أخضر #00FF66
+                            if any(kw in _v_low for kw in ["no", "لا", "false", "n", "غير سارية", "منتهية", "expired", "not valid"]):
+                                val_html = f"<span style='color: #FF3333; font-weight: 700;'>{v_str}</span>"
+                            elif any(kw in _v_low for kw in ["yes", "نعم", "true", "y", "سارية", "valid"]):
+                                val_html = f"<span style='color: #00FF66; font-weight: 700;'>{v_str}</span>"
+                            else:
+                                val_html = f"<span style='color: #FFFFFF; font-weight: 600;'>{v_str}</span>"
+                        elif _is_iqama_expired_duration_field:
+                            # مدة انتهاء الإقامة: أي قيمة مسجلة تكون باللون الأحمر #FF3333
+                            val_html = f"<span style='color: #FF3333; font-weight: 700;'>{v_str}</span>"
+                        elif _is_working_now_field:
+                            # هل تعمل حالياً؟ لا = أخضر #00FF66
+                            if any(kw in _v_low for kw in ["no", "لا", "false", "n", "لا أعمل", "لا اعمل", "not working", "غير موظف", "عاطل", "عاطلا"]):
+                                val_html = f"<span style='color: #00FF66; font-weight: 700;'>{v_str}</span>"
+                            else:
+                                val_html = f"<span style='color: #FFFFFF; font-weight: 600;'>{v_str}</span>"
+                        elif _is_work_outside_field:
+                            # هل يمكنك العمل خارج مدينتك؟ نعم = أخضر #00FF66
+                            if any(kw in _v_low for kw in ["yes", "نعم", "true", "y", "موافق", "نعم استطيع", "نعم أستطيع", "can work", "willing"]):
+                                val_html = f"<span style='color: #00FF66; font-weight: 700;'>{v_str}</span>"
+                            else:
+                                val_html = f"<span style='color: #FFFFFF; font-weight: 600;'>{v_str}</span>"
+                        elif _is_job_field:
+                            val_html = f"<span style='color: #FFA500; font-weight: 700;'>{v_str}</span>"
+                        elif _is_skills_field:
+                            val_html = f"<span style='color: #FFA500; font-weight: 700;'>{v_str}</span>"
+                        elif _is_iqama_prof_field:
+                            val_html = f"<span style='color: #FFA500; font-weight: 700;'>{v_str}</span>"
+                        elif _is_contract_field:
+                            # إذا كان منتهي = أخضر #00FF66 / إذا كان غير منتهي = أحمر #FF3333
+                            _is_expired = False
+                            if any(kw in _v_low for kw in ["منتهي", "expired"]):
+                                _is_expired = True
+                            elif any(kw in _v_low for kw in ["ساري", "active", "عاجل", "urgent", "غير منتهي"]):
+                                _is_expired = False
+                            else:
+                                try:
+                                    dt = pd.to_datetime(v_str, errors='coerce')
+                                    if pd.notnull(dt) and dt.date() <= datetime.now().date():
+                                        _is_expired = True
+                                    else:
+                                        _is_expired = False
+                                except Exception:
+                                    _is_expired = False
+
+                            if _is_expired:
+                                val_html = f"<span style='color: #00FF66; font-weight: 700;'>{v_str}</span>"
+                            else:
+                                val_html = f"<span style='color: #FF3333; font-weight: 700;'>{v_str}</span>"
+                        elif _is_fin_obl_field:
+                            # التزامات مالية: نعم = أحمر
+                            if any(kw in _v_low for kw in ["yes", "نعم", "true", "y"]):
+                                val_html = f"<span style='color: #FF3333; font-weight: 700;'>{v_str}</span>"
+                            elif any(kw in _v_low for kw in ["no", "لا", "false", "n"]):
+                                val_html = f"<span style='color: #00FF66; font-weight: 600;'>{v_str}</span>"
+                            else:
+                                val_html = f"<span style='color: #FFFFFF; font-weight: 600;'>{v_str}</span>"
+                        elif _is_huroob_field:
+                            # بلاغ هروب: نعم = أحمر
+                            if any(kw in _v_low for kw in ["yes", "نعم", "true", "y"]):
+                                val_html = f"<span style='color: #FF3333; font-weight: 700;'>{v_str}</span>"
+                            elif any(kw in _v_low for kw in ["no", "لا", "false", "n"]):
+                                val_html = f"<span style='color: #00FF66; font-weight: 600;'>{v_str}</span>"
+                            else:
+                                val_html = f"<span style='color: #FFFFFF; font-weight: 600;'>{v_str}</span>"
+                        elif _is_transfer_accept_field:
+                            # هل يقبل الكفيل النقل: نعم = أخضر / لا أو لااعرف = أحمر
+                            if any(kw in _v_low for kw in ["yes", "نعم", "موافق", "يقبل"]):
+                                val_html = f"<span style='color: #00FF66; font-weight: 700;'>{v_str}</span>"
+                            elif any(kw in _v_low for kw in ["no", "لا", "رفض", "لااعرف", "لا اعرف", "لا أعرف", "don't know", "dont know", "not sure", "غير معروف"]):
+                                val_html = f"<span style='color: #FF3333; font-weight: 700;'>{v_str}</span>"
+                            else:
+                                val_html = f"<span style='color: #FFFFFF; font-weight: 600;'>{v_str}</span>"
+                        elif _is_transfer_count_field:
+                            # عدد مرات نقل الكفالة: First time = أخضر
+                            if any(kw in _v_low for kw in ["first time", "first", "المرة الأولى", "المرة الاولى", "مرة واحدة", "لم يتم", "never"]):
+                                val_html = f"<span style='color: #00FF66; font-weight: 700;'>{v_str}</span>"
+                            else:
+                                val_html = f"<span style='color: #FFFFFF; font-weight: 600;'>{v_str}</span>"
+                        elif any(kw in _v_low for kw in ["عاجل", "urgent", "warning"]):
+                            val_html = f"<span style='color: #FF9900; font-weight: 700;'>{v_str}</span>"
+                        else:
+                            val_html = f"<span style='color: #FFFFFF; font-weight: 600;'>{v_str}</span>"
+
+                        orig_tag = ""
+                        if is_ar and orig_lbl != lbl and orig_lbl != "":
+                            orig_tag = (
+                                f"<span dir='ltr' style='direction: ltr; unicode-bidi: isolate; display: inline-block; "
+                                f"color: rgba(212, 175, 55, 0.6); font-size: 0.75rem; font-family: sans-serif;'>"
+                                f"({orig_lbl})"
+                                f"</span>"
+                            )
+
+                        card_html = (
+                            f"<div style='background: rgba(24, 24, 24, 0.75); border: 1px solid rgba(212, 175, 55, 0.22); "
+                            f"border-right: 4px solid #D4AF37; border-radius: 10px; padding: 10px 14px; margin-bottom: 10px; "
+                            f"box-shadow: 0 4px 12px rgba(0,0,0,0.3); direction: {d}; text-align: {a};'>"
+                            f"<div style='display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; flex-wrap: wrap; gap: 4px;'>"
+                            f"<span style='color: #D4AF37; font-weight: 700; font-size: 0.88rem;'>{lbl}</span>"
+                            f"{orig_tag}"
+                            f"</div>"
+                            f"<div style='font-size: 0.98rem; line-height: 1.4; word-break: break-word;'>"
+                            f"{val_html}"
+                            f"</div>"
+                            f"</div>"
+                        )
+                        st.html(card_html)
+
+        with tab_table:
+            st.markdown(f"<div style='direction:{d}; text-align:{a};'>", unsafe_allow_html=True)
+            table_rows = []
+            for idx_f, f in enumerate(display_fields, 1):
+                val_display = f["value"] if not f["is_empty"] else ("غير مسجل" if is_ar else "Not recorded")
+                # Apply value translation for Arabic
+                if is_ar and not f["is_empty"]:
+                    val_display = t_val(val_display, 'ar', f["orig_label"])
+                if not f["is_empty"] and any(kw in f"{f['orig_label']} {f['label']}".lower() for kw in ["nationality", "الجنسية", "جنسية"]):
+                    try:
+                        n_code = _get_nationality_code(f["value"])
+                        if n_code:
+                            c_name = get_country_display_name(n_code, 'ar' if is_ar else 'en') or f["value"]
+                            flag_e = _country_code_to_emoji(n_code)
+                            val_display = f"{c_name} {flag_e}"
+                    except Exception:
+                        pass
+                row_data = {
+                    "#" if is_ar else "No": idx_f,
+                    "اسم الحقل" if is_ar else "Field Name": f["label"],
+                    "القيمة المسجلة" if is_ar else "Recorded Value": val_display,
+                    "المسمى في قاعدة البيانات" if is_ar else "Database Header": f["orig_label"]
+                }
+                table_rows.append(row_data)
+
+            df_modal = pd.DataFrame(table_rows)
+            st.dataframe(df_modal, width='stretch', hide_index=True)
+            st.markdown("</div>", unsafe_allow_html=True)
+
+        with tab_copy:
+            st.markdown(f"<div style='direction:{d}; text-align:{a};'>", unsafe_allow_html=True)
+            st.info("💡 " + ("يمكنك نسخ كافة البيانات المسجلة بنقرة واحدة باستخدام زر النسخ في الزاوية:" if is_ar else "You can copy all recorded data with one click using the copy icon:"))
+            
+            sep_line = "━" * 38
+            report_lines = [
+                f"📋 {'البيانات الكاملة المسجلة للعامل' if is_ar else 'Complete Registered Worker Data'}: {worker_name}",
+                sep_line,
+                f"📊 {'إجمالي الحقول' if is_ar else 'Total Fields'}: {total_fields_count} | {'المسجلة' if is_ar else 'Filled'}: {filled_count}",
+                ""
+            ]
+
+            for sec_key, sec_title in sections_def:
+                sec_items = [item for item in raw_fields if classify_field(item) == sec_key]
+                if not sec_items:
+                    continue
+                report_lines.append(f"\n{sec_title}:")
+                for itm in sec_items:
+                    v_clean = itm["value"] if not itm["is_empty"] else ("غير مسجل" if is_ar else "Not recorded")
+                    # Apply value translation for Arabic
+                    if is_ar and not itm["is_empty"]:
+                        v_clean = t_val(v_clean, 'ar', itm["orig_label"])
+                    if not itm["is_empty"] and any(kw in f"{itm['orig_label']} {itm['label']}".lower() for kw in ["nationality", "الجنسية", "جنسية"]):
+                        try:
+                            n_code = _get_nationality_code(itm["value"])
+                            if n_code:
+                                c_name = get_country_display_name(n_code, 'ar' if is_ar else 'en') or itm["value"]
+                                flag_e = _country_code_to_emoji(n_code)
+                                v_clean = f"{c_name} {flag_e}"
+                        except Exception:
+                            pass
+                    report_lines.append(f"• {itm['label']}: {v_clean}")
+
+            report_lines.append(f"\n{sep_line}")
+            report_lines.append("✨ تم الاستخراج من قاعدة بيانات النظام بدقة كاملة." if is_ar else "✨ Extracted from system database with complete fidelity.")
+            
+            full_text_report = "\n".join(report_lines)
+            st.code(full_text_report, language="markdown")
+            st.markdown("</div>", unsafe_allow_html=True)
+
+    col_full, col_sum = st.columns([1, 1])
+    with col_full:
+        if st.button("📋 " + t('full_worker_info_btn', lang), width='stretch', key=f"btn_full_info_{key_prefix}_{worker_id}"):
+            show_worker_full_info_modal()
+    with col_sum:
+        if st.button("✨ " + ("إنشاء ملخص العامل" if lang == 'ar' else "Create Worker Summary"), width='stretch', key=f"btn_summary_mk_{key_prefix}_{worker_id}"):
+            show_worker_summary_modal()
 
     translate_configs = [
         {"lang_code": "ar", "label": t('translate_cv_btn', lang), "key_suffix": "ar", "target": "ar"},
@@ -2851,12 +3425,19 @@ if ('Notification' in window && Notification.permission === 'default') {
         if (parts.length == 2) return parts.pop().split(";").shift();
         return null;
     }
+    function lsGet(name) {
+        try { return window.localStorage.getItem(name); }
+        catch (e) { return null; }
+    }
     function fillRemember() {
         try {
-            var savedU = getCookie("_rec_saved_user");
-            var savedP = getCookie("_rec_saved_pass_enc");
-            var savedPersist = getCookie("_rec_saved_persist");
-            if (savedPersist !== "1") return;
+            // localStorage is the primary store (works on both localhost and
+            // Streamlit Cloud HTTPS); cookies are only a fallback because
+            // st.context.cookies does not reliably see JS-set cookies on Cloud.
+            var savedU = lsGet("_rec_saved_user") || getCookie("_rec_saved_user");
+            var savedP = lsGet("_rec_saved_pass_enc") || getCookie("_rec_saved_pass_enc");
+            var savedPersist = lsGet("_rec_saved_persist") || getCookie("_rec_saved_persist");
+            if (savedPersist !== "1" && savedPersist !== "true") return;
             if (savedU) savedU = decodeURIComponent(savedU);
             if (savedP) savedP = decodeURIComponent(savedP);
             var forms = Array.from(document.querySelectorAll('div[data-testid="stForm"]'));
@@ -2913,7 +3494,19 @@ if ('Notification' in window && Notification.permission === 'default') {
             date.setTime(date.getTime() + (days * 24 * 60 * 60 * 1000));
             expires = "; expires=" + date.toUTCString();
         }
-        document.cookie = name + "=" + (value || "") + expires + "; path=/; SameSite=Lax";
+        // Secure is REQUIRED for persistent cookies on HTTPS (Streamlit Cloud).
+        // localhost is http so the flag is omitted there.
+        var secure = (window.location && window.location.protocol === "https:") ? "; Secure" : "";
+        document.cookie = name + "=" + (value || "") + expires + "; path=/; SameSite=Lax" + secure;
+    }
+    function lsSet(name, value) {
+        try {
+            if (value === null || value === undefined) { window.localStorage.removeItem(name); }
+            else { window.localStorage.setItem(name, value); }
+        } catch (e) {}
+    }
+    function lsDel(name) {
+        try { window.localStorage.removeItem(name); } catch (e) {}
     }
     function deleteCookie(name) {
         document.cookie = name + '=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT;';
@@ -2943,20 +3536,28 @@ if ('Notification' in window && Notification.permission === 'default') {
                         var curP = pi ? pi.value : '';
                         var curC = ci ? ci.checked : false;
                         if (curC && curU) {
-                            setCookie("_rec_saved_user", encodeURIComponent(curU), 365);
+                            var encU = encodeURIComponent(curU);
+                            setCookie("_rec_saved_user", encU, 365);
                             setCookie("_rec_saved_persist", "1", 365);
+                            lsSet("_rec_saved_user", encU);
+                            lsSet("_rec_saved_persist", "1");
                             if (curP) {
                                 try {
-                                    var encodedP = btoa_utf8(curP);
-                                    setCookie("_rec_saved_pass_enc", encodeURIComponent(encodedP), 365);
+                                    var encodedP = encodeURIComponent(btoa_utf8(curP));
+                                    setCookie("_rec_saved_pass_enc", encodedP, 365);
+                                    lsSet("_rec_saved_pass_enc", encodedP);
                                 } catch(e) { console.error("encode error:", e); }
                             } else {
                                 deleteCookie("_rec_saved_pass_enc");
+                                lsDel("_rec_saved_pass_enc");
                             }
                         } else if (!curC) {
                             deleteCookie("_rec_saved_user");
                             deleteCookie("_rec_saved_pass_enc");
                             deleteCookie("_rec_saved_persist");
+                            lsDel("_rec_saved_user");
+                            lsDel("_rec_saved_pass_enc");
+                            lsDel("_rec_saved_persist");
                         }
                     }, true);
                 });
@@ -3056,12 +3657,24 @@ if ('Notification' in window && Notification.permission === 'default') {
                         should_persist = st.session_state.get(persist_key, False)
                         if should_persist:
                             enc_u = urllib.parse.quote(u.strip())
+                            try:
+                                _enc_p_raw = base64.b64encode(p.strip().encode("utf-8")).decode()
+                            except Exception:
+                                _enc_p_raw = ""
+                            enc_p = urllib.parse.quote(_enc_p_raw)
                             st.html(f"""
                             <script>
                             (function() {{
                                 var exp = "; max-age=31536000; path=/; SameSite=Lax";
+                                if (window.location && window.location.protocol === "https:") {{ exp += "; Secure"; }}
                                 document.cookie = "{DEVICE_USER_COOKIE}={enc_u}" + exp;
                                 document.cookie = "{DEVICE_PERSIST_COOKIE}=1" + exp;
+                                document.cookie = "_rec_saved_pass_enc={enc_p}" + exp;
+                                try {{
+                                    window.localStorage.setItem("_rec_saved_user", "{enc_u}");
+                                    window.localStorage.setItem("_rec_saved_persist", "1");
+                                    window.localStorage.setItem("_rec_saved_pass_enc", "{enc_p}");
+                                }} catch(e) {{}}
                             }})();
                             </script>
                             """, unsafe_allow_javascript=True)
@@ -3074,6 +3687,11 @@ if ('Notification' in window && Notification.permission === 'default') {
                                 document.cookie = "{DEVICE_USER_COOKIE}=" + exp0;
                                 document.cookie = "{DEVICE_PERSIST_COOKIE}=" + exp0;
                                 document.cookie = "_rec_saved_pass_enc=" + exp0;
+                                try {{
+                                    window.localStorage.removeItem("_rec_saved_user");
+                                    window.localStorage.removeItem("_rec_saved_persist");
+                                    window.localStorage.removeItem("_rec_saved_pass_enc");
+                                }} catch(e) {{}}
                             }})();
                             </script>
                             """, unsafe_allow_javascript=True)
@@ -4010,11 +4628,9 @@ def dashboard():
             <script>
             (function() {{
                 var exp0 = "; max-age=0; path=/;";
-                // Only clear the remember token (current session), NOT localStorage
-                // localStorage should persist if user has "Remember Me" enabled
+                // Only clear the remember token (current session), NOT saved cookies
                 document.cookie = "{DEVICE_REMEMBER_COOKIE}=" + exp0;
-                // Do NOT clear localStorage - it should persist for next login
-                // User can clear it by unchecking "Remember Me" on login screen
+                // Do NOT clear _rec_saved_* cookies - preserve user's "Remember Me" preference
             }})();
             </script>
             """, unsafe_allow_javascript=True)
@@ -4044,6 +4660,11 @@ def dashboard():
                     document.cookie = "_rec_saved_user=" + exp0;
                     document.cookie = "_rec_saved_persist=" + exp0;
                     document.cookie = "_rec_saved_pass_enc=" + exp0;
+                    try {
+                        window.localStorage.removeItem("_rec_saved_user");
+                        window.localStorage.removeItem("_rec_saved_persist");
+                        window.localStorage.removeItem("_rec_saved_pass_enc");
+                    } catch(e) {}
                 })();
                 </script>
                 """, unsafe_allow_javascript=True)

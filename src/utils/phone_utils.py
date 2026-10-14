@@ -117,22 +117,6 @@ def is_local_windows_pc():
     is_cloud = "/mount/" in __file__.replace("\\", "/") 
     return is_windows and not is_cloud
 
-def normalize_ar(text):
-    if not text or not isinstance(text, str): return ""
-    text = text.strip()
-    # Basic Arabic normalization
-    text = re.sub(r'[أإآا]', 'ا', text)
-    text = re.sub(r'ة', 'ه', text)
-    text = re.sub(r'ى', 'ي', text)
-    return text.lower()
-
-def mask_phone(phone_str):
-    """Masks entire phone number for viewers with stars (**********)."""
-    p = str(phone_str).strip()
-    if p == '---' or not p: return '---'
-    # Replace all digits and characters with stars
-    return "*" * len(p)
-
 def render_pasha_export_button(df, label, filename, base_save_name, key=None):
     """
     Renders either a Desktop Save button (for local PC) or a Download button (for others).
