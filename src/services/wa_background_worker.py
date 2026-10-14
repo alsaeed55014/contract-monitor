@@ -212,13 +212,12 @@ def run_worker():
                     wa = WhatsAppService(session_id=wa_session_id_for(job_username))
                     wa_owner = job_username
 
-                # 🛡️ Worker headless mode:
-                # - على بيئة السحابة (Linux): headless إلزامي
-                # - على Windows المحلي: headless=False لاستعادة الجلسة بشكل صحيح
-                is_cloud_env = ("/mount/" in BASE_DIR.replace("\\", "/")
-                                or os.path.exists("/mount")
-                                or (not os.environ.get("DISPLAY", "") and os.name != "nt"))
-                run_headless = is_cloud_env  # Windows local = False, Cloud Linux = True
+                # 🛡️ Worker headless mode (background-safe):
+                # - headless=True دائماً: الإرسال يستمر والمتصفح مصغّر/مغطّى،
+                #   ولا يحتاج نافذة أمامية، ولا يتأثر بتصفحك في متصفح آخر.
+                # - الجلسة محفوظة في نفس user-data-dir فتعمل headless بدون QR جديد.
+                # - عند فشل headless يُعاد المحاولة headed تلقائياً.
+                run_headless = True
                 driver_ok, driver_msg = wa.start_driver(headless=run_headless, force_clean=False)
                 if not driver_ok:
                     # Retry avec la valeur opposée

@@ -2840,10 +2840,11 @@ def render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search", 
             ]
 
         # 6. Presentation Tabs
-        tab_cards, tab_table, tab_copy = st.tabs([
+        tab_cards, tab_table, tab_copy, tab_print = st.tabs([
             "🗂️ " + ("عرض البطاقات المنظمة" if is_ar else "Categorized Cards"),
             "📊 " + ("جدول البيانات الكامل" if is_ar else "Full Data Table"),
-            "📄 " + ("نص شامل للنسخ" if is_ar else "Copyable Text Report")
+            "📄 " + ("نص شامل للنسخ" if is_ar else "Copyable Text Report"),
+            "🖨️ " + ("طباعة / حفظ صورة" if is_ar else "Print / Save Image")
         ])
 
         with tab_cards:
@@ -2950,7 +2951,7 @@ def render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search", 
                             "خارج مدينتك", "خارج المدينة", "outside your city", "outside city", "work outside"
                         ])
 
-                        # ── Gender: colored icon ───────────────────────────
+                        # ── Gender: bathroom-door icons (🚹 blue / 🚺 pink) ──
                         _gender_prefix = ""
                         if _is_gender_field and v_str and not _is_nat_field:
                             _is_female = (
@@ -2965,23 +2966,26 @@ def render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search", 
                             )
                             if _is_female:
                                 _gender_prefix = (
-                                    "<span style='display:inline-flex; align-items:center; gap:5px; "
-                                    "background: rgba(255, 105, 180, 0.18); color: #FF69B4; "
-                                    "border: 1px solid rgba(255, 105, 180, 0.5); "
-                                    "border-radius: 20px; padding: 2px 10px; font-size: 1rem; font-weight: 700; "
-                                    "margin-left: 6px;'>♀ أنثى</span>"
+                                    "<span style='display:inline-flex; align-items:center; gap:8px; "
+                                    "background: rgba(255, 77, 141, 0.18); color: #FF4D8D; "
+                                    "border: 1px solid rgba(255, 77, 141, 0.55); "
+                                    "border-radius: 20px; padding: 3px 14px 3px 10px; font-size: 1rem; font-weight: 700; "
+                                    "margin-left: 6px;'>"
+                                    "<span style='font-size: 1.6rem; line-height: 1;'>🚺</span> أنثى</span>"
                                 )
                             elif _is_male:
                                 _gender_prefix = (
-                                    "<span style='display:inline-flex; align-items:center; gap:5px; "
-                                    "background: rgba(100, 180, 255, 0.18); color: #64B4FF; "
-                                    "border: 1px solid rgba(100, 180, 255, 0.5); "
-                                    "border-radius: 20px; padding: 2px 10px; font-size: 1rem; font-weight: 700; "
-                                    "margin-left: 6px;'>♂ ذكر</span>"
+                                    "<span style='display:inline-flex; align-items:center; gap:8px; "
+                                    "background: rgba(33, 150, 243, 0.18); color: #2196F3; "
+                                    "border: 1px solid rgba(33, 150, 243, 0.55); "
+                                    "border-radius: 20px; padding: 3px 14px 3px 10px; font-size: 1rem; font-weight: 700; "
+                                    "margin-left: 6px;'>"
+                                    "<span style='font-size: 1.6rem; line-height: 1;'>🚹</span> ذكر</span>"
                                 )
 
-                        # ── Nationality: country name + flag emoji ───────────
+                        # ── Nationality: country name + flag image (works on Windows) ──
                         _nat_flag = ""
+                        _nat_flag_url = ""
                         _nat_country_name = ""
                         if _is_nat_field and v_str and not item["is_empty"]:
                             try:
@@ -2989,7 +2993,12 @@ def render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search", 
                                 if not _nat_code and len(_v_low) == 2 and _v_low in COUNTRY_NAMES_DISPLAY:
                                     _nat_code = _v_low
                                 if _nat_code:
+                                    _nat_code = _nat_code.strip().lower()
                                     _nat_flag = _country_code_to_emoji(_nat_code)
+                                    try:
+                                        _nat_flag_url = _get_flag_url_cached(v_str) or f"https://cdn.jsdelivr.net/gh/lipis/flag-icons@7.2.0/flags/4x3/{_nat_code}.svg"
+                                    except Exception:
+                                        _nat_flag_url = f"https://cdn.jsdelivr.net/gh/lipis/flag-icons@7.2.0/flags/4x3/{_nat_code}.svg"
                                     _c_disp = get_country_display_name(_nat_code, 'ar' if is_ar else 'en')
                                     _nat_country_name = _c_disp if _c_disp else v_str
                                 else:
@@ -3005,7 +3014,16 @@ def render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search", 
                             val_html = f"<a href='{v_str}' target='_blank' style='color: #00FF66; text-decoration: underline; font-weight: 600;'>🔗 {link_lbl}</a>"
                         elif _is_nat_field:
                             _disp_name = _nat_country_name if _nat_country_name else v_str
-                            if _nat_flag:
+                            if _nat_flag_url:
+                                val_html = (
+                                    f"<span style='display:inline-flex; align-items:center; gap:8px;'>"
+                                    f"<img src='{_nat_flag_url}' style='width:32px; height:22px; object-fit:cover; "
+                                    f"border-radius:4px; box-shadow:0 1px 4px rgba(0,0,0,0.5); "
+                                    f"border:1px solid rgba(255,255,255,0.25); vertical-align:middle;' />"
+                                    f"<span style='color: #FFFFFF; font-weight: 600;'>{_disp_name}</span>"
+                                    f"</span>"
+                                )
+                            elif _nat_flag:
                                 val_html = (
                                     f"<span style='display:inline-flex; align-items:center; gap:8px;'>"
                                     f"<span style='color: #FFFFFF; font-weight: 600;'>{_disp_name}</span>"
@@ -3133,25 +3151,54 @@ def render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search", 
                 # Apply value translation for Arabic
                 if is_ar and not f["is_empty"]:
                     val_display = t_val(val_display, 'ar', f["orig_label"])
-                if not f["is_empty"] and any(kw in f"{f['orig_label']} {f['label']}".lower() for kw in ["nationality", "الجنسية", "جنسية"]):
+                _flbl = f"{f['orig_label']} {f['label']}".lower()
+                _is_nat_row = not f["is_empty"] and any(kw in _flbl for kw in ["nationality", "الجنسية", "جنسية"])
+                _is_gen_row = not f["is_empty"] and (
+                    any(kw in _flbl for kw in ["gender", "النوع", "نوع الجنس", "sex"])
+                    or (_flbl.strip() in ["الجنس", "جنس", "gender"])
+                    or ("الجنس" in _flbl and "الجنسية" not in _flbl and "جنسية" not in _flbl)
+                )
+                _flag_img = None
+                if _is_nat_row:
                     try:
                         n_code = _get_nationality_code(f["value"])
                         if n_code:
+                            n_code = n_code.strip().lower()
                             c_name = get_country_display_name(n_code, 'ar' if is_ar else 'en') or f["value"]
-                            flag_e = _country_code_to_emoji(n_code)
-                            val_display = f"{c_name} {flag_e}"
+                            val_display = c_name
+                            try:
+                                _flag_img = _get_flag_url_cached(f["value"]) or f"https://cdn.jsdelivr.net/gh/lipis/flag-icons@7.2.0/flags/4x3/{n_code}.svg"
+                            except Exception:
+                                _flag_img = f"https://cdn.jsdelivr.net/gh/lipis/flag-icons@7.2.0/flags/4x3/{n_code}.svg"
                     except Exception:
                         pass
+                if _is_gen_row:
+                    _vl = str(val_display).lower().strip()
+                    if any(w in _vl for w in ["female", "أنثى", "انثى", "اناث", "أناث", "امرأة", "امراة"]) or _vl in ["f", "أنثى", "انثى"]:
+                        val_display = f"🚺 {val_display}"
+                    elif any(w in _vl for w in ["male", "ذكر", "رجل"]) or _vl in ["m", "ذكر"]:
+                        val_display = f"🚹 {val_display}"
                 row_data = {
                     "#" if is_ar else "No": idx_f,
                     "اسم الحقل" if is_ar else "Field Name": f["label"],
                     "القيمة المسجلة" if is_ar else "Recorded Value": val_display,
                     "المسمى في قاعدة البيانات" if is_ar else "Database Header": f["orig_label"]
                 }
+                if _is_nat_row:
+                    row_data["🏳️ العلم" if is_ar else "🏳️ Flag"] = _flag_img
+                else:
+                    row_data["🏳️ العلم" if is_ar else "🏳️ Flag"] = None
                 table_rows.append(row_data)
 
             df_modal = pd.DataFrame(table_rows)
-            st.dataframe(df_modal, width='stretch', hide_index=True)
+            try:
+                _flag_col = "🏳️ العلم" if is_ar else "🏳️ Flag"
+                st.dataframe(
+                    df_modal, width='stretch', hide_index=True,
+                    column_config={_flag_col: st.column_config.ImageColumn(_flag_col, width="small")}
+                )
+            except Exception:
+                st.dataframe(df_modal, width='stretch', hide_index=True)
             st.markdown("</div>", unsafe_allow_html=True)
 
         with tab_copy:
@@ -3176,7 +3223,8 @@ def render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search", 
                     # Apply value translation for Arabic
                     if is_ar and not itm["is_empty"]:
                         v_clean = t_val(v_clean, 'ar', itm["orig_label"])
-                    if not itm["is_empty"] and any(kw in f"{itm['orig_label']} {itm['label']}".lower() for kw in ["nationality", "الجنسية", "جنسية"]):
+                    _clbl = f"{itm['orig_label']} {itm['label']}".lower()
+                    if not itm["is_empty"] and any(kw in _clbl for kw in ["nationality", "الجنسية", "جنسية"]):
                         try:
                             n_code = _get_nationality_code(itm["value"])
                             if n_code:
@@ -3185,6 +3233,12 @@ def render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search", 
                                 v_clean = f"{c_name} {flag_e}"
                         except Exception:
                             pass
+                    elif not itm["is_empty"] and (any(kw in _clbl for kw in ["gender", "النوع", "sex"]) or (_clbl.strip() in ["الجنس", "جنس", "gender"]) or ("الجنس" in _clbl and "الجنسية" not in _clbl and "جنسية" not in _clbl)):
+                        _vl = str(v_clean).lower().strip()
+                        if any(w in _vl for w in ["female", "أنثى", "انثى", "اناث", "أناث", "امرأة", "امراة"]) or _vl in ["f", "أنثى", "انثى"]:
+                            v_clean = f"🚺 {v_clean}"
+                        elif any(w in _vl for w in ["male", "ذكر", "رجل"]) or _vl in ["m", "ذكر"]:
+                            v_clean = f"🚹 {v_clean}"
                     report_lines.append(f"• {itm['label']}: {v_clean}")
 
             report_lines.append(f"\n{sep_line}")
@@ -3193,6 +3247,515 @@ def render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search", 
             full_text_report = "\n".join(report_lines)
             st.code(full_text_report, language="markdown")
             st.markdown("</div>", unsafe_allow_html=True)
+
+        with tab_print:
+            import html as _html_lib
+            import re as _re_print
+            from datetime import datetime as _dt_print
+            _dir = 'rtl' if is_ar else 'ltr'
+            _align = 'right' if is_ar else 'left'
+            _now_str = _dt_print.now().strftime('%Y-%m-%d %H:%M')
+            _safe_name = _re_print.sub(r'[\\/:*?"<>|]', '', str(worker_name)).strip() or 'worker'
+
+            def _fmt_print_val(itm):
+                _v = itm["value"] if not itm["is_empty"] else ("غير مسجل" if is_ar else "Not recorded")
+                if is_ar and not itm["is_empty"]:
+                    try:
+                        _v = t_val(_v, 'ar', itm["orig_label"])
+                    except Exception:
+                        pass
+                _cl = f"{itm['orig_label']} {itm['label']}".lower()
+                _is_nat = any(kw in _cl for kw in ["nationality", "الجنسية", "جنسية"])
+                _is_gen = (any(kw in _cl for kw in ["gender", "النوع", "sex"])
+                           or (_cl.strip() in ["الجنس", "جنس", "gender"])
+                           or ("الجنس" in _cl and "الجنسية" not in _cl and "جنسية" not in _cl))
+                if _is_nat and not itm["is_empty"]:
+                    try:
+                        _nc = _get_nationality_code(itm["value"])
+                        if _nc:
+                            _nc = _nc.strip().lower()
+                            _cn = get_country_display_name(_nc, 'ar' if is_ar else 'en') or _v
+                            _furl = f"https://cdn.jsdelivr.net/gh/lipis/flag-icons@7.2.0/flags/4x3/{_nc}.svg"
+                            return f"<span style='font-weight:700;'>{_html_lib.escape(str(_cn))}</span> <img src='{_furl}' style='width:30px;height:20px;object-fit:cover;border:1px solid #ccc;vertical-align:middle;' crossorigin='anonymous' />"
+                    except Exception:
+                        pass
+                if _is_gen and not itm["is_empty"]:
+                    _vl = str(_v).lower().strip()
+                    if any(w in _vl for w in ["female", "أنثى", "انثى", "اناث", "أناث", "امرأة", "امراة"]) or _vl in ["f", "أنثى", "انثى"]:
+                        return "🚺 " + _html_lib.escape(str(_v))
+                    if any(w in _vl for w in ["male", "ذكر", "رجل"]) or _vl in ["m", "ذكر"]:
+                        return "🚹 " + _html_lib.escape(str(_v))
+                return _html_lib.escape(str(_v))
+
+            _print_sections = ""
+            for _sec_key, _sec_title in sections_def:
+                _sec_items = [item for item in raw_fields if classify_field(item) == _sec_key]
+                if not _sec_items:
+                    continue
+                _rows = ""
+                for _it in _sec_items:
+                    _rows += (
+                        "<tr>"
+                        f"<td style='border:1px solid #999;padding:6px 8px;width:32%;font-weight:700;background:#f2f2f2;color:#111;'>{_html_lib.escape(str(_it['label']))}</td>"
+                        f"<td style='border:1px solid #999;padding:6px 8px;color:#111;'>{_fmt_print_val(_it)}</td>"
+                        "</tr>"
+                    )
+                _print_sections += (
+                    f"<h3 style='background:#111;color:#fff;padding:8px 12px;border-radius:6px;margin:16px 0 8px 0;font-size:15px;'>{_html_lib.escape(str(_sec_title))} ({len(_sec_items)})</h3>"
+                    f"<table style='width:100%;border-collapse:collapse;font-size:13px;' dir='{_dir}'>{_rows}</table>"
+                )
+
+            _report_inner = (
+                f"<div id='worker-print-area' style='background:#fff;color:#111;padding:24px;font-family:Cairo,Arial,sans-serif;' dir='{_dir}'>"
+                f"<div style='text-align:center;border:3px double #111;border-radius:10px;padding:14px;margin-bottom:12px;'>"
+                f"<div style='font-size:20px;font-weight:900;'>{'البيانات الكاملة المسجلة للعامل' if is_ar else 'Complete Registered Worker Data'}</div>"
+                f"<div style='font-size:17px;font-weight:800;margin-top:4px;'>👤 {_html_lib.escape(str(worker_name))}</div>"
+                f"<div style='font-size:12px;color:#333;margin-top:6px;'>{'إجمالي الحقول' if is_ar else 'Total'}: {total_fields_count} | {'المسجلة' if is_ar else 'Filled'}: {filled_count} | 📅 {_now_str}</div>"
+                f"</div>"
+                f"{_print_sections}"
+                f"<div style='text-align:center;font-size:11px;color:#555;margin-top:16px;border-top:1px solid #999;padding-top:8px;'>{'تم الاستخراج من قاعدة بيانات النظام بدقة كاملة' if is_ar else 'Extracted from system database with complete fidelity.'}</div>"
+                f"</div>"
+            )
+
+            _print_css = (
+                "body{font-family:Cairo,Arial,sans-serif;background:#fff;color:#111;}"
+                "#worker-print-area{max-width:800px;margin:0 auto;}"
+                "table{width:100%;border-collapse:collapse;}"
+                "img{print-color-adjust:exact;-webkit-print-color-adjust:exact;}"
+                "@media print{"
+                ".no-print{display:none !important;}"
+                "button{display:none !important;}"
+                "}"
+            )
+
+            _standalone_html = (
+                "<!DOCTYPE html><html lang='" + ('ar' if is_ar else 'en') + "' dir='" + _dir + "'><head><meta charset='utf-8'>"
+                f"<title>{_html_lib.escape(str(worker_name))}</title>"
+                f"<style>{_print_css}</style></head><body>"
+                "<div class='no-print' style='text-align:center;padding:12px;'>"
+                "<button onclick='window.print()' style='font-size:16px;padding:10px 26px;cursor:pointer;border-radius:8px;border:1px solid #111;background:#111;color:#fff;'>🖨️ " + ('طباعة' if is_ar else 'Print') + "</button>"
+                "</div>"
+                f"{_report_inner}</body></html>"
+            )
+
+            _comp_html = (
+                f"<style id='print-styles'>{_print_css}</style>"
+                "<div class='no-print' style='margin-bottom:12px;'>"
+                "<button onclick='doWorkerPrint()' style='width:100%;font-size:15px;font-weight:800;padding:11px;cursor:pointer;border-radius:10px;border:none;background:linear-gradient(135deg,#D4AF37,#9C7C1E);color:#111;'>🖨️ " + ('طباعة البيانات' if is_ar else 'Print') + "</button>"
+                "</div>"
+                f"{_report_inner}"
+                "<script>"
+                "function doWorkerPrint(){"
+                "var content=document.getElementById('worker-print-area').outerHTML;"
+                "var styles=document.getElementById('print-styles').innerHTML;"
+                "var w=window.open('','_blank','width=950,height=750');"
+                "if(!w){alert('" + ('يرجى السماح بالنوافذ المنبثقة للطباعة' if is_ar else 'Please allow popups to print') + "');return;}"
+                "w.document.write('<html><head><meta charset=\"utf-8\"><title>" + _html_lib.escape(str(worker_name)).replace("'", "\\'") + "</title><style>'+styles+'</style></head><body>'+content+'<scr'+'ipt>window.onload=function(){setTimeout(function(){window.print()},350)}<\\/scr'+'ipt></body></html>');"
+                "w.document.close();"
+                "}"
+                "</script>"
+            )
+            st.components.v1.html(_comp_html, height=900, scrolling=True)
+
+            # ── Server-side PNG image (valid file, WhatsApp-safe) ──
+            def _build_worker_png_bytes():
+                from PIL import Image as _PILImage, ImageDraw as _PILDraw, ImageFont as _PILFont
+                import io as _io
+                import os as _os
+                import re as _rx2
+                try:
+                    import arabic_reshaper as _ar_resh
+                    from bidi.algorithm import get_display as _bidi_disp
+                    _has_resh = True
+                except Exception:
+                    _has_resh = False
+                try:
+                    import requests as _rq
+                    _has_rq = True
+                except Exception:
+                    _has_rq = False
+
+                _ar_rx = _rx2.compile(r'[\u0600-\u06FF]')
+                _emoji_rx = _rx2.compile('[\U0001F000-\U0001FAFF\u2600-\u27BF\u2B00-\u2BFF\uFE0F\u200D]')
+
+                def _pick(_paths, _size):
+                    for _p in _paths:
+                        if _p and _os.path.exists(_p):
+                            try:
+                                return _PILFont.truetype(_p, _size)
+                            except Exception:
+                                continue
+                    return _PILFont.load_default()
+
+                _winf = 'C:/Windows/Fonts/'
+                _dj = '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'
+                _dj_b = '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf'
+                _f_title = _pick([_winf + 'arialbd.ttf', _dj_b], 36)
+                _f_name = _pick([_winf + 'arialbd.ttf', _dj_b], 32)
+                _f_meta = _pick([_winf + 'arial.ttf', _dj], 23)
+                _f_sec = _pick([_winf + 'arialbd.ttf', _dj_b], 27)
+                _f_lab = _pick([_winf + 'arialbd.ttf', _dj_b], 25)
+                _f_val = _pick([_winf + 'arial.ttf', _dj], 26)
+                _f_prog = _pick([_winf + 'arial.ttf', _dj], 22)
+                _f_script = _pick([_winf + 'segoesc.ttf', _winf + 'segoescb.ttf'], 60)
+
+                def _clean(_t):
+                    return _emoji_rx.sub('', str(_t))
+
+                def _sh(_t):
+                    _t = _clean(_t)
+                    if _has_resh and _ar_rx.search(_t):
+                        try:
+                            return _bidi_disp(_ar_resh.reshape(_t))
+                        except Exception:
+                            return _t
+                    return _t
+
+                _rtl = bool(is_ar)
+                _W = 1440
+                _M = 40
+                _CW = _W - 2 * _M
+                _tmp = _PILImage.new('RGB', (10, 10), 'white')
+                _md = _PILDraw.Draw(_tmp)
+
+                def _tw(_t, _font):
+                    try:
+                        return _md.textlength(_sh(_t), font=_font)
+                    except Exception:
+                        return len(str(_t)) * 14
+
+                def _wrap(_t, _font, _maxw):
+                    _words = str(_t).split()
+                    _lines, _cur = [], ''
+                    for _w in _words:
+                        if _tw(_w, _font) > _maxw and len(_w) > 1:
+                            if _cur:
+                                _lines.append(_cur)
+                                _cur = ''
+                            _part = ''
+                            for _ch in _w:
+                                if _tw(_part + _ch, _font) <= _maxw:
+                                    _part += _ch
+                                else:
+                                    _lines.append(_part)
+                                    _part = _ch
+                            _cur = _part
+                            continue
+                        _cand = (_cur + ' ' + _w).strip()
+                        if _tw(_cand, _font) <= _maxw or not _cur:
+                            _cur = _cand
+                        else:
+                            _lines.append(_cur)
+                            _cur = _w
+                    if _cur:
+                        _lines.append(_cur)
+                    return _lines or ['']
+
+                def _is_nat(_itm):
+                    _c = f"{_itm['orig_label']} {_itm['label']}".lower()
+                    return any(k in _c for k in ['nationality', 'الجنسية', 'جنسية'])
+
+                def _is_gen(_itm):
+                    _c = f"{_itm['orig_label']} {_itm['label']}".lower()
+                    return (any(k in _c for k in ['gender', 'النوع', 'sex'])
+                            or _c.strip() in ['الجنس', 'جنس', 'gender']
+                            or ('الجنس' in _c and 'الجنسية' not in _c and 'جنسية' not in _c))
+
+                def _gen_kind(_v):
+                    _l = str(_v).lower().strip()
+                    if any(w in _l for w in ['female', 'أنثى', 'انثى', 'اناث', 'أناث', 'امرأة', 'امراة']) or _l in ['f', 'أنثى', 'انثى']:
+                        return 'F'
+                    if any(w in _l for w in ['male', 'ذكر', 'رجل']) or _l in ['m', 'ذكر']:
+                        return 'M'
+                    return ''
+
+                def _flag_img(_code):
+                    _ck = f'_flagpng_{str(_code).lower()}'
+                    if _ck in st.session_state and st.session_state[_ck] is not None:
+                        return st.session_state[_ck]
+                    _data = None
+                    if _has_rq:
+                        try:
+                            _r = _rq.get(f'https://flagcdn.com/w160/{str(_code).lower()}.png', timeout=10)
+                            if _r.status_code == 200 and _r.content:
+                                from PIL import Image as _P2
+                                _fim = _P2.open(_io.BytesIO(_r.content)).convert('RGB')
+                                _fim.thumbnail((144, 108))
+                                _data = _fim
+                        except Exception:
+                            _data = None
+                    st.session_state[_ck] = _data
+                    return _data
+
+                _title_txt = 'البيانات الكاملة المسجلة للعامل' if is_ar else 'Complete Registered Worker Data'
+                _meta_txt = f"{'إجمالي الحقول' if is_ar else 'Total'}: {total_fields_count} | {'المسجلة' if is_ar else 'Filled'}: {filled_count} | {_now_str}"
+                _t_lines = _wrap(_title_txt, _f_title, _CW - 80)
+                _n_lines = _wrap(str(worker_name), _f_name, _CW - 80)
+                _m_lines = _wrap(_meta_txt, _f_meta, _CW - 80)
+
+                _LH = 34
+                _VPAD = 8
+                _CELLGAP = 12
+                _CELLW = (_CW - _CELLGAP) // 2
+                _TXTPAD = 16
+
+                def _entry_text(_it2):
+                    if _it2['is_empty']:
+                        return ('غير مسجل' if is_ar else 'Not recorded')
+                    _vv = str(_it2['value'])
+                    if is_ar:
+                        try:
+                            _vv = t_val(_vv, 'ar', _it2['orig_label'])
+                        except Exception:
+                            pass
+                    return _vv
+
+                def _cell_plan(_label, _vtext, _kind, _textw, _reserve):
+                    _vw = _textw - _reserve
+                    if _vw < 120:
+                        _vw = 120
+                    _vlines = _wrap(_vtext, _f_val, _vw)
+                    _labw = _tw(str(_label) + ':  ', _f_lab)
+                    _comb = (_labw + _tw(_vlines[0], _f_val) <= _textw - _reserve)
+                    _n = len(_vlines) if _comb else 1 + len(_vlines)
+                    return (_comb, _labw, _vlines, _n)
+
+                def _cell_h(_label, _vtext, _kind, _textw, _reserve):
+                    _h = _cell_plan(_label, _vtext, _kind, _textw, _reserve)[3] * _LH + _VPAD * 2
+                    return max(_h, 52)
+
+                _flat = []
+                for _sk2, _stitle2 in sections_def:
+                    _items2 = [it for it in raw_fields if classify_field(it) == _sk2]
+                    if not _items2:
+                        continue
+                    _flat.append({'t': 'sec', 'lines': _wrap(f'{_stitle2} ({len(_items2)})', _f_sec, _CW - 60)})
+                    for _it2 in _items2:
+                        _kind2, _g2, _flag2 = 'text', '', None
+                        _vtext2 = _entry_text(_it2)
+                        if not _it2['is_empty']:
+                            if _is_nat(_it2):
+                                try:
+                                    _nc2 = _get_nationality_code(_it2['value'])
+                                except Exception:
+                                    _nc2 = None
+                                if _nc2:
+                                    _nc2 = str(_nc2).strip().lower()
+                                    try:
+                                        _vtext2 = get_country_display_name(_nc2, 'ar' if is_ar else 'en') or _vtext2
+                                    except Exception:
+                                        pass
+                                    _flag2 = _flag_img(_nc2)
+                            elif _is_gen(_it2):
+                                _g2 = _gen_kind(_vtext2)
+                                if _g2:
+                                    _kind2 = 'gender'
+                        _flat.append({'t': 'row', 'label': str(_it2['label']), 'vtext': _vtext2,
+                                      'kind': _kind2, 'g': _g2, 'flag': _flag2, 'empty': bool(_it2['is_empty'])})
+
+                _TEXTW_CELL = _CELLW - _TXTPAD * 2
+                _TEXTW_FULL = _CW - _TXTPAD * 2
+
+                def _res_of(_en):
+                    if _en['kind'] == 'gender' and _en['g'] in ('M', 'F'):
+                        return 140
+                    if _en['flag'] is not None:
+                        return 100
+                    return 0
+
+                _layout = []
+                _i = 0
+                while _i < len(_flat):
+                    _en = _flat[_i]
+                    if _en['t'] == 'sec':
+                        _layout.append(_en)
+                        _i += 1
+                        continue
+                    if _i + 1 < len(_flat) and _flat[_i + 1]['t'] == 'row':
+                        _en2 = _flat[_i + 1]
+                        _h1 = _cell_h(_en['label'], _en['vtext'], _en['kind'], _TEXTW_CELL, _res_of(_en))
+                        _h2 = _cell_h(_en2['label'], _en2['vtext'], _en2['kind'], _TEXTW_CELL, _res_of(_en2))
+                        _layout.append({'t': 'pair', 'a': _en, 'b': _en2, 'h': max(_h1, _h2)})
+                        _i += 2
+                    else:
+                        _layout.append({'t': 'single', 'a': _en,
+                                        'h': _cell_h(_en['label'], _en['vtext'], _en['kind'], _TEXTW_FULL, _res_of(_en))})
+                        _i += 1
+
+                _head_h = len(_t_lines) * 44 + len(_n_lines) * 40 + len(_m_lines) * 28 + 60
+                _H = 32 + _head_h + 16
+                for _e in _layout:
+                    _H += (52 if _e['t'] == 'sec' else _e['h']) + 6
+                _H += 22 + 30 + 72 + 36
+
+                _img = _PILImage.new('RGB', (_W, _H), 'white')
+                _dr = _PILDraw.Draw(_img)
+                _y = 32
+                _dr.rounded_rectangle([_M - 12, _y, _W - _M + 12, _y + _head_h], radius=18, outline='black', width=4)
+                _y += 28
+                for _ln in _t_lines:
+                    _dr.text((_W // 2, _y), _sh(_ln), font=_f_title, fill='black', anchor='ma')
+                    _y += 44
+                _y += 2
+                for _ln in _n_lines:
+                    _dr.text((_W // 2, _y), _sh(_ln), font=_f_name, fill='black', anchor='ma')
+                    _y += 40
+                _y += 4
+                for _ln in _m_lines:
+                    _dr.text((_W // 2, _y), _sh(_ln), font=_f_meta, fill=(80, 80, 80), anchor='ma')
+                    _y += 28
+                _y += 26 + 16
+
+                def _draw_cell(_en, _cx0, _cx1, _rh, _yy):
+                    _textw = (_cx1 - _cx0) - _TXTPAD * 2
+                    _res = 140 if (_en['kind'] == 'gender' and _en['g'] in ('M', 'F')) else (100 if _en['flag'] is not None else 0)
+                    _comb, _labw, _vlines, _n = _cell_plan(_en['label'], _en['vtext'], _en['kind'], _textw, _res)
+                    _ty = _yy + (_rh - _n * _LH) // 2
+                    _vfill = (130, 130, 130) if _en.get('empty') else 'black'
+                    if _rtl:
+                        _xe = _cx1 - _TXTPAD
+                        if _en['kind'] == 'gender' and _en['g'] in ('M', 'F'):
+                            _bcol = (33, 150, 243) if _en['g'] == 'M' else (236, 64, 122)
+                            _btxt = 'ذكر' if _en['g'] == 'M' else 'أنثى'
+                            _by = _ty + (_LH - 40) // 2
+                            _dr.rounded_rectangle([_xe - 120, _by, _xe, _by + 40], radius=20, fill=_bcol)
+                            _dr.text((_xe - 60, _by + 20), _sh(_btxt), font=_f_lab, fill='white', anchor='mm')
+                            _xe -= 132
+                        elif _en['flag'] is not None:
+                            try:
+                                _fim2 = _en['flag']
+                                _fw, _fh = _fim2.size
+                                _sc = min(64 / _fw, 46 / _fh)
+                                _fim2 = _fim2.resize((max(1, int(_fw * _sc)), max(1, int(_fh * _sc))))
+                                _fw2, _fh2 = _fim2.size
+                                _img.paste(_fim2, (_xe - _fw2, _ty + (_LH - _fh2) // 2))
+                                _xe -= _fw2 + 12
+                            except Exception:
+                                pass
+                        _dr.text((_xe, _ty), _sh(str(_en['label']) + ':  '), font=_f_lab, fill='black', anchor='ra')
+                        _vy = _ty + _LH
+                        if _comb:
+                            _dr.text((_xe - _labw, _ty), _sh(_vlines[0]), font=_f_val, fill=_vfill, anchor='ra')
+                            _rest = _vlines[1:]
+                        else:
+                            _rest = _vlines
+                        for _ln in _rest:
+                            _dr.text((_xe, _vy), _sh(_ln), font=_f_val, fill=_vfill, anchor='ra')
+                            _vy += _LH
+                    else:
+                        _xs = _cx0 + _TXTPAD
+                        if _en['kind'] == 'gender' and _en['g'] in ('M', 'F'):
+                            _bcol = (33, 150, 243) if _en['g'] == 'M' else (236, 64, 122)
+                            _btxt = 'ذكر' if _en['g'] == 'M' else 'أنثى'
+                            _by = _ty + (_LH - 40) // 2
+                            _dr.rounded_rectangle([_xs, _by, _xs + 120, _by + 40], radius=20, fill=_bcol)
+                            _dr.text((_xs + 60, _by + 20), _sh(_btxt), font=_f_lab, fill='white', anchor='mm')
+                            _xs += 132
+                        elif _en['flag'] is not None:
+                            try:
+                                _fim2 = _en['flag']
+                                _fw, _fh = _fim2.size
+                                _sc = min(64 / _fw, 46 / _fh)
+                                _fim2 = _fim2.resize((max(1, int(_fw * _sc)), max(1, int(_fh * _sc))))
+                                _fw2, _fh2 = _fim2.size
+                                _img.paste(_fim2, (_xs, _ty + (_LH - _fh2) // 2))
+                                _xs += _fw2 + 12
+                            except Exception:
+                                pass
+                        _dr.text((_xs, _ty), _sh(str(_en['label']) + ':  '), font=_f_lab, fill='black', anchor='la')
+                        _vy = _ty + _LH
+                        if _comb:
+                            _dr.text((_xs + _labw, _ty), _sh(_vlines[0]), font=_f_val, fill=_vfill, anchor='la')
+                            _rest = _vlines[1:]
+                        else:
+                            _rest = _vlines
+                        for _ln in _rest:
+                            _dr.text((_xs, _vy), _sh(_ln), font=_f_val, fill=_vfill, anchor='la')
+                            _vy += _LH
+
+                for _e in _layout:
+                    if _e['t'] == 'sec':
+                        _dr.rounded_rectangle([_M, _y, _W - _M, _y + 46], radius=10, fill='black')
+                        _sy = _y + 23 - (len(_e['lines']) * 34) // 2
+                        for _ln in _e['lines']:
+                            _dr.text((_W // 2, _sy), _sh(_ln), font=_f_sec, fill='white', anchor='ma')
+                            _sy += 34
+                        _y += 46 + 6
+                        continue
+                    _rh = _e['h']
+                    _dr.rectangle([_M, _y, _W - _M, _y + _rh], outline='black', width=2)
+                    if _e['t'] == 'pair':
+                        _mid = _M + _CELLW + _CELLGAP // 2
+                        _dr.line([_mid, _y, _mid, _y + _rh], fill=(130, 130, 130), width=2)
+                        if _rtl:
+                            _draw_cell(_e['a'], _mid + _CELLGAP // 2, _W - _M, _rh, _y)
+                            _draw_cell(_e['b'], _M, _mid - _CELLGAP // 2, _rh, _y)
+                        else:
+                            _draw_cell(_e['a'], _M, _mid - _CELLGAP // 2, _rh, _y)
+                            _draw_cell(_e['b'], _mid + _CELLGAP // 2, _W - _M, _rh, _y)
+                    else:
+                        _draw_cell(_e['a'], _M, _W - _M, _rh, _y)
+                    _y += _rh + 6
+
+                _y += 14
+                _dr.line([_M + 60, _y, _W - _M - 60, _y], fill=(160, 160, 160), width=2)
+                _y += 10
+                _dr.text((_W // 2, _y), 'PROGRAMMING  •  PROG.', font=_f_prog, fill=(154, 124, 30), anchor='ma')
+                _y += 30
+                _dr.text((_W // 2, _y), 'Alsaeed Alwazzan', font=_f_script, fill=(138, 101, 8), anchor='ma')
+
+                _buf = _io.BytesIO()
+                _img.save(_buf, format='PNG', optimize=True)
+                return _buf.getvalue()
+
+            _png_state_key = f'worker_png_{key_prefix}_{worker_id}'
+            if st.button('📸 ' + ('حفظ كصورة PNG (تعمل على الواتساب ✅)' if is_ar else 'Save as PNG image (WhatsApp-ready ✅)'), key=f'mkpng_{key_prefix}_{worker_id}', width='stretch'):
+                with st.spinner('⏳ ' + ('جاري تجهيز الصورة...' if is_ar else 'Rendering image...')):
+                    try:
+                        st.session_state[_png_state_key] = _build_worker_png_bytes()
+                    except Exception as _pxe:
+                        st.session_state[_png_state_key] = None
+                        st.error('❌ ' + str(_pxe))
+            _png_data = st.session_state.get(_png_state_key)
+            if _png_data:
+                st.image(_png_data, caption=('معاينة الصورة — جاهزة للرفع على الواتساب ✅' if is_ar else 'Preview — ready for WhatsApp ✅'))
+                st.download_button(
+                    '⬇️ ' + ('تحميل الصورة PNG' if is_ar else 'Download PNG image'),
+                    data=_png_data,
+                    file_name=f'{_safe_name}.png',
+                    mime='image/png',
+                    key=f'dlpng_{key_prefix}_{worker_id}',
+                    width='stretch'
+                )
+            st.download_button(
+                "⬇️ " + ("تحميل نسخة الطباعة (HTML)" if is_ar else "Download printable (HTML)"),
+                data=_standalone_html.encode('utf-8'),
+                file_name=f"{_safe_name}_print.html",
+                mime="text/html",
+                key=f"dl_print_{key_prefix}_{worker_id}",
+                width='stretch'
+            )
+
+        # ── Footer: programming signature (handwritten shiny gold) ──
+        st.html(
+            "<style>"
+            "@import url('https://fonts.googleapis.com/css2?family=Great+Vibes&display=swap');"
+            "@keyframes goldShine{0%{background-position:0% 50%;}50%{background-position:100% 50%;}100%{background-position:0% 50%;}}"
+            "</style>"
+            "<div style='text-align:center; margin-top:22px; padding-top:12px; "
+            "border-top:1px solid rgba(212,175,55,0.25); direction:ltr;'>"
+            "<div style='font-size:0.7rem; color:rgba(212,175,55,0.8); "
+            "font-family:Verdana,sans-serif; letter-spacing:3px;'>PROGRAMMING &#8226; PROG.</div>"
+            "<div style=\"font-family:'Great Vibes','Dancing Script','Brush Script MT',cursive; "
+            "font-size:2rem; line-height:1.2; margin-top:2px; padding:0 10px 6px 10px; "
+            "background:linear-gradient(110deg,#8a6508,#d4af37 20%,#fff8d6 40%,#f5e7a8 50%,#fff8d6 60%,#d4af37 80%,#8a6508); "
+            "background-size:200% auto; "
+            "-webkit-background-clip:text; background-clip:text; color:transparent; "
+            "animation:goldShine 4s linear infinite; "
+            "filter:drop-shadow(0 0 6px rgba(212,175,55,0.45));\">"
+            "Alsaeed Alwazzan</div>"
+            "</div>"
+        )
 
     col_full, col_sum = st.columns([1, 1])
     with col_full:

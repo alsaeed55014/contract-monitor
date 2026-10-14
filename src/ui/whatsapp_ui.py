@@ -804,7 +804,7 @@ def render_whatsapp_page():
                     if hasattr(st.session_state.wa_service, 'close'):
                         try: st.session_state.wa_service.close()
                         except Exception: pass
-                    ok, msg = st.session_state.wa_service.start_driver(headless=is_cloud, force_clean=False)
+                    ok, msg = st.session_state.wa_service.start_driver(headless=True, force_clean=False)
                     if ok:
                         st.toast(f"✅ {msg}")
                         st.rerun()
@@ -819,7 +819,7 @@ def render_whatsapp_page():
                     if hasattr(st.session_state.wa_service, 'close'):
                         try: st.session_state.wa_service.close()
                         except Exception: pass
-                    ok, msg = st.session_state.wa_service.start_driver(headless=is_cloud, force_clean=True)
+                    ok, msg = st.session_state.wa_service.start_driver(headless=True, force_clean=True)
                     if ok:
                         st.toast(f"✅ {msg}")
                         st.rerun()
@@ -1725,7 +1725,7 @@ def render_whatsapp_page():
                 if hasattr(st.session_state.wa_service, 'close'):
                     try: st.session_state.wa_service.close()
                     except Exception: pass
-                ok, msg = st.session_state.wa_service.start_driver(headless=is_cloud, force_clean=False)
+                ok, msg = st.session_state.wa_service.start_driver(headless=True, force_clean=False)
                 if ok:
                     st.toast(f"✅ {msg}")
                     st.rerun()
@@ -1740,7 +1740,7 @@ def render_whatsapp_page():
                 if hasattr(st.session_state.wa_service, 'close'):
                     try: st.session_state.wa_service.close()
                     except Exception: pass
-                ok, msg = st.session_state.wa_service.start_driver(headless=is_cloud, force_clean=True)
+                ok, msg = st.session_state.wa_service.start_driver(headless=True, force_clean=True)
                 if ok:
                     st.toast(f"✅ {msg}")
                     st.rerun()

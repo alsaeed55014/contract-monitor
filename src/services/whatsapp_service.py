@@ -403,8 +403,10 @@ class WhatsAppService:
         # Cloud containers have no X server/screen: headed Chrome dies instantly
         # ("Missing X server or $DISPLAY"). Force headless there; the QR is
         # shown from screenshots (get_qr_hd), so scanning still works.
-        # Local runs keep a visible browser for debugging.
-        use_headless = True if is_cloud else False
+        # Local runs respect the caller's `headless` flag (worker uses
+        # headless=True so sending continues in background/minimized without
+        # needing the browser in the foreground).
+        use_headless = True if is_cloud else bool(headless)
         ver = self._get_chrome_version()
         ua = self._get_random_ua(ver)
         binary = self._find_chrome_binary()
@@ -414,6 +416,12 @@ class WhatsAppService:
             o = StdOptions()
             if use_headless:
                 o.add_argument("--headless=new")
+                o.add_argument("--window-size=1366,768")
+                o.add_argument("--force-device-scale-factor=1")
+            else:
+                # Headed background mode: keep rendering/timers alive even when
+                # the window is minimized, occluded, or in the background so the
+                # user can browse in another browser/tab while sending continues.
                 o.add_argument("--window-size=1366,768")
             o.add_argument("--no-sandbox")
             o.add_argument("--disable-dev-shm-usage")
@@ -431,9 +439,13 @@ class WhatsAppService:
             o.add_argument("--no-default-browser-check")
             o.add_argument("--disable-crash-reporter")
             o.add_argument("--disable-features=IsolateOrigins,site-per-process,VizDisplayCompositor")
+            # Background stability: never throttle/pause the WhatsApp tab when
+            # the window is not in the foreground.
             o.add_argument("--disable-background-timer-throttling")
             o.add_argument("--disable-backgrounding-occluded-windows")
             o.add_argument("--disable-renderer-backgrounding")
+            o.add_argument("--disable-background-media-suspend")
+            o.add_argument("--disable-hang-monitor")
             o.add_argument("--memory-pressure-off")
             o.add_argument("--js-flags=--max-old-space-size=4096")
             # NOTE: no --remote-debugging-port on purpose. A fixed debug port
@@ -477,6 +489,13 @@ class WhatsAppService:
                         window.navigator.chrome = {
                             runtime: {},
                         };
+                        // Background stability: keep WhatsApp Web alive when the
+                        // window/tab is minimized, occluded, or in background.
+                        try {
+                            Object.defineProperty(document, 'hidden', { get: () => false, configurable: true });
+                            Object.defineProperty(document, 'visibilityState', { get: () => 'visible', configurable: true });
+                            Object.defineProperty(document, 'hasFocus', { value: () => true, configurable: true });
+                        } catch (e) {}
                     '''
                 })
             except Exception:
@@ -532,6 +551,13 @@ class WhatsAppService:
                         window.navigator.chrome = {
                             runtime: {},
                         };
+                        // Background stability: keep WhatsApp Web alive when the
+                        // window/tab is minimized, occluded, or in background.
+                        try {
+                            Object.defineProperty(document, 'hidden', { get: () => false, configurable: true });
+                            Object.defineProperty(document, 'visibilityState', { get: () => 'visible', configurable: true });
+                            Object.defineProperty(document, 'hasFocus', { value: () => true, configurable: true });
+                        } catch (e) {}
                     '''
                 })
             except Exception:
@@ -1260,7 +1286,13 @@ class WhatsAppService:
         return None
 
     def _inject_text_to_input(self, msg_input, text: str) -> bool:
-        """إدخال النص في صندوق الرسالة بطرق متعددة ومضمونة وسريعة تدعم العربية والإيموجي بالكامل"""
+        """إدخال النص في صندوق الرسالة — نسخة تعمل في الخلفية (بدون حاجة لواجهة أمامية).
+
+        الترتيب الجديد (background-safe أولاً):
+        1) JS insertText — يعمل والمتصفح مصغّر/مغطّى/في الخلفية، لا يستخدم الحافظة.
+        2) send_keys عبر CDP — يعمل في الخلفية طالما التبويب نشط.
+        3) الحافظة Ctrl+V — احتياطي أخير فقط (يتطلب واجهة أمامية).
+        """
         from selenium.webdriver.common.keys import Keys
         from selenium.webdriver.common.action_chains import ActionChains
 
@@ -1274,19 +1306,14 @@ class WhatsAppService:
         except Exception:
             return False
 
-        # 1. التركيز على صندوق الكتابة
+        # التركيز عبر JS فقط (يعمل في الخلفية — بدون click() فيزيائي يحتاج واجهة)
         try:
-            self.driver.execute_script("arguments[0].scrollIntoView({block:'center'}); arguments[0].focus();", msg_input)
+            self.driver.execute_script("arguments[0].focus();", msg_input)
         except Exception:
             pass
-        time.sleep(0.3)
-        try:
-            msg_input.click()
-        except Exception:
-            pass
-        time.sleep(0.3)
+        time.sleep(0.2)
 
-        # تفريغ أي نص موجود مسبقاً
+        # تفريغ أي نص موجود مسبقاً (JS فقط)
         try:
             self.driver.execute_script("""
                 var el = arguments[0];
@@ -1298,19 +1325,7 @@ class WhatsAppService:
             pass
         time.sleep(0.2)
 
-        # الطريقة الأولى (الأكثر كفاءة وموثوقية للعربية والأسطر المتعددة): Clipboard Paste (Ctrl+V)
-        try:
-            copied = _copy_text_to_clipboard(text)
-            if copied:
-                ActionChains(self.driver).move_to_element(msg_input).click().key_down(Keys.CONTROL).send_keys('v').key_up(Keys.CONTROL).perform()
-                time.sleep(0.5)
-                curr_text = self.driver.execute_script("return (arguments[0].innerText || arguments[0].textContent || '').trim();", msg_input)
-                if len(curr_text) > 0:
-                    return True
-        except Exception as e:
-            print(f"[inject_text] Clipboard attempt note: {e}")
-
-        # الطريقة الثانية: JS insertText مع أحداث React InputEvent (Lexical/DraftJS)
+        # الطريقة الأولى (أساسية وتعمل في الخلفية): JS insertText مع أحداث React
         try:
             encoded = json.dumps(text)
             self.driver.execute_script(f"""
@@ -1330,14 +1345,15 @@ class WhatsAppService:
         except Exception:
             pass
 
-        # الطريقة الثالثة: send_keys سطر بسطر مع Shift+Enter
+        # الطريقة الثانية (تعمل في الخلفية عبر CDP): send_keys سطر بسطر
         try:
             lines = text.split("\n")
             for l_idx, line in enumerate(lines):
                 if line:
                     msg_input.send_keys(line)
                 if l_idx < len(lines) - 1:
-                    ActionChains(self.driver).key_down(Keys.SHIFT).send_keys(Keys.ENTER).key_up(Keys.SHIFT).perform()
+                    # Shift+Enter موجّه للعنصر نفسه (يعمل في الخلفية)
+                    msg_input.send_keys(Keys.SHIFT + Keys.ENTER)
                 time.sleep(0.04)
             time.sleep(0.5)
             curr_text = self.driver.execute_script("return (arguments[0].innerText || arguments[0].textContent || '').trim();", msg_input)
@@ -1345,6 +1361,22 @@ class WhatsAppService:
                 return True
         except Exception:
             pass
+
+        # الطريقة الثالثة (احتياط أخير — تتطلب نافذة أمامية): Clipboard Paste
+        try:
+            copied = _copy_text_to_clipboard(text)
+            if copied:
+                try:
+                    self.driver.execute_script("arguments[0].focus();", msg_input)
+                except Exception:
+                    pass
+                ActionChains(self.driver).move_to_element(msg_input).click().key_down(Keys.CONTROL).send_keys('v').key_up(Keys.CONTROL).perform()
+                time.sleep(0.5)
+                curr_text = self.driver.execute_script("return (arguments[0].innerText || arguments[0].textContent || '').trim();", msg_input)
+                if len(curr_text) > 0:
+                    return True
+        except Exception as e:
+            print(f"[inject_text] Clipboard attempt note: {e}")
 
         # الطريقة الرابعة: الكتابة الحرفية
         try:
@@ -1858,14 +1890,23 @@ class WhatsAppService:
                 ]
 
                 def _open_attach_menu():
+                    # Background-safe: JS click أولاً (يعمل والمتصفح في الخلفية)
                     for sel in attach_selectors:
                         try:
                             btns = self.driver.find_elements(By.XPATH, sel)
                             if btns and btns[0].is_displayed():
                                 try:
-                                    ActionChains(self.driver).move_to_element(btns[0]).pause(0.2).click().perform()
+                                    self.driver.execute_script(
+                                        "arguments[0].scrollIntoView({block:'center'}); arguments[0].click();",
+                                        btns[0])
                                 except Exception:
-                                    btns[0].click()
+                                    try:
+                                        btns[0].click()
+                                    except Exception:
+                                        try:
+                                            ActionChains(self.driver).move_to_element(btns[0]).pause(0.2).click().perform()
+                                        except Exception:
+                                            continue
                                 return True
                         except Exception:
                             continue
@@ -2579,45 +2620,51 @@ class WhatsAppService:
                 print(f"[{time.strftime('%H:%M:%S')}] ✅ MESSAGE_TYPED: Message ready in input box")
                 time.sleep(random.uniform(0.6, 1.2))
 
-                # إرسال الرسالة: النقر على زر الإرسال المكتشف بدقة
+                # إرسال الرسالة: يعمل في الخلفية — JS أولاً (لا يحتاج واجهة أمامية)
                 sent_ok = False
                 send_btn = self._find_send_button()
                 print(f"[{time.strftime('%H:%M:%S')}] 🔘 SEND_CLICKED: Send button found: {send_btn is not None}")
 
                 if send_btn and send_btn.is_displayed():
-                    try:
-                        ActionChains(self.driver).move_to_element(send_btn).pause(0.2).click().perform()
+                    # 1) نقرة JS كاملة (background-safe — تعمل والمتصفح مصغّر/مغطّى)
+                    if self._js_click(send_btn):
                         sent_ok = True
-                        print(f"[{time.strftime('%H:%M:%S')}] ✅ SEND_CLICKED: Clicked send button via ActionChains")
-                    except Exception as e:
-                        print(f"[{time.strftime('%H:%M:%S')}] ⚠️ SEND_CLICKED: ActionChains click failed: {e}")
+                        print(f"[{time.strftime('%H:%M:%S')}] ✅ SEND_CLICKED: Clicked send button via JS")
+                    # 2) نقرة مباشرة
+                    if not sent_ok:
                         try:
                             send_btn.click()
                             sent_ok = True
                             print(f"[{time.strftime('%H:%M:%S')}] ✅ SEND_CLICKED: Clicked send button directly")
                         except Exception as e2:
                             print(f"[{time.strftime('%H:%M:%S')}] ⚠️ SEND_CLICKED: Direct click failed: {e2}")
-                            try:
-                                self.driver.execute_script("""
-                                    var btn = arguments[0];
-                                    btn.dispatchEvent(new MouseEvent('mousedown', {bubbles: true, cancelable: true}));
-                                    btn.dispatchEvent(new MouseEvent('mouseup', {bubbles: true, cancelable: true}));
-                                    btn.dispatchEvent(new MouseEvent('click', {bubbles: true, cancelable: true}));
-                                """, send_btn)
-                                sent_ok = True
-                                print(f"[{time.strftime('%H:%M:%S')}] ✅ SEND_CLICKED: Clicked send button via JS")
-                            except Exception as e3:
-                                print(f"[{time.strftime('%H:%M:%S')}] ❌ SEND_CLICKED: JS click failed: {e3}")
+                    # 3) ActionChains (يتطلب واجهة — احتياط أخير فقط)
+                    if not sent_ok:
+                        try:
+                            ActionChains(self.driver).move_to_element(send_btn).pause(0.2).click().perform()
+                            sent_ok = True
+                            print(f"[{time.strftime('%H:%M:%S')}] ✅ SEND_CLICKED: Clicked send button via ActionChains")
+                        except Exception as e:
+                            print(f"[{time.strftime('%H:%M:%S')}] ⚠️ SEND_CLICKED: ActionChains click failed: {e}")
                 else:
                     print(f"[{time.strftime('%H:%M:%S')}] ⚠️ SEND_CLICKED: Send button not found or not visible")
 
-                # إذا لم يكن زر الإرسال متاحاً أو فشل النقر عليه، نستخدم ENTER كبديل وحيد
+                # إذا لم يكن زر الإرسال متاحاً أو فشل النقر عليه، نستخدم ENTER (يعمل في الخلفية عبر CDP)
                 if not sent_ok:
                     print(f"[{time.strftime('%H:%M:%S')}] 🔑 SEND_CLICKED: Trying ENTER key as fallback...")
                     try:
                         self.driver.execute_script("arguments[0].focus();", msg_input)
-                        msg_input.click()
                         time.sleep(0.2)
+                        # ENTER عبر JS أولاً (background-safe)، ثم send_keys
+                        try:
+                            self.driver.execute_script("""
+                                var el = arguments[0];
+                                el.dispatchEvent(new KeyboardEvent('keydown', {bubbles: true, cancelable: true, key: 'Enter', code: 'Enter', keyCode: 13}));
+                                el.dispatchEvent(new KeyboardEvent('keypress', {bubbles: true, cancelable: true, key: 'Enter', code: 'Enter', keyCode: 13}));
+                                el.dispatchEvent(new KeyboardEvent('keyup', {bubbles: true, cancelable: true, key: 'Enter', code: 'Enter', keyCode: 13}));
+                            """, msg_input)
+                        except Exception:
+                            pass
                         msg_input.send_keys(Keys.ENTER)
                         sent_ok = True
                         print(f"[{time.strftime('%H:%M:%S')}] ✅ SEND_CLICKED: Pressed ENTER key on input box")
