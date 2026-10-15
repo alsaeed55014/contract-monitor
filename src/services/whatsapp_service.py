@@ -321,6 +321,57 @@ class WhatsAppService:
             print(f"[{time.strftime('%H:%M:%S')}] ⚠️ فشل إعادة ضبط الإحصائيات: {e}")
             return False
 
+    def _release_start_lock(self):
+        """Removes the single-instance start lock (called on success and final failure)."""
+        try:
+            _lp = os.path.join(self.session_path, "wa_start.lock")
+            if os.path.exists(_lp):
+                os.remove(_lp)
+        except Exception:
+            pass
+
+    def _safe_quit_current_driver(self):
+        """quit() + dereference the current driver without raising.
+
+        Prevents: (1) zombie chrome holding the profile lock, (2) next
+        attempt reusing a dead session -> 'invalid session id'."""
+        drv, self.driver = self.driver, None
+        if drv is not None:
+            try:
+                drv.quit()
+            except Exception:
+                pass
+
+    def _is_session_alive(self, drv=None) -> bool:
+        """True if the driver session still accepts commands."""
+        d = drv if drv is not None else self.driver
+        if d is None:
+            return False
+        try:
+            _ = d.window_handles
+            return True
+        except Exception as e:
+            msg = str(e).lower()
+            # Dead-session markers -> definitely not alive (fail fast).
+            if any(k in msg for k in (
+                    "invalid session", "no such window", "session deleted",
+                    "disconnected", "unable to receive message",
+                    "target window already closed", "chrome not reachable",
+                    "invalid argument: session")):
+                return False
+            try:
+                _ = d.current_url
+                return True
+            except Exception:
+                return False
+
+    _DEAD_SESSION_MARKERS = (
+        "invalid session id", "invalid session",
+        "no such window", "session deleted",
+        "disconnected", "unable to receive message",
+        "target window already closed", "chrome not reachable",
+    )
+
     # ============================================================
     # 🛡️ SIMULATION DE COMPORTEMENT HUMAIN PENDANT LA SESSION
     # ============================================================
@@ -356,6 +407,7 @@ class WhatsAppService:
         if self.driver: 
             try:
                 self.driver.current_url
+                self._release_start_lock()
                 return True, "Active"
             except: 
                 self.close()
@@ -512,7 +564,10 @@ class WhatsAppService:
             
             self.driver.get("https://web.whatsapp.com")
             self._wait_for_qr_or_login(timeout=15)
+            if not self._is_session_alive():
+                raise RuntimeError("invalid session id: Chrome session died right after navigation (renderer crash or profile lock)")
             print(f"[{time.strftime('%H:%M:%S')}] Engine Ready!")
+            self._release_start_lock()
             return True, "Ready (Stealth Engine) [b1010d]"
         except Exception as e1:
             print(f"[{time.strftime('%H:%M:%S')}] Attempt 1 Error: {e1}")
@@ -520,6 +575,10 @@ class WhatsAppService:
             _tail1 = self._driver_log_tail(_drv_log1)
             if _tail1:
                 self.last_error += f" | driverlog: {_tail1}"
+            # Dead/half-launched driver must be quit before retry, otherwise
+            # its zombie chrome holds the profile lock and the next attempt
+            # fails (or the stale session raises 'invalid session id').
+            self._safe_quit_current_driver()
 
         # 🚀 ATTEMPT 2: Scoped zombie cleanup & retry (keeps the WhatsApp login)
         _drv_log2 = ""
@@ -573,6 +632,9 @@ class WhatsAppService:
             )
             self.driver.get("https://web.whatsapp.com")
             self._wait_for_qr_or_login(timeout=15)
+            if not self._is_session_alive():
+                raise RuntimeError("invalid session id on retry: Chrome session died right after navigation")
+            self._release_start_lock()
             return True, "Ready (Fresh Session Engine) [b1010d]"
         except Exception as e2:
             print(f"[{time.strftime('%H:%M:%S')}] Attempt 2 Error: {e2}")
@@ -580,6 +642,7 @@ class WhatsAppService:
             _tail2 = self._driver_log_tail(_drv_log2)
             if _tail2:
                 self.last_error += f" | driverlog2: {_tail2}"
+            self._safe_quit_current_driver()
 
         # 🚀 ATTEMPT 3: Undetected Chromedriver (UC) Fallback
         # NOTE: uc's patched driver rejects selenium *experimental options*
@@ -647,10 +710,14 @@ class WhatsAppService:
             )
             self.driver.get("https://web.whatsapp.com")
             self._wait_for_qr_or_login(timeout=15)
+            if not self._is_session_alive():
+                raise RuntimeError("invalid session id on UC engine: session died after navigation")
+            self._release_start_lock()
             return True, "Ready (UC Engine) [b1010d]"
         except Exception as e3:
             print(f"[{time.strftime('%H:%M:%S')}] UC Fallback Error: {e3}")
             self.last_error += f" | UC Err: {str(e3)[:500]}"
+            self._safe_quit_current_driver()
 
         # 🚀 ATTEMPT 4: Fresh temporary profile (diagnostic last resort).
         # Proves whether the saved profile itself is the blocker. WhatsApp
@@ -672,26 +739,41 @@ class WhatsAppService:
             self.driver = _wd.Chrome(service=_svc4, options=_fresh_opts)
             self.driver.get("https://web.whatsapp.com")
             self._wait_for_qr_or_login(timeout=15)
+            if not self._is_session_alive():
+                raise RuntimeError("invalid session id on temp profile: session died after navigation")
+            self._release_start_lock()
             return True, "Ready (Fresh Temp Profile — rescan QR) [b1010d]"
         except Exception as e4:
             print(f"[{time.strftime('%H:%M:%S')}] Attempt 4 Error: {e4}")
             self.last_error += f" | TempProfile Err: {str(e4)[:500]}"
+            self._safe_quit_current_driver()
+            self._release_start_lock()
             return False, self.last_error
 
     def _wait_for_qr_or_login(self, timeout=15):
-        """انتظار تحميل الباركود أو تسجيل الدخول في المتصفح لضمان الجاهزية الفورية"""
+        """انتظار تحميل الباركود أو تسجيل الدخول في المتصفح لضمان الجاهزية الفورية.
+
+        Fail-fast: if the session is dead (invalid session id / closed
+        window / disconnected) return False immediately instead of looping
+        the full timeout — the caller must retry with a fresh driver.
+        """
         from selenium.webdriver.common.by import By
         start_t = time.time()
         while time.time() - start_t < timeout:
             try:
-                if not self.driver: break
+                if not self.driver:
+                    return False
                 elements = self.driver.find_elements(By.XPATH, '//*[@id="side"] | //div[@id="main"] | //div[@contenteditable="true"] | //div[@data-tab="3"]')
                 qr_elements = self.driver.find_elements(By.XPATH, '//canvas | //*[@data-ref] | //*[contains(@data-testid, "qr")] | //*[contains(@aria-label, "QR")] | //*[contains(@aria-label, "Scan")]')
                 if elements or qr_elements:
                     return True
-            except: pass
+            except Exception as e:
+                msg = str(e).lower()
+                if any(k in msg for k in self._DEAD_SESSION_MARKERS):
+                    return False
             time.sleep(0.4)
-        return False
+        # Timeout: still verify the session answers before reporting success.
+        return self._is_session_alive()
 
     def _find_chrome_binary(self):
         if os.name == 'nt':
