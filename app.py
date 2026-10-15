@@ -2465,25 +2465,80 @@ def render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search", 
     @st.dialog("الملخص الاحترافي للعامل" if lang == "ar" else "Professional Worker Summary")
     def show_worker_summary_modal():
         import re as _re
-        # -- 1. Data Extraction --
-        def g(ar_col, en_col):
-            val = worker_row.get(en_col, worker_row.get(ar_col, ""))
-            return str(val).strip() if pd.notnull(val) else ""
+        # -- 1. Data Extraction (robust: handles all header variants + duplicates) --
+        def _norm_col(s):
+            return str(s).strip().lower()
 
-        name = g("الاسم الكامل", "Full Name:")
-        nat = g("الجنسية", "Nationality")
+        try:
+            _cols = list(worker_row.index)
+        except Exception:
+            try:
+                _cols = list(worker_row.keys())
+            except Exception:
+                _cols = []
+        _norm_map = {_norm_col(c): c for c in _cols}
+
+        def _clean_val(v):
+            if v is None:
+                return ""
+            try:
+                import pandas as _pd
+                # isna on list/array returns array -> guard
+                _isna = _pd.isna(v)
+                if isinstance(_isna, bool) and _isna:
+                    return ""
+            except Exception:
+                pass
+            s = str(v).strip()
+            if s.lower() in ("nan", "none", "null", "<na>", "nat", ""):
+                return ""
+            return s
+
+        def g(*aliases):
+            # 1) exact + normalized match
+            for a in aliases:
+                try:
+                    if a in worker_row.index:
+                        v = _clean_val(worker_row.get(a, ""))
+                        if v:
+                            return v
+                except Exception:
+                    pass
+                na = _norm_col(a)
+                if na in _norm_map:
+                    real = _norm_map[na]
+                    v = _clean_val(worker_row.get(real, ""))
+                    if v:
+                        return v
+            # 2) fallback: contains match (handles '?' / '↓' / extra spaces variants)
+            for a in aliases:
+                na = _norm_col(a).replace("?", "").replace("↓", "").replace(":", "").strip()
+                if len(na) < 3:
+                    continue
+                for c in _cols:
+                    nc = _norm_col(c).replace("?", "").replace("↓", "").replace(":", "").strip()
+                    if not nc:
+                        continue
+                    if na == nc or na in nc or nc in na:
+                        v = _clean_val(worker_row.get(c, ""))
+                        if v:
+                            return v
+            return ""
+
+        name = g("الاسم الكامل", "Full Name:", "Full Name", "Name", "الاسم")
+        nat = g("الجنسية", "الجنسيه", "Nationality")
         gen = g("الجنس", "Gender")
-        age = g("العمر", "your Age:")
-        ar_lang_val = g("هل تتحدث العربية؟", "Do you speak Arabic")
-        job = g("الوظيفة المطلوبة", "Which job are you looking for")
-        exp = g("الخبرة في هذا المجال", "Experience in this field")
-        skills = g("مهارات أخرى", "What other jobs can you do")
-        exp_other = g("الخبرة (أخرى)", "Other experience")
-        card = g("هل لديك كرت بلدية؟", "Do you have Card Baladiya")
-        card_val = g("مدة صلاحية الكرت (أشهر)", "how many months Card Baladiya valid")
-        iqama_prof = g("المهنة في الإقامة", "What is the occupation listed on your Iqama")
-        iqama_rem = g("المدة المتبقية في الإقامة", "If the Iqama is valid, how many months are left?")
-        transfers = g("عدد مرات نقل الكفالة", "How many times did you transfer your sponsorship")
+        age = g("العمر", "your Age:", "your Age", "Age")
+        ar_lang_val = g("هل تتحدث العربية؟", "هل تتحدث العربية", "Do you speak Arabic", "Do you speak Arabic?", "speaks arabic")
+        job = g("الوظيفة المطلوبة", "الوظيفه المطلوبه", "Which job are you looking for", "Which job are you looking for?")
+        exp = g("الخبرة في هذا المجال", "الخبرة في هذا المجال ↓", "Experience in this field", "Experience", "How much experience do you have in this field?", "How much experience do you have in this field")
+        skills = g("مهارات أخرى", "مهارات اخرى", "What other jobs can you do", "What other jobs can you do?", "Other Skills")
+        exp_other = g("الخبرة (أخرى)", "Experience (Other)", "Other experience", "How much experience do you have in this field?_1", "How much experience do you have in this field? _1")
+        card = g("هل لديك كرت بلدية؟", "هل لديك كرت بلدية", "Do you have Card Baladiya", "Do you have Card Baladiya?")
+        card_val = g("مدة صلاحية الكرت (أشهر)", "how many months Card Baladiya valid", "how many months Card Baladiya valid?", "Card Validity (Months)")
+        iqama_prof = g("المهنة في الإقامة", "What is the occupation listed on your Iqama", "What is the occupation listed on your Iqama?", "Iqama Profession")
+        iqama_rem = g("المدة المتبقية في الإقامة", "If the Iqama is valid, how many months are left?", "If the Iqama is valid, how many months are left", "Iqama Remaining")
+        transfers = g("عدد مرات نقل الكفالة", "How many times did you transfer your sponsorship", "How many times did you transfer your sponsorship?", "Transfer Count")
 
         # -- 2. EN→AR Dictionary for strict Arabic localization --
         is_ar = (lang == "ar")
@@ -2564,6 +2619,26 @@ def render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search", 
             if not val or not is_ar:
                 return val
             text = str(val).strip()
+            # 0. Bare number (Western or Arabic-Indic digits) -> years of experience
+            try:
+                _digit_map = str.maketrans("٠١٢٣٤٥٦٧٨٩", "0123456789")
+                tmp_digits = text.strip().translate(_digit_map)
+            except Exception:
+                tmp_digits = text.strip()
+            _m_bare = _re.match(r'^(\d+)\s*$', tmp_digits)
+            if _m_bare:
+                n = _m_bare.group(1)
+                try:
+                    if int(n) > 200:
+                        return n  # likely a year/id, not experience
+                except Exception:
+                    pass
+                if n == "1":
+                    return "1 سنة"
+                elif n == "2":
+                    return "2 سنوات"
+                else:
+                    return f"{n} سنوات"
             if not _re.search(r'[a-zA-Z]', text):
                 return text
             low = text.lower()
@@ -2582,19 +2657,47 @@ def render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search", 
                     return "يتحدث العربية بشكل جيد"
                 else:
                     return "يتحدث العربية"
-            # 2. Numeric experience pattern
+            # 2. Numeric experience pattern (strict + tolerant)
             cleaned = text.strip().replace("'s", "").replace("'", "")
+            try:
+                cleaned = cleaned.translate(str.maketrans("٠١٢٣٤٥٦٧٨٩", "0123456789"))
+            except Exception:
+                pass
             m = _re.match(r'^(\d+)\s*x?\s*(years?|months?)?(\s*experience|\s*experiance)?$', cleaned, _re.IGNORECASE)
             if m:
                 n = m.group(1)
                 unit = m.group(2)
-                if not unit and int(n) < 50:
-                    return f"{n} سنوات"
                 if not unit:
-                    return n
+                    try:
+                        if int(n) > 200:
+                            return n
+                    except Exception:
+                        pass
+                    if n == "1":
+                        return "1 سنة"
+                    elif n == "2":
+                        return "2 سنوات"
+                    return f"{n} سنوات"
                 u = "سنوات" if "year" in unit.lower() else "أشهر"
                 if n == "1":
                     u = "سنة" if "year" in unit.lower() else "شهر"
+                elif n == "2" and "year" in unit.lower():
+                    u = "سنوات"
+                return f"{n} {u}"
+            # 2b. Loose: number + year/month/experience words anywhere ("5 years experience", "3 years of work", ...)
+            low_c = cleaned.lower()
+            m2 = _re.search(r'(\d+)', cleaned)
+            if m2 and ('year' in low_c or 'month' in low_c or 'exper' in low_c):
+                n = m2.group(1)
+                if 'month' in low_c:
+                    u = "شهر" if n == "1" else "أشهر"
+                else:
+                    if n == "1":
+                        u = "سنة"
+                    elif n == "2":
+                        u = "سنوات"
+                    else:
+                        u = "سنوات"
                 return f"{n} {u}"
             # 3. Google Translate for everything else
             try:
@@ -2669,6 +2772,10 @@ def render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search", 
         st.success(msg_success)
         st.code(summary, language="markdown")
         st.markdown("</div>", unsafe_allow_html=True)
+        if st.button("✖️ " + ("إغلاق النافذة" if is_ar else "Close window"),
+                      key=f"close_summary_{key_prefix}_{worker_id}"):
+            st.session_state["active_dlg"] = None
+            st.rerun()
 
     # === Full Worker Information Modal & Button === #
     def luxury_modal_dialog(title):
@@ -2774,6 +2881,29 @@ def render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search", 
             st.warning("⚠️ لا توجد بيانات مسجلة لهذا العامل في قاعدة البيانات." if is_ar else "⚠️ No recorded data found for this worker.")
             return
 
+        # 2b. Per-worker hide/delete (display only — does NOT touch Google Sheet)
+        # Each Q&A box (card) can be removed for THIS worker only via 🗑️ button.
+        # Hidden items are excluded from cards/table/copy/print/PNG but stay in the Sheet.
+        import hashlib as _hl_del
+        _hide_key = f"deleted_fields_{key_prefix}_{worker_id}"
+        if _hide_key not in st.session_state:
+            st.session_state[_hide_key] = set()
+        _deleted_keys = st.session_state[_hide_key]
+        # Clean stale keys (e.g. sheet headers changed)
+        _all_keys = {f["col_key"] for f in raw_fields}
+        _stale = {k for k in _deleted_keys if k not in _all_keys}
+        if _stale:
+            _deleted_keys = {k for k in _deleted_keys if k in _all_keys}
+            st.session_state[_hide_key] = _deleted_keys
+        _deleted_list = [f for f in raw_fields if f["col_key"] in _deleted_keys]
+        visible_fields = [f for f in raw_fields if f["col_key"] not in _deleted_keys]
+
+        def _fld_uid(_col_key):
+            try:
+                return _hl_del.md5(str(_col_key).encode("utf-8")).hexdigest()[:10]
+            except Exception:
+                return str(abs(hash(str(_col_key))))[:10]
+
         # 3. Categorize fields into logical sections while ensuring 100% inclusion
         def classify_field(item):
             t_str = f"{item['orig_label']} {item['label']}".lower()
@@ -2796,8 +2926,8 @@ def render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search", 
         ]
 
         # 4. Header Bar with Worker Name and Counts
-        total_fields_count = len(raw_fields)
-        filled_count = len([f for f in raw_fields if not f["is_empty"]])
+        total_fields_count = len(visible_fields)
+        filled_count = len([f for f in visible_fields if not f["is_empty"]])
         empty_count = total_fields_count - filled_count
 
         empty_badge_html = f"<span style='background: rgba(255, 255, 255, 0.08); color: #BBB; border: 1px solid rgba(255, 255, 255, 0.18); padding: 4px 12px; border-radius: 20px; font-size: 0.85rem; font-weight: 600;'>{'⚪ غير مسجل:' if is_ar else 'Empty:'} {empty_count}</span>" if empty_count > 0 else ""
@@ -2824,6 +2954,14 @@ def render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search", 
         )
         st.html(header_banner_html)
 
+        # Explicit close (use it instead of X so the dialog state resets;
+        # closing restores hidden Q&A automatically on next open).
+        if st.button("✖️ " + ("إغلاق النافذة" if is_ar else "Close window"),
+                      key=f"close_full_info_{key_prefix}_{worker_id}"):
+            st.session_state[_hide_key] = set()
+            st.session_state["active_dlg"] = None
+            st.rerun()
+
         # 5. Quick Live Search inside Modal
         filter_query = st.text_input(
             "🔍 " + ("بحث سريع في الحقول..." if is_ar else "Quick search in fields..."),
@@ -2831,13 +2969,39 @@ def render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search", 
             placeholder="اكتب اسم الحقل أو القيمة للتصفية..." if is_ar else "Type to filter by field name or value..."
         )
 
-        display_fields = raw_fields
+        display_fields = visible_fields
         if filter_query and filter_query.strip():
             fq = filter_query.strip().lower()
             display_fields = [
-                f for f in raw_fields 
+                f for f in visible_fields 
                 if fq in f["label"].lower() or fq in f["orig_label"].lower() or fq in f["value"].lower()
             ]
+
+        # 5b. Deleted-items manager (restore) — per worker only
+        if _deleted_list:
+            with st.expander(
+                f"🗑️ {'أسئلة محذوفة من العرض' if is_ar else 'Hidden questions'} ({len(_deleted_list)}) — "
+                + ("استرجاع" if is_ar else "restore"), expanded=False
+            ):
+                st.caption(
+                    (("هذه الأسئلة مخفية مؤقتاً من العرض والطباعة والصورة لهذا العامل فقط، وبياناتها ما زالت محفوظة في الشيت. "
+                       "عند إغلاق النافذة وإعادة فتحها من البحث أو أي مكان آخر ستعود تلقائياً.") if is_ar
+                     else "These questions are temporarily hidden from view/print/image for this worker only. Data stays in the Sheet. Close and reopen to restore them automatically.")
+                )
+                for _df in _deleted_list:
+                    _duid = _fld_uid(_df["col_key"])
+                    _c1, _c2 = st.columns([4, 1])
+                    with _c1:
+                        st.write(f"• **{_df['label']}** — {_df['value'][:60] if _df['value'] else ('غير مسجل' if is_ar else 'Not recorded')}")
+                    with _c2:
+                        if st.button("↩️ " + ("استرجاع" if is_ar else "Restore"),
+                                     key=f"restore_{key_prefix}_{worker_id}_{_duid}"):
+                            st.session_state[_hide_key].discard(_df["col_key"])
+                            st.rerun()
+                if st.button("↩️ " + ("استرجاع الكل" if is_ar else "Restore all"),
+                             key=f"restore_all_{key_prefix}_{worker_id}"):
+                    st.session_state[_hide_key] = set()
+                    st.rerun()
 
         # 6. Presentation Tabs
         tab_cards, tab_table, tab_copy, tab_print = st.tabs([
@@ -3142,6 +3306,14 @@ def render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search", 
                             f"</div>"
                         )
                         st.html(card_html)
+                        _fuid = _fld_uid(item["col_key"])
+                        if st.button(
+                            "🗑️ " + ("حذف هذا السؤال" if is_ar else "Delete this Q&A"),
+                            key=f"del_field_{key_prefix}_{worker_id}_{_fuid}",
+                            help=("إخفاء مؤقت لهذا العامل فقط — يعود تلقائياً عند إغلاق النافذة وإعادة فتحها (لا يحذف من الشيت)" if is_ar else "Temporary hide for this worker only — restored automatically on close & reopen (kept in Sheet)"),
+                        ):
+                            st.session_state[_hide_key].add(item["col_key"])
+                            st.rerun()
 
         with tab_table:
             st.markdown(f"<div style='direction:{d}; text-align:{a};'>", unsafe_allow_html=True)
@@ -3214,7 +3386,7 @@ def render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search", 
             ]
 
             for sec_key, sec_title in sections_def:
-                sec_items = [item for item in raw_fields if classify_field(item) == sec_key]
+                sec_items = [item for item in visible_fields if classify_field(item) == sec_key]
                 if not sec_items:
                     continue
                 report_lines.append(f"\n{sec_title}:")
@@ -3289,7 +3461,7 @@ def render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search", 
 
             _print_sections = ""
             for _sec_key, _sec_title in sections_def:
-                _sec_items = [item for item in raw_fields if classify_field(item) == _sec_key]
+                _sec_items = [item for item in visible_fields if classify_field(item) == _sec_key]
                 if not _sec_items:
                     continue
                 _rows = ""
@@ -3510,23 +3682,38 @@ def render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search", 
                             pass
                     return _vv
 
+                def _norm_lab(_label):
+                    _s = str(_label).strip()
+                    _s = _s.rstrip(':：').rstrip()
+                    return _s + ':'
+
                 def _cell_plan(_label, _vtext, _kind, _textw, _reserve):
-                    _vw = _textw - _reserve
-                    if _vw < 120:
-                        _vw = 120
-                    _vlines = _wrap(_vtext, _f_val, _vw)
-                    _labw = _tw(str(_label) + ':  ', _f_lab)
-                    _comb = (_labw + _tw(_vlines[0], _f_val) <= _textw - _reserve)
-                    _n = len(_vlines) if _comb else 1 + len(_vlines)
-                    return (_comb, _labw, _vlines, _n)
+                    _avail = _textw - _reserve
+                    if _avail < 120:
+                        _avail = 120
+                    _lab_txt = _norm_lab(_label)
+                    _lab_lines = _wrap(_lab_txt + '  ', _f_lab, _avail)
+                    if not _lab_lines:
+                        _lab_lines = [_lab_txt]
+                    _vlines = _wrap(_vtext, _f_val, _avail)
+                    if not _vlines:
+                        _vlines = ['']
+                    _labw = _tw(_lab_lines[0], _f_lab)
+                    _comb = (len(_lab_lines) == 1 and len(_vlines) >= 1
+                             and (_labw + _tw(_vlines[0], _f_val) <= _avail))
+                    if _comb:
+                        _n = len(_lab_lines) + len(_vlines) - 1
+                    else:
+                        _n = len(_lab_lines) + len(_vlines)
+                    return (_comb, _labw, _lab_lines, _vlines, _n)
 
                 def _cell_h(_label, _vtext, _kind, _textw, _reserve):
-                    _h = _cell_plan(_label, _vtext, _kind, _textw, _reserve)[3] * _LH + _VPAD * 2
-                    return max(_h, 52)
+                    _h = _cell_plan(_label, _vtext, _kind, _textw, _reserve)[4] * _LH + _VPAD * 2
+                    return max(_h, 56)
 
                 _flat = []
                 for _sk2, _stitle2 in sections_def:
-                    _items2 = [it for it in raw_fields if classify_field(it) == _sk2]
+                    _items2 = [it for it in visible_fields if classify_field(it) == _sk2]
                     if not _items2:
                         continue
                     _flat.append({'t': 'sec', 'lines': _wrap(f'{_stitle2} ({len(_items2)})', _f_sec, _CW - 60)})
@@ -3609,8 +3796,8 @@ def render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search", 
                 def _draw_cell(_en, _cx0, _cx1, _rh, _yy):
                     _textw = (_cx1 - _cx0) - _TXTPAD * 2
                     _res = 140 if (_en['kind'] == 'gender' and _en['g'] in ('M', 'F')) else (100 if _en['flag'] is not None else 0)
-                    _comb, _labw, _vlines, _n = _cell_plan(_en['label'], _en['vtext'], _en['kind'], _textw, _res)
-                    _ty = _yy + (_rh - _n * _LH) // 2
+                    _comb, _labw, _lab_lines, _vlines, _n = _cell_plan(_en['label'], _en['vtext'], _en['kind'], _textw, _res)
+                    _ty = _yy + max(0, (_rh - _n * _LH)) // 2
                     _vfill = (130, 130, 130) if _en.get('empty') else 'black'
                     if _rtl:
                         _xe = _cx1 - _TXTPAD
@@ -3632,16 +3819,21 @@ def render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search", 
                                 _xe -= _fw2 + 12
                             except Exception:
                                 pass
-                        _dr.text((_xe, _ty), _sh(str(_en['label']) + ':  '), font=_f_lab, fill='black', anchor='ra')
-                        _vy = _ty + _LH
                         if _comb:
+                            _dr.text((_xe, _ty), _sh(_lab_lines[0]), font=_f_lab, fill='black', anchor='ra')
                             _dr.text((_xe - _labw, _ty), _sh(_vlines[0]), font=_f_val, fill=_vfill, anchor='ra')
-                            _rest = _vlines[1:]
+                            _vy = _ty + _LH
+                            for _ln in _vlines[1:]:
+                                _dr.text((_xe, _vy), _sh(_ln), font=_f_val, fill=_vfill, anchor='ra')
+                                _vy += _LH
                         else:
-                            _rest = _vlines
-                        for _ln in _rest:
-                            _dr.text((_xe, _vy), _sh(_ln), font=_f_val, fill=_vfill, anchor='ra')
-                            _vy += _LH
+                            _vy = _ty
+                            for _ln in _lab_lines:
+                                _dr.text((_xe, _vy), _sh(_ln), font=_f_lab, fill='black', anchor='ra')
+                                _vy += _LH
+                            for _ln in _vlines:
+                                _dr.text((_xe, _vy), _sh(_ln), font=_f_val, fill=_vfill, anchor='ra')
+                                _vy += _LH
                     else:
                         _xs = _cx0 + _TXTPAD
                         if _en['kind'] == 'gender' and _en['g'] in ('M', 'F'):
@@ -3662,16 +3854,21 @@ def render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search", 
                                 _xs += _fw2 + 12
                             except Exception:
                                 pass
-                        _dr.text((_xs, _ty), _sh(str(_en['label']) + ':  '), font=_f_lab, fill='black', anchor='la')
-                        _vy = _ty + _LH
                         if _comb:
+                            _dr.text((_xs, _ty), _sh(_lab_lines[0]), font=_f_lab, fill='black', anchor='la')
                             _dr.text((_xs + _labw, _ty), _sh(_vlines[0]), font=_f_val, fill=_vfill, anchor='la')
-                            _rest = _vlines[1:]
+                            _vy = _ty + _LH
+                            for _ln in _vlines[1:]:
+                                _dr.text((_xs, _vy), _sh(_ln), font=_f_val, fill=_vfill, anchor='la')
+                                _vy += _LH
                         else:
-                            _rest = _vlines
-                        for _ln in _rest:
-                            _dr.text((_xs, _vy), _sh(_ln), font=_f_val, fill=_vfill, anchor='la')
-                            _vy += _LH
+                            _vy = _ty
+                            for _ln in _lab_lines:
+                                _dr.text((_xs, _vy), _sh(_ln), font=_f_lab, fill='black', anchor='la')
+                                _vy += _LH
+                            for _ln in _vlines:
+                                _dr.text((_xs, _vy), _sh(_ln), font=_f_val, fill=_vfill, anchor='la')
+                                _vy += _LH
 
                 for _e in _layout:
                     if _e['t'] == 'sec':
@@ -3760,10 +3957,44 @@ def render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search", 
     col_full, col_sum = st.columns([1, 1])
     with col_full:
         if st.button("📋 " + t('full_worker_info_btn', lang), width='stretch', key=f"btn_full_info_{key_prefix}_{worker_id}"):
-            show_worker_full_info_modal()
+            # Fresh open → temporary deletions reset, so previously hidden Q&A reappear.
+            # Single-slot state: only ONE dialog can exist per run (Streamlit limit),
+            # so opening this replaces any other open dialog instead of stacking.
+            try:
+                st.session_state["active_dlg"] = ("full", str(key_prefix), str(worker_id))
+                st.session_state[f"deleted_fields_{key_prefix}_{worker_id}"] = set()
+                _png_reset_key = f'worker_png_{key_prefix}_{worker_id}'
+                if _png_reset_key in st.session_state:
+                    del st.session_state[_png_reset_key]
+            except Exception:
+                pass
     with col_sum:
         if st.button("✨ " + ("إنشاء ملخص العامل" if lang == 'ar' else "Create Worker Summary"), width='stretch', key=f"btn_summary_mk_{key_prefix}_{worker_id}"):
+            try:
+                st.session_state["active_dlg"] = ("summary", str(key_prefix), str(worker_id))
+            except Exception:
+                pass
+    # Keep the dialog alive across inner reruns (delete/restore/search).
+    # Without this, ANY button inside the dialog closes it immediately,
+    # because the open-button above is False on those reruns.
+    # try/except = safety net: Streamlit allows max one dialog per run.
+    try:
+        _active = st.session_state.get("active_dlg")
+    except Exception:
+        _active = None
+    if _active == ("full", str(key_prefix), str(worker_id)):
+        try:
+            show_worker_full_info_modal()
+        except Exception as _dlg_e:
+            # Swallow ONLY the "single dialog per run" limit error; re-raise real bugs.
+            if type(_dlg_e).__name__ != "StreamlitAPIException":
+                raise
+    elif _active == ("summary", str(key_prefix), str(worker_id)):
+        try:
             show_worker_summary_modal()
+        except Exception as _dlg_e:
+            if type(_dlg_e).__name__ != "StreamlitAPIException":
+                raise
 
     translate_configs = [
         {"lang_code": "ar", "label": t('translate_cv_btn', lang), "key_suffix": "ar", "target": "ar"},
