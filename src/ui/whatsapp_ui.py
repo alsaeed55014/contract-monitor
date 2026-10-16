@@ -100,7 +100,9 @@ def save_templates(templates):
     except Exception as e:
         return False, str(e)
 
-def _split_smart_part_text(text):
+MULTILINE_SMART_KEYS = ("signature", "closing", "header")
+
+def _split_smart_part_text(text, key=None):
     """Parse editor text into component options. A line with only --- separates multi-line options."""
     text = (text or "").replace("\r\n", "\n").strip()
     if not text:
@@ -120,6 +122,11 @@ def _split_smart_part_text(text):
         if chunk:
             parts.append(chunk)
         return parts
+    # No --- separator: multiline components (signature/closing/header) must stay
+    # as ONE option so e.g. "Best regards,\nAbu Fahd\nHR Manager" keeps
+    # "HR Manager" under "Abu Fahd" instead of becoming 3 separate options.
+    if key in MULTILINE_SMART_KEYS:
+        return [text.strip()] if text.strip() else []
     return [line.strip() for line in lines if line.strip()]
 
 
@@ -155,7 +162,7 @@ def _read_smart_parts_from_widgets(file_smart=None):
     for key in _smart_editor_keys(file_smart):
         raw = st.session_state.get(f"smart_comp_{key}")
         if isinstance(raw, str):
-            parsed = _split_smart_part_text(raw)
+            parsed = _split_smart_part_text(raw, key=key)
             parts[key] = parsed if parsed else list(file_smart.get(key) or SMART_TEMPLATES.get(key) or [])
         else:
             parts[key] = list(file_smart.get(key) or SMART_TEMPLATES.get(key) or [])
@@ -218,12 +225,73 @@ def generate_smart_message(name, cv_link, custom_job="", templates=None, stable=
     if cv_link and str(cv_link).lower() != "nan" and str(cv_link).strip() != "":
         msg += f"Link to your profile: {cv_link}\n\n"
 
+    signature = str(signature).replace("\r\n", "\n").strip()
     msg += signature
 
     if not stable and random.random() > 0.7:
         msg = msg.replace(".", " .").replace("!", " ! ")
 
+    msg = _fix_whatsapp_direction(msg)
+
     return msg
+
+
+def _fix_whatsapp_direction(msg):
+    """Ensure LTR alignment in WhatsApp (even on Arabic devices) and keep
+    'HR Manager' on its own line under 'Abu Fahd'.
+
+    Real WhatsApp puts its timestamp on the same line as the last short line,
+    which made 'HR Manager' appear at the far right. We trim trailing spaces
+    per line, force LTR marks, and add an invisible LRM line at the end so the
+    timestamp moves to its own line.
+    """
+    if not msg:
+        return msg
+    msg = str(msg).replace("\r\n", "\n")
+    # Remove trailing spaces/tabs on every line (bidi flip cause)
+    msg = "\n".join(ln.rstrip(" \t\u200e\u2066\u2069") for ln in msg.split("\n"))
+    msg = msg.strip("\n ")
+    # Normalize signature lines: HR Manager must sit under Abu Fahd
+    msg = msg.replace("Abu Fahd\r\nHR Manager", "Abu Fahd\nHR Manager")
+    msg = msg.replace("Abu Fahd\u200e\nHR Manager", "Abu Fahd\nHR Manager")
+    msg = re.sub(r"Abu Fahd\s*\n\s*HR Manager", "Abu Fahd\nHR Manager", msg)
+    # Force LTR on signature lines so RTL WhatsApp UI doesn't push them right
+    msg = msg.replace("Abu Fahd\nHR Manager", "Abu Fahd\u200e\nHR Manager\u200e")
+    msg = msg.replace("Best regards,\nAbu Fahd", "Best regards,\u200e\nAbu Fahd")
+    # Force whole message LTR
+    if not msg.startswith(("\u200e", "\u2066")):
+        msg = "\u200e" + msg
+    # Push WhatsApp timestamp to its own invisible line
+    stripped = msg.rstrip("\u200e\u2066\u2069 \t\n")
+    if stripped.endswith("HR Manager") or stripped.endswith("HR Manager\u200e"):
+        msg = stripped.rstrip("\u200e") + "\u200e\n\u200e"
+    return msg
+
+
+@st.dialog("👁️ " + "معاينة واتساب — كما ستظهر للمستلم", width="large")
+def _smart_preview_dialog():
+    """Popup preview that disappears on close (X / outside click / Close button)."""
+    msg = st.session_state.get("smart_preview_dialog_msg", "") or ""
+    if not msg:
+        st.warning("لا توجد معاينة بعد.")
+        if st.button("إغلاق", key="close_smart_preview_empty"):
+            st.rerun()
+        return
+    _bubble = html.escape(msg).replace("\n", "<br>")
+    st.markdown(
+        f"""
+        <div style="background:#0b141a; padding:14px; border-radius:14px;" dir="ltr">
+            <div style="background:#005c4b; color:#e9edef; padding:12px 14px; border-radius:10px; border-top-right-radius:0; direction:ltr; text-align:left; unicode-bidi:isolate; white-space:normal; line-height:1.7; font-size:0.95rem; box-shadow: 0 1px 1px rgba(0,0,0,0.4);">
+                {_bubble}
+                <div style="text-align:right; font-size:0.72rem; color:#aebac1; margin-top:8px;">✓✓ {datetime.now().strftime('%H:%M')}</div>
+            </div>
+            <div style="color:#8696a0; font-size:0.78rem; margin-top:8px;" dir="rtl">توقيع من 3 أسطر: Best regards, / Abu Fahd / HR Manager — كل سطر مستقل.</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    if st.button("إغلاق", key="close_smart_preview", type="primary", width="stretch"):
+        st.rerun()
 
 def load_wa_history(username=None):
     if username is None:
@@ -2386,7 +2454,9 @@ HR Manager"""
             st.session_state.wa_messages[0] = default_msg
         
         # --- ⚙️ Smart Templates Components Editor (before preview so live edits apply) ---
-        with st.expander("🛠️ " + ("تعديل مكونات الرسائل الذكية" if is_ar else "Edit Smart Message Components"), expanded=is_smart):
+        # NOTE: expanded=False دائماً — لا تفتح تلقائياً عند تفعيل الرسائل الذكية
+        # أو عند الضغط على Enter في حقل اسم الوظيفة، فقط بالفتح اليدوي.
+        with st.expander("🛠️ " + ("تعديل مكونات الرسائل الذكية" if is_ar else "Edit Smart Message Components"), expanded=False):
             templates_data_smart = load_templates()
             smart_parts = {k: list(v) for k, v in templates_data_smart.get("smart", SMART_TEMPLATES).items()}
             original_smart_parts = {k: list(v) for k, v in smart_parts.items()}
@@ -2405,17 +2475,18 @@ HR Manager"""
                     height=120,
                     key=f"smart_comp_{part_key}",
                 )
-                smart_parts[part_key] = _split_smart_part_text(new_list_str)
+                smart_parts[part_key] = _split_smart_part_text(new_list_str, key=part_key)
 
             st.session_state.smart_parts_live = smart_parts
             has_changes = any(original_smart_parts.get(k) != smart_parts.get(k) for k in original_smart_parts)
 
-            save_col1, save_col2 = st.columns([2, 1])
-            with save_col1:
+            btn_save_col, btn_preview_col = st.columns(2)
+            with btn_save_col:
                 if st.button(
-                    "💾 " + ("حفظ التغييرات وتحديث المعاينة" if is_ar else "Save Changes & Update Preview"),
+                    "💾 " + ("حفظ التغييرات" if is_ar else "Save Changes"),
                     type="primary",
                     key="save_smart_parts",
+                    width="stretch",
                 ):
                     _save_smart_parts_from_editor()
                     _st = st.session_state.get("smart_save_status", {}) or {}
@@ -2426,11 +2497,32 @@ HR Manager"""
                         _err = _st.get("error") or ("تعذر الكتابة" if is_ar else "write failed")
                         st.error("❌ " + ("فشل الحفظ" if is_ar else "Save failed") + f": {_err}")
 
-            with save_col2:
-                if has_changes:
-                    st.info("📝 " + ("هناك تغييرات غير محفوظة" if is_ar else "Unsaved changes"))
-                else:
-                    st.success("✅ " + ("جميع التغييرات محفوظة" if is_ar else "All changes saved"))
+            with btn_preview_col:
+                if st.button(
+                    "👁️ " + ("معاينة الرسالة كما ستظهر" if is_ar else "Preview Message As It Will Appear"),
+                    key="preview_smart_parts",
+                    width="stretch",
+                ):
+                    # Popup preview (dialog) without saving: disappears on close
+                    try:
+                        _live = _read_smart_parts_from_widgets(templates_data_smart.get("smart"))
+                    except Exception:
+                        _live = smart_parts
+                    st.session_state.smart_parts_live = _live
+                    _sample = generate_smart_message(
+                        "Ahmed",
+                        "",
+                        custom_job=st.session_state.get("wa_custom_job_val", ""),
+                        templates=_live,
+                        stable=False,
+                    )
+                    st.session_state.smart_preview_dialog_msg = _sample
+                    _smart_preview_dialog()
+
+            if has_changes:
+                st.info("📝 " + ("هناك تغييرات غير محفوظة — اضغط حفظ التغييرات" if is_ar else "Unsaved changes — press Save Changes"))
+            else:
+                st.success("✅ " + ("جميع التغييرات محفوظة" if is_ar else "All changes saved"))
 
         # --- ⌨️ Message Input Logic ---
         if not is_smart:
@@ -2456,9 +2548,11 @@ HR Manager"""
 
             live_templates = get_live_smart_templates()
             use_random_preview = bool(st.session_state.pop("smart_preview_randomize", False))
+            # Realistic preview text (first option after edits, sample name Ahmed)
+            sample_name = st.session_state.get("smart_preview_sample_name", "Ahmed") or "Ahmed"
             preview_msg = generate_smart_message(
-                "{Name}",
-                "{CV}",
+                sample_name,
+                "",
                 custom_job=st.session_state.get("wa_custom_job_val", ""),
                 templates=live_templates,
                 stable=not use_random_preview,
@@ -2478,20 +2572,30 @@ HR Manager"""
                 st.text_area(
                     "معاينة الرسالة الذكية (Smart Message Preview)",
                     value=preview_msg,
-                    height=250,
+                    height=200,
                     disabled=True,
                     key=f"smart_preview_area_{preview_token}",
                 )
                 st.caption("🔎 " + (
-                    "المعاينة تستخدم الخيار الأول من كل مكوّن بعد التعديل. اضغط تحديث لعرض عينة عشوائية."
+                    "النص أعلاه للقراءة السريعة. اضغط معاينة لفتح شاشة منبثقة بشكل واتساب تختفي عند الإغلاق."
                     if is_ar else
-                    "Preview uses the first option of each component after edits. Click Refresh for a random sample."
+                    "Text above is for quick reading. Press Preview to open a popup WhatsApp view that disappears on close."
                 ))
             with preview_col2:
-                if st.button("🔄 " + ("تحديث" if is_ar else "Refresh"), key="refresh_preview"):
+                if st.button("🔄 " + ("تحديث النص" if is_ar else "Refresh text"), key="refresh_preview"):
                     st.session_state.smart_preview_randomize = True
                     st.session_state.smart_preview_nonce = st.session_state.get("smart_preview_nonce", 0) + 1
                     st.rerun()
+                if st.button("👁️ " + ("معاينة منبثقة" if is_ar else "Popup preview"), key="refresh_preview_bubble"):
+                    _sample = generate_smart_message(
+                        "Ahmed",
+                        "",
+                        custom_job=st.session_state.get("wa_custom_job_val", ""),
+                        templates=get_live_smart_templates(),
+                        stable=False,
+                    )
+                    st.session_state.smart_preview_dialog_msg = _sample
+                    _smart_preview_dialog()
             
         # --- 📁 Templates Library Logic (Self-contained at start to avoid state conflicts) ---
         templates_data = load_templates()
@@ -2721,10 +2825,13 @@ HR Manager"""
                 if re.search(r'^HR Manager\s*(\n|$)', final_msg) and re.search(_sig_tail_re, final_msg):
                     final_msg = re.sub(r'^HR Manager\s*\n+', '', final_msg, count=1)
 
-                # إضافة التوقيع الإنجليزي لواتساب ماركتنج
-                signature = "\n\nBest regards,\nAbu Fahd\nHR Manager"
-                if signature not in final_msg:
-                    final_msg += signature
+                # إضافة التوقيع الإنجليزي + إصلاح الاتجاه (LRM) حتى لا يلتصق الطابع الزمني بـ HR Manager
+                if "HR Manager" not in final_msg:
+                    final_msg = final_msg.rstrip() + "\n\nBest regards,\nAbu Fahd\nHR Manager"
+                try:
+                    final_msg = _fix_whatsapp_direction(final_msg)
+                except Exception:
+                    pass
 
                 # 3. Send Message via WhatsApp Service
                 # التحقق من حالة الخدمة قبل الإرسال
