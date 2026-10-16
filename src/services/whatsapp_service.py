@@ -1054,47 +1054,150 @@ class WhatsAppService:
         except: return None
 
     def _type_human_like(self, element, text):
-        """محاكاة كتابة بشرية واقعية جداً مع تنوع سرعتها واستخدام Shift+Enter للأسطر الجديدة لمنع الإرسال المبكر"""
+        """كتابة بشرية حرفاً بحرف (أو بمقاطع صغيرة) عبر الكيبورد الحقيقي —
+        تُظهر للطرف الآخر مؤشر 'يكتب...' بدل اللصق الفوري.
+
+        - '\\n' يُكتب بـ Shift+Enter حتى لا يُرسل مبكراً
+        - سرعة تكيفية: الرسائل الطويلة تُكتب بمقاطع 2-4 أحرف لتقليل الوقت
+          مع بقاء الطابع التدريجي (typing indicator يظهر للطرف الآخر)
+        - تعمل في الخلفية عبر CDP طالما التبويب نشط (لا تحتاج نافذة أمامية)
+        """
         from selenium.webdriver.common.keys import Keys
-        for char in text:
-            try:
-                if char == '\n':
+        if not text:
+            return
+        n = len(text)
+        # سرعة تكيفية حسب الطول حتى لا تستغرق الرسائل الطويلة دقائق
+        if n > 400:
+            min_d, max_d, chunk_max = 0.015, 0.045, 4
+        elif n > 150:
+            min_d, max_d, chunk_max = 0.02, 0.07, 3
+        else:
+            min_d, max_d, chunk_max = 0.03, 0.11, 2
+
+        # وقفة افتتاحية قصيرة كأن المستخدم يجهّز للكتابة (تُظهر بدء الكتابة)
+        time.sleep(random.uniform(0.4, 0.9))
+
+        i = 0
+        while i < n:
+            ch = text[i]
+            # سطر جديد: Shift+Enter موجّه للعنصر نفسه
+            if ch == '\n':
+                try:
                     element.send_keys(Keys.SHIFT + Keys.ENTER)
-                else:
-                    element.send_keys(char)
-            except:
+                except Exception:
+                    try:
+                        self.driver.execute_script(
+                            "arguments[0].focus();"
+                            "arguments[0].dispatchEvent(new KeyboardEvent('keydown', {bubbles:true, key:'Enter', code:'Enter', keyCode:13, shiftKey:true}));",
+                            element)
+                    except Exception:
+                        pass
+                time.sleep(random.uniform(0.15, 0.4))
+                i += 1
+                continue
+
+            # مقطع صغير (1- chunk_max أحرف) — لا نقطع عند \n
+            chunk_len = random.randint(1, chunk_max)
+            chunk = text[i:i + chunk_len].split('\n')[0]
+            if not chunk:
+                continue
+            try:
+                element.send_keys(chunk)
+                i += len(chunk)
+            except Exception:
                 try:
                     self.driver.execute_script(
                         """
                         arguments[0].focus();
                         document.execCommand('insertText', false, arguments[1]);
-                        arguments[0].dispatchEvent(new Event('input', {bubbles:true}));
+                        arguments[0].dispatchEvent(new InputEvent('input', {bubbles:true, inputType:'insertText', data: arguments[1]}));
                         """,
-                        element, char
+                        element, chunk
                     )
-                except: pass
-            
-            # تأخيرات واقعية أكثر تنوعاً لمحاكاة الكتابة البشرية
-            base_delay = random.uniform(0.03, 0.12)
-            
-            # تأخير إضافي للرموز الخاصة
-            if char in [" ", "\n", ".", ",", "!", "?", "،", "؛", ":", "؛", "؟", "،"]:
-                base_delay += random.uniform(0.10, 0.35)
-            # تأخير إضافي للأحرف الكبيرة
-            elif char.isupper():
-                base_delay += random.uniform(0.05, 0.18)
-            # تأخير إضافي للأرقام
-            elif char.isdigit():
+                    i += len(chunk)
+                except Exception:
+                    i += len(chunk)
+                    pass
+
+            # تأخير واقعي متنوع لمحاكاة الكتابة البشرية
+            base_delay = random.uniform(min_d, max_d)
+            last = chunk[-1] if chunk else ''
+            # تأخير إضافي للرموز والمسافات (وقفة كلمة)
+            if last in [" ", ".", ",", "!", "?", "،", "؛", ":", "؟"]:
+                base_delay += random.uniform(0.08, 0.28)
+            elif last.isupper():
                 base_delay += random.uniform(0.04, 0.15)
-                
+            elif last.isdigit():
+                base_delay += random.uniform(0.03, 0.12)
+
             time.sleep(base_delay)
-            
-            # وقفات عشوائية أثناء الكتابة لمحاكاة التفكير
-            if random.random() < 0.025:
-                time.sleep(random.uniform(0.2, 0.8))
-            # وقفات أطول نادرة جداً
-            elif random.random() < 0.008:
-                time.sleep(random.uniform(0.5, 1.2))
+
+            # وقفات عشوائية أثناء الكتابة لمحاكاة التفكير (تُطيل مؤشر يكتب...)
+            r = random.random()
+            if r < 0.02:
+                time.sleep(random.uniform(0.3, 0.9))
+            elif r < 0.028:
+                time.sleep(random.uniform(0.6, 1.3))
+
+    def _js_type_human_like(self, element, text) -> bool:
+        """كتابة بشرية تدريجية عبر JS (مقطع كل ~120ms) — بديل يعمل في الخلفية
+        تماماً ويُظهر 'يكتب...' للطرف الآخر لأنه يُدخل النص على دفعات مع
+        أحداث input الحقيقية بدل اللصق دفعة واحدة."""
+        if not element or not text:
+            return False
+        try:
+            self.driver.execute_script("arguments[0].focus();", element)
+        except Exception:
+            pass
+        # تفريغ أولاً
+        try:
+            self.driver.execute_script("""
+                var el = arguments[0];
+                el.focus();
+                document.execCommand('selectAll', false, null);
+                document.execCommand('delete', false, null);
+            """, element)
+        except Exception:
+            pass
+        time.sleep(0.25)
+        # إدخال تدريجي: كلمة-كلمتين كل مرة
+        words = text.replace('\n', ' \n ').split(' ')
+        buf_ok = True
+        try:
+            for wi, w in enumerate(words):
+                token = w if wi == 0 else (' ' + w)
+                # التعامل مع علامة السطر
+                parts = token.split('\n')
+                for pi, part in enumerate(parts):
+                    if part:
+                        self.driver.execute_script("""
+                            var el = arguments[0], s = arguments[1];
+                            el.focus();
+                            document.execCommand('insertText', false, s);
+                            el.dispatchEvent(new InputEvent('beforeinput', {bubbles:true, cancelable:true, data:s, inputType:'insertText'}));
+                            el.dispatchEvent(new InputEvent('input', {bubbles:true, cancelable:true, data:s, inputType:'insertText'}));
+                        """, element, part)
+                        time.sleep(random.uniform(0.09, 0.28))
+                    if pi < len(parts) - 1:
+                        # سطر جديد: Shift+Enter عبر حدث كيبورد (لا يرسل)
+                        try:
+                            from selenium.webdriver.common.keys import Keys as _K
+                            element.send_keys(_K.SHIFT + _K.ENTER)
+                        except Exception:
+                            self.driver.execute_script("""
+                                var el = arguments[0];
+                                el.dispatchEvent(new KeyboardEvent('keydown', {bubbles:true, cancelable:true, key:'Enter', code:'Enter', keyCode:13, shiftKey:true}));
+                            """, element)
+                        time.sleep(random.uniform(0.15, 0.35))
+                if random.random() < 0.06:
+                    time.sleep(random.uniform(0.3, 0.7))
+            time.sleep(0.4)
+            curr = self.driver.execute_script(
+                "return (arguments[0].innerText || arguments[0].textContent || '').trim();", element)
+            return len(curr or "") > 0
+        except Exception:
+            return False
+        return buf_ok
 
     def _find_attachment_send_button(self):
         """العثور على زر إرسال المرفق في شاشة المعاينة (media preview drawer).
@@ -1368,12 +1471,13 @@ class WhatsAppService:
         return None
 
     def _inject_text_to_input(self, msg_input, text: str) -> bool:
-        """إدخال النص في صندوق الرسالة — نسخة تعمل في الخلفية (بدون حاجة لواجهة أمامية).
+        """إدخال النص ككتابة بشرية من الكيبورد (وليس لصقاً فورياً).
 
-        الترتيب الجديد (background-safe أولاً):
-        1) JS insertText — يعمل والمتصفح مصغّر/مغطّى/في الخلفية، لا يستخدم الحافظة.
-        2) send_keys عبر CDP — يعمل في الخلفية طالما التبويب نشط.
-        3) الحافظة Ctrl+V — احتياطي أخير فقط (يتطلب واجهة أمامية).
+        الترتيب الجديد (كتابة بشرية أولاً حتى يظهر 'يكتب...' للطرف الآخر):
+        1) كتابة بشرية حقيقية عبر send_keys (حرف/مقطع + Shift+Enter) — تُظهر typing.
+        2) كتابة تدريجية عبر JS على دفعات (تعمل في الخلفية تماماً) — تُظهر typing.
+        3) JS insertText دفعة واحدة — احتياطي سريع فقط (لا يُظهر typing مطولاً).
+        4) الحافظة Ctrl+V — احتياطي أخير فقط.
         """
         from selenium.webdriver.common.keys import Keys
         from selenium.webdriver.common.action_chains import ActionChains
@@ -1395,7 +1499,7 @@ class WhatsAppService:
             pass
         time.sleep(0.2)
 
-        # تفريغ أي نص موجود مسبقاً (JS فقط)
+        # تفريغ أي نص موجود مسبقاً (JS فقط) — لأن رابط Prefill قد يكون ملأ الصندوق لصقاً
         try:
             self.driver.execute_script("""
                 var el = arguments[0];
@@ -1405,9 +1509,29 @@ class WhatsAppService:
             """, msg_input)
         except Exception:
             pass
-        time.sleep(0.2)
+        time.sleep(0.25)
 
-        # الطريقة الأولى (أساسية وتعمل في الخلفية): JS insertText مع أحداث React
+        # الطريقة الأولى (الأساسية): كتابة بشرية حقيقية من الكيبورد
+        try:
+            print("[inject_text] ⌨️ typing human-like via keyboard...")
+            self._type_human_like(msg_input, text)
+            time.sleep(0.5)
+            curr_text = self.driver.execute_script("return (arguments[0].innerText || arguments[0].textContent || '').trim();", msg_input)
+            if len(curr_text) > 0:
+                print("[inject_text] ✅ human keyboard typing done")
+                return True
+        except Exception as e:
+            print(f"[inject_text] human typing note: {e}")
+
+        # الطريقة الثانية: كتابة تدريجية عبر JS (خلفية 100% + تُظهر typing)
+        try:
+            print("[inject_text] ⌨️ typing progressively via JS chunks...")
+            if self._js_type_human_like(msg_input, text):
+                return True
+        except Exception:
+            pass
+
+        # الطريقة الثالثة (احتياطي سريع فقط — لصق دفعة واحدة، لا يُظهر typing مطولاً):
         try:
             encoded = json.dumps(text)
             self.driver.execute_script(f"""
@@ -1427,7 +1551,7 @@ class WhatsAppService:
         except Exception:
             pass
 
-        # الطريقة الثانية (تعمل في الخلفية عبر CDP): send_keys سطر بسطر
+        # الطريقة الرابعة (تعمل في الخلفية عبر CDP): send_keys سطر بسطر
         try:
             lines = text.split("\n")
             for l_idx, line in enumerate(lines):
@@ -1444,7 +1568,7 @@ class WhatsAppService:
         except Exception:
             pass
 
-        # الطريقة الثالثة (احتياط أخير — تتطلب نافذة أمامية): Clipboard Paste
+        # الطريقة الخامسة (احتياطي أخير — تتطلب نافذة أمامية): Clipboard Paste
         try:
             copied = _copy_text_to_clipboard(text)
             if copied:
@@ -1459,15 +1583,6 @@ class WhatsAppService:
                     return True
         except Exception as e:
             print(f"[inject_text] Clipboard attempt note: {e}")
-
-        # الطريقة الرابعة: الكتابة الحرفية
-        try:
-            self._type_human_like(msg_input, text)
-            time.sleep(0.5)
-            curr_text = self.driver.execute_script("return (arguments[0].innerText || arguments[0].textContent || '').trim();", msg_input)
-            return len(curr_text) > 0
-        except Exception:
-            pass
 
         return False
 
@@ -1785,13 +1900,11 @@ class WhatsAppService:
             self._dismiss_modals()
             time.sleep(0.4)
 
-            # 🌐 2. التنقل المباشر لرابط المحادثة مع دعم التعبئة التلقائية (URL Prefill)
-            if message and not attachment_path:
-                encoded_msg = urllib.parse.quote(message)
-                target_url = f"https://web.whatsapp.com/send/?phone={clean_phone}&text={encoded_msg}"
-            else:
-                target_url = f"https://web.whatsapp.com/send/?phone={clean_phone}"
-            print(f"[{time.strftime('%H:%M:%S')}] 🚀 OPEN_CHAT: Navigating to: {clean_phone}...")
+            # 🌐 2. التنقل لرابط المحادثة WITHOUT نص مسبق — حتى تُكتب الرسالة
+            # حرفاً بحرف من الكيبورد (تُظهر 'يكتب...' للطرف الآخر) بدل اللصق الفوري
+            # ملاحظة: ?text= في الرابط كان يملأ الصندوق لصقاً دفعة واحدة — أُلغي عمداً
+            target_url = f"https://web.whatsapp.com/send/?phone={clean_phone}"
+            print(f"[{time.strftime('%H:%M:%S')}] 🚀 OPEN_CHAT: Navigating to: {clean_phone}... (human-typing mode)")
 
             # محاولة التنقل الداخلي لتجنب إعادة تحميل الصفحة الكاملة
             navigated = False
@@ -2676,24 +2789,15 @@ class WhatsAppService:
                 if not message:
                     return False, "الرسالة فارغة"
 
-                print(f"[{time.strftime('%H:%M:%S')}] 📝 Checking message in input box (length: {len(message)} chars)...")
+                print(f"[{time.strftime('%H:%M:%S')}] 📝 Typing message via keyboard (length: {len(message)} chars)...")
 
-                # التحقق هل الرسالة موجودة مسبقاً عبر الرابط (URL Prefill)
-                curr_text = ""
-                try:
-                    curr_text = self.driver.execute_script("return (arguments[0].innerText || arguments[0].textContent || '').trim();", msg_input)
-                except Exception:
-                    pass
-
-                injected = (len(curr_text) > 0)
-                if injected:
-                    print(f"[{time.strftime('%H:%M:%S')}] ✅ Message already in input box (prefilled via URL)")
-                else:
+                # كتابة بشرية دائماً من الصفر — لا نعتمد على أي نص مسبق (Prefill)
+                # لأن النص المسبق يظهر كلصق فوري ولا يُظهر 'يكتب...' للطرف الآخر
+                injected = self._inject_text_to_input(msg_input, message)
+                if not injected:
+                    print(f"[{time.strftime('%H:%M:%S')}] ⚠️ First typing failed, retrying...")
+                    time.sleep(0.5)
                     injected = self._inject_text_to_input(msg_input, message)
-                    if not injected:
-                        print(f"[{time.strftime('%H:%M:%S')}] ⚠️ First injection failed, retrying...")
-                        time.sleep(0.5)
-                        injected = self._inject_text_to_input(msg_input, message)
 
                 if not injected:
                     print(f"[{time.strftime('%H:%M:%S')}] ❌ FAILED: All injection methods failed")

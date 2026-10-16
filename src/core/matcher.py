@@ -287,6 +287,48 @@ def _normalize(text):
     return t.strip()
 
 
+def _split_multi_values(text):
+    """تقسيم نص قد يحتوي عدة جنسيات/أجناس: 'فلبيني نيبالي هندي' أو
+    'فلبيني/نيبالي/هندي' أو 'فلبيني، نيبالي وهندي' → قائمة قيم.
+    تُحفظ الجنسيات المركبة ('Sri Lankan') موحدة قبل التقسيم."""
+    if not text or str(text).strip().lower() == "nan":
+        return []
+    s = str(text).strip()
+    # حماية الجنسيات المركبة ذات المسافة قبل التقسيم بالمسافات
+    s_prot = re.sub(r'sri\s+lankan', 'sri-lankan', s, flags=re.IGNORECASE)
+    # فواصل صريحة أولاً
+    chunks = re.split(r'[,،/\\|&+]+', s_prot)
+    parts = []
+    for ch in chunks:
+        # داخل كل مقطع: افصل بالمسافات + نظّف أدوات العطف
+        for tok in re.split(r'\s+', ch.strip()):
+            t = tok.strip().strip('()[]').strip()
+            # "ونيبالي" → "نيبالي"، "وهندي" → "هندي"
+            if len(t) > 3 and t[0] == 'و':
+                t = t[1:]
+            if not t or t in ('و', 'او', 'أو', 'and', 'or', '&', '+'):
+                continue
+            if len(t) < 2:
+                continue
+            parts.append(t.replace('sri-lankan', 'Sri Lankan').replace('SRI-LANKAN', 'Sri Lankan'))
+    # إزالة المكرر مع الحفاظ على الترتيب
+    seen, out = set(), []
+    for p in parts:
+        k = p.lower()
+        if k not in seen:
+            seen.add(k)
+            out.append(p)
+    return out
+
+
+def _fuzzy_match_any(value, targets):
+    """OR عبر عدة أهداف: True إذا طابقت القيمة أياً منها."""
+    for t in targets:
+        if _fuzzy_match(value, t):
+            return True
+    return False
+
+
 def _find_col(df, keywords):
     """Find a column in df that matches any of the given keywords (fuzzy)."""
     # Excluded keywords for columns we NEVER want to use for matching/searching
@@ -585,7 +627,11 @@ class CandidateMatcher:
     # Step 3: Filter by Nationality + Gender + Location
     # ─────────────────────────────────────────
     def _filter_basic(self, nationality, gender):
-        """Filter candidates by nationality AND gender (mandatory)."""
+        """Filter candidates by nationality AND gender (mandatory).
+
+        يدعم عدة جنسيات بمنطق OR: 'فلبيني نيبالي هندي' يقبل أياً منها
+        (الصف الواحد يحمل جنسية واحدة فـ AND كان يعطي صفر نتائج دائماً).
+        """
         df = self.candidates.copy()
         if df.empty:
             return df
@@ -598,11 +644,24 @@ class CandidateMatcher:
         self.debug_info["gen_col"] = gen_col
 
         if nat_col and nationality:
-            mask = df[nat_col].apply(lambda v: _fuzzy_match(v, nationality))
+            nat_parts = _split_multi_values(nationality)
+            if len(nat_parts) > 1:
+                mask = df[nat_col].apply(lambda v: _fuzzy_match_any(v, nat_parts))
+            elif nat_parts:
+                mask = df[nat_col].apply(lambda v: _fuzzy_match(v, nat_parts[0]))
+            else:
+                mask = df[nat_col].apply(lambda v: _fuzzy_match(v, nationality))
             df = df[mask]
 
         if gen_col and gender:
-            mask = df[gen_col].apply(lambda v: _fuzzy_match(v, gender))
+            gen_parts = _split_multi_values(gender)
+            # للجنس: إذا ذُكرت قيمتان (ذكر/أنثى) فالمنطق OR أيضاً
+            if len(gen_parts) > 1:
+                mask = df[gen_col].apply(lambda v: _fuzzy_match_any(v, gen_parts))
+            elif gen_parts:
+                mask = df[gen_col].apply(lambda v: _fuzzy_match(v, gen_parts[0]))
+            else:
+                mask = df[gen_col].apply(lambda v: _fuzzy_match(v, gender))
             df = df[mask]
 
         return df
