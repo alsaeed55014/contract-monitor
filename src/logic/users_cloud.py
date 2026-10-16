@@ -16,7 +16,6 @@ NOTE: background only, no UI. The permissions page shows no banner/backup.
 """
 
 import json
-from datetime import datetime
 
 WORKSHEET_TITLE = "AppUsers"
 HEADER = ["username", "password", "role", "first_name_ar", "father_name_ar",

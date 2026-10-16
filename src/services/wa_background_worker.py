@@ -11,7 +11,6 @@ import sys
 import json
 import time
 import random
-import signal
 import traceback
 from datetime import datetime
 

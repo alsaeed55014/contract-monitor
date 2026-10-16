@@ -19,7 +19,7 @@ import re
 import time
 import logging
 from datetime import datetime
-from typing import Callable, Optional, Dict, List, Tuple, Any
+from typing import Callable, Optional, Dict, List, Any
 
 # ──────────────────────────────────────────────
 # Constants

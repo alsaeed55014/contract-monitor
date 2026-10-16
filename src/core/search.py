@@ -4,7 +4,6 @@ import re
 import pandas as pd
 from datetime import date
 from dateutil import parser as dateutil_parser
-import hashlib
 
 class SmartSearchEngine:
     def __init__(self, data_frame=None):

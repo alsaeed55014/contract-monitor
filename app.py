@@ -6,7 +6,7 @@ import json
 import hashlib
 import time
 from datetime import datetime, timedelta
-from typing import Optional, Dict, List, Any, Union
+from typing import Dict, List, Any, Union
 import pytz
 import base64
 import re
@@ -275,27 +275,6 @@ def create_device_token(username: str, days: int = 30) -> str:
     sig = hmac.new(DEVICE_REMEMBER_SECRET, payload.encode(), hashlib.sha256).hexdigest()
     raw = f"{payload}:{sig}"
     return base64.urlsafe_b64encode(raw.encode()).decode()
-
-def verify_device_token(token: str) -> Optional[str]:
-    """Verify signed client token. Returns username if valid and unexpired."""
-    if not token or not isinstance(token, str):
-        return None
-    try:
-        raw = base64.urlsafe_b64decode(token.encode()).decode()
-        parts = raw.split(":")
-        if len(parts) != 3:
-            return None
-        username, expires_at_str, sig = parts
-        expires_at = int(expires_at_str)
-        if time.time() > expires_at:
-            return None
-        payload = f"{username}:{expires_at}"
-        expected_sig = hmac.new(DEVICE_REMEMBER_SECRET, payload.encode(), hashlib.sha256).hexdigest()
-        if hmac.compare_digest(sig, expected_sig):
-            return username
-    except Exception:
-        return None
-    return None
 
 @st.cache_data(ttl=3600, show_spinner=False)
 def get_base64_image(image_path):
@@ -590,11 +569,48 @@ def get_css(lang='ar'):
             border-radius: 50% !important;
         }}
         
-        /* Header specific for dataframes to handle high brightness */
-        [data-testid="stDataFrame"] div[role="columnheader"] {{
-            background-color: rgba(240, 240, 240, 0.9) !important;
-            color: #000000 !important;
-            font-weight: 700 !important;
+        /* Center dataframe/table headers (HTML-rendered tables + accessibility tree).
+           NOTE: st.dataframe body cells are canvas-drawn and aligned via column
+           config `alignment=left`; headers render centered with exact-fit widths. */
+        [data-testid="stDataFrame"] th[role="columnheader"],
+        [data-testid="stDataFrame"] div[role="columnheader"],
+        [data-testid="stDataFrame"] [role="columnheader"],
+        [data-testid="stTable"] thead th,
+        [data-testid="stTable"] th {{
+            text-align: center !important;
+        }}
+        [data-testid="stDataFrame"] th[role="columnheader"] > div,
+        [data-testid="stDataFrame"] div[role="columnheader"] > div,
+        [data-testid="stDataFrame"] [role="columnheader"] > div {{
+            text-align: center !important;
+            justify-content: center !important;
+            margin: 0 auto !important;
+        }}
+        /* Headers on one line when space allows (widths are content-fitted,
+           so no truncation); allow wrapping on small screens */
+        [data-testid="stDataFrame"] [role="columnheader"],
+        [data-testid="stTable"] thead th {{
+            white-space: nowrap !important;
+            vertical-align: middle !important;
+        }}
+        @media screen and (max-width: 768px) {{
+            [data-testid="stDataFrame"] [role="columnheader"],
+            [data-testid="stTable"] thead th {{
+                white-space: normal !important;
+            }}
+        }}
+        /* Body cells far-left, headers stay centered */
+        [data-testid="stDataFrame"] td[role="gridcell"],
+        [data-testid="stDataFrame"] div[role="gridcell"],
+        [data-testid="stDataFrame"] [role="gridcell"],
+        [data-testid="stTable"] td {{
+            text-align: left !important;
+        }}
+        [data-testid="stDataFrame"] td[role="gridcell"] > div,
+        [data-testid="stDataFrame"] div[role="gridcell"] > div,
+        [data-testid="stDataFrame"] [role="gridcell"] > div {{
+            text-align: left !important;
+            justify-content: flex-start !important;
         }}
 
         /* Status Column Glows - Enhanced for 2026 High-Tech Look */
@@ -3366,11 +3382,14 @@ def render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search", 
             try:
                 _flag_col = "🏳️ العلم" if is_ar else "🏳️ Flag"
                 st.dataframe(
-                    df_modal, width='stretch', hide_index=True,
-                    column_config={_flag_col: st.column_config.ImageColumn(_flag_col, width="small")}
+                    df_modal, width='content', hide_index=True,
+                    column_config=__apply_pinned_columns(df_modal, {_flag_col: st.column_config.ImageColumn(_flag_col, width="small")})
                 )
             except Exception:
-                st.dataframe(df_modal, width='stretch', hide_index=True)
+                try:
+                    st.dataframe(df_modal, width='content', hide_index=True, column_config=__apply_pinned_columns(df_modal))
+                except Exception:
+                    st.dataframe(df_modal, width='content', hide_index=True)
             st.markdown("</div>", unsafe_allow_html=True)
 
         with tab_copy:
@@ -4144,6 +4163,24 @@ def render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search", 
                     )
     
     st.markdown(f"#### 🔎 {t('preview_cv', lang)}")
+
+    # Direct per-worker CV download button (same original file & mechanism as the grid link).
+    # An HTML anchor styled as a button: no widget-ID conflicts across panels,
+    # opens the worker's own file in a new tab.
+    _cv_dl_url = str(cv_url).strip().replace('"', '') if cv_url else ""
+    if _cv_dl_url.lower().startswith("http"):
+        _dl_label = "⬇ تحميل السيرة الذاتية" if lang == 'ar' else "⬇ Download CV"
+        st.markdown(
+            f"""<a href="{_cv_dl_url}" target="_blank" rel="noopener noreferrer" style="
+                display: block; text-align: center; text-decoration: none;
+                background: linear-gradient(135deg, #1A1A1A 0%, #262626 100%);
+                color: #D4AF37; font-weight: 700; font-family: 'Cairo', sans-serif;
+                border: 1px solid rgba(212, 175, 55, 0.4); border-radius: 12px;
+                padding: 0.75rem 2rem; margin: 10px 0; letter-spacing: 1px;
+                box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);">{_dl_label}</a>""",
+            unsafe_allow_html=True)
+    else:
+        st.info("ℹ️ " + ("السيرة الذاتية غير متوفرة لهذا المرشح" if lang == 'ar' else "CV not available for this worker"))
     
     if cv_url and str(cv_url).startswith("http"):
         # NEW: Defer iframe loading to improve selection speed
@@ -5513,80 +5550,171 @@ def __apply_pinned_columns(df_or_style, cfg=None):
     if cfg is None: cfg = {}
     import streamlit as st
     import pandas as pd
-    
+
     # Priority Keywords for Pinning
     pin_keywords = [
         "حالة العقد", "contract status", "status",
         "وقت", "طابع", "timestamp", "registration",
-        "الاسم", "name", 
+        "الاسم", "name",
         "جنسية", "nationality", "🚩", "دولة", "country",
         "جنس", "gender"
     ]
-    
+
     # Handle both DataFrame and Styler
     df_temp = None
     if hasattr(df_or_style, 'data'):
         df_temp = df_or_style.data
-        cols = df_temp.columns
+        cols = list(df_temp.columns)
     elif hasattr(df_or_style, 'columns'):
         df_temp = df_or_style
-        cols = df_temp.columns
+        cols = list(df_temp.columns)
     else:
         return cfg
-        
-    # Helper function to reliably estimate screen pixel width of a string in Streamlit's font
+
+    # Helper: estimate rendered pixel width of a string in Streamlit's font.
+    # Calibrated to fit exactly without extra blank space.
     def estimate_px(text):
+        s = str(text).replace("\xA0", "").strip()
+        if s in ("", "nan", "None", "NaT", "-"): return 0
         px = 0
-        for char in str(text):
-            if '\u0600' <= char <= '\u06FF': px += 8   # Arabic characters are wider
-            elif char.isupper(): px += 8.5            # Capital letters
-            elif char.isdigit(): px += 7.5            # Numbers
-            elif char.islower(): px += 6.5            # Lowercase letters
-            else: px += 5                             # Spaces and punctuation
+        for char in s:
+            o = ord(char)
+            if 0x1F300 <= o <= 0x1FAFF or 0x2600 <= o <= 0x27BF or 0xFE00 <= o <= 0xFE0F or char in ("✅", "❌", "⚠️", "🚹", "🚺"):
+                px += 14  # emoji / icons
+            elif '\u0600' <= char <= '\u06FF': px += 8
+            elif char.isupper(): px += 8.5
+            elif char.isdigit(): px += 7.5
+            elif char.islower(): px += 6.5
+            else: px += 5
         return px
-        
+
+    def _is_cv_col(col_key, col_str):
+        # CV download column by name (AR/EN) or by LinkColumn type.
+        try:
+            tc = cfg.get(col_key, {}).get("type_config") or {}
+            if isinstance(tc, dict) and tc.get("type") == "link":
+                return True
+        except Exception:
+            pass
+        cl = col_str.lower().strip()
+        return ("سيرة" in col_str) or ("download cv" in cl) or (cl == "cv")
+
+    def _center(col_key):
+        # Canvas-level alignment: column configs are dicts serialized to JSON,
+        # the frontend reads `alignment` -> contentAlignment for every cell.
+        # Headers stay centered (verified). Body goes far-left, EXCEPT the CV
+        # download column which goes far-right per requirement (physical right
+        # in both RTL and LTR, with the renderer's native cell padding kept).
+        try:
+            col_str = str(col_key).replace("\xA0", "").strip()
+            if col_str.startswith("🚩") or "🏳️" in col_str:
+                return  # flag icons keep the renderer's default (centered)
+            try:
+                tc0 = cfg.get(col_key, {}).get("type_config") or {}
+                if isinstance(tc0, dict) and tc0.get("type") == "image":
+                    return
+            except Exception:
+                pass
+            cfg[col_key]["alignment"] = "center" if _is_cv_col(col_key, col_str) else "left"
+        except Exception:
+            pass
+
     for col in cols:
-        col_str = str(col)
-        # Determine Pinning
+        # Clean any old NBSP padding from previous versions
+        col_str = str(col).replace("\xA0", "").strip()
+        if col_str.startswith("__"):
+            continue
         should_pin = any(kw.lower() in col_str.lower() for kw in pin_keywords)
-        
-        # Calculate pixel width of the header
+
+        # Flag image column: fixed narrow width, no text measuring
+        if col_str.startswith("🚩"):
+            target_w = 52
+            if col in cfg:
+                try:
+                    cfg[col]["width"] = target_w
+                    if should_pin: cfg[col]["pinned"] = True
+                except Exception:
+                    try: cfg[col].width = target_w
+                    except Exception: pass
+            else:
+                cfg[col] = st.column_config.ImageColumn(label=col_str, width=target_w, pinned=True if should_pin else None)
+            _center(col)
+            continue
+
         header_px = estimate_px(col_str)
         max_px = header_px
-        
-        if df_temp is not None and col in df_temp.columns:
+        try:
+            _cfg_tc = (cfg.get(col, {}) or {}).get("type_config") or {}
+        except Exception:
+            _cfg_tc = {}
+        _is_link_cfg = isinstance(_cfg_tc, dict) and _cfg_tc.get("type") == "link"
+        _is_img_cfg = isinstance(_cfg_tc, dict) and _cfg_tc.get("type") == "image"
+        if _is_link_cfg:
+            # LinkColumn shows a download icon/label, not raw URLs:
+            # fit the column to the header + icon, keeping it narrow.
+            max_px = max(max_px, 40.0)
+        elif _is_img_cfg:
+            # Image columns (flags, CV icon buttons): fit to the header only;
+            # never measure URL/data-URI strings.
+            max_px = header_px
+        elif df_temp is not None and col in df_temp.columns:
             try:
-                # Find maximum pixel width among all items in the column efficiently
-                data_px = df_temp[col].astype(str).apply(estimate_px).max()
-                if pd.notna(data_px):
-                    max_px = max(max_px, data_px + 20) # +20px safety margin for the cell padding
-            except:
+                vals = df_temp[col].astype(str)
+                # Skip empty placeholders for measuring
+                vals = vals[~vals.isin(["", "nan", "None", "NaT", "None ", "nan "])]
+                if not vals.empty:
+                    # Measure the whole column so width matches the longest word exactly
+                    data_px = vals.apply(estimate_px).max()
+                    if pd.notna(data_px):
+                        max_px = max(max_px, float(data_px))
+            except Exception:
                 pass
-                
-        # Force the column to be as wide as the longest string by injecting non-breaking spaces (\xA0)
-        diff_px = max_px - header_px
-        padded_label = col_str
-        
-        if diff_px > 0:
-            # A non-breaking space in Streamlit's font is approx 3 pixels wide
-            pad_amount = int(diff_px / 3) + 8 # +8 extra spaces for margin
-            left_pad = pad_amount // 2
-            right_pad = pad_amount - left_pad
-            padded_label = ("\xA0" * left_pad) + col_str + ("\xA0" * right_pad)
+
+        # Exact fit: content + minimal cell padding, no extra blank on the sides.
+        # Max raised so long headers (AR ~34 chars, EN originals) never truncate;
+        # horizontal scroll is preserved for wide tables.
+        fit_px = int(max_px + 14)
+        # Clamp to avoid one long column (e.g. skills) blowing up the layout
+        fit_px = max(50, min(fit_px, 460))
+
+        if col in cfg:
+            existing = cfg[col]
+            try:
+                # Column config objects behave like dicts in streamlit>=1.30
+                existing["width"] = fit_px
+                # Remove any old NBSP-padded label
+                try:
+                    lbl = existing.get("label")
+                    if isinstance(lbl, str) and "\xA0" in lbl:
+                        existing["label"] = col_str
+                except Exception:
+                    pass
+                if should_pin:
+                    try:
+                        if not existing.get("pinned"):
+                            existing["pinned"] = True
+                    except Exception:
+                        pass
+            except Exception:
+                try:
+                    existing.width = fit_px
+                except Exception:
+                    pass
+            _center(col)
         else:
-            # Minimal default padding just in case
-            padded_label = ("\xA0" * 4) + col_str + ("\xA0" * 4)
-        
-        if col not in cfg:
-            # Create new column config with padded width logic
-            cfg[col] = st.column_config.Column(pinned=should_pin, label=padded_label)
-        else:
-            # Update dictionary if passed as one
-            if isinstance(cfg[col], dict):
-                cfg[col]["pinned"] = should_pin
-                if "label" not in cfg[col]:
-                    cfg[col]["label"] = padded_label
-    
+            # Numeric dtypes (age, counts) must use TextColumn: the default
+            # number renderer only supports left/right and ignores center,
+            # while TextColumn centers. Sorting is done in pandas beforehand.
+            try:
+                is_num = pd.api.types.is_numeric_dtype(df_temp[col])
+            except Exception:
+                is_num = False
+            if is_num:
+                cfg[col] = st.column_config.TextColumn(label=col_str, width=fit_px, pinned=True if should_pin else None)
+            else:
+                cfg[col] = st.column_config.Column(label=col_str, width=fit_px, pinned=True if should_pin else None)
+            _center(col)
+
     return cfg
 
 def render_dashboard_content():
@@ -5824,9 +5952,13 @@ def render_dashboard_content():
         final_cfg = {}
         if cv_col and cv_col in new_names:
             trans_cv_col = new_names[cv_col]
+            # Clickable CV link (ImageColumn cells are NOT clickable in
+            # st.dataframe, so the link column stays: per-row file opens).
             final_cfg[trans_cv_col] = st.column_config.LinkColumn(
-                t("cv_download", lang), 
-                display_text=t("download_pdf", lang)
+                t("cv_download", lang),
+                display_text="🟦🟦🟦⬇️🟦🟦🟦",
+                help="⬇ " + ("تحميل السيرة الذاتية" if lang == 'ar' else "Download CV"),
+                validate="^https?://"
             )
         
         # Suffix Configuration for Numeric Remaining Column
@@ -6231,14 +6363,15 @@ def render_search_content():
             # --- ROW SELECTION & PROFESSIONAL UI ---
 
             
-            # Configure columns for better look
+            # Clickable CV link per row (opens that worker's own file).
+            # ImageColumn cells are not clickable in st.dataframe.
             column_config = {}
             cv_col_name = t_col("Download CV", lang)
             column_config[cv_col_name] = st.column_config.LinkColumn(
                 cv_col_name,
-                help="Click to open original file",
-                validate="^http",
-                display_text="فتح الملف 🔗"
+                display_text="🟦🟦🟦⬇️🟦🟦🟦",
+                help="⬇ " + ("تحميل السيرة الذاتية" if lang == 'ar' else "Download CV"),
+                validate="^https?://",
             )
             
             # Numeric Suffix for Search
@@ -6644,7 +6777,7 @@ def render_login_history_content():
             ("التاريخ" if is_ar else "Date"): e.get("date", ""),
             ("الوقت" if is_ar else "Time"): e.get("time", ""),
         } for e in rows])
-        st.dataframe(disp, width="stretch", hide_index=True)
+        st.dataframe(disp, width="content", hide_index=True, column_config=__apply_pinned_columns(disp))
     st.divider()
     c1, c2 = st.columns(2)
     with c1:

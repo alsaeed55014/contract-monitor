@@ -7,10 +7,10 @@ import html
 import time
 from datetime import datetime, timedelta
 # WhatsAppService is imported lazily inside render_whatsapp_page() to avoid blocking app startup with selenium
-from src.utils.phone_utils import validate_numbers, format_phone_number, save_to_local_desktop, render_pasha_export_button
+from src.utils.phone_utils import validate_numbers, format_phone_number
+from src.utils.data_utils import build_auto_column_config
 from src.core.i18n import t
 from src.config import WA_HISTORY_FILE, WA_TEMPLATES_FILE
-from src.ui.styles import get_base64_image
 import random
 
 # --- Smart Message Templates (Updated 2026-03-20) ---
@@ -1027,7 +1027,7 @@ def render_whatsapp_page():
                 # ── عرض عينة من البيانات للتحقق (Debug) ──────────────────────────────
                 with st.expander("🔍 عينة من البيانات (للتأكد من المحتوى)", expanded=False):
                     sample_df = pd.DataFrame(all_sys_records[:5])
-                    st.dataframe(sample_df)
+                    st.dataframe(sample_df, width='content', hide_index=True, column_config=build_auto_column_config(sample_df))
                 
                 # ─ـ تحويل البيانات إلى DataFrame لاستخدام SmartSearchEngine ──────────────────────────────
                 sys_df = pd.DataFrame(all_sys_records)
@@ -1154,21 +1154,21 @@ def render_whatsapp_page():
                     st.markdown("### 📊 جدول نتائج البحث الشامل")
                     st.dataframe(
                         disp_df,
-                        use_container_width=True,
+                        width='content',
                         hide_index=True,
-                        column_config={
-                            '#': st.column_config.NumberColumn('#', width='small'),
-                            'الاسم': st.column_config.TextColumn('الاسم', width='medium'),
-                            '📱 رقم التليفون': st.column_config.TextColumn('📱 رقم التليفون', width='medium'),
-                            'المدينة': st.column_config.TextColumn('المدينة', width='medium'),
-                            'المهنة / النشاط': st.column_config.TextColumn('المهنة / النشاط', width='medium'),
-                            'المصدر': st.column_config.TextColumn('المصدر', width='medium'),
-                            'الشركة': st.column_config.TextColumn('الشركة', width='medium'),
-                            'المسؤول': st.column_config.TextColumn('المسؤول', width='medium'),
-                            'الجنسية': st.column_config.TextColumn('الجنسية', width='medium'),
-                            'الراتب': st.column_config.TextColumn('الراتب', width='small'),
-                            'طبيعة العمل': st.column_config.TextColumn('طبيعة العمل', width='medium'),
-                        }
+                        column_config=build_auto_column_config(disp_df, {
+                            '#': st.column_config.NumberColumn('#'),
+                            'الاسم': st.column_config.TextColumn('الاسم'),
+                            '📱 رقم التليفون': st.column_config.TextColumn('📱 رقم التليفون'),
+                            'المدينة': st.column_config.TextColumn('المدينة'),
+                            'المهنة / النشاط': st.column_config.TextColumn('المهنة / النشاط'),
+                            'المصدر': st.column_config.TextColumn('المصدر'),
+                            'الشركة': st.column_config.TextColumn('الشركة'),
+                            'المسؤول': st.column_config.TextColumn('المسؤول'),
+                            'الجنسية': st.column_config.TextColumn('الجنسية'),
+                            'الراتب': st.column_config.TextColumn('الراتب'),
+                            'طبيعة العمل': st.column_config.TextColumn('طبيعة العمل'),
+                        })
                     )
 
                     st.markdown("**اختر السجلات للإضافة:**")
@@ -2217,16 +2217,25 @@ def render_whatsapp_page():
                                             return "color: #3498db; font-weight: bold;"
                                         return "color: #4CAF50;"
 
-                                    _styler = _disp_df.style.map(_wa_color, subset=[c for c in [_LBL_NAT, _LBL_GENDER] if c in _disp_df.columns])
+                                    _styler = _disp_df.style.map(_wa_color, subset=[c for c in [_LBL_NAT, _LBL_GENDER] if c in _disp_df.columns]).set_properties(
+                                        **{'text-align': 'left'}
+                                    ).set_table_styles([
+                                        {'selector': 'th', 'props': [('text-align', 'center'), ('vertical-align', 'middle')]},
+                                        {'selector': 'td', 'props': [('text-align', 'left')]}
+                                    ])
                                     _col_cfg = {}
                                     if _LBL_FLAG in _disp_df.columns:
                                         try:
                                             _col_cfg[_LBL_FLAG] = st.column_config.ImageColumn(_LBL_FLAG, width="small")
                                         except Exception:
                                             pass
-                                    st.dataframe(_styler, width="stretch", hide_index=True, column_config=_col_cfg)
+                                    st.dataframe(_styler, width="content", hide_index=True, column_config=build_auto_column_config(_styler, _col_cfg))
                                 except Exception:
-                                    st.dataframe(pd.DataFrame(display_rows), width="stretch", hide_index=True)
+                                    try:
+                                        _fb = pd.DataFrame(display_rows)
+                                        st.dataframe(_fb, width="content", hide_index=True, column_config=build_auto_column_config(_fb))
+                                    except Exception:
+                                        st.dataframe(pd.DataFrame(display_rows), width="content", hide_index=True)
 
                                 with_phone = sum(1 for r in display_rows if str(r[("الجوال" if is_ar else "Phone")]).strip())
                                 st.caption(

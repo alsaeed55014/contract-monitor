@@ -1,181 +1,124 @@
 import pandas as pd
 import re
-from datetime import datetime
 import streamlit as st
 
-FLAG_MAP = {
-    # Arabic
-    "هندي": "in", "هندية": "in", "الهند": "in",
-    "فلبيني": "ph", "فلبينية": "ph", "الفلبين": "ph",
-    "نيبالي": "np", "نيبالية": "np", "نيبال": "np",
-    "بنجلاديشي": "bd", "بنجالية": "bd", "بنجلاديش": "bd", "بنقالي": "bd",
-    "باكستاني": "pk", "باكستانية": "pk", "باكستان": "pk",
-    "مصري": "eg", "مصرية": "eg", "مصر": "eg",
-    "سوداني": "sd", "سودانية": "sd", "السودان": "sd",
-    "سيريلانكي": "lk", "سيريلانكية": "lk", "سيريلانكا": "lk",
-    "كيني": "ke", "كينية": "ke", "كينيا": "ke",
-    "اوغندي": "ug", "اوغندية": "ug", "اوغندا": "ug",
-    "اثيوبي": "et", "اثيوبية": "et", "اثيوبيا": "et",
-    "مغربي": "ma", "مغربية": "ma", "المغرب": "ma",
-    "يمني": "ye", "يمنية": "ye", "اليمن": "ye",
-    "اندونيسي": "id", "اندونيسية": "id", "اندونيسيا": "id", "اندونيسا": "id",
-    "رواندي": "rw", "رواندية": "rw", "رواندا": "rw", "روندا": "rw", "روندي": "rw", "روندية": "rw",
-    "افغاني": "af", "افغانية": "af", "افغانستان": "af", "افغان": "af",
-    "نيجيري": "ng", "نيجيرية": "ng", "نيجيريا": "ng", "نيجريا": "ng", "نيجري": "ng", "نيجرية": "ng",
-    # English
-    "indian": "in", "filipino": "ph", "nepi": "np", "nepali": "np", "nepal": "np",
-    "bangla": "bd", "bangladeshi": "bd", "pakistan": "pk", "pakistani": "pk",
-    "egypt": "eg", "egyptian": "eg", "sudan": "sd", "sudanese": "sd",
-    "sri lanka": "lk", "sri lankan": "lk", "kenya": "ke", "kenyan": "ke",
-    "uganda": "ug", "ugandan": "ug", "ethiopia": "et", "ethiopian": "et",
-    "indonesian": "id", "indonesia": "id", "rwandan": "rw", "rwanda": "rw",
-    "afghan": "af", "afghanistan": "af", "nigerian": "ng", "nigeria": "ng"
-}
+def build_auto_column_config(df_or_styler, cfg=None):
+    """Auto-fit every column to its header + content (exact width, no truncation).
 
-GENDER_MAP = {
-    "ذكر": "🚹", "male": "🚹",
-    "أنثى": "🚺", "female": "🚺"
-}
+    Shared helper for tables that don't use pinning (WhatsApp results, modals,
+    previews). Headers render centered, body cells far-left. Existing entries
+    (ImageColumn/LinkColumn/NumberColumn) keep their type and only gain an
+    exact pixel width. Returns the cfg dict ready for st.dataframe.
+    """
+    if cfg is None:
+        cfg = {}
 
-def auto_translate(val, target_lang='en'):
-    if not val or not isinstance(val, (str, object)):
-        return val
-    
-    val_str = str(val).strip()
-    if not val_str or len(val_str) < 2:
-        return val
-        
-    # Skip non-translatable text (numbers, dates, phones, symbols)
-    if not re.search(r'[a-zA-Z\u0600-\u06FF]', val_str) or re.match(r'^[\+\d\s\-\(\)\./:,#%*!=@&]+$', val_str):
-        return val_str
+    if hasattr(df_or_styler, 'data'):
+        df_temp = df_or_styler.data
+        cols = list(df_temp.columns)
+    elif hasattr(df_or_styler, 'columns'):
+        df_temp = df_or_styler
+        cols = list(df_temp.columns)
+    else:
+        return cfg
 
-    if any(err in val_str.lower() for err in ["error 500", "server error", "that's an error", "that’s an error", "translation error"]):
-        return val_str
-    
-    curr_lang = st.session_state.get('lang', 'ar')
-    if curr_lang != target_lang:
-        return val
-        
-    has_ar = any('\u0600' <= char <= '\u06FF' for char in val_str)
-    if not has_ar and target_lang == 'en':
-        return val
-    if has_ar and target_lang == 'ar':
-        return val
+    def estimate_px(text):
+        s = str(text).replace("\xA0", "").strip()
+        if s in ("", "nan", "None", "NaT", "-"):
+            return 0
+        px = 0
+        for char in s:
+            o = ord(char)
+            if 0x1F300 <= o <= 0x1FAFF or 0x2600 <= o <= 0x27BF or 0xFE00 <= o <= 0xFE0F or char in ("✅", "❌", "⚠️", "🚹", "🚺"):
+                px += 14
+            elif '\u0600' <= char <= '\u06FF':
+                px += 8
+            elif char.isupper():
+                px += 8.5
+            elif char.isdigit():
+                px += 7.5
+            elif char.islower():
+                px += 6.5
+            else:
+                px += 5
+        return px
 
-    try:
-        if 'tm' not in st.session_state or st.session_state.tm is None:
-            from src.core.translation import TranslationManager
-            st.session_state.tm = TranslationManager()
-        
-        tm = st.session_state.tm
-        if len(val_str.split()) <= 2:
-            translated = tm.translate_word(val_str)
-            if isinstance(translated, list): translated = translated[0]
-            if translated != val_str: return translated
-            
-        res = tm.translate_full_text(val_str, target_lang=target_lang)
-        if res and not any(err in str(res).lower() for err in ["error 500", "server error", "that's an error", "that’s an error", "translation error", "<html"]):
-            return res
-        return val
-    except:
-        return val
-
-def style_df(df):
-    if not isinstance(df, pd.DataFrame):
-        return df
-
-    styled_df = df.copy()
-    lang = st.session_state.get('lang', 'ar')
-    
-    if lang == 'en':
-        for col in styled_df.columns:
-            if not str(col).startswith("🚩_") and styled_df[col].dtype == 'object':
-                styled_df[col] = styled_df[col].apply(lambda x: auto_translate(x, target_lang='en'))
-
-    nat_cols = [c for c in styled_df.columns if any(kw in str(c).lower() for kw in ["nationality", "الجنسية"])]
-    for col in nat_cols:
-        flag_col = f"🚩_{col}"
-        if flag_col not in styled_df.columns:
-            def get_flag_url(val):
-                if not val: return None
-                s_val = str(val).strip().lower()
-                sorted_keys = sorted(FLAG_MAP.keys(), key=len, reverse=True)
-                for key in sorted_keys:
-                    code = FLAG_MAP[key]
-                    if len(key) <= 3:
-                        pattern = r'(?:^|[\s,:;.\-/])' + re.escape(key) + r'(?:[\s,:;.\-/]|$)'
-                        if re.search(pattern, s_val):
-                            return f"https://cdn.jsdelivr.net/gh/lipis/flag-icons@7.2.0/flags/4x3/{code.lower()}.svg"
-                    else:
-                        if key in s_val:
-                            return f"https://cdn.jsdelivr.net/gh/lipis/flag-icons@7.2.0/flags/4x3/{code.lower()}.svg"
-                return None
-            
-            idx = list(styled_df.columns).index(col)
-            styled_df.insert(idx, flag_col, styled_df[col].apply(get_flag_url))
-        
-        def clean_val(v):
-            if not v: return v
-            return re.sub(r'[\U0001F1E6-\U0001F1FF]{2}\s*', '', str(v))
-        styled_df[col] = styled_df[col].apply(clean_val)
-
-    gen_cols = [c for c in styled_df.columns if any(kw in str(c).lower() for kw in ["gender", "الجنس"]) and str(c).lower() != "الجنسية"]
-    for col in gen_cols:
-        def add_gender_icon(val):
-            if not val: return val
-            s_val = str(val).strip().lower()
-            for key, icon in GENDER_MAP.items():
-                if key == s_val:
-                    return f"{icon} {val}"
-            return val
-        styled_df[col] = styled_df[col].apply(add_gender_icon)
-
-    def apply_colors(val):
-        s_val = str(val).lower()
-        if any(k in s_val for k in ["🚺", "أنثى", "female"]):
-            return "color: #e91e63; font-weight: bold;"
-        if any(k in s_val for k in ["🚹", "ذكر", "male"]):
-            return "color: #3498db; font-weight: bold;" 
-        return "color: #4CAF50;"
-
-    return styled_df.style.format(
-        precision=2, 
-        thousands="", 
-        na_rep="",
-        subset=[c for c in styled_df.columns if styled_df[c].dtype in ['float64', 'int64']]
-    ).map(apply_colors, subset=[c for c in styled_df.columns if not str(c).startswith("🚩_")])
-
-def clean_date_display(df):
-    if not isinstance(df, pd.DataFrame) or df.empty:
-        return df
-        
-    from dateutil import parser as dateutil_parser
-    
-    def _parse_to_date_str(val):
-        if val is None or str(val).strip() == '': return ""
+    for col in cols:
+        col_str = str(col).replace("\xA0", "").strip()
+        if col_str.startswith("__"):
+            continue
+        if col_str.startswith("🚩") or "🏳️" in col_str:
+            if col in cfg:
+                try:
+                    cfg[col]["width"] = 52
+                except Exception:
+                    pass
+            else:
+                cfg[col] = st.column_config.ImageColumn(label=col_str, width=52)
+            continue
+        header_px = estimate_px(col_str)
+        max_px = header_px
         try:
-            val_str = str(val).strip()
-            a_to_w = str.maketrans('٠١٢٣٤٥٦٧٨٩', '0123456789')
-            val_str = val_str.translate(a_to_w)
-            clean_s = re.sub(r'[صم]', '', val_str).strip()
-            dt = dateutil_parser.parse(clean_s, dayfirst=False)
-            return dt.strftime('%Y-%m-%d')
-        except:
+            _cfg_tc = (cfg.get(col, {}) or {}).get("type_config") or {}
+        except Exception:
+            _cfg_tc = {}
+        _is_link_cfg = isinstance(_cfg_tc, dict) and _cfg_tc.get("type") == "link"
+        _is_img_cfg = isinstance(_cfg_tc, dict) and _cfg_tc.get("type") == "image"
+        if _is_link_cfg:
+            max_px = max(max_px, 40.0)
+        elif _is_img_cfg:
+            max_px = header_px
+        else:
             try:
-                dt = pd.to_datetime(val, errors='coerce')
-                if pd.isna(dt): return str(val)
-                return dt.strftime('%Y-%m-%d')
-            except:
-                return str(val)
-
-    date_keywords = ["date", "time", "تاريخ", "طابع", "التسجيل", "expiry", "end", "متى"]
-    for col in df.columns:
-        col_lower = str(col).lower()
-        if any(kw in col_lower for kw in date_keywords):
-            df[col] = df[col].apply(_parse_to_date_str)
-            
-    return df
-
+                vals = df_temp[col].astype(str)
+                vals = vals[~vals.isin(["", "nan", "None", "NaT", "None ", "nan "])]
+                if not vals.empty:
+                    data_px = vals.apply(estimate_px).max()
+                    if pd.notna(data_px):
+                        max_px = max(max_px, float(data_px))
+            except Exception:
+                pass
+        fit_px = max(50, min(int(max_px + 14), 460))
+        try:
+            _tc = (cfg.get(col, {}) or {}).get("type_config") or {}
+        except Exception:
+            _tc = {}
+        _is_link = isinstance(_tc, dict) and _tc.get("type") == "link"
+        _cl = col_str.lower().strip()
+        _is_cv = _is_link or ("سيرة" in col_str) or ("download cv" in _cl) or (_cl == "cv")
+        _align = "center" if _is_cv else "left"
+        _is_flag = col_str.startswith("🚩") or "🏳️" in col_str or (isinstance(_tc, dict) and _tc.get("type") == "image")
+        if col in cfg:
+            try:
+                cfg[col]["width"] = fit_px
+                try:
+                    lbl = cfg[col].get("label")
+                    if isinstance(lbl, str) and "\xA0" in lbl:
+                        cfg[col]["label"] = col_str
+                except Exception:
+                    pass
+                if not _is_flag:
+                    try:
+                        cfg[col]["alignment"] = _align
+                    except Exception:
+                        pass
+            except Exception:
+                pass
+        else:
+            try:
+                is_num = pd.api.types.is_numeric_dtype(df_temp[col])
+            except Exception:
+                is_num = False
+            if is_num:
+                cfg[col] = st.column_config.TextColumn(label=col_str, width=fit_px)
+            else:
+                cfg[col] = st.column_config.Column(label=col_str, width=fit_px)
+            if not _is_flag:
+                try:
+                    cfg[col]["alignment"] = _align
+                except Exception:
+                    pass
+    return cfg
 def sort_by_reg_date_desc(df):
     """Sort any data table newest-first by registration date (الأحدث أولاً).
 
