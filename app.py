@@ -5599,12 +5599,36 @@ def __apply_pinned_columns(df_or_style, cfg=None):
         cl = col_str.lower().strip()
         return ("سيرة" in col_str) or ("download cv" in cl) or (cl == "cv")
 
+    def _col_needs_right(col_key, col_str):
+        # Verified (screenshot A/B): the canvas renderer ignores
+        # textAlign="left", which clips emoji-led/RTL strings to a sliver.
+        # "right" is the only fully-rendered alignment for such content.
+        try:
+            if any('\u0600' <= ch <= '\u06FF' for ch in col_str):
+                return True
+            _lk = col_key if col_key in df_temp.columns else col_str
+            if _lk not in df_temp.columns:
+                return False
+            vals = df_temp[_lk].astype(str)
+            sample = vals.head(60) if len(vals) > 60 else vals
+            for v in sample:
+                s = str(v)
+                if any('\u0600' <= ch <= '\u06FF' for ch in s):
+                    return True
+                for ch in s:
+                    o = ord(ch)
+                    if 0x1F300 <= o <= 0x1FAFF or 0x2600 <= o <= 0x27BF or 0xFE00 <= o <= 0xFE0F:
+                        return True
+        except Exception:
+            pass
+        return False
+
     def _center(col_key):
         # Canvas-level alignment: column configs are dicts serialized to JSON,
         # the frontend reads `alignment` -> contentAlignment for every cell.
-        # Headers stay centered (verified). Body goes far-left, EXCEPT the CV
-        # download column which goes far-right per requirement (physical right
-        # in both RTL and LTR, with the renderer's native cell padding kept).
+        # Headers stay centered (verified). CV download column centered.
+        # RTL/emoji-led body MUST be right (left clips it - verified);
+        # Latin body stays far-left per requirement.
         try:
             col_str = str(col_key).replace("\xA0", "").strip()
             if col_str.startswith("🚩") or "🏳️" in col_str:
@@ -5615,7 +5639,12 @@ def __apply_pinned_columns(df_or_style, cfg=None):
                     return
             except Exception:
                 pass
-            cfg[col_key]["alignment"] = "center" if _is_cv_col(col_key, col_str) else "left"
+            if _is_cv_col(col_key, col_str):
+                cfg[col_key]["alignment"] = "center"
+            elif _col_needs_right(col_key, col_str):
+                cfg[col_key]["alignment"] = "right"
+            else:
+                cfg[col_key]["alignment"] = "left"
         except Exception:
             pass
 

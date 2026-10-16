@@ -86,7 +86,31 @@ def build_auto_column_config(df_or_styler, cfg=None):
         _is_link = isinstance(_tc, dict) and _tc.get("type") == "link"
         _cl = col_str.lower().strip()
         _is_cv = _is_link or ("سيرة" in col_str) or ("download cv" in _cl) or (_cl == "cv")
-        _align = "center" if _is_cv else "left"
+        if _is_cv:
+            _align = "center"
+        else:
+            _align = "left"
+            try:
+                _rtl_hit = any('\u0600' <= ch <= 'ۿ' for ch in col_str)
+                if not _rtl_hit and col in df_temp.columns:
+                    _svals = df_temp[col].astype(str)
+                    _samp = _svals.head(60) if len(_svals) > 60 else _svals
+                    for _v in _samp:
+                        _s = str(_v)
+                        if any('\u0600' <= ch <= 'ۿ' for ch in _s):
+                            _rtl_hit = True
+                            break
+                        for _ch in _s:
+                            _o = ord(_ch)
+                            if 0x1F300 <= _o <= 0x1FAFF or 0x2600 <= _o <= 0x27BF or 0xFE00 <= _o <= 0xFE0F:
+                                _rtl_hit = True
+                                break
+                        if _rtl_hit:
+                            break
+                if _rtl_hit:
+                    _align = "right"
+            except Exception:
+                pass
         _is_flag = col_str.startswith("🚩") or "🏳️" in col_str or (isinstance(_tc, dict) and _tc.get("type") == "image")
         if col in cfg:
             try:
