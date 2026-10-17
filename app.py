@@ -5908,6 +5908,22 @@ def render_dashboard_content():
         with tc1:
             use_work_outside = st.checkbox(t("work_outside_city", lang), key="dash_use_work_outside")
 
+        # 4. Row: New Smart Filters (Ready to Work / Iqama Valid / Experience) - Centered
+        st.markdown("<div style='margin-bottom: 10px;'></div>", unsafe_allow_html=True)
+        # Using 5 columns [Pad, Ready, Iqama, Experience, Pad] to center 3 items
+        n_pad1, nc1, nc2, nc3, n_pad2 = st.columns([0.4, 1, 1, 1.7, 0.4])
+        yes_no_opts = [t("filter_option_all", lang), t("filter_option_yes", lang), t("filter_option_no", lang)]
+        with nc1:
+            st.markdown(f'<div style="font-family: \'Cairo\', sans-serif; font-size: 0.88rem; font-weight: 600; color: #FFFFFF; text-align: right; margin-bottom: 6px;">{t("ready_to_work_filter", lang)}</div>', unsafe_allow_html=True)
+            sel_ready = st.selectbox("", options=yes_no_opts, key="dash_ready_to_work", label_visibility="collapsed")
+        with nc2:
+            st.markdown(f'<div style="font-family: \'Cairo\', sans-serif; font-size: 0.88rem; font-weight: 600; color: #FFFFFF; text-align: right; margin-bottom: 6px;">{t("iqama_valid_filter", lang)}</div>', unsafe_allow_html=True)
+            sel_iqama = st.selectbox("", options=yes_no_opts, key="dash_iqama_valid", label_visibility="collapsed")
+        with nc3:
+            st.markdown(f'<div style="font-family: \'Cairo\', sans-serif; font-size: 0.88rem; font-weight: 600; color: #FFFFFF; text-align: right; margin-bottom: 6px;">{t("experience_field_filter", lang)}</div>', unsafe_allow_html=True)
+            exp_placeholder = "مثل: < 1 أو > 5 أو = 3 سنوات" if lang == 'ar' else "e.g. < 1 or > 5 or = 3 years"
+            sel_exp = st.text_input("", placeholder=exp_placeholder, key="dash_experience_input", label_visibility="collapsed")
+
     dash_query = st.text_input(t("smart_search", lang), placeholder=t("search_placeholder", lang), key="dash_search_query")
     dash_search_clicked = st.button(t("search_btn", lang), key="dash_search_btn", width='stretch', type="primary")
 
@@ -5923,6 +5939,29 @@ def render_dashboard_content():
     if use_work_outside: dash_filters['work_outside_city'] = True
     if use_domestic_worker: dash_filters['domestic_worker'] = True
     if selected_transfer_key: dash_filters['transfer_count'] = selected_transfer_key
+    # --- New advanced filters: Ready to Work / Iqama Valid / Experience ---
+    if sel_ready and sel_ready != t("filter_option_all", lang):
+        dash_filters['ready_to_work'] = 'Yes' if 'Yes' in sel_ready else 'No'
+    if sel_iqama and sel_iqama != t("filter_option_all", lang):
+        dash_filters['iqama_valid'] = 'Yes' if 'Yes' in sel_iqama else 'No'
+    # Experience: parse custom condition like "< 1", "> 5", "= 3", "<= 2", ">= 10", or just "5"
+    if sel_exp and sel_exp.strip() and sel_exp.strip() != t("filter_option_all", lang):
+        _exp_text = sel_exp.strip()
+        _exp_m = re.match(r'\s*(<=|>=|<|>|=)\s*(\d+)', _exp_text)
+        if _exp_m:
+            _exp_op = _exp_m.group(1)
+            _exp_val = int(_exp_m.group(2))
+        else:
+            _exp_m2 = re.match(r'\s*(\d+)\s*', _exp_text)
+            if _exp_m2:
+                _exp_op = '>='
+                _exp_val = int(_exp_m2.group(1))
+            else:
+                _exp_op = None
+                _exp_val = None
+        if _exp_val is not None:
+            dash_filters['experience_op'] = _exp_op
+            dash_filters['experience_val'] = _exp_val
 
     st.markdown("---")
     # --- END SMART SEARCH UI ---
@@ -6164,6 +6203,21 @@ def render_search_content():
         with tc1:
             use_work_outside = st.checkbox(t("work_outside_city", lang), key="use_work_outside_filter")
 
+        # Row 4: New Smart Filters (Ready to Work / Iqama Valid / Experience) - Centered
+        st.markdown("<div style='margin-bottom: 10px;'></div>", unsafe_allow_html=True)
+        n_pad1, nc1, nc2, nc3, n_pad2 = st.columns([0.4, 1, 1, 1.7, 0.4])
+        yes_no_opts = [t("filter_option_all", lang), t("filter_option_yes", lang), t("filter_option_no", lang)]
+        with nc1:
+            st.markdown(f'<div style="font-family: \'Cairo\', sans-serif; font-size: 0.88rem; font-weight: 600; color: #FFFFFF; text-align: right; margin-bottom: 6px;">{t("ready_to_work_filter", lang)}</div>', unsafe_allow_html=True)
+            sel_ready = st.selectbox("", options=yes_no_opts, key="search_ready_to_work", label_visibility="collapsed")
+        with nc2:
+            st.markdown(f'<div style="font-family: \'Cairo\', sans-serif; font-size: 0.88rem; font-weight: 600; color: #FFFFFF; text-align: right; margin-bottom: 6px;">{t("iqama_valid_filter", lang)}</div>', unsafe_allow_html=True)
+            sel_iqama = st.selectbox("", options=yes_no_opts, key="search_iqama_valid", label_visibility="collapsed")
+        with nc3:
+            st.markdown(f'<div style="font-family: \'Cairo\', sans-serif; font-size: 0.88rem; font-weight: 600; color: #FFFFFF; text-align: right; margin-bottom: 6px;">{t("experience_field_filter", lang)}</div>', unsafe_allow_html=True)
+            exp_placeholder = "مثل: < 1 أو > 5 أو = 3 سنوات" if lang == 'ar' else "e.g. < 1 or > 5 or = 3 years"
+            sel_exp = st.text_input("", placeholder=exp_placeholder, key="search_experience_input", label_visibility="collapsed")
+
     # 2. Search Input & Button
     st.markdown('<div class="search-container">', unsafe_allow_html=True)
     query = st.text_input(t("smart_search", lang), placeholder=t("search_placeholder", lang), key="search_query_input")
@@ -6222,6 +6276,29 @@ def render_search_content():
         
     if selected_transfer_key:
         filters['transfer_count'] = selected_transfer_key
+    
+    # --- New advanced filters: Ready to Work / Iqama Valid / Experience ---
+    if sel_ready and sel_ready != t("filter_option_all", lang):
+        filters['ready_to_work'] = 'Yes' if 'Yes' in sel_ready else 'No'
+    if sel_iqama and sel_iqama != t("filter_option_all", lang):
+        filters['iqama_valid'] = 'Yes' if 'Yes' in sel_iqama else 'No'
+    if sel_exp and sel_exp.strip() and sel_exp.strip() != t("filter_option_all", lang):
+        _exp_text = sel_exp.strip()
+        _exp_m = re.match(r'\s*(<=|>=|<|>|=)\s*(\d+)', _exp_text)
+        if _exp_m:
+            _exp_op = _exp_m.group(1)
+            _exp_val = int(_exp_m.group(2))
+        else:
+            _exp_m2 = re.match(r'\s*(\d+)\s*', _exp_text)
+            if _exp_m2:
+                _exp_op = '>='
+                _exp_val = int(_exp_m2.group(1))
+            else:
+                _exp_op = None
+                _exp_val = None
+        if _exp_val is not None:
+            filters['experience_op'] = _exp_op
+            filters['experience_val'] = _exp_val
     
     # Check if any filter is actually active
     has_active_filter = bool(filters)
@@ -7119,6 +7196,21 @@ def render_order_processing_content():
         with tc1:
             work_outside = st.checkbox(t("work_outside_city", lang), key="op_outside")
 
+        # 4. Row: New Smart Filters (Ready to Work / Iqama Valid / Experience) - Centered
+        st.markdown("<div style='margin-bottom: 10px;'></div>", unsafe_allow_html=True)
+        n_pad1, nc1, nc2, nc3, n_pad2 = st.columns([0.4, 1, 1, 1.7, 0.4])
+        yes_no_opts = [t("filter_option_all", lang), t("filter_option_yes", lang), t("filter_option_no", lang)]
+        with nc1:
+            st.markdown(f'<div style="font-family: \'Cairo\', sans-serif; font-size: 0.88rem; font-weight: 600; color: #FFFFFF; text-align: right; margin-bottom: 6px;">{t("ready_to_work_filter", lang)}</div>', unsafe_allow_html=True)
+            op_sel_ready = st.selectbox("", options=yes_no_opts, key="op_ready_to_work", label_visibility="collapsed")
+        with nc2:
+            st.markdown(f'<div style="font-family: \'Cairo\', sans-serif; font-size: 0.88rem; font-weight: 600; color: #FFFFFF; text-align: right; margin-bottom: 6px;">{t("iqama_valid_filter", lang)}</div>', unsafe_allow_html=True)
+            op_sel_iqama = st.selectbox("", options=yes_no_opts, key="op_iqama_valid", label_visibility="collapsed")
+        with nc3:
+            st.markdown(f'<div style="font-family: \'Cairo\', sans-serif; font-size: 0.88rem; font-weight: 600; color: #FFFFFF; text-align: right; margin-bottom: 6px;">{t("experience_field_filter", lang)}</div>', unsafe_allow_html=True)
+            op_exp_placeholder = "مثل: < 1 أو > 5 أو = 3 سنوات" if lang == 'ar' else "e.g. < 1 or > 5 or = 3 years"
+            op_sel_exp = st.text_input("", placeholder=op_exp_placeholder, key="op_experience_input", label_visibility="collapsed")
+
         # Apply Filters using SmartSearchEngine
         filters = {
             'age_enabled': age_enabled,
@@ -7137,10 +7229,25 @@ def render_order_processing_content():
             'sponsor_transfer': sponsor_transfer,
             'work_outside_city': work_outside,
             'domestic_worker': domestic_worker,
-            'transfer_count': trans_count if trans_count != "" else None
+            'transfer_count': trans_count if trans_count != "" else None,
+            
+            # --- New advanced filters: Ready to Work / Iqama Valid / Experience ---
+            'ready_to_work': 'Yes' if (op_sel_ready and 'Yes' in op_sel_ready) else ('No' if op_sel_ready and op_sel_ready != t("filter_option_all", lang) else None),
+            'iqama_valid': 'Yes' if (op_sel_iqama and 'Yes' in op_sel_iqama) else ('No' if op_sel_iqama and op_sel_iqama != t("filter_option_all", lang) else None),
         }
         
-        # Execute global filter on worker dataset
+        # Parse experience condition for order processing
+        if op_sel_exp and op_sel_exp.strip() and op_sel_exp.strip() != t("filter_option_all", lang):
+            _op_exp_text = op_sel_exp.strip()
+            _op_exp_m = re.match(r'\s*(<=|>=|<|>|=)\s*(\d+)', _op_exp_text)
+            if _op_exp_m:
+                filters['experience_op'] = _op_exp_m.group(1)
+                filters['experience_val'] = int(_op_exp_m.group(2))
+            else:
+                _op_exp_m2 = re.match(r'\s*(\d+)\s*', _op_exp_text)
+                if _op_exp_m2:
+                    filters['experience_op'] = '>='
+                    filters['experience_val'] = int(_op_exp_m2.group(1))
         if any(filters.values()):
             total_orig_workers = len(workers_df)
             engine = SmartSearchEngine(workers_df)

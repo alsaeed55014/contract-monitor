@@ -192,6 +192,13 @@ TRANSLATIONS = {
     "expired_filter": {"ar": "العقود المنتهية", "en": "Expired Contracts"},
     "work_outside_city": {"ar": "يقبل العمل خارج مدينته (Yes)", "en": "Can work outside city (Yes)"},
     "domestic_worker_filter": {"ar": "عاملة منزلية", "en": "Domestic Worker"},
+    # --- New Advanced Smart Filters (Ready to Work / Iqama Valid / Experience) ---
+    "ready_to_work_filter": {"ar": "جاهز للعمل فوراً", "en": "Ready to Work Immediately"},
+    "iqama_valid_filter": {"ar": "هل الإقامة سارية؟", "en": "Is Iqama Valid?"},
+    "experience_field_filter": {"ar": "الخبرة في هذا المجال (بالسنوات)", "en": "Experience in this field (years)"},
+    "filter_option_all": {"ar": "— الكل —", "en": "— All —"},
+    "filter_option_yes": {"ar": "نعم (Yes)", "en": "Yes (نعم)"},
+    "filter_option_no": {"ar": "لا (No)", "en": "No (لا)"},
     "country_label": {"ar": "دولة", "en": "country"},
     
     # Bengali Supply Module

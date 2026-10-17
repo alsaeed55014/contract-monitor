@@ -471,6 +471,73 @@ class SmartSearchEngine:
                     pattern = "|".join([re.escape(k) for k in keywords])
                     results = results[results[prof_col].astype(str).str.contains(pattern, case=False, na=False, regex=True)]
 
+            # ── New: Filter by Ready to Work Immediately (Yes/No) ──
+            if filters.get('ready_to_work') in ('Yes', 'No'):
+                ready_col = find_col([
+                    "هل أنت جاهز للعمل فوراً", "هل انت جاهز للعمل", "جاهز للعمل", "جاهز للعمل فوراً",
+                    "ready to work immediately", "ready immediately", "are you ready to work",
+                    "هل أنت جاهز للعمل", "جاهز للعمل فورا", "هل انت جاهز للعمل فوراً"
+                ])
+                if ready_col:
+                    target = filters['ready_to_work']
+                    yes_keys = ['yes', 'نعم', 'true', '1', 'y', 'ok', 'سارية', 'ساري', 'valid', 'جاهز']
+                    no_keys = ['no', 'لا', 'none', 'false', '0', 'n', 'غير سارية', 'منتهية', 'expired', 'not valid', 'غير جاهز', 'لا']
+
+                    def match_ready(val):
+                        v = str(val).strip().lower()
+                        if target == 'Yes':
+                            return any(k in v for k in yes_keys)
+                        return any(k in v for k in no_keys)
+
+                    results = results[results[ready_col].apply(match_ready)]
+
+            # ── New: Filter by Iqama Valid (Yes/No) ──
+            if filters.get('iqama_valid') in ('Yes', 'No'):
+                iqama_col = find_col([
+                    "هل الإقامة سارية", "هل الاقامة سارية", "الإقامة سارية", "الاقامة سارية",
+                    "iqama valid", "is your iqama valid", "your iqama valid", "is the iqama valid",
+                    "هل الكرت ساري", "card valid", "iqama_valid"
+                ])
+                if iqama_col:
+                    target = filters['iqama_valid']
+                    yes_keys = ['yes', 'نعم', 'true', '1', 'y', 'ok', 'سارية', 'ساري', 'valid']
+                    no_keys = ['no', 'لا', 'none', 'false', '0', 'n', 'غير سارية', 'منتهية', 'expired', 'not valid']
+
+                    def match_iqama(val):
+                        v = str(val).strip().lower()
+                        if target == 'Yes':
+                            return any(k in v for k in yes_keys)
+                        return any(k in v for k in no_keys)
+
+                    results = results[results[iqama_col].apply(match_iqama)]
+
+            # ── New: Filter by Experience (custom condition: <, >, =, <=, >=) ──
+            if filters.get('experience_val') is not None:
+                exp_col = find_col([
+                    "الخبرة في هذا المجال", "الخبرة", "سنوات الخبرة", "خبرة",
+                    "field experience", "experience in this field",
+                    "years of experience", "Experience", "exp years",
+                    "years experience", "خبرةسنوات", "سنوات"
+                ])
+                if exp_col:
+                    exp_val = int(filters['experience_val'])
+                    exp_op = filters.get('experience_op', '>=')
+                    results['__temp_exp'] = pd.to_numeric(
+                        results[exp_col].astype(str).str.extract(r'(\d+)')[0], errors='coerce'
+                    )
+                    if exp_op == '<':
+                        _exp_mask = results['__temp_exp'] < exp_val
+                    elif exp_op == '>':
+                        _exp_mask = results['__temp_exp'] > exp_val
+                    elif exp_op == '=':
+                        _exp_mask = results['__temp_exp'] == exp_val
+                    elif exp_op == '<=':
+                        _exp_mask = results['__temp_exp'] <= exp_val
+                    else:  # '>=' or default
+                        _exp_mask = results['__temp_exp'] >= exp_val
+                    results = results[results['__temp_exp'].notna() & _exp_mask]
+                    results = results.drop(columns=['__temp_exp'])
+
             # Filter by Timestamp (Registration Date)
             if filters.get('date_enabled') and 'date_start' in filters and 'date_end' in filters:
                 ts_col = find_col(["طابع زمني", "وقت التسجيل", "تاريخ التسجيل", "Timestamp"])

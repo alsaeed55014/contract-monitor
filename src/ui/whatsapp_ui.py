@@ -2085,6 +2085,20 @@ def render_whatsapp_page():
                     with tc5:
                         wa_use_outside = st.checkbox(t("work_outside_city", lang), key="wa_wrk_outside")
 
+                    # New: Ready to Work / Iqama Valid / Experience filters
+                    nc1, nc2, nc3 = st.columns(3)
+                    wa_yes_no_opts = [t("filter_option_all", lang), t("filter_option_yes", lang), t("filter_option_no", lang)]
+                    with nc1:
+                        st.markdown(f'<div style="font-family: \'Cairo\', sans-serif; font-size: 0.88rem; font-weight: 600; color: #FFFFFF; text-align: right; margin-bottom: 6px;">{t("ready_to_work_filter", lang)}</div>', unsafe_allow_html=True)
+                        wa_sel_ready = st.selectbox("", options=wa_yes_no_opts, key="wa_wrk_ready_to_work", label_visibility="collapsed")
+                    with nc2:
+                        st.markdown(f'<div style="font-family: \'Cairo\', sans-serif; font-size: 0.88rem; font-weight: 600; color: #FFFFFF; text-align: right; margin-bottom: 6px;">{t("iqama_valid_filter", lang)}</div>', unsafe_allow_html=True)
+                        wa_sel_iqama = st.selectbox("", options=wa_yes_no_opts, key="wa_wrk_iqama_valid", label_visibility="collapsed")
+                    with nc3:
+                        st.markdown(f'<div style="font-family: \'Cairo\', sans-serif; font-size: 0.88rem; font-weight: 600; color: #FFFFFF; text-align: right; margin-bottom: 6px;">{t("experience_field_filter", lang)}</div>', unsafe_allow_html=True)
+                        wa_exp_placeholder = "مثل: < 1 أو > 5 أو = 3 سنوات" if lang == 'ar' else "e.g. < 1 or > 5 or = 3 years"
+                        wa_sel_exp = st.text_input("", placeholder=wa_exp_placeholder, key="wa_wrk_experience_input", label_visibility="collapsed")
+
                 wa_filters = {}
                 if wa_use_age:
                     wa_filters.update({"age_enabled": True, "age_min": wa_age_min, "age_max": wa_age_max})
@@ -2116,6 +2130,28 @@ def render_whatsapp_page():
                     wa_filters["domestic_worker"] = True
                 if wa_selected_transfer_key:
                     wa_filters["transfer_count"] = wa_selected_transfer_key
+                # New advanced filters: Ready to Work / Iqama Valid / Experience
+                if wa_sel_ready and wa_sel_ready != t("filter_option_all", lang):
+                    wa_filters["ready_to_work"] = 'Yes' if 'Yes' in wa_sel_ready else 'No'
+                if wa_sel_iqama and wa_sel_iqama != t("filter_option_all", lang):
+                    wa_filters["iqama_valid"] = 'Yes' if 'Yes' in wa_sel_iqama else 'No'
+                if wa_sel_exp and wa_sel_exp.strip() and wa_sel_exp.strip() != t("filter_option_all", lang):
+                    _w_exp_text = wa_sel_exp.strip()
+                    _w_exp_m = re.match(r'\s*(<=|>=|<|>|=)\s*(\d+)', _w_exp_text)
+                    if _w_exp_m:
+                        _w_exp_op = _w_exp_m.group(1)
+                        _w_exp_val = int(_w_exp_m.group(2))
+                    else:
+                        _w_exp_m2 = re.match(r'\s*(\d+)\s*', _w_exp_text)
+                        if _w_exp_m2:
+                            _w_exp_op = '>='
+                            _w_exp_val = int(_w_exp_m2.group(1))
+                        else:
+                            _w_exp_op = None
+                            _w_exp_val = None
+                    if _w_exp_val is not None:
+                        wa_filters["experience_op"] = _w_exp_op
+                        wa_filters["experience_val"] = _w_exp_val
 
                 q_col, btn_col, ref_col = st.columns([4, 1, 1])
                 with q_col:
