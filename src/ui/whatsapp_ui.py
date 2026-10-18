@@ -2377,6 +2377,86 @@ def render_whatsapp_page():
                                         _adopt_wa_worker_targets(extracted)
                                         st.toast(f"✅ {'تم اعتماد كافة' if is_ar else 'Loaded all'} {len(extracted)} {'نتيجة' if is_ar else 'results'}")
                                         st.rerun()
+
+                    # 📎 مرفقات رسالة العمال (صور / فيديوهات / صوت / PDF) — فقط في تبويب بحث العمال
+                    st.markdown("---")
+                    st.markdown(f"#### 📎 {'مرفقات رسالة العمال (صور / فيديوهات / صوت / PDF)' if is_ar else 'Worker Message Attachments (Photos / Videos / Audio / PDF)'}")
+                    st.caption("💡 " + ("يمكنك رفع صور، مقاطع فيديو، ملفات صوتية، وملفات PDF لإرفاقها مع الرسائل المرسلة للعمال من قاعدة البيانات." if is_ar else "You can upload images, videos, audio files, and PDFs to attach with messages sent to workers from the database."))
+
+                    wdb_att_type = st.selectbox(
+                        "📎 " + ("اختر نوع الملف" if is_ar else "Select file type"),
+                        options=[
+                            "📄 " + ("ملف PDF / مستندات" if is_ar else "PDF / Documents"),
+                            "🖼️ " + ("الصور ومقاطع الفيديو" if is_ar else "Images & Videos"),
+                            "🎵 " + ("ملفات صوتية" if is_ar else "Audio Files")
+                        ],
+                        key="wa_wdb_att_type_select"
+                    )
+
+                    wdb_uploaded_files = []
+                    if "PDF" in wdb_att_type or "مستندات" in wdb_att_type or "Documents" in wdb_att_type:
+                        wdb_uploaded_files = st.file_uploader(
+                            "📄 " + ("اختر ملفات PDF أو مستندات (عدة ملفات)" if is_ar else "Select PDF or document files (multiple)"),
+                            type=["pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "txt", "csv"],
+                            accept_multiple_files=True,
+                            key="wa_wdb_files_uploader_doc"
+                        )
+                    elif "صور" in wdb_att_type or "Images" in wdb_att_type:
+                        wdb_uploaded_files = st.file_uploader(
+                            "🖼️ " + ("اختر صور ومقاطع فيديو (عدة ملفات)" if is_ar else "Select images and videos (multiple)"),
+                            type=["png", "jpg", "jpeg", "webp", "gif", "bmp", "mp4", "mov", "avi", "mkv", "3gp", "webm"],
+                            accept_multiple_files=True,
+                            key="wa_wdb_files_uploader_media"
+                        )
+                    elif "صوتي" in wdb_att_type or "Audio" in wdb_att_type:
+                        wdb_uploaded_files = st.file_uploader(
+                            "🎵 " + ("اختر ملفات صوتية (عدة ملفات)" if is_ar else "Select audio files (multiple)"),
+                            type=["mp3", "wav", "m4a", "ogg", "aac"],
+                            accept_multiple_files=True,
+                            key="wa_wdb_files_uploader_audio"
+                        )
+
+                    # حفظ الملفات المرفوعة في حالة الجلسة
+                    wdb_saved_attachments = st.session_state.get('wa_worker_db_attachments', [])
+
+                    if wdb_uploaded_files:
+                        base_dir = os.path.join(os.getcwd(), "whatsapp_session")
+                        os.makedirs(base_dir, exist_ok=True)
+                        import uuid as _uuid
+                        for uf in wdb_uploaded_files:
+                            file_ext = os.path.splitext(uf.name)[1]
+                            unique_name = f"wdb_{_uuid.uuid4().hex[:8]}{file_ext}"
+                            save_path = os.path.join(base_dir, unique_name)
+                            with open(save_path, "wb") as f:
+                                f.write(uf.getvalue())
+                            if save_path not in wdb_saved_attachments:
+                                wdb_saved_attachments.append(save_path)
+                        st.session_state.wa_worker_db_attachments = wdb_saved_attachments
+
+                    # عرض المرفقات المحفوظة مع إمكانية الحذف
+                    if wdb_saved_attachments:
+                        st.markdown(f"**📎 {'المرفقات المحفوظة:' if is_ar else 'Saved Attachments:'}** ({len(wdb_saved_attachments)})")
+                        for idx, att_path in enumerate(wdb_saved_attachments):
+                            col_att1, col_att2 = st.columns([4, 1])
+                            with col_att1:
+                                file_name = os.path.basename(att_path)
+                                file_ext = os.path.splitext(file_name)[1].lower()
+                                if file_ext == '.pdf':
+                                    icon = "📄"
+                                elif file_ext in ['.mp4', '.mov', '.avi', '.mkv', '.3gp']:
+                                    icon = "🎥"
+                                elif file_ext in ['.png', '.jpg', '.jpeg', '.webp', '.gif', '.bmp']:
+                                    icon = "🖼️"
+                                elif file_ext in ['.mp3', '.wav', '.ogg']:
+                                    icon = "🎵"
+                                else:
+                                    icon = "📎"
+                                st.markdown(f"{icon} **{file_name}**")
+                            with col_att2:
+                                if st.button("❌", key=f"del_wdb_att_{idx}", help="حذف المرفق"):
+                                    wdb_saved_attachments.pop(idx)
+                                    st.session_state.wa_worker_db_attachments = wdb_saved_attachments
+                                    st.rerun()
                 else:
                     st.info("💡 " + (
                         "اكتب في البحث الذكي (مهنة، جنسية، مدينة، رقم جوال...) ثم اعتمد النتائج لإرسال واتساب."
@@ -2755,9 +2835,13 @@ HR Manager"""
             if st.session_state.get('wa_running', False):
                 if st.button(lbl['stop'], type="primary", width='stretch', key="wa_stop_btn"):
                     st.session_state.wa_running = False
-                    if st.session_state.get('wa_temp_path') and os.path.exists(st.session_state.wa_temp_path):
-                        try: os.remove(st.session_state.wa_temp_path)
-                        except: pass
+                    # تنظيف المسار الأحادي والقائمة المتعددة
+                    for _p in [st.session_state.get('wa_temp_path')] + list(st.session_state.get('wa_temp_paths', []) or []):
+                        if _p and os.path.exists(_p):
+                            try: os.remove(_p)
+                            except: pass
+                    st.session_state.wa_temp_path = None
+                    st.session_state.wa_temp_paths = []
                     st.toast("🛑 " + ("تم إيقاف الإرسال" if is_ar else "Sending stopped"))
                     st.rerun()
             else:
@@ -2773,8 +2857,18 @@ HR Manager"""
                         if wa_stat != "Connected":
                             st.error("⚠️ " + ("يرجى تشغيل محرك واتساب ومسح الباركود أولاً للاتصال" if is_ar else "Please start WhatsApp engine and scan QR first to connect"))
                         else:
-                            temp_path = None
-                            if attachment:
+                            # تحديد المرفقات: أولوية لمرفقات بحث قاعدة العمال إذا كان الإرسال منها
+                            wdb_attachments = st.session_state.get('wa_worker_db_attachments', []) or []
+                            is_from_wdb = st.session_state.get('wa_from_worker_db', False)
+
+                            temp_paths = []
+                            if is_from_wdb and wdb_attachments:
+                                # استخدام مرفقات بحث العمال مباشرة (محفوظة كمسارات ملفات)
+                                temp_paths = [p for p in wdb_attachments if p and os.path.exists(p)]
+                                st.session_state.wa_temp_paths = temp_paths
+                                # تنظيف المسار الأحادي القديم
+                                st.session_state.wa_temp_path = None
+                            elif attachment:
                                 import tempfile
                                 suffix = os.path.splitext(attachment.name)[1]
                                 base_no_dot = os.path.join(os.getcwd(), "whatsapp_session")
@@ -2785,14 +2879,18 @@ HR Manager"""
                                     t_file = tempfile.NamedTemporaryFile(delete=False, suffix=suffix, dir=temp_dir)
                                     t_file.write(attachment.getvalue())
                                     t_file.close()
-                                    temp_path = t_file.name
-                                    st.session_state.wa_temp_path = temp_path
+                                    temp_paths = [t_file.name]
+                                    st.session_state.wa_temp_paths = temp_paths
+                                    st.session_state.wa_temp_path = t_file.name
                                 except Exception as att_err:
                                     st.error(f"❌ {'فشل حفظ الملف المرفق: ' if is_ar else 'Failed to save attachment: '}{str(att_err)}")
-                                    temp_path = None
+                                    temp_paths = []
+                                    st.session_state.wa_temp_paths = []
+                                    st.session_state.wa_temp_path = None
                             else:
-                                # 🛡️ تنظيف المسار القديم إذا لم يوجد مرفق
+                                # 🛡️ تنظيف المسارات القديمة إذا لم يوجد مرفق
                                 st.session_state.wa_temp_path = None
+                                st.session_state.wa_temp_paths = []
 
                             st.session_state.wa_running = True
                             st.session_state.wa_idx = 0
@@ -2853,7 +2951,7 @@ HR Manager"""
                     final_msg = final_msg.replace("{CV}", v).replace("{cv}", v).replace("{السيرة}", v)
                     final_msg = re.sub(r'\n{3,}', '\n\n', final_msg).strip()
 
-                temp_path = st.session_state.get('wa_temp_path')
+                temp_paths = st.session_state.get('wa_temp_paths', []) or []
 
                 # إزالة سطر HR Manager المكرر في الأعلى إن كان التوقيع نفسه
                 # موجوداً بالأسفل (تكرار واضح) — مع الحفاظ على باقي المتن
@@ -2877,7 +2975,7 @@ HR Manager"""
                     st.error("❌ محرك واتساب غير متصل! يرجى الضغط على 'Start Engine' أولاً")
                 else:
                     with st.spinner(f"🚀 {'جاري إرسال الرسالة إلى' if is_ar else 'Sending message to'} {n} ({p})..."):
-                        ok, log_msg = st.session_state.wa_service.send_message(p, final_msg, attachment_path=temp_path)
+                        ok, log_msg = st.session_state.wa_service.send_message(p, final_msg, attachment_path=temp_paths)
 
                 # 4. Record Log
                 entry = {
@@ -2910,9 +3008,13 @@ HR Manager"""
                     if st.session_state.wa_idx >= total_targets:
                         st.session_state.wa_running = False
                         st.session_state.wa_done = True
-                        if temp_path and os.path.exists(temp_path):
-                            try: os.remove(temp_path)
-                            except: pass
+                        # تنظيف جميع المسارات المؤقتة
+                        for _p in list(st.session_state.get('wa_temp_paths', []) or []):
+                            if _p and os.path.exists(_p):
+                                try: os.remove(_p)
+                                except: pass
+                        st.session_state.wa_temp_path = None
+                        st.session_state.wa_temp_paths = []
                         st.balloons()
                         st.success("🎉 " + ("اكتمل إرسال جميع الرسائل بنجاح!" if is_ar else "All messages sent successfully!"))
                         time.sleep(1)
