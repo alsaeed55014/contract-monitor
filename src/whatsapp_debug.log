@@ -129,3 +129,17 @@
 2026-10-10 02:19:46,471 - Connection pool is full, discarding connection: localhost. Connection pool size: 1
 2026-10-10 02:19:47,932 - Connection pool is full, discarding connection: localhost. Connection pool size: 1
 2026-10-10 02:52:07,300 - Connection pool is full, discarding connection: localhost. Connection pool size: 1
+2026-10-18 19:35:18,360 - 🔍 _get_target_file_input: Found 1 file inputs
+2026-10-18 19:35:18,372 - 🔍 File input 1: accept='image/*'
+2026-10-18 19:35:18,380 - ✅ _get_target_file_input: Selected media input with accept='image/*'
+2026-10-18 19:43:16,103 - 🔍 _get_target_file_input: Found 1 file inputs
+2026-10-18 19:43:16,110 - 🔍 File input 1: accept='image/*'
+2026-10-18 19:43:16,117 - ✅ _get_target_file_input: Selected media input with accept='image/*'
+2026-10-18 19:50:46,101 - 🔍 _get_target_file_input: Found 1 file inputs
+2026-10-18 19:50:46,107 - 🔍 File input 1: accept='image/*'
+2026-10-18 19:50:46,111 - ✅ _get_target_file_input: Selected media input with accept='image/*'
+2026-10-18 19:57:59,449 - 🔍 _get_target_file_input: Found 1 file inputs
+2026-10-18 19:57:59,460 - 🔍 File input 1: accept='image/*'
+2026-10-18 19:57:59,464 - ✅ _get_target_file_input: Selected media input with accept='image/*'
+2026-10-18 20:59:31,198 - patching driver executable C:\Users\ا\appdata\roaming\undetected_chromedriver\undetected_chromedriver.exe
+2026-10-18 20:59:41,363 - Connection pool is full, discarding connection: localhost. Connection pool size: 1

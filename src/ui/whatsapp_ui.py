@@ -2365,6 +2365,7 @@ def render_whatsapp_page():
                                         picked = res.iloc[selected_pos] if selected_pos else res.iloc[0:0]
                                         extracted = _worker_df_to_wa_targets(picked, st.session_state.wa_history)
                                         _adopt_wa_worker_targets(extracted)
+                                        st.session_state.wa_from_worker_db = True
                                         st.toast(f"✅ {'تم اعتماد' if is_ar else 'Loaded'} {len(extracted)} {'عامل' if is_ar else 'workers'}")
                                         st.rerun()
                                 with b2:
@@ -2375,6 +2376,7 @@ def render_whatsapp_page():
                                     ):
                                         extracted = _worker_df_to_wa_targets(res, st.session_state.wa_history)
                                         _adopt_wa_worker_targets(extracted)
+                                        st.session_state.wa_from_worker_db = True
                                         st.toast(f"✅ {'تم اعتماد كافة' if is_ar else 'Loaded all'} {len(extracted)} {'نتيجة' if is_ar else 'results'}")
                                         st.rerun()
 
@@ -2416,46 +2418,84 @@ def render_whatsapp_page():
                             key="wa_wdb_files_uploader_audio"
                         )
 
-                    # حفظ الملفات المرفوعة في حالة الجلسة
+                    # حفظ الملفات المرفوعة في حالة الجلسة (مع منع التكرار بناءً على محتوى الملف)
                     wdb_saved_attachments = st.session_state.get('wa_worker_db_attachments', [])
+                    wdb_existing_hashes = st.session_state.get('wa_worker_db_attachments_hashes', set())
 
                     if wdb_uploaded_files:
                         base_dir = os.path.join(os.getcwd(), "whatsapp_session")
                         os.makedirs(base_dir, exist_ok=True)
                         import uuid as _uuid
+                        import hashlib as _hashlib
+                        new_files_count = 0
                         for uf in wdb_uploaded_files:
+                            file_bytes = uf.getvalue()
+                            file_hash = _hashlib.md5(file_bytes).hexdigest()
+                            # منع التكرار: إذا كان الـ hash موجوداً مسبقاً، نتجاهل الملف
+                            if file_hash in wdb_existing_hashes:
+                                continue
                             file_ext = os.path.splitext(uf.name)[1]
                             unique_name = f"wdb_{_uuid.uuid4().hex[:8]}{file_ext}"
                             save_path = os.path.join(base_dir, unique_name)
                             with open(save_path, "wb") as f:
-                                f.write(uf.getvalue())
+                                f.write(file_bytes)
                             if save_path not in wdb_saved_attachments:
                                 wdb_saved_attachments.append(save_path)
+                                wdb_existing_hashes.add(file_hash)
+                                new_files_count += 1
                         st.session_state.wa_worker_db_attachments = wdb_saved_attachments
+                        st.session_state.wa_worker_db_attachments_hashes = wdb_existing_hashes
+                        if new_files_count > 0:
+                            st.toast(f"✅ {'تم إضافة' if is_ar else 'Added'} {new_files_count} {'ملف' if is_ar else 'file(s)'}")
+                        else:
+                            st.info("ℹ️ " + ("جميع الملفات المرفوعة مكررة وليست جديدة" if is_ar else "All uploaded files are duplicates"))
+                        
+                        # رسالة تأكيد أن المرفقات جاهزة للإرسال مع بحث العمال
+                        if wdb_saved_attachments:
+                            st.success(
+                                f"📎 {'تم تحميل' if is_ar else 'Attachments loaded'} {len(wdb_saved_attachments)} "
+                                f"{'ملف(Multiple files ready to send with worker messages)' if is_ar else 'file(s) ready to send with worker messages'}"
+                            )
 
-                    # عرض المرفقات المحفوظة مع إمكانية الحذف
+                    # عرض المرفقات المحفوظة مع معاينة الصور وإمكانية الحذف
                     if wdb_saved_attachments:
                         st.markdown(f"**📎 {'المرفقات المحفوظة:' if is_ar else 'Saved Attachments:'}** ({len(wdb_saved_attachments)})")
                         for idx, att_path in enumerate(wdb_saved_attachments):
-                            col_att1, col_att2 = st.columns([4, 1])
-                            with col_att1:
-                                file_name = os.path.basename(att_path)
-                                file_ext = os.path.splitext(file_name)[1].lower()
-                                if file_ext == '.pdf':
-                                    icon = "📄"
-                                elif file_ext in ['.mp4', '.mov', '.avi', '.mkv', '.3gp']:
-                                    icon = "🎥"
-                                elif file_ext in ['.png', '.jpg', '.jpeg', '.webp', '.gif', '.bmp']:
-                                    icon = "🖼️"
-                                elif file_ext in ['.mp3', '.wav', '.ogg']:
-                                    icon = "🎵"
+                            file_name = os.path.basename(att_path)
+                            file_ext = os.path.splitext(file_name)[1].lower()
+                            is_image = file_ext in ['.png', '.jpg', '.jpeg', '.webp', '.gif', '.bmp']
+                            is_video = file_ext in ['.mp4', '.mov', '.avi', '.mkv', '.3gp', '.webm']
+
+                            col_prev, col_del = st.columns([5, 1])
+                            with col_prev:
+                                if is_image:
+                                    st.image(att_path, caption=file_name, width=200)
+                                elif is_video:
+                                    st.video(att_path)
                                 else:
-                                    icon = "📎"
-                                st.markdown(f"{icon} **{file_name}**")
-                            with col_att2:
+                                    if file_ext == '.pdf':
+                                        icon = "📄"
+                                    elif file_ext in ['.mp3', '.wav', '.ogg']:
+                                        icon = "🎵"
+                                    else:
+                                        icon = "📎"
+                                    st.markdown(f"{icon} **{file_name}**")
+                            with col_del:
+                                st.markdown("<div style='margin-top: 10px;'></div>", unsafe_allow_html=True)
                                 if st.button("❌", key=f"del_wdb_att_{idx}", help="حذف المرفق"):
                                     wdb_saved_attachments.pop(idx)
+                                    # إزالة الـ hash المقابل
+                                    try:
+                                        with open(att_path, "rb") as _f:
+                                            _f_hash = _hashlib.md5(_f.read()).hexdigest()
+                                        wdb_existing_hashes.discard(_f_hash)
+                                    except Exception:
+                                        pass
+                                    if os.path.exists(att_path):
+                                        try: os.remove(att_path)
+                                        except: pass
                                     st.session_state.wa_worker_db_attachments = wdb_saved_attachments
+                                    st.session_state.wa_worker_db_attachments_hashes = wdb_existing_hashes
                                     st.rerun()
                 else:
                     st.info("💡 " + (
@@ -2466,8 +2506,13 @@ def render_whatsapp_page():
             
             # 🛡️ Build review targets only when NOT sending — never interrupt the send loop
             from_worker_db = st.session_state.get('wa_from_worker_db', False)
+            wdb_has_attachments = bool(st.session_state.get('wa_worker_db_attachments', []))
             if not st.session_state.get('wa_running', False):
-                if from_worker_db and not rebuild_review:
+                # 🛡️ إذا كانت هناك مرفقات عامل محفوظة، حافظ على wa_from_worker_db = True
+                # حتى لا تُفقد المرفقات عند rerun قبل النقر على إرسال
+                if wdb_has_attachments:
+                    st.session_state.wa_from_worker_db = True
+                elif from_worker_db and not rebuild_review:
                     pass
                 elif rebuild_review or (not st.session_state.wa_review_targets and (manual_list or st.session_state.wa_data is not None)):
                     st.session_state.wa_from_worker_db = False
@@ -2862,12 +2907,14 @@ HR Manager"""
                             is_from_wdb = st.session_state.get('wa_from_worker_db', False)
 
                             temp_paths = []
+                            attachment_info = ""
                             if is_from_wdb and wdb_attachments:
                                 # استخدام مرفقات بحث العمال مباشرة (محفوظة كمسارات ملفات)
                                 temp_paths = [p for p in wdb_attachments if p and os.path.exists(p)]
                                 st.session_state.wa_temp_paths = temp_paths
-                                # تنظيف المسار الأحادي القديم
                                 st.session_state.wa_temp_path = None
+                                attachment_info = f"📎 {'مع' if is_ar else 'With'} {len(temp_paths)} {'مرفق' if is_ar else 'attachment(s)'}"
+                                print(f"[{time.strftime('%H:%M:%S')}] 📎 WDB_ATTACHMENTS: Found {len(temp_paths)} valid attachment paths for worker DB send")
                             elif attachment:
                                 import tempfile
                                 suffix = os.path.splitext(attachment.name)[1]
@@ -2882,6 +2929,8 @@ HR Manager"""
                                     temp_paths = [t_file.name]
                                     st.session_state.wa_temp_paths = temp_paths
                                     st.session_state.wa_temp_path = t_file.name
+                                    attachment_info = f"📎 {'مع' if is_ar else 'With'} 1 {'مرفق' if is_ar else 'attachment'}"
+                                    print(f"[{time.strftime('%H:%M:%S')}] 📎 SINGLE_ATTACHMENT: Saved {t_file.name}")
                                 except Exception as att_err:
                                     st.error(f"❌ {'فشل حفظ الملف المرفق: ' if is_ar else 'Failed to save attachment: '}{str(att_err)}")
                                     temp_paths = []
@@ -2891,6 +2940,10 @@ HR Manager"""
                                 # 🛡️ تنظيف المسارات القديمة إذا لم يوجد مرفق
                                 st.session_state.wa_temp_path = None
                                 st.session_state.wa_temp_paths = []
+
+                            # عرض رسالة تأكيد للمستخدم قبل بدء الإرسال
+                            if attachment_info:
+                                st.info(attachment_info + " " + ("سوف تُرسل مع كل رسالة" if is_ar else "will be sent with each message"))
 
                             st.session_state.wa_running = True
                             st.session_state.wa_idx = 0
@@ -2974,8 +3027,13 @@ HR Manager"""
                     log_msg = "محرك واتساب غير متصل (يرجى تشغيل المحرك أولاً)"
                     st.error("❌ محرك واتساب غير متصل! يرجى الضغط على 'Start Engine' أولاً")
                 else:
-                    with st.spinner(f"🚀 {'جاري إرسال الرسالة إلى' if is_ar else 'Sending message to'} {n} ({p})..."):
-                        ok, log_msg = st.session_state.wa_service.send_message(p, final_msg, attachment_path=temp_paths)
+                    try:
+                        with st.spinner(f"🚀 {'جاري إرسال الرسالة إلى' if is_ar else 'Sending message to'} {n} ({p})..."):
+                            ok, log_msg = st.session_state.wa_service.send_message(p, final_msg, attachment_path=temp_paths)
+                    except Exception as send_err:
+                        ok = False
+                        log_msg = f"خطأ في الإرسال: {str(send_err)}"
+                        print(f"[{time.strftime('%H:%M:%S')}] ❌ SEND_EXCEPTION for {p}: {send_err}")
 
                 # 4. Record Log
                 entry = {
