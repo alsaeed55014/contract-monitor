@@ -143,3 +143,20 @@
 2026-10-18 19:57:59,464 - ✅ _get_target_file_input: Selected media input with accept='image/*'
 2026-10-18 20:59:31,198 - patching driver executable C:\Users\ا\appdata\roaming\undetected_chromedriver\undetected_chromedriver.exe
 2026-10-18 20:59:41,363 - Connection pool is full, discarding connection: localhost. Connection pool size: 1
+2026-10-19 23:53:47,680 - 🔍 _get_target_file_input: Found 1 file inputs
+2026-10-19 23:53:47,688 - 🔍 File input 1: accept='image/*'
+2026-10-19 23:53:47,693 - ✅ _get_target_file_input: Selected media input with accept='image/*'
+2026-10-20 01:02:53,580 - 🔍 _get_target_file_input: Found 2 file inputs
+2026-10-20 01:02:53,585 - 🔍 File input 1: accept='*'
+2026-10-20 01:02:53,589 - 🔍 File input 2: accept='image/*'
+2026-10-20 01:02:53,596 - ✅ _get_target_file_input: Selected media input with accept='image/*'
+2026-10-20 01:09:38,608 - 🔍 _get_target_file_input: Found 2 file inputs
+2026-10-20 01:09:38,657 - 🔍 File input 1: accept='*'
+2026-10-20 01:09:38,660 - 🔍 File input 2: accept='image/*'
+2026-10-20 01:09:38,667 - ✅ _get_target_file_input: Selected media input with accept='image/*'
+2026-10-20 02:19:01,983 - 🔍 _get_target_file_input: Found 1 file inputs
+2026-10-20 02:19:01,990 - 🔍 File input 1: accept='image/*'
+2026-10-20 02:19:01,994 - ✅ _get_target_file_input: Selected media input with accept='image/*'
+2026-10-20 02:25:55,555 - 🔍 _get_target_file_input: Found 1 file inputs
+2026-10-20 02:25:55,560 - 🔍 File input 1: accept='image/*'
+2026-10-20 02:25:55,565 - ✅ _get_target_file_input: Selected media input with accept='image/*'

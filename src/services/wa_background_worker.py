@@ -299,6 +299,8 @@ def run_worker():
                     phone = trg.get("phone", "")
                     name  = trg.get("name", "Client")
                     cv    = trg.get("cv", "")
+                    # Use per-target attachment if available, otherwise use global attachment
+                    target_attachment = trg.get("attachment", "") if trg.get("attachment") else attachment
 
                     # 🛡️ 2026 Pre-Send Phone Validation
                     clean_p = "".join(filter(str.isdigit, str(phone)))
@@ -376,7 +378,7 @@ def run_worker():
 
                     # ── أرسل الرسالة ──
                     print(f"[{time.strftime('%H:%M:%S')}] 📤 Sending to {name} ({phone})")
-                    ok, log_msg = wa.send_message(phone, final_msg, attachment_path=attachment)
+                    ok, log_msg = wa.send_message(phone, final_msg, attachment_path=target_attachment)
 
                     entry = {
                         "idx": i,

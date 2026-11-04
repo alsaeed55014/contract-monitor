@@ -2174,7 +2174,7 @@ class WhatsAppService:
                         return False
 
                 media_exts = {'.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.mp4', '.mov', '.avi', '.mkv', '.3gp'}
-                document_exts = {'.pdf', '.doc', '.docx', '.txt', '.xls', '.xlsx', '.ppt', '.pptx', '.rtf', '.odt', '.ods', '.odp', '.csv', '.zip', '.rar', '.7z'}
+                document_exts = {'.pdf', '.doc', '.docx', '.txt', '.xls', '.xlsx', '.ppt', '.pptx', '.rtf', '.odt', '.ods', '.odp', '.csv', '.zip', '.rar', '.7z', '.mp3', '.wav', '.m4a', '.ogg', '.aac'}
 
                 def _get_target_file_input(ext):
                     ext_lower = ext.lower()
@@ -2495,34 +2495,46 @@ class WhatsAppService:
                         # التحقق من ظهور معاينة المرفق قبل البحث عن زر الإرسال
                         print(f"[{time.strftime('%H:%M:%S')}] 🔍 PDF_PREVIEW_VISIBLE: Checking for attachment preview...")
                         preview_visible = False
-                        try:
-                            previews = self.driver.find_elements(By.XPATH,
-                                '//div[contains(@data-testid, "media-preview")] | '
-                                '//div[contains(@data-testid, "media-caption-input-container")] | '
-                                '//div[contains(@data-testid, "drawer-middle")]'
-                            )
-                            if previews and any(p.is_displayed() for p in previews):
-                                preview_visible = True
-                                print(f"[{time.strftime('%H:%M:%S')}] ✅ PDF_PREVIEW_VISIBLE: Attachment preview is visible")
-                            else:
-                                print(f"[{time.strftime('%H:%M:%S')}] ⚠️ PDF_PREVIEW_VISIBLE: Attachment preview not visible, waiting more...")
-                                time.sleep(5.0)  # زيادة من 3.0 إلى 5.0 ثانية
-                                # Check again
+                        max_wait = 20  # زيادة الانتظار إلى 20 ثانية كحد أقصى
+                        check_interval = 2.0
+                        waited = 0
+                        
+                        while waited < max_wait and not preview_visible:
+                            try:
                                 previews = self.driver.find_elements(By.XPATH,
                                     '//div[contains(@data-testid, "media-preview")] | '
                                     '//div[contains(@data-testid, "media-caption-input-container")] | '
-                                    '//div[contains(@data-testid, "drawer-middle")]'
+                                    '//div[contains(@data-testid, "drawer-middle")] | '
+                                    '//div[@data-testid="media-container"] | '
+                                    '//div[contains(@data-testid, "attachment-panel")]'
                                 )
                                 if previews and any(p.is_displayed() for p in previews):
                                     preview_visible = True
-                                    print(f"[{time.strftime('%H:%M:%S')}] ✅ PDF_PREVIEW_VISIBLE: Attachment preview visible after retry")
-                        except Exception as e:
-                            print(f"[{time.strftime('%H:%M:%S')}] ⚠️ PDF_PREVIEW_VISIBLE: Error checking preview: {e}")
+                                    print(f"[{time.strftime('%H:%M:%S')}] ✅ PDF_PREVIEW_VISIBLE: Attachment preview is visible after {waited}s")
+                                    break
+                                else:
+                                    print(f"[{time.strftime('%H:%M:%S')}] ⚠️ PDF_PREVIEW_VISIBLE: Preview not visible, waiting {check_interval}s... (total waited: {waited}s)")
+                                    time.sleep(check_interval)
+                                    waited += check_interval
+                            except Exception as e:
+                                print(f"[{time.strftime('%H:%M:%S')}] ⚠️ PDF_PREVIEW_VISIBLE: Error checking preview: {e}")
+                                time.sleep(check_interval)
+                                waited += check_interval
 
                         if not preview_visible:
-                            print(f"[{time.strftime('%H:%M:%S')}] ❌ PDF_SEND_FAILED: Attachment preview not visible, cannot send")
+                            # حاول البحث عن المعاينة بطريقة مختلفة - تحقق من وجود الصورة المرفوعة
+                            try:
+                                preview_img = self.driver.find_elements(By.XPATH, '//img[contains(@src, "blob:")]')
+                                if preview_img and any(p.is_displayed() for p in preview_img):
+                                    preview_visible = True
+                                    print(f"[{time.strftime('%H:%M:%S')}] ✅ PDF_PREVIEW_VISIBLE: Found blob image preview (alternative method)")
+                            except Exception:
+                                pass
+
+                        if not preview_visible:
+                            print(f"[{time.strftime('%H:%M:%S')}] ❌ PDF_SEND_FAILED: Attachment preview not visible after {max_wait}s, cannot send")
                             self.update_daily_stats(False, is_invalid_number=False)
-                            return False, "فشل ظهور معاينة المرفق، لا يمكن الإرسال"
+                            return False, f"تعذر إرسال المرفق ({orig_name}) — المعاينة بقيت مفتوحة دون خطأ"
 
                         # مهلة أمان إضافية بحسب حجم الملف ونوعه (فيديوهات / مستندات PDF) لضمان تسليمه لخوادم واتساب
                         try:

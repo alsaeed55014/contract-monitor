@@ -662,7 +662,7 @@ def _wa_gender_label(v, is_ar=True):
 
 
 def _worker_df_to_wa_targets(df, history_set):
-    """Convert worker search results into WhatsApp send targets (name, phone, CV, row fields)."""
+    """Convert worker search results into WhatsApp send targets (name, phone, CV, attachments, row fields)."""
     targets = []
     seen = set()
     if df is None or getattr(df, "empty", True):
@@ -675,6 +675,8 @@ def _worker_df_to_wa_targets(df, history_set):
     if not c_phone:
         c_phone = _find_df_col(cols, ["phone", "mobile", "جوال", "هاتف", "واتساب"])
     c_cv = _find_df_col(cols, ["download cv", "سيرة الذاتية", "resume", "cv"])
+    # Add attachment column detection
+    c_attachment = _find_df_col(cols, ["attachment", "image", "صورة", "مرفق", "ملف", "file", "photo"])
 
     for idx, row in df.iterrows():
         raw_p = str(row[c_phone]).strip() if c_phone and pd.notna(row[c_phone]) else ""
@@ -695,12 +697,18 @@ def _worker_df_to_wa_targets(df, history_set):
         cv = str(row[c_cv]).strip() if c_cv and pd.notna(row[c_cv]) else ""
         if cv.lower() == "nan":
             cv = ""
+        # Extract attachment path
+        attachment = str(row[c_attachment]).strip() if c_attachment and pd.notna(row[c_attachment]) else ""
+        if attachment.lower() == "nan":
+            attachment = ""
         target_data.update({
             "idx": idx,
             "phone": phone,
             "name": name,
             "cv": cv,
+            "attachment": attachment,
             "is_sent": phone in (history_set or set()),
+            "source": "worker_db",
         })
         targets.append(target_data)
     return targets
@@ -2380,129 +2388,306 @@ def render_whatsapp_page():
                                         st.toast(f"✅ {'تم اعتماد كافة' if is_ar else 'Loaded all'} {len(extracted)} {'نتيجة' if is_ar else 'results'}")
                                         st.rerun()
 
-                    # 📎 مرفقات رسالة العمال (صور / فيديوهات / صوت / PDF) — فقط في تبويب بحث العمال
-                    st.markdown("---")
-                    st.markdown(f"#### 📎 {'مرفقات رسالة العمال (صور / فيديوهات / صوت / PDF)' if is_ar else 'Worker Message Attachments (Photos / Videos / Audio / PDF)'}")
-                    st.caption("💡 " + ("يمكنك رفع صور، مقاطع فيديو، ملفات صوتية، وملفات PDF لإرفاقها مع الرسائل المرسلة للعمال من قاعدة البيانات." if is_ar else "You can upload images, videos, audio files, and PDFs to attach with messages sent to workers from the database."))
-
-                    wdb_att_type = st.selectbox(
-                        "📎 " + ("اختر نوع الملف" if is_ar else "Select file type"),
-                        options=[
-                            "📄 " + ("ملف PDF / مستندات" if is_ar else "PDF / Documents"),
-                            "🖼️ " + ("الصور ومقاطع الفيديو" if is_ar else "Images & Videos"),
-                            "🎵 " + ("ملفات صوتية" if is_ar else "Audio Files")
-                        ],
-                        key="wa_wdb_att_type_select"
-                    )
-
-                    wdb_uploaded_files = []
-                    if "PDF" in wdb_att_type or "مستندات" in wdb_att_type or "Documents" in wdb_att_type:
-                        wdb_uploaded_files = st.file_uploader(
-                            "📄 " + ("اختر ملفات PDF أو مستندات (عدة ملفات)" if is_ar else "Select PDF or document files (multiple)"),
-                            type=["pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "txt", "csv"],
-                            accept_multiple_files=True,
-                            key="wa_wdb_files_uploader_doc"
-                        )
-                    elif "صور" in wdb_att_type or "Images" in wdb_att_type:
-                        wdb_uploaded_files = st.file_uploader(
-                            "🖼️ " + ("اختر صور ومقاطع فيديو (عدة ملفات)" if is_ar else "Select images and videos (multiple)"),
-                            type=["png", "jpg", "jpeg", "webp", "gif", "bmp", "mp4", "mov", "avi", "mkv", "3gp", "webm"],
-                            accept_multiple_files=True,
-                            key="wa_wdb_files_uploader_media"
-                        )
-                    elif "صوتي" in wdb_att_type or "Audio" in wdb_att_type:
-                        wdb_uploaded_files = st.file_uploader(
-                            "🎵 " + ("اختر ملفات صوتية (عدة ملفات)" if is_ar else "Select audio files (multiple)"),
-                            type=["mp3", "wav", "m4a", "ogg", "aac"],
-                            accept_multiple_files=True,
-                            key="wa_wdb_files_uploader_audio"
-                        )
-
-                    # حفظ الملفات المرفوعة في حالة الجلسة (مع منع التكرار بناءً على محتوى الملف)
-                    wdb_saved_attachments = st.session_state.get('wa_worker_db_attachments', [])
-                    wdb_existing_hashes = st.session_state.get('wa_worker_db_attachments_hashes', set())
-
-                    if wdb_uploaded_files:
-                        base_dir = os.path.join(os.getcwd(), "whatsapp_session")
-                        os.makedirs(base_dir, exist_ok=True)
-                        import uuid as _uuid
-                        import hashlib as _hashlib
-                        new_files_count = 0
-                        for uf in wdb_uploaded_files:
-                            file_bytes = uf.getvalue()
-                            file_hash = _hashlib.md5(file_bytes).hexdigest()
-                            # منع التكرار: إذا كان الـ hash موجوداً مسبقاً، نتجاهل الملف
-                            if file_hash in wdb_existing_hashes:
-                                continue
-                            file_ext = os.path.splitext(uf.name)[1]
-                            unique_name = f"wdb_{_uuid.uuid4().hex[:8]}{file_ext}"
-                            save_path = os.path.join(base_dir, unique_name)
-                            with open(save_path, "wb") as f:
-                                f.write(file_bytes)
-                            if save_path not in wdb_saved_attachments:
-                                wdb_saved_attachments.append(save_path)
-                                wdb_existing_hashes.add(file_hash)
-                                new_files_count += 1
-                        st.session_state.wa_worker_db_attachments = wdb_saved_attachments
-                        st.session_state.wa_worker_db_attachments_hashes = wdb_existing_hashes
-                        if new_files_count > 0:
-                            st.toast(f"✅ {'تم إضافة' if is_ar else 'Added'} {new_files_count} {'ملف' if is_ar else 'file(s)'}")
-                        else:
-                            st.info("ℹ️ " + ("جميع الملفات المرفوعة مكررة وليست جديدة" if is_ar else "All uploaded files are duplicates"))
-                        
-                        # رسالة تأكيد أن المرفقات جاهزة للإرسال مع بحث العمال
-                        if wdb_saved_attachments:
-                            st.success(
-                                f"📎 {'تم تحميل' if is_ar else 'Attachments loaded'} {len(wdb_saved_attachments)} "
-                                f"{'ملف(Multiple files ready to send with worker messages)' if is_ar else 'file(s) ready to send with worker messages'}"
-                            )
-
-                    # عرض المرفقات المحفوظة مع معاينة الصور وإمكانية الحذف
-                    if wdb_saved_attachments:
-                        st.markdown(f"**📎 {'المرفقات المحفوظة:' if is_ar else 'Saved Attachments:'}** ({len(wdb_saved_attachments)})")
-                        for idx, att_path in enumerate(wdb_saved_attachments):
-                            file_name = os.path.basename(att_path)
-                            file_ext = os.path.splitext(file_name)[1].lower()
-                            is_image = file_ext in ['.png', '.jpg', '.jpeg', '.webp', '.gif', '.bmp']
-                            is_video = file_ext in ['.mp4', '.mov', '.avi', '.mkv', '.3gp', '.webm']
-
-                            col_prev, col_del = st.columns([5, 1])
-                            with col_prev:
-                                if is_image:
-                                    st.image(att_path, caption=file_name, width=200)
-                                elif is_video:
-                                    st.video(att_path)
-                                else:
-                                    if file_ext == '.pdf':
-                                        icon = "📄"
-                                    elif file_ext in ['.mp3', '.wav', '.ogg']:
-                                        icon = "🎵"
-                                    else:
-                                        icon = "📎"
-                                    st.markdown(f"{icon} **{file_name}**")
-                            with col_del:
-                                st.markdown("<div style='margin-top: 10px;'></div>", unsafe_allow_html=True)
-                                if st.button("❌", key=f"del_wdb_att_{idx}", help="حذف المرفق"):
-                                    wdb_saved_attachments.pop(idx)
-                                    # إزالة الـ hash المقابل
-                                    try:
-                                        with open(att_path, "rb") as _f:
-                                            _f_hash = _hashlib.md5(_f.read()).hexdigest()
-                                        wdb_existing_hashes.discard(_f_hash)
-                                    except Exception:
-                                        pass
-                                    if os.path.exists(att_path):
-                                        try: os.remove(att_path)
-                                        except: pass
-                                    st.session_state.wa_worker_db_attachments = wdb_saved_attachments
-                                    st.session_state.wa_worker_db_attachments_hashes = wdb_existing_hashes
-                                    st.rerun()
                 else:
                     st.info("💡 " + (
                         "اكتب في البحث الذكي (مهنة، جنسية، مدينة، رقم جوال...) ثم اعتمد النتائج لإرسال واتساب."
                         if is_ar else
                         "Type in Smart Search (job, nationality, city, phone...) then load results for WhatsApp sending."
                     ))
+
+                # 📎 مرفقات رسالة العمال (صور / فيديوهات / صوت / PDF) — حصراً في تبويب بحث العمال
+                st.markdown("---")
+                st.markdown(f"#### 📎 {'مرفقات رسالة العمال (صور / فيديوهات / صوت / PDF)' if is_ar else 'Worker Message Attachments (Photos / Videos / Audio / PDF)'}")
+                st.caption("💡 " + ("يمكنك رفع صور متعددة، مقاطع فيديو، ملفات صوتية، وملفات PDF لإرفاقها مع الرسائل المرسلة للعمال من قاعدة البيانات." if is_ar else "You can upload multiple images, video clips, audio files, and PDFs to attach with messages sent to workers from the database."))
+
+                # نمط CSS حديث لمعاينة المرفقات والبطاقات
+                st.markdown("""
+                <style>
+                .wdb-card-box {
+                    background: rgba(255, 255, 255, 0.03);
+                    border: 1px solid rgba(0, 229, 255, 0.2);
+                    border-radius: 12px;
+                    padding: 10px;
+                    margin-bottom: 12px;
+                    transition: all 0.25s ease;
+                }
+                .wdb-card-box:hover {
+                    border-color: rgba(0, 229, 255, 0.5);
+                    background: rgba(255, 255, 255, 0.05);
+                }
+                .wdb-chip {
+                    display: inline-block;
+                    padding: 3px 8px;
+                    border-radius: 6px;
+                    font-size: 0.76rem;
+                    font-weight: 600;
+                }
+                .wdb-chip-img { background: rgba(0, 255, 136, 0.15); color: #00FF88; border: 1px solid rgba(0, 255, 136, 0.3); }
+                .wdb-chip-vid { background: rgba(0, 229, 255, 0.15); color: #00E5FF; border: 1px solid rgba(0, 229, 255, 0.3); }
+                .wdb-chip-aud { background: rgba(255, 187, 0, 0.15); color: #FFBB00; border: 1px solid rgba(255, 187, 0, 0.3); }
+                .wdb-chip-doc { background: rgba(233, 30, 99, 0.15); color: #FF4081; border: 1px solid rgba(233, 30, 99, 0.3); }
+                </style>
+                """, unsafe_allow_html=True)
+
+                if 'wa_wdb_att_category' not in st.session_state:
+                    st.session_state.wa_wdb_att_category = "images"
+
+                wdb_cat = st.session_state.wa_wdb_att_category
+
+                # أزرار حديثة لاختيار نوع الملف (صور متعددة / فيديو / صوتي / PDF)
+                c_btn1, c_btn2, c_btn3, c_btn4 = st.columns(4)
+                with c_btn1:
+                    if st.button(
+                        "🖼️ " + ("رفع أكثر من صورة" if is_ar else "Upload Multiple Images"),
+                        key="btn_wdb_cat_img",
+                        type="primary" if wdb_cat == "images" else "secondary",
+                        width="stretch"
+                    ):
+                        st.session_state.wa_wdb_att_category = "images"
+                        st.rerun()
+                with c_btn2:
+                    if st.button(
+                        "🎬 " + ("اختيار ملف فيديو" if is_ar else "Choose Video File"),
+                        key="btn_wdb_cat_vid",
+                        type="primary" if wdb_cat == "video" else "secondary",
+                        width="stretch"
+                    ):
+                        st.session_state.wa_wdb_att_category = "video"
+                        st.rerun()
+                with c_btn3:
+                    if st.button(
+                        "🎵 " + ("اختيار ملف صوتي" if is_ar else "Choose Audio File"),
+                        key="btn_wdb_cat_aud",
+                        type="primary" if wdb_cat == "audio" else "secondary",
+                        width="stretch"
+                    ):
+                        st.session_state.wa_wdb_att_category = "audio"
+                        st.rerun()
+                with c_btn4:
+                    if st.button(
+                        "📄 " + ("ملف PDF / مستندات" if is_ar else "PDF / Documents"),
+                        key="btn_wdb_cat_pdf",
+                        type="primary" if wdb_cat == "pdf" else "secondary",
+                        width="stretch"
+                    ):
+                        st.session_state.wa_wdb_att_category = "pdf"
+                        st.rerun()
+
+                # حقل الرفع التفاعلي حسب النوع المختار
+                wdb_uploaded_files = []
+                if wdb_cat == "images":
+                    wdb_uploaded_files = st.file_uploader(
+                        "🖼️ " + ("اختر صور (يمكنك اختيار عدة صور معاً)" if is_ar else "Select images (multiple allowed)"),
+                        type=["png", "jpg", "jpeg", "webp", "gif", "bmp"],
+                        accept_multiple_files=True,
+                        key="wa_wdb_uploader_images"
+                    )
+                elif wdb_cat == "video":
+                    wdb_uploaded_files = st.file_uploader(
+                        "🎬 " + ("اختر ملف فيديو (MP4, MOV, AVI, MKV, 3GP, WEBM)" if is_ar else "Select video file (MP4, MOV, AVI, MKV...)"),
+                        type=["mp4", "mov", "avi", "mkv", "3gp", "webm"],
+                        accept_multiple_files=True,
+                        key="wa_wdb_uploader_video"
+                    )
+                elif wdb_cat == "audio":
+                    wdb_uploaded_files = st.file_uploader(
+                        "🎵 " + ("اختر ملف صوتي أو تسجيل (MP3, WAV, M4A, OGG, AAC)" if is_ar else "Select audio file (MP3, WAV, M4A, OGG, AAC)"),
+                        type=["mp3", "wav", "m4a", "ogg", "aac"],
+                        accept_multiple_files=True,
+                        key="wa_wdb_uploader_audio"
+                    )
+                elif wdb_cat == "pdf":
+                    wdb_uploaded_files = st.file_uploader(
+                        "📄 " + ("اختر ملف PDF أو مستندات" if is_ar else "Select PDF or documents"),
+                        type=["pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "txt", "csv"],
+                        accept_multiple_files=True,
+                        key="wa_wdb_uploader_doc"
+                    )
+
+                # حفظ الملفات المرفوعة في مجلد الجلسة مع منع التكرار بناءً على الـ Hash
+                wdb_saved_attachments = st.session_state.get('wa_worker_db_attachments', [])
+                wdb_existing_hashes = st.session_state.get('wa_worker_db_attachments_hashes', set())
+
+                if wdb_uploaded_files:
+                    base_dir = os.path.join(os.getcwd(), "whatsapp_session")
+                    os.makedirs(base_dir, exist_ok=True)
+                    import uuid as _uuid
+                    import hashlib as _hashlib
+                    new_files_count = 0
+                    for uf in wdb_uploaded_files:
+                        file_bytes = uf.getvalue()
+                        file_hash = _hashlib.md5(file_bytes).hexdigest()
+                        if file_hash in wdb_existing_hashes:
+                            continue
+                        file_ext = os.path.splitext(uf.name)[1]
+                        unique_name = f"wdb_{_uuid.uuid4().hex[:8]}{file_ext}"
+                        save_path = os.path.join(base_dir, unique_name)
+                        with open(save_path, "wb") as f:
+                            f.write(file_bytes)
+                        if save_path not in wdb_saved_attachments:
+                            wdb_saved_attachments.append(save_path)
+                            wdb_existing_hashes.add(file_hash)
+                            new_files_count += 1
+                    st.session_state.wa_worker_db_attachments = wdb_saved_attachments
+                    st.session_state.wa_worker_db_attachments_hashes = wdb_existing_hashes
+                    if new_files_count > 0:
+                        st.toast(f"✅ {'تم إضافة' if is_ar else 'Added'} {new_files_count} {'ملف' if is_ar else 'file(s)'}")
+
+                # تنقية المسارات الموجودة فعلياً على القرص
+                wdb_saved_attachments = [p for p in wdb_saved_attachments if p and os.path.exists(p)]
+                st.session_state.wa_worker_db_attachments = wdb_saved_attachments
+
+                # عرض المرفقات الحالية بتصميم ومعاينة عصرية
+                if wdb_saved_attachments:
+                    img_exts = {'.png', '.jpg', '.jpeg', '.webp', '.gif', '.bmp'}
+                    vid_exts = {'.mp4', '.mov', '.avi', '.mkv', '.3gp', '.webm'}
+                    aud_exts = {'.mp3', '.wav', '.m4a', '.ogg', '.aac'}
+                    
+                    images_list = []
+                    videos_list = []
+                    audio_list = []
+                    docs_list = []
+
+                    for idx, att_path in enumerate(wdb_saved_attachments):
+                        fname = os.path.basename(att_path)
+                        fext = os.path.splitext(fname)[1].lower()
+                        try:
+                            fsize_bytes = os.path.getsize(att_path)
+                            fsize_str = f"{fsize_bytes/1024:.1f} KB" if fsize_bytes < 1048576 else f"{fsize_bytes/1048576:.2f} MB"
+                        except Exception:
+                            fsize_str = ""
+
+                        item = (idx, att_path, fname, fsize_str)
+                        if fext in img_exts:
+                            images_list.append(item)
+                        elif fext in vid_exts:
+                            videos_list.append(item)
+                        elif fext in aud_exts:
+                            audio_list.append(item)
+                        else:
+                            docs_list.append(item)
+
+                    # شريط الملخص العلوي للمرفقات وزر الحذف الكلي
+                    sum_col1, sum_col2 = st.columns([4, 1])
+                    with sum_col1:
+                        summary_parts = []
+                        if images_list: summary_parts.append(f"🖼️ {len(images_list)} صور")
+                        if videos_list: summary_parts.append(f"🎬 {len(videos_list)} فيديو")
+                        if audio_list: summary_parts.append(f"🎵 {len(audio_list)} صوتي")
+                        if docs_list: summary_parts.append(f"📄 {len(docs_list)} مستند/PDF")
+                        sum_text = " · ".join(summary_parts) if summary_parts else ""
+
+                        st.markdown(f"""
+                        <div style="background: rgba(0, 229, 255, 0.08); border: 1.5px solid rgba(0, 229, 255, 0.35); border-radius: 10px; padding: 10px 14px; margin: 8px 0;">
+                            <span style="color: #00E5FF; font-weight: 700; font-size: 0.95rem;">📎 {'المرفقات الجاهزة للإرسال مع رسائل العمال' if is_ar else 'Ready Attachments for Workers'}: {len(wdb_saved_attachments)} ملف</span>
+                            <div style="color: #ccc; font-size: 0.85rem; margin-top: 3px;">{sum_text}</div>
+                        </div>
+                        """, unsafe_allow_html=True)
+                    with sum_col2:
+                        st.markdown("<div style='height: 8px;'></div>", unsafe_allow_html=True)
+                        if st.button("🗑️ " + ("مسح الكل" if is_ar else "Clear All"), key="btn_wdb_clear_all", width="stretch"):
+                            for p in wdb_saved_attachments:
+                                if os.path.exists(p):
+                                    try: os.remove(p)
+                                    except: pass
+                            st.session_state.wa_worker_db_attachments = []
+                            st.session_state.wa_worker_db_attachments_hashes = set()
+                            st.rerun()
+
+                    # 1. معاينة عصرية للصور (Modern Image Gallery Grid)
+                    if images_list:
+                        st.markdown(f"**🖼️ {'معاينة حديثة للصور المرفوعة' if is_ar else 'Uploaded Images Gallery'} ({len(images_list)}):**")
+                        cols_grid = st.columns(3)
+                        for i_img, (real_idx, a_path, a_name, a_sz) in enumerate(images_list):
+                            with cols_grid[i_img % 3]:
+                                st.markdown(f"""
+                                <div class="wdb-card-box">
+                                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                                        <span class="wdb-chip wdb-chip-img">🖼️ صورة #{i_img + 1}</span>
+                                        <span style="font-size: 0.72rem; color: #aaa;">{a_sz}</span>
+                                    </div>
+                                </div>
+                                """, unsafe_allow_html=True)
+                                st.image(a_path, use_container_width=True)
+                                if st.button(f"🗑️ {'حذف' if is_ar else 'Delete'}", key=f"del_wdb_img_{real_idx}", width="stretch"):
+                                    wdb_saved_attachments.pop(real_idx)
+                                    if os.path.exists(a_path):
+                                        try: os.remove(a_path)
+                                        except: pass
+                                    st.session_state.wa_worker_db_attachments = wdb_saved_attachments
+                                    st.rerun()
+
+                    # 2. معاينة مقاطع الفيديو
+                    if videos_list:
+                        st.markdown(f"**🎬 {'مقاطع الفيديو المرفوعة' if is_ar else 'Uploaded Videos'} ({len(videos_list)}):**")
+                        v_cols = st.columns(2)
+                        for i_vid, (real_idx, a_path, a_name, a_sz) in enumerate(videos_list):
+                            with v_cols[i_vid % 2]:
+                                st.markdown(f"""
+                                <div class="wdb-card-box">
+                                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                                        <span class="wdb-chip wdb-chip-vid">🎬 فيديو #{i_vid + 1}</span>
+                                        <span style="font-size: 0.72rem; color: #aaa;">{a_sz}</span>
+                                    </div>
+                                </div>
+                                """, unsafe_allow_html=True)
+                                st.video(a_path)
+                                if st.button(f"🗑️ {'حذف الفيديو' if is_ar else 'Delete Video'}", key=f"del_wdb_vid_{real_idx}", width="stretch"):
+                                    wdb_saved_attachments.pop(real_idx)
+                                    if os.path.exists(a_path):
+                                        try: os.remove(a_path)
+                                        except: pass
+                                    st.session_state.wa_worker_db_attachments = wdb_saved_attachments
+                                    st.rerun()
+
+                    # 3. معاينة الملفات الصوتية
+                    if audio_list:
+                        st.markdown(f"**🎵 {'الملفات الصوتية والتسجيلات' if is_ar else 'Uploaded Audio'} ({len(audio_list)}):**")
+                        a_cols = st.columns(2)
+                        for i_aud, (real_idx, a_path, a_name, a_sz) in enumerate(audio_list):
+                            with a_cols[i_aud % 2]:
+                                st.markdown(f"""
+                                <div class="wdb-card-box">
+                                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                                        <span class="wdb-chip wdb-chip-aud">🎵 ملف صوتي #{i_aud + 1}</span>
+                                        <span style="font-size: 0.72rem; color: #aaa;">{a_sz}</span>
+                                    </div>
+                                </div>
+                                """, unsafe_allow_html=True)
+                                st.audio(a_path)
+                                if st.button(f"🗑️ {'حذف الصوت' if is_ar else 'Delete Audio'}", key=f"del_wdb_aud_{real_idx}", width="stretch"):
+                                    wdb_saved_attachments.pop(real_idx)
+                                    if os.path.exists(a_path):
+                                        try: os.remove(a_path)
+                                        except: pass
+                                    st.session_state.wa_worker_db_attachments = wdb_saved_attachments
+                                    st.rerun()
+
+                    # 4. معاينة ملفات PDF والمستندات
+                    if docs_list:
+                        st.markdown(f"**📄 {'ملفات PDF والمستندات المرفوعة' if is_ar else 'Uploaded Documents'} ({len(docs_list)}):**")
+                        d_cols = st.columns(2)
+                        for i_doc, (real_idx, a_path, a_name, a_sz) in enumerate(docs_list):
+                            with d_cols[i_doc % 2]:
+                                st.markdown(f"""
+                                <div class="wdb-card-box">
+                                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                                        <div>
+                                            <span class="wdb-chip wdb-chip-doc">📄 PDF / مستند</span>
+                                            <div style="font-weight: 600; font-size: 0.88rem; color: #FFF; margin-top: 5px;">{a_name}</div>
+                                            <div style="font-size: 0.75rem; color: #aaa;">{a_sz}</div>
+                                        </div>
+                                    </div>
+                                </div>
+                                """, unsafe_allow_html=True)
+                                if st.button(f"🗑️ {'حذف المستند' if is_ar else 'Delete Document'}", key=f"del_wdb_doc_{real_idx}", width="stretch"):
+                                    wdb_saved_attachments.pop(real_idx)
+                                    if os.path.exists(a_path):
+                                        try: os.remove(a_path)
+                                        except: pass
+                                    st.session_state.wa_worker_db_attachments = wdb_saved_attachments
+                                    st.rerun()
+
             
             # 🛡️ Build review targets only when NOT sending — never interrupt the send loop
             from_worker_db = st.session_state.get('wa_from_worker_db', False)
@@ -2880,9 +3065,10 @@ HR Manager"""
             if st.session_state.get('wa_running', False):
                 if st.button(lbl['stop'], type="primary", width='stretch', key="wa_stop_btn"):
                     st.session_state.wa_running = False
-                    # تنظيف المسار الأحادي والقائمة المتعددة
+                    # تنظيف المسارات المؤقتة غير المحفوظة في قاعدة العمال
+                    _wdb_saved = set(st.session_state.get('wa_worker_db_attachments', []) or [])
                     for _p in [st.session_state.get('wa_temp_path')] + list(st.session_state.get('wa_temp_paths', []) or []):
-                        if _p and os.path.exists(_p):
+                        if _p and _p not in _wdb_saved and os.path.exists(_p):
                             try: os.remove(_p)
                             except: pass
                     st.session_state.wa_temp_path = None
@@ -2904,7 +3090,7 @@ HR Manager"""
                         else:
                             # تحديد المرفقات: أولوية لمرفقات بحث قاعدة العمال إذا كان الإرسال منها
                             wdb_attachments = st.session_state.get('wa_worker_db_attachments', []) or []
-                            is_from_wdb = st.session_state.get('wa_from_worker_db', False)
+                            is_from_wdb = st.session_state.get('wa_from_worker_db', False) or any(t.get('source') == 'worker_db' for t in final_targets)
 
                             temp_paths = []
                             attachment_info = ""
@@ -2913,8 +3099,19 @@ HR Manager"""
                                 temp_paths = [p for p in wdb_attachments if p and os.path.exists(p)]
                                 st.session_state.wa_temp_paths = temp_paths
                                 st.session_state.wa_temp_path = None
-                                attachment_info = f"📎 {'مع' if is_ar else 'With'} {len(temp_paths)} {'مرفق' if is_ar else 'attachment(s)'}"
-                                print(f"[{time.strftime('%H:%M:%S')}] 📎 WDB_ATTACHMENTS: Found {len(temp_paths)} valid attachment paths for worker DB send")
+                                # استخراج تفاصيل الأنواع لتأكيد الإرسال
+                                _cnt_img = sum(1 for _tp in temp_paths if os.path.splitext(_tp)[1].lower() in ['.png', '.jpg', '.jpeg', '.webp', '.gif', '.bmp'])
+                                _cnt_vid = sum(1 for _tp in temp_paths if os.path.splitext(_tp)[1].lower() in ['.mp4', '.mov', '.avi', '.mkv', '.3gp', '.webm'])
+                                _cnt_aud = sum(1 for _tp in temp_paths if os.path.splitext(_tp)[1].lower() in ['.mp3', '.wav', '.m4a', '.ogg', '.aac'])
+                                _cnt_doc = sum(1 for _tp in temp_paths if os.path.splitext(_tp)[1].lower() in ['.pdf', '.doc', '.docx', '.txt', '.xls', '.xlsx', '.csv'])
+                                _parts = []
+                                if _cnt_img: _parts.append(f"{_cnt_img} صور" if is_ar else f"{_cnt_img} image(s)")
+                                if _cnt_vid: _parts.append(f"{_cnt_vid} فيديو" if is_ar else f"{_cnt_vid} video(s)")
+                                if _cnt_aud: _parts.append(f"{_cnt_aud} صوت" if is_ar else f"{_cnt_aud} audio")
+                                if _cnt_doc: _parts.append(f"{_cnt_doc} PDF/مستند" if is_ar else f"{_cnt_doc} doc(s)")
+                                _types_desc = f" ({' · '.join(_parts)})" if _parts else ""
+                                attachment_info = f"📎 {'تم تجهيز' if is_ar else 'Loaded'} {len(temp_paths)} {'مرفق' if is_ar else 'attachment(s)'}{_types_desc}"
+                                print(f"[{time.strftime('%H:%M:%S')}] 📎 WDB_ATTACHMENTS: Found {len(temp_paths)} valid attachment paths for worker DB send: {_types_desc}")
                             elif attachment:
                                 import tempfile
                                 suffix = os.path.splitext(attachment.name)[1]
@@ -2951,6 +3148,7 @@ HR Manager"""
                             st.session_state.wa_sent_fingerprint = current_fp
                             st.rerun()
 
+
         # ══════════════════════════════════════════════════════════
         # 🚀 حلقة الإرسال والعداد التنازلي المباشر (Live Sending Loop & Countdown)
         # ══════════════════════════════════════════════════════════
@@ -2973,6 +3171,27 @@ HR Manager"""
                 sent_pct = (curr_i / total_targets * 100) if total_targets > 0 else 0
                 st.progress(min(1.0, (curr_i + 1) / total_targets))
 
+                temp_paths = st.session_state.get('wa_temp_paths', []) or []
+                att_badge_html = ""
+                att_log_tag = ""
+                if temp_paths:
+                    _cnt_img = sum(1 for _tp in temp_paths if os.path.splitext(_tp)[1].lower() in ['.png', '.jpg', '.jpeg', '.webp', '.gif', '.bmp'])
+                    _cnt_vid = sum(1 for _tp in temp_paths if os.path.splitext(_tp)[1].lower() in ['.mp4', '.mov', '.avi', '.mkv', '.3gp', '.webm'])
+                    _cnt_aud = sum(1 for _tp in temp_paths if os.path.splitext(_tp)[1].lower() in ['.mp3', '.wav', '.m4a', '.ogg', '.aac'])
+                    _cnt_doc = sum(1 for _tp in temp_paths if os.path.splitext(_tp)[1].lower() in ['.pdf', '.doc', '.docx', '.txt', '.xls', '.xlsx', '.csv'])
+                    _parts = []
+                    if _cnt_img: _parts.append(f"🖼️ {_cnt_img} صور")
+                    if _cnt_vid: _parts.append(f"🎬 {_cnt_vid} فيديو")
+                    if _cnt_aud: _parts.append(f"🎵 {_cnt_aud} صوت")
+                    if _cnt_doc: _parts.append(f"📄 {_cnt_doc} PDF/مستند")
+                    _types_str = " · ".join(_parts) if _parts else f"{len(temp_paths)} ملفات"
+                    att_badge_html = f"""
+                    <div style="margin-top: 8px; padding: 6px 12px; background: rgba(0, 229, 255, 0.08); border: 1px solid rgba(0, 229, 255, 0.35); border-radius: 8px; color: #00E5FF; font-size: 0.88rem; font-weight: 600;">
+                        📎 {'تم إرفاق ورفع المرفقات مع الرسالة بنجاح' if is_ar else 'Attachments attached with message'}: ({_types_str})
+                    </div>
+                    """
+                    att_log_tag = f" [📎 مرفق معها: {_types_str}]"
+
                 st.markdown(f"""
                 <div style="background: rgba(0, 255, 100, 0.05); padding: 16px 20px; border-radius: 14px; border: 1.5px solid rgba(0, 255, 100, 0.3); margin: 12px 0; box-shadow: 0 0 15px rgba(0, 255, 100, 0.1);">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
@@ -2982,6 +3201,7 @@ HR Manager"""
                     <div style="color: #FFFFFF; font-size: 0.95rem;">
                         👤 <strong>{n}</strong> · 📱 <span style="font-family: monospace; color: #00FF88;">{p}</span>
                     </div>
+                    {att_badge_html}
                 </div>
                 """, unsafe_allow_html=True)
 
@@ -3003,8 +3223,6 @@ HR Manager"""
                     final_msg = final_msg.replace("{Name}", n).replace("{name}", n).replace("{الاسم}", n)
                     final_msg = final_msg.replace("{CV}", v).replace("{cv}", v).replace("{السيرة}", v)
                     final_msg = re.sub(r'\n{3,}', '\n\n', final_msg).strip()
-
-                temp_paths = st.session_state.get('wa_temp_paths', []) or []
 
                 # إزالة سطر HR Manager المكرر في الأعلى إن كان التوقيع نفسه
                 # موجوداً بالأسفل (تكرار واضح) — مع الحفاظ على باقي المتن
@@ -3028,7 +3246,7 @@ HR Manager"""
                     st.error("❌ محرك واتساب غير متصل! يرجى الضغط على 'Start Engine' أولاً")
                 else:
                     try:
-                        with st.spinner(f"🚀 {'جاري إرسال الرسالة إلى' if is_ar else 'Sending message to'} {n} ({p})..."):
+                        with st.spinner(f"🚀 {'جاري إرسال الرسالة والمرفقات إلى' if temp_paths else 'جاري إرسال الرسالة إلى'} {n} ({p})..."):
                             ok, log_msg = st.session_state.wa_service.send_message(p, final_msg, attachment_path=temp_paths)
                     except Exception as send_err:
                         ok = False
@@ -3040,7 +3258,7 @@ HR Manager"""
                     "idx": curr_i + 1,
                     "name": n,
                     "phone": p,
-                    "status": log_msg if ok else f"فشل ({log_msg})",
+                    "status": (log_msg + att_log_tag) if ok else f"فشل ({log_msg})",
                     "ok": ok,
                     "time": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 }
@@ -3066,9 +3284,10 @@ HR Manager"""
                     if st.session_state.wa_idx >= total_targets:
                         st.session_state.wa_running = False
                         st.session_state.wa_done = True
-                        # تنظيف جميع المسارات المؤقتة
+                        # تنظيف جميع المسارات المؤقتة عدا المرفقات المحفوظة لقاعدة العمال
+                        _wdb_saved = set(st.session_state.get('wa_worker_db_attachments', []) or [])
                         for _p in list(st.session_state.get('wa_temp_paths', []) or []):
-                            if _p and os.path.exists(_p):
+                            if _p and _p not in _wdb_saved and os.path.exists(_p):
                                 try: os.remove(_p)
                                 except: pass
                         st.session_state.wa_temp_path = None
@@ -3077,6 +3296,7 @@ HR Manager"""
                         st.success("🎉 " + ("اكتمل إرسال جميع الرسائل بنجاح!" if is_ar else "All messages sent successfully!"))
                         time.sleep(1)
                         st.rerun()
+
                     else:
                         # 7. ⏱️ LIVE DYNAMIC RANDOM COUNTDOWN TIMER (60s - 120s unique per message)
                         is_batch_break = (batch_size > 0 and st.session_state.wa_idx % batch_size == 0)

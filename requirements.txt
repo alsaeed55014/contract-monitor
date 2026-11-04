@@ -13,3 +13,4 @@ google-auth
 deep-translator
 pdfplumber
 undetected-chromedriver
+setuptools
