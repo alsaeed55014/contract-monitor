@@ -14,18 +14,48 @@ ENV/
 st_logs.txt
 st_output.txt
 
-# Project Specific & Secrets
+# Project Specific & Secrets (DO NOT UPLOAD TO GITHUB)
 .whatsapp_session/
 src/.persist_login.json
 whatsapp_history.json
+whatsapp_history_*.json
+whatsapp_history_admin.json
+whatsapp_history_maya.json
+whatsapp_history_samar.json
+login_history.json
+online_users.json
 credentials.json
 service_account.json
+users.json
+notif_seen_admin.json
+notification_cache.json
+notification_state.json
+wa_worker_job.json
+wa_worker_log.json
+wa_worker_state.json
+wa_worker.pid
 brain/
 scratch/
 data/*.xlsx
 data/*.csv
 !data/candidates_sample.xlsx
+ignored_rows.json
+state.json
+
+# Temporary files
+barista_*.txt
+section_*.txt
+tail*.txt
+run_*.txt
+filter_*.txt
+between_*.txt
 
 # OS
 .DS_Store
 Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo

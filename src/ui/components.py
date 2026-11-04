@@ -2,7 +2,6 @@ import streamlit as st
 import os
 import json
 from datetime import datetime
-from src.utils.phone_utils import mask_phone
 
 def show_toast(msg, typ="info", container=None):
     """Modern toast with luxury styling."""
@@ -70,8 +69,3 @@ def find_col(df, options):
         match = next((c for c in df.columns if o.lower() in str(c).lower()), None)
         if match: return match
     return None
-
-def silent_notification_monitor():
-    """Background monitor for new entries (Placeholder for app.py integration)."""
-    # This is normally called in app.py to trigger the background check
-    pass

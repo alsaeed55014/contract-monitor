@@ -1,9 +1,0 @@
-2499:         event = st.dataframe(
-2868:             event = st.dataframe(
-3411:     st.dataframe(style_df(df_users), use_container_width=True)
-4037:                         event_city = st.dataframe(
-4084:                         ev_reg = st.dataframe(
-4121:                         event_other = st.dataframe(
-4331:     st.dataframe(
-4456:                         st.dataframe(
-4702:                     st.dataframe(style_df(df_bengali_search), use_container_width=True, hide_index=True, column_config=col_cfg_b)

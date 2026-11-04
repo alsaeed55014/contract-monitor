@@ -1,0 +1,6 @@
+2026/10/19-23:46:00.422 3718 Creating DB C:\app\whatsapp_session\user_admin\Default\WebStorage\3\IndexedDB\indexeddb.leveldb since it was missing.
+2026/10/19-23:46:00.431 3718 Reusing MANIFEST C:\app\whatsapp_session\user_admin\Default\WebStorage\3\IndexedDB\indexeddb.leveldb/MANIFEST-000001
+2026/10/19-23:46:02.457 3ca0 Level-0 table #5: started
+2026/10/19-23:46:02.460 3ca0 Level-0 table #5: 376 bytes OK
+2026/10/19-23:46:02.463 3ca0 Delete type=0 #3
+2026/10/19-23:46:02.463 3ca0 Manual compaction at level-0 from (begin) .. (end); will stop at (end)

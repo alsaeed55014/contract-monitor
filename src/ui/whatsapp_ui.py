@@ -2,17 +2,23 @@ import streamlit as st
 import pandas as pd
 import json
 import os
+import re
+import html
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 # WhatsAppService is imported lazily inside render_whatsapp_page() to avoid blocking app startup with selenium
-from src.utils.phone_utils import validate_numbers, format_phone_number, save_to_local_desktop, render_pasha_export_button
+from src.utils.phone_utils import validate_numbers, format_phone_number
+from src.utils.data_utils import build_auto_column_config
 from src.core.i18n import t
 from src.config import WA_HISTORY_FILE, WA_TEMPLATES_FILE
-from src.ui.styles import get_base64_image
 import random
 
 # --- Smart Message Templates (Updated 2026-03-20) ---
+SMART_PART_KEYS = ("header", "intro", "body_start", "body_end", "closing", "final_call", "signature")
 SMART_TEMPLATES = {
+    "header": [
+        "Hello {Name},"
+    ],
     "intro": [
         "I hope you are doing well.",
         "I hope this message finds you in good health.",
@@ -47,6 +53,9 @@ SMART_TEMPLATES = {
         "The selection process is moving fast, so please get back to us as soon as possible.",
         "To ensure you don't miss out, please let us know your status shortly.",
         "We look forward to your prompt response."
+    ],
+    "signature": [
+        "Best regards,\nAbu Fahd\nHR Manager"
     ]
 }
 
@@ -70,85 +79,663 @@ def load_templates():
                     for k, v in data["custom"].items():
                         if isinstance(v, str):
                             data["custom"][k] = {"body": v, "is_smart": False, "job_title": ""}
+                smart = dict(SMART_TEMPLATES)
+                smart.update(data.get("smart") or {})
+                data["smart"] = smart
                 return data
-        except:
+        except Exception:
             return default_templates
     return default_templates
 
 def save_templates(templates):
     try:
+        parent = os.path.dirname(WA_TEMPLATES_FILE)
+        if parent:
+            os.makedirs(parent, exist_ok=True)
         with open(WA_TEMPLATES_FILE, 'w', encoding='utf-8') as f:
             json.dump(templates, f, ensure_ascii=False, indent=4)
-    except:
-        pass
+            f.flush()
+            os.fsync(f.fileno())
+        return True, None
+    except Exception as e:
+        return False, str(e)
 
-def generate_smart_message(name, cv_link, custom_job=""):
-    templates = load_templates().get("smart", SMART_TEMPLATES)
-    
-    # 🛡️ تنويع التحية
-    greetings = ["Hello", "Hi", "Greetings", "Dear"]
-    greet = random.choice(greetings)
-    
-    intro = random.choice(templates.get("intro", [""]))
-    b_start = random.choice(templates.get("body_start", [""]))
-    b_end = random.choice(templates.get("body_end", [""]))
-    closing = random.choice(templates.get("closing", [""]))
-    final_call = random.choice(templates.get("final_call", [""]))
-    
-    # Handle custom job title injection beautifully
-    job_part = f" - {custom_job}" if custom_job.strip() else ""
+MULTILINE_SMART_KEYS = ("signature", "closing", "header")
+
+def _split_smart_part_text(text, key=None):
+    """Parse editor text into component options. A line with only --- separates multi-line options."""
+    text = (text or "").replace("\r\n", "\n").strip()
+    if not text:
+        return []
+    lines = text.split("\n")
+    if any(line.strip() == "---" for line in lines):
+        parts, buf = [], []
+        for line in lines:
+            if line.strip() == "---":
+                chunk = "\n".join(buf).strip()
+                if chunk:
+                    parts.append(chunk)
+                buf = []
+            else:
+                buf.append(line)
+        chunk = "\n".join(buf).strip()
+        if chunk:
+            parts.append(chunk)
+        return parts
+    # No --- separator: multiline components (signature/closing/header) must stay
+    # as ONE option so e.g. "Best regards,\nAbu Fahd\nHR Manager" keeps
+    # "HR Manager" under "Abu Fahd" instead of becoming 3 separate options.
+    if key in MULTILINE_SMART_KEYS:
+        return [text.strip()] if text.strip() else []
+    return [line.strip() for line in lines if line.strip()]
+
+
+def _join_smart_part_list(part_list):
+    return "\n---\n".join(str(item).strip() for item in (part_list or []) if str(item).strip())
+
+
+def _pick_smart_part(templates, key, fallback, stable=False):
+    options = templates.get(key) if templates else None
+    if not options:
+        options = fallback
+    options = [o for o in options if str(o).strip()]
+    if not options:
+        options = fallback or [""]
+    if stable:
+        return options[0]
+    return random.choice(options)
+
+
+def _smart_editor_keys(file_smart=None):
+    keys = list(SMART_PART_KEYS)
+    if isinstance(file_smart, dict):
+        for key in file_smart:
+            if key not in keys:
+                keys.append(key)
+    return keys
+
+
+def _read_smart_parts_from_widgets(file_smart=None):
+    """Always prefer the editor widget text; never re-apply the file over typed changes."""
+    file_smart = file_smart if isinstance(file_smart, dict) else (load_templates().get("smart") or dict(SMART_TEMPLATES))
+    parts = {}
+    for key in _smart_editor_keys(file_smart):
+        raw = st.session_state.get(f"smart_comp_{key}")
+        if isinstance(raw, str):
+            parsed = _split_smart_part_text(raw, key=key)
+            parts[key] = parsed if parsed else list(file_smart.get(key) or SMART_TEMPLATES.get(key) or [])
+        else:
+            parts[key] = list(file_smart.get(key) or SMART_TEMPLATES.get(key) or [])
+    return parts
+
+
+def get_live_smart_templates():
+    live = st.session_state.get("smart_parts_live")
+    if isinstance(live, dict) and live:
+        return live
+    return _read_smart_parts_from_widgets()
+
+
+def _save_smart_parts_from_editor():
+    data = load_templates()
+    parts = _read_smart_parts_from_widgets(data.get("smart"))
+    data["smart"] = parts
+    ok, err = save_templates(data)
+    st.session_state.smart_parts_live = parts
+    st.session_state.smart_preview_nonce = st.session_state.get("smart_preview_nonce", 0) + 1
+    st.session_state.smart_preview_randomize = False
+    st.session_state.smart_save_status = {"ok": ok, "error": err, "parts": parts}
+
+
+def generate_smart_message(name, cv_link, custom_job="", templates=None, stable=False):
+    if templates is None:
+        templates = load_templates().get("smart", SMART_TEMPLATES)
+
+    header_opts = [o for o in (templates.get("header") or []) if str(o).strip()]
+    if header_opts:
+        header = _pick_smart_part(templates, "header", ["Hello {Name},"], stable=stable)
+        header = (
+            header.replace("{Name}", str(name))
+            .replace("{name}", str(name))
+            .replace("{الاسم}", str(name))
+        )
+    else:
+        greetings = ["Hello", "Hi", "Greetings", "Dear"]
+        greet = greetings[0] if stable else random.choice(greetings)
+        header = f"{greet} {name},"
+
+    intro = _pick_smart_part(templates, "intro", [""], stable=stable)
+    b_start = _pick_smart_part(templates, "body_start", [""], stable=stable)
+    b_end = _pick_smart_part(templates, "body_end", [""], stable=stable)
+    closing = _pick_smart_part(templates, "closing", [""], stable=stable)
+    final_call = _pick_smart_part(templates, "final_call", [""], stable=stable)
+    signature = _pick_smart_part(
+        templates,
+        "signature",
+        ["Best regards,\nAbu Fahd\nHR Manager"],
+        stable=stable,
+    )
+
+    job_part = f" - {custom_job}" if custom_job and str(custom_job).strip() else ""
     full_body = f"{b_start}{job_part}{b_end}"
-    
-    # 🛡️ تبديل هيكلية الرسالة بشكل عشوائي (Shuffling sections)
-    sections = [intro, full_body, closing, final_call]
-    # random.shuffle(sections) # Not always good as it might break logical flow
-    
-    # Randomize line breaks (one or two)
-    lb = "\n" if random.random() > 0.5 else "\n\n"
-    
-    msg = f"{greet} {name},{lb}{intro}{lb}{full_body}{lb}{closing}{lb}{final_call}{lb}"
-    
-    # Logic: If CV exists, add CV link. If not, omit it.
-    if cv_link and str(cv_link).lower() != 'nan' and str(cv_link).strip() != '':
+    lb = "\n\n" if stable else ("\n" if random.random() > 0.5 else "\n\n")
+
+    msg = f"{header}{lb}{intro}{lb}{full_body}{lb}{closing}{lb}{final_call}{lb}"
+
+    if cv_link and str(cv_link).lower() != "nan" and str(cv_link).strip() != "":
         msg += f"Link to your profile: {cv_link}\n\n"
-    
-    # 🛡️ تنويع التوقيع
-    signatures = [
-        "Best regards,\nAbu Fahd\nHR Manager",
-        "Kind regards,\nAbu Fahd\nHR Manager",
-        "With respect,\nAbu Fahd\nHR Manager",
-        "Sincerely,\nAbu Fahd\nHR Manager"
-    ]
-    msg += random.choice(signatures)
-    
-    # 🛡️ عشوائية المسافات والرموز التعبيرية
-    if random.random() > 0.7:
+
+    signature = str(signature).replace("\r\n", "\n").strip()
+    msg += signature
+
+    if not stable and random.random() > 0.7:
         msg = msg.replace(".", " .").replace("!", " ! ")
-        
+
+    msg = _fix_whatsapp_direction(msg)
+
     return msg
 
-def load_wa_history():
-    if os.path.exists(WA_HISTORY_FILE):
+
+def _fix_whatsapp_direction(msg):
+    """Ensure LTR alignment in WhatsApp (even on Arabic devices) and keep
+    'HR Manager' on its own line under 'Abu Fahd'.
+
+    Real WhatsApp puts its timestamp on the same line as the last short line,
+    which made 'HR Manager' appear at the far right. We trim trailing spaces
+    per line, force LTR marks, and add an invisible LRM line at the end so the
+    timestamp moves to its own line.
+    """
+    if not msg:
+        return msg
+    msg = str(msg).replace("\r\n", "\n")
+    # Remove trailing spaces/tabs on every line (bidi flip cause)
+    msg = "\n".join(ln.rstrip(" \t\u200e\u2066\u2069") for ln in msg.split("\n"))
+    msg = msg.strip("\n ")
+    # Normalize signature lines: HR Manager must sit under Abu Fahd
+    msg = msg.replace("Abu Fahd\r\nHR Manager", "Abu Fahd\nHR Manager")
+    msg = msg.replace("Abu Fahd\u200e\nHR Manager", "Abu Fahd\nHR Manager")
+    msg = re.sub(r"Abu Fahd\s*\n\s*HR Manager", "Abu Fahd\nHR Manager", msg)
+    # Force LTR on signature lines so RTL WhatsApp UI doesn't push them right
+    msg = msg.replace("Abu Fahd\nHR Manager", "Abu Fahd\u200e\nHR Manager\u200e")
+    msg = msg.replace("Best regards,\nAbu Fahd", "Best regards,\u200e\nAbu Fahd")
+    # Force whole message LTR
+    if not msg.startswith(("\u200e", "\u2066")):
+        msg = "\u200e" + msg
+    # Push WhatsApp timestamp to its own invisible line
+    stripped = msg.rstrip("\u200e\u2066\u2069 \t\n")
+    if stripped.endswith("HR Manager") or stripped.endswith("HR Manager\u200e"):
+        msg = stripped.rstrip("\u200e") + "\u200e\n\u200e"
+    return msg
+
+
+@st.dialog("👁️ " + "معاينة واتساب — كما ستظهر للمستلم", width="large")
+def _smart_preview_dialog():
+    """Popup preview that disappears on close (X / outside click / Close button)."""
+    msg = st.session_state.get("smart_preview_dialog_msg", "") or ""
+    if not msg:
+        st.warning("لا توجد معاينة بعد.")
+        if st.button("إغلاق", key="close_smart_preview_empty"):
+            st.rerun()
+        return
+    _bubble = html.escape(msg).replace("\n", "<br>")
+    st.markdown(
+        f"""
+        <div style="background:#0b141a; padding:14px; border-radius:14px;" dir="ltr">
+            <div style="background:#005c4b; color:#e9edef; padding:12px 14px; border-radius:10px; border-top-right-radius:0; direction:ltr; text-align:left; unicode-bidi:isolate; white-space:normal; line-height:1.7; font-size:0.95rem; box-shadow: 0 1px 1px rgba(0,0,0,0.4);">
+                {_bubble}
+                <div style="text-align:right; font-size:0.72rem; color:#aebac1; margin-top:8px;">✓✓ {datetime.now().strftime('%H:%M')}</div>
+            </div>
+            <div style="color:#8696a0; font-size:0.78rem; margin-top:8px;" dir="rtl">توقيع من 3 أسطر: Best regards, / Abu Fahd / HR Manager — كل سطر مستقل.</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    if st.button("إغلاق", key="close_smart_preview", type="primary", width="stretch"):
+        st.rerun()
+
+def load_wa_history(username=None):
+    if username is None:
+        username = get_wa_username()
+    _f = wa_history_file_for(username)
+    if os.path.exists(_f):
         try:
-            with open(WA_HISTORY_FILE, 'r', encoding='utf-8') as f:
+            with open(_f, 'r', encoding='utf-8') as f:
                 return set(json.load(f))
         except:
             return set()
     return set()
 
-def save_wa_history(history_set):
+def save_wa_history(history_set, username=None):
+    if username is None:
+        username = get_wa_username()
     try:
-        with open(WA_HISTORY_FILE, 'w', encoding='utf-8') as f:
+        with open(wa_history_file_for(username), 'w', encoding='utf-8') as f:
             json.dump(list(history_set), f, ensure_ascii=False)
     except:
         pass
 
+
+def get_wa_username():
+    """Current app username, sanitized — each user gets isolated WhatsApp data."""
+    try:
+        from src.services.whatsapp_service import wa_username_key
+        u = (st.session_state.get("user") or {}).get("username", "")
+        return wa_username_key(u)
+    except Exception:
+        return "shared"
+
+
+def wa_history_file_for(username=None):
+    """Per-user sent-numbers history file (shared global file no longer used)."""
+    base = os.path.dirname(WA_HISTORY_FILE)
+    return os.path.join(base, f"whatsapp_history_{username or get_wa_username()}.json")
+
+
+def ensure_wa_service():
+    """Return the WhatsAppService for the CURRENT user, creating it with an
+    isolated per-user Chrome profile (QR/login per username).
+
+    On user switch: closes the previous user's driver and resets per-user
+    runtime state so sessions never leak across users.
+    """
+    from src.services.whatsapp_service import WhatsAppService, wa_session_id_for
+    uname = get_wa_username()
+    svc = st.session_state.get("wa_service")
+    if svc is not None and st.session_state.get("wa_service_owner") != uname:
+        try:
+            if getattr(svc, "driver", None) and hasattr(svc, "close"):
+                svc.close()
+        except Exception:
+            pass
+        svc = None
+        st.session_state["wa_service"] = None
+        for _k in ("wa_history", "wa_review_targets", "wa_running", "wa_idx",
+                   "wa_done", "wa_emp_targets", "wa_emp_running", "wa_emp_idx",
+                   "wa_data", "wa_from_worker_db", "wa_emp_saved_attachments"):
+            st.session_state.pop(_k, None)
+    if svc is None:
+        svc = WhatsAppService(session_id=wa_session_id_for(uname))
+        st.session_state["wa_service"] = svc
+        st.session_state["wa_service_owner"] = uname
+    return st.session_state["wa_service"]
+
+
+def _find_df_col(columns, keys):
+    for c in columns:
+        cl = str(c).lower()
+        if any(k.lower() in cl for k in keys):
+            return c
+    return None
+
+
+def _dedup_workers_by_iqama_keep_newest(df):
+    """حذف المكرر من رقم الإقامة مع الاحتفاظ بالأحدث بتاريخ التسجيل.
+
+    Returns: (deduped_df, removed_count, iqama_col, ts_col)
+    - يبحث عن عمود رقم الإقامة (ويستبعد عمود المهنة في الإقامة).
+    - يرتب حسب تاريخ التسجيل/الطابع الزمني تنازلياً (الأحدث أولاً) ثم يحذف المكرر.
+    - الصفوف بدون رقم إقامة صالح تُترك كما هي ولا تُحذف.
+    """
+    import re as _re
+
+    if df is None or getattr(df, "empty", True):
+        return df, 0, None, None
+
+    cols = list(df.columns)
+
+    # 1) إيجاد عمود رقم الإقامة — مع استبعاد عمود المهنة في الإقامة
+    exclude_kw = ["مهنة", "مهنه", "profession", "occupation", "listed on", "job"]
+    iqama_candidates = []
+    for c in cols:
+        cl = str(c).lower().strip()
+        if str(c).startswith("__"):
+            continue
+        has_iqama = any(k in cl for k in ["رقم الاقامة", "رقم الإقامة", "iqama id", "iqama", "residency", "national id", "رقم الهوية", "باسبورد"])
+        if has_iqama and not any(x in cl for x in exclude_kw):
+            iqama_candidates.append(c)
+    # الأفضل: عمود يحتوي صراحة "رقم" أولاً
+    iqama_col = None
+    for c in iqama_candidates:
+        if "رقم" in str(c):
+            iqama_col = c
+            break
+    if iqama_col is None and iqama_candidates:
+        iqama_col = iqama_candidates[0]
+    if iqama_col is None:
+        return df, 0, None, None
+
+    # 2) إيجاد عمود تاريخ التسجيل / الطابع الزمني
+    ts_keys = ["طابع زمني", "تاريخ التسجيل", "وقت التسجيل", "timestamp", "registration date", "تاريخ التقديم", "date submitted"]
+    ts_col = _find_df_col(cols, ts_keys)
+    # احتياط: أي عمود فيه timestamp وما يبدأ بـ __
+    if ts_col is None:
+        for c in cols:
+            if str(c).startswith("__"):
+                continue
+            if "timestamp" in str(c).lower():
+                ts_col = c
+                break
+
+    # 3) تطبيع رقم الإقامة: تحويل الأرقام العربية + إبقاء الأرقام فقط
+    ar_to_west = str.maketrans('٠١٢٣٤٥٦٧٨٩', '0123456789')
+
+    def _norm_iqama(v):
+        if v is None:
+            return ""
+        try:
+            import pandas as _pd
+            if _pd.isna(v):
+                return ""
+        except Exception:
+            pass
+        s = str(v).translate(ar_to_west).strip()
+        if not s or s.lower() == "nan":
+            return ""
+        digits = _re.sub(r'\D', '', s)
+        return digits
+
+    work = df.copy()
+    work["__iqama_norm"] = work[iqama_col].apply(_norm_iqama)
+    # الصفوف الفارغة تبقى كما هي (لا تعتبر مكررة)
+    valid_mask = work["__iqama_norm"].astype(str).str.len() > 0
+    valid_df = work[valid_mask].copy()
+    empty_df = work[~valid_mask].copy()
+    if valid_df.empty:
+        return df, 0, iqama_col, ts_col
+
+    # 4) تحليل تاريخ التسجيل
+    def _parse_ts(v):
+        try:
+            import pandas as _pd
+            if v is None:
+                return _pd.NaT
+            s = str(v).translate(ar_to_west).strip()
+            if not s or s.lower() == "nan":
+                return _pd.NaT
+            if 'ص' in s or 'م' in s:
+                marker = 'AM' if 'ص' in s else 'PM'
+                s = _re.sub(r'[صم]', '', s).strip() + " " + marker
+            try:
+                from dateutil import parser as _parser
+                return _pd.Timestamp(_parser.parse(s, dayfirst=False))
+            except Exception:
+                return _pd.to_datetime(s, errors='coerce')
+        except Exception:
+            try:
+                import pandas as _pd2
+                return _pd2.NaT
+            except Exception:
+                return None
+
+    if ts_col is not None and ts_col in valid_df.columns:
+        valid_df["__ts_parsed"] = valid_df[ts_col].apply(_parse_ts)
+        # الأحدث أولاً (NaT في الأخير)، ثم حذف المكرر مع إبقاء الأول = الأحدث
+        valid_df = valid_df.sort_values(by="__ts_parsed", ascending=False, kind="mergesort")
+        before = len(valid_df)
+        valid_df = valid_df.drop_duplicates(subset=["__iqama_norm"], keep="first")
+        removed = before - len(valid_df)
+        valid_df = valid_df.drop(columns=["__ts_parsed"], errors="ignore")
+    else:
+        before = len(valid_df)
+        valid_df = valid_df.drop_duplicates(subset=["__iqama_norm"], keep="first")
+        removed = before - len(valid_df)
+
+    valid_df = valid_df.drop(columns=["__iqama_norm"], errors="ignore")
+    empty_df = empty_df.drop(columns=["__iqama_norm"], errors="ignore")
+
+    # نعيد الدمج: النتائج المعالجة (الأحدث أولاً) + الصفوف بدون إقامة
+    deduped = pd.concat([valid_df, empty_df], ignore_index=False)
+    # إسقاط أي أعمدة مؤقتة متبقية
+    deduped = deduped.drop(columns=[c for c in ["__iqama_norm", "__ts_parsed"] if c in deduped.columns], errors="ignore")
+    return deduped, int(removed), iqama_col, ts_col
+
+
+def _sort_df_by_registration_newest(df, ts_col_hint=None):
+    """ترتيب دائم: الأحدث بتاريخ التسجيل أولاً (والفارغ/غير الصالح في الأخير)."""
+    import re as _re2
+    if df is None or getattr(df, "empty", True):
+        return df
+    cols = list(df.columns)
+    ts_col = ts_col_hint if (ts_col_hint is not None and ts_col_hint in cols) else None
+    if ts_col is None:
+        ts_col = _find_df_col(cols, ["طابع زمني", "تاريخ التسجيل", "وقت التسجيل", "timestamp", "registration date", "تاريخ التقديم", "date submitted"])
+        if ts_col is None:
+            for _c in cols:
+                if str(_c).startswith("__"):
+                    continue
+                if "timestamp" in str(_c).lower():
+                    ts_col = _c
+                    break
+    if ts_col is None:
+        return df
+    _ar2w = str.maketrans('٠١٢٣٤٥٦٧٨٩', '0123456789')
+
+    def _p(v):
+        try:
+            import pandas as _pd
+            if v is None:
+                return _pd.NaT
+            s = str(v).translate(_ar2w).strip()
+            if not s or s.lower() == "nan":
+                return _pd.NaT
+            if 'ص' in s or 'م' in s:
+                mk = 'AM' if 'ص' in s else 'PM'
+                s = _re2.sub(r'[صم]', '', s).strip() + " " + mk
+            try:
+                from dateutil import parser as _prs
+                return _pd.Timestamp(_prs.parse(s, dayfirst=False))
+            except Exception:
+                return _pd.to_datetime(s, errors='coerce')
+        except Exception:
+            try:
+                import pandas as _pd2
+                return _pd2.NaT
+            except Exception:
+                return None
+
+    try:
+        _tmp = df[ts_col].apply(_p)
+        out = df.copy()
+        out["__reg_sort"] = _tmp
+        out = out.sort_values(by="__reg_sort", ascending=False, kind="mergesort", na_position="last")
+        return out.drop(columns=["__reg_sort"], errors="ignore")
+    except Exception:
+        return df
+
+
+def _wa_format_reg_date(v):
+    """تنسيق تاريخ التسجيل بصيغة YYYY-MM-DD للعرض."""
+    if v is None:
+        return ""
+    try:
+        import pandas as _pd
+        if _pd.isna(v):
+            return ""
+    except Exception:
+        pass
+    s = str(v).strip()
+    if not s or s.lower() == "nan":
+        return ""
+    try:
+        _ar2w = str.maketrans('٠١٢٣٤٥٦٧٨٩', '0123456789')
+        s2 = s.translate(_ar2w)
+        import re as _rx
+        s2 = _rx.sub(r'[صم]', '', s2).strip()
+        from dateutil import parser as _prs
+        return _prs.parse(s2, dayfirst=False).strftime('%Y-%m-%d')
+    except Exception:
+        try:
+            import pandas as _pd2
+            _dt = _pd2.to_datetime(s, errors='coerce')
+            if _pd2.isna(_dt):
+                return s
+            return _dt.strftime('%Y-%m-%d')
+        except Exception:
+            return s
+
+
+# خريطة الأعلام محلياً (نسخة من الجدول الشامل في app.py — بدون استيراده لتفادي إعادة
+# تنفيذ app.py كاملاً داخل العرض والذي كان يسبب فراغاً كبيراً وبطئاً في الجدول).
+_WA_FLAG_MAP = {
+    "هندي": "in", "هنديه": "in", "الهند": "in", "هند": "in",
+    "فلبيني": "ph", "فلبينيه": "ph", "الفلبين": "ph", "فلبين": "ph",
+    "نيبالي": "np", "نيباليه": "np", "نيبال": "np",
+    "بنجلاديشي": "bd", "بنجاليه": "bd", "بنجلاديش": "bd", "بنقالي": "bd", "بنغالي": "bd", "بنغاليه": "bd", "بنجلادش": "bd",
+    "باكستاني": "pk", "باكستانيه": "pk", "باكستان": "pk",
+    "مصري": "eg", "مصريه": "eg", "مصر": "eg",
+    "سوداني": "sd", "سودانيه": "sd", "السودان": "sd",
+    "سيريلانكي": "lk", "سيريلانكيه": "lk", "سيريلانكا": "lk", "سيرلانكي": "lk", "سيرلانكيه": "lk",
+    "كيني": "ke", "كينيه": "ke", "كينيا": "ke",
+    "اوغندي": "ug", "اوغنديه": "ug", "اوغندا": "ug",
+    "اثيوبي": "et", "اثيوبيه": "et", "اثيوبيا": "et",
+    "مغربي": "ma", "مغربيه": "ma", "المغرب": "ma",
+    "يمني": "ye", "يمنيه": "ye", "اليمن": "ye",
+    "اندونيسي": "id", "اندونيسيه": "id", "اندونيسيا": "id", "اندونيسا": "id",
+    "رواندي": "rw", "روانديه": "rw", "رواندا": "rw", "روندا": "rw", "روندي": "rw", "رونديه": "rw",
+    "افغاني": "af", "افغانيه": "af", "افغانستان": "af", "افغان": "af",
+    "نيجيري": "ng", "نيجيريه": "ng", "نيجيريا": "ng", "نيجريا": "ng", "نيجري": "ng", "نيجرية": "ng",
+    "غاني": "gh", "غانيه": "gh", "غانا": "gh",
+    "فيتنام": "vn", "فيتنامي": "vn", "فيتناميه": "vn",
+    "سيراليون": "sl",
+    "بوروندي": "bi",
+    "indian": "in", "filipino": "ph", "filipina": "ph", "philippines": "ph", "nepi": "np", "nepali": "np", "nepal": "np",
+    "bangla": "bd", "bangladeshi": "bd", "bangladesh": "bd", "pakistan": "pk", "pakistani": "pk",
+    "egypt": "eg", "egyptian": "eg", "sudan": "sd", "sudanese": "sd",
+    "sri lanka": "lk", "sri lankan": "lk", "srilankan": "lk", "kenya": "ke", "kenyan": "ke",
+    "uganda": "ug", "ugandan": "ug", "ethiopia": "et", "ethiopian": "et",
+    "indonesian": "id", "indonesia": "id", "rwandan": "rw", "rwanda": "rw",
+    "afghan": "af", "afghanistan": "af", "nigerian": "ng", "nigeria": "ng",
+    "ghanaian": "gh", "ghana": "gh", "vietnam": "vn", "vietnamese": "vn",
+    "sierra leone": "sl", "burundi": "bi", "sierra leonean": "sl", "burundian": "bi",
+    "saudi": "sa", "السعودية": "sa",
+}
+_WA_FLAG_SORTED = sorted(_WA_FLAG_MAP.items(), key=lambda x: len(x[0]), reverse=True)
+
+
+def _wa_norm_ar(text):
+    return (text.replace("أ", "ا").replace("إ", "ا").replace("آ", "ا").replace("ة", "ه").replace("ى", "ي"))
+
+
+def _wa_flag_url(nat_val):
+    """رابط علم الدولة — نفس منطق الجدول الشامل لكن محلياً (بدون استيراد app)."""
+    if nat_val is None:
+        return None
+    try:
+        import pandas as _pd
+        if _pd.isna(nat_val):
+            return None
+    except Exception:
+        pass
+    s = str(nat_val).strip().lower()
+    if not s or s == "nan":
+        return None
+    try:
+        import re as _rx
+        # إزالة ال التعريف + توحيد الهمزات (نفس app.py)
+        if s.startswith("ال") and len(s) > 4:
+            s = s[2:]
+        s = _wa_norm_ar(s)
+        for _k, _code in _WA_FLAG_SORTED:
+            _nk = _wa_norm_ar(_k)
+            if len(_nk) <= 3:
+                if _rx.search(r'(?:^|[\s,:;.\-/])' + _rx.escape(_nk) + r'(?:[\s,:;.\-/]|$)', s):
+                    return f"https://cdn.jsdelivr.net/gh/lipis/flag-icons@7.2.0/flags/4x3/{_code.lower()}.svg"
+            elif _nk in s:
+                return f"https://cdn.jsdelivr.net/gh/lipis/flag-icons@7.2.0/flags/4x3/{_code.lower()}.svg"
+    except Exception:
+        pass
+    return None
+
+
+def _wa_gender_label(v, is_ar=True):
+    """تسمية الجنس مع الأيقونة كما في الجدول الشامل."""
+    s = str(v).strip().lower() if v is not None else ""
+    if s in ("female", "أنثى", "انثى", "انثي", "أنثي", "f", "🚺 female", "🚺 أنثى"):
+        return ("🚺 أنثى" if is_ar else "🚺 Female")
+    if s in ("male", "ذكر", "m", "🚹 male", "🚹 ذكر"):
+        return ("🚹 ذكر" if is_ar else "🚹 Male")
+    if "female" in s or "أنث" in s or "انث" in s:
+        return ("🚺 أنثى" if is_ar else "🚺 Female")
+    if "male" in s or "ذكر" in s:
+        return ("🚹 ذكر" if is_ar else "🚹 Male")
+    return str(v).strip() if v is not None else ""
+
+
+def _worker_df_to_wa_targets(df, history_set):
+    """Convert worker search results into WhatsApp send targets (name, phone, CV, attachments, row fields)."""
+    targets = []
+    seen = set()
+    if df is None or getattr(df, "empty", True):
+        return targets
+    cols = list(df.columns)
+    c_name = _find_df_col(cols, ["full name", "الاسم الكامل", "اسم العامل", "candidate name", "worker name"])
+    if not c_name:
+        c_name = _find_df_col(cols, ["name", "الاسم"])
+    c_phone = _find_df_col(cols, ["whatsapp", "phone number", "mobile number", "رقم الجوال", "رقم الهاتف", "رقم الموبايل"])
+    if not c_phone:
+        c_phone = _find_df_col(cols, ["phone", "mobile", "جوال", "هاتف", "واتساب"])
+    c_cv = _find_df_col(cols, ["download cv", "سيرة الذاتية", "resume", "cv"])
+    # Add attachment column detection
+    c_attachment = _find_df_col(cols, ["attachment", "image", "صورة", "مرفق", "ملف", "file", "photo"])
+
+    for idx, row in df.iterrows():
+        raw_p = str(row[c_phone]).strip() if c_phone and pd.notna(row[c_phone]) else ""
+        phone = format_phone_number(raw_p)
+        if not phone:
+            phone = format_phone_number("".join(raw_p.split()))
+        if not phone or phone in seen:
+            continue
+        seen.add(phone)
+        target_data = {
+            str(col): (str(row[col]).strip() if pd.notna(row[col]) else "")
+            for col in cols
+            if not str(col).startswith("__")
+        }
+        name = str(row[c_name]).strip() if c_name and pd.notna(row[c_name]) else "عامل"
+        if not name or name.lower() == "nan":
+            name = "عامل"
+        cv = str(row[c_cv]).strip() if c_cv and pd.notna(row[c_cv]) else ""
+        if cv.lower() == "nan":
+            cv = ""
+        # Extract attachment path
+        attachment = str(row[c_attachment]).strip() if c_attachment and pd.notna(row[c_attachment]) else ""
+        if attachment.lower() == "nan":
+            attachment = ""
+        target_data.update({
+            "idx": idx,
+            "phone": phone,
+            "name": name,
+            "cv": cv,
+            "attachment": attachment,
+            "is_sent": phone in (history_set or set()),
+            "source": "worker_db",
+        })
+        targets.append(target_data)
+    return targets
+
+
+def _adopt_wa_worker_targets(targets):
+    st.session_state.wa_from_worker_db = True
+    st.session_state.wa_review_targets = targets
+    st.session_state.wa_done = False
+    st.session_state.wa_idx = 0
+    st.session_state.wa_running = False
+
 def render_whatsapp_page():
-    from src.services.whatsapp_service import WhatsAppService
+    from src.services.whatsapp_service import WhatsAppService, wa_session_id_for
     from src.services.wa_worker_manager import WAWorkerManager
+    from src.core.translation import TranslationManager
     lang = st.session_state.get('lang', 'ar')
     is_ar = lang == 'ar'
     is_cloud = "/mount/" in __file__
+
+    # ── تهيئة TranslationManager ──
+    if 'tm' not in st.session_state:
+        try:
+            st.session_state.tm = TranslationManager()
+        except Exception as e:
+            print(f"[ERROR] Failed to init TranslationManager: {e}")
+            st.session_state.tm = None
 
     # ── مدير العامل الخلفي ──
     if 'wa_worker_mgr' not in st.session_state:
@@ -156,16 +743,19 @@ def render_whatsapp_page():
     mgr: WAWorkerManager = st.session_state.wa_worker_mgr
 
     # للوضع القديم (المتزامن) نبقيه للتوافق
-    if 'wa_service' not in st.session_state or st.session_state.wa_service is None:
-        st.session_state.wa_service = WhatsAppService()
-    else:
+    # 🛡️ خدمة مستقلة لكل مستخدم (بروفايل/باركود خاص) + تبديل تلقائي عند تغير المستخدم
+    # 🛡️ لا نُنشئ خدمة جديدة إذا كان هناك driver نشط — ذلك يُفقد الاتصال
+    st.session_state.wa_service = ensure_wa_service()
+    if not getattr(st.session_state.wa_service, 'driver', None):
+        # لا يوجد driver نشط — نتحقق من توافق الـ API فقط
         try:
             import inspect
             sig = inspect.signature(st.session_state.wa_service.send_message)
             if 'attachment_path' not in sig.parameters:
-                st.session_state.wa_service = WhatsAppService()
+                st.session_state.wa_service = ensure_wa_service()
         except Exception:
-            st.session_state.wa_service = WhatsAppService()
+            st.session_state.wa_service = ensure_wa_service()
+    # إذا كان driver نشطاً → نُبقي الكائن كما هو بدون أي تعديل
 
     if 'wa_logs' not in st.session_state: st.session_state.wa_logs = []
     if 'wa_running' not in st.session_state: st.session_state.wa_running = False
@@ -173,9 +763,14 @@ def render_whatsapp_page():
     if 'wa_data' not in st.session_state: st.session_state.wa_data = None
     if 'wa_history' not in st.session_state: st.session_state.wa_history = load_wa_history()
     if 'wa_review_targets' not in st.session_state: st.session_state.wa_review_targets = []
+    if 'wa_from_worker_db' not in st.session_state: st.session_state.wa_from_worker_db = False
     if 'wa_messages' not in st.session_state: st.session_state.wa_messages = [""]
+    if 'wa_emp_targets' not in st.session_state: st.session_state.wa_emp_targets = []
+    if 'wa_emp_running' not in st.session_state: st.session_state.wa_emp_running = False
+    if 'wa_emp_idx' not in st.session_state: st.session_state.wa_emp_idx = 0
 
     st.markdown('<div class="programmer-signature-neon">By: Alsaeed Alwazzan</div>', unsafe_allow_html=True)
+    st.caption("build b1011c")
 
     # === Bilingual Labels ===
     lbl = {
@@ -195,6 +790,7 @@ def render_whatsapp_page():
         'qr_loading': "⏳ جاري توليد الباركود..." if is_ar else "⏳ Generating QR...",
         'tab_manual': "🔢 أرقام يدوية" if is_ar else "🔢 Manual Numbers",
         'tab_excel': "📊 ملف إكسل" if is_ar else "📊 Excel File",
+        'tab_db_search': "🔍 بحث في قاعدة بيانات العمال" if is_ar else "🔍 Search Workers Database",
         'paste_numbers': "ألصق الأرقام هنا" if is_ar else "Paste numbers here",
         'ready_count': "جاهز لـ {} رقم" if is_ar else "Ready for {} numbers",
         'upload_excel': "ارفع ملف الإكسل" if is_ar else "Upload Excel file",
@@ -279,12 +875,12 @@ def render_whatsapp_page():
         with ec2:
             if st.button(lbl['start_engine'], type="primary", width='stretch', key="emp_start_engine"):
                 with st.spinner(lbl['starting']):
-                    if st.session_state.wa_service is None:
-                        st.session_state.wa_service = WhatsAppService()
+                    # خدمة المستخدم الحالي (تُنشأ ببروفايله الخاص عند الحاجة)
+                    st.session_state.wa_service = ensure_wa_service()
                     if hasattr(st.session_state.wa_service, 'close'):
                         try: st.session_state.wa_service.close()
                         except Exception: pass
-                    ok, msg = st.session_state.wa_service.start_driver(headless=is_cloud, force_clean=False)
+                    ok, msg = st.session_state.wa_service.start_driver(headless=True, force_clean=False)
                     if ok:
                         st.toast(f"✅ {msg}")
                         st.rerun()
@@ -294,12 +890,12 @@ def render_whatsapp_page():
             if st.button(lbl['full_reset'], width='stretch', key="emp_full_reset",
                          help="سيتم مسح بيانات تسجيل الدخول بالكامل. ستحتاج لمسح الباركود مرة أخرى." if is_ar else "This will clear all login data. You'll need to scan the QR again."):
                 with st.spinner(lbl['resetting']):
-                    if st.session_state.wa_service is None:
-                        st.session_state.wa_service = WhatsAppService()
+                    # خدمة المستخدم الحالي (تُنشأ ببروفايله الخاص عند الحاجة)
+                    st.session_state.wa_service = ensure_wa_service()
                     if hasattr(st.session_state.wa_service, 'close'):
                         try: st.session_state.wa_service.close()
                         except Exception: pass
-                    ok, msg = st.session_state.wa_service.start_driver(headless=is_cloud, force_clean=True)
+                    ok, msg = st.session_state.wa_service.start_driver(headless=True, force_clean=True)
                     if ok:
                         st.toast(f"✅ {msg}")
                         st.rerun()
@@ -344,231 +940,842 @@ def render_whatsapp_page():
                     st.rerun()
 
         # ── إذا لم يتصل، أوقف ولا تكمل (إلا إذا كان الإرسال جاري بالفعل) ──
-        if status_emp != "Connected" and not st.session_state.get('wa_running', False):
+        if status_emp != "Connected" and not st.session_state.get('wa_emp_running', False):
             st.info("💡 " + ("قم بتشغيل المحرك ومسح الباركود أولاً للبدء بالإرسال." if is_ar else "Start the engine and scan the QR code first to begin sending."))
             st.markdown("---")
             return
 
         st.markdown("---")
         # ──────────────────────────────────────────────────────────────
+        # 🛡️ شريط الأمان وإحصائيات اليوم وزر فك القفل
+        # ──────────────────────────────────────────────────────────────
+        sec_c1, sec_c2 = st.columns([3, 1])
+        with sec_c1:
+            stats = st.session_state.wa_service.get_daily_stats() if st.session_state.wa_service else {}
+            ok_cnt = stats.get('sent_ok', 0)
+            fail_cnt = stats.get('sent_fail', 0)
+            inval_cnt = stats.get('invalid_numbers', 0)
+            st.markdown(
+                f'<div style="background: rgba(0,255,136,0.06); padding: 10px 15px; border-radius: 10px; border: 1px solid rgba(0,255,136,0.2); font-size: 0.9rem;">'
+                f'🛡️ <b>{"درع الحماية من الحظر" if is_ar else "Anti-Ban Shield"}:</b> '
+                f'{"تم إرسال اليوم" if is_ar else "Today Sent"}: <span style="color:#00FF88; font-weight:bold;">{ok_cnt}</span> | '
+                f'{"محاولات فاشلة" if is_ar else "Failed"}: <span style="color:#FF6B6B; font-weight:bold;">{fail_cnt}</span> | '
+                f'{"أرقام غير صالحة" if is_ar else "Invalid"}: <span style="color:#FFA500; font-weight:bold;">{inval_cnt}</span>'
+                f'</div>',
+                unsafe_allow_html=True
+            )
+        with sec_c2:
+            if st.button("🔄 " + ("تصفير العداد / فك القفل" if is_ar else "Reset Counter"), key="emp_unblock_btn", help="تصفير عداد الأخطاء وفك أي قفل أمان مؤقت"):
+                if st.session_state.wa_service:
+                    st.session_state.wa_service.reset_daily_stats()
+                    st.toast("✅ " + ("تم فك قفل الأمان وتصفير العداد بنجاح" if is_ar else "Anti-ban counters reset successfully!"))
+                    st.rerun()
 
-        # Data Source Selection
-        st.markdown(f"#### {'مصدر البيانات' if is_ar else 'Data Source'}")
+        st.markdown("---")
+
+        # ──────────────────────────────────────────────────────────────
+        # 1. اختيار مصدر البيانات وإدارتها (محفوظة في st.session_state)
+        # ──────────────────────────────────────────────────────────────
+        st.markdown(f"#### {'مصدر أرقام العملاء' if is_ar else 'Customer Data Source'}")
         data_source = st.radio(
             "اختر مصدر البيانات" if is_ar else "Select Data Source",
-            ["من النظام (Bengali Supply)" if is_ar else "From System (Bengali Supply)", 
-             "استيراد ملف Excel" if is_ar else "Import Excel File"],
+            ["استيراد ملف Excel" if is_ar else "Import Excel File",
+             "بحث في قاعدة بيانات العملاء" if is_ar else "Search in Customer Database",
+             "إدخال أرقام يدوياً" if is_ar else "Enter Numbers Manually"],
             horizontal=True,
-            key="wa_bengali_data_source"
+            key="wa_emp_data_source"
         )
-        
-        target_phones = []
-        target_names = []
-        
-        if data_source == ("من النظام (Bengali Supply)" if is_ar else "From System (Bengali Supply)"):
-            # Import BengaliDataManager
-            from src.data.bengali_manager import BengaliDataManager
-            bm = BengaliDataManager()
-            
-            # Get all employers
-            all_employers = bm.get_employers()
-            
-            if not all_employers:
-                st.warning("⚠️ " + ("لا يوجد عملاء في النظام" if is_ar else "No employers in the system"))
-            else:
-                # Select employers to send to
-                st.markdown(f"#### {'اختر العملاء للإرسال' if is_ar else 'Select Employers to Send'}")
-                
-                # Multi-select employers
-                employer_options = [f"{e['name']} - {e.get('mobile', '')}" for e in all_employers]
-                selected_employers = st.multiselect(
-                    "العملاء" if is_ar else "Employers",
-                    employer_options,
-                    key="wa_bengali_employers"
-                )
-                
-                if selected_employers:
-                    # Extract phone numbers
-                    for selection in selected_employers:
-                        # Extract phone from selection
-                        parts = selection.split(' - ')
-                        if len(parts) > 1:
-                            phone = parts[-1].strip()
-                            name = parts[0].strip()
-                            # Clean phone number
-                            clean_phone = "".join(filter(str.isdigit, phone))
-                            if clean_phone:
-                                target_phones.append(clean_phone)
-                                target_names.append(name)
-                
-                st.info(f"📊 {'تم اختيار' if is_ar else 'Selected'}: {len(target_phones)} {'عميل' if is_ar else 'employers'}")
-        else:
-            # Excel Import
-            st.markdown(f"#### {'استيراد ملف Excel' if is_ar else 'Import Excel File'}")
+
+        if data_source == ("استيراد ملف Excel" if is_ar else "Import Excel File"):
             uploaded_file = st.file_uploader(
                 "ارفع ملف Excel" if is_ar else "Upload Excel file",
                 type=['xlsx', 'xls'],
-                key="wa_bengali_excel_upload"
+                key="wa_emp_excel_uploader"
             )
-            
             if uploaded_file:
                 try:
                     df = pd.read_excel(uploaded_file)
-                    st.success(f"✅ {'تم تحميل الملف بنجاح' if is_ar else 'File loaded successfully'}: {len(df)} {'صف' if is_ar else 'rows'}")
+                    st.success(f"✅ {'تم قراءة الملف بنجاح' if is_ar else 'File loaded successfully'}: {len(df)} {'صف' if is_ar else 'rows'}")
                     
-                    # Show columns
-                    st.write(f"**{'الأعمدة المتاحة' if is_ar else 'Available columns'}:**", list(df.columns))
-                    
-                    # Select name and phone columns
-                    col1, col2 = st.columns(2)
-                    with col1:
-                        name_col = st.selectbox(
-                            "عمود الاسم" if is_ar else "Name column",
-                            df.columns.tolist(),
-                            key="wa_bengali_name_col"
-                        )
-                    with col2:
-                        phone_col = st.selectbox(
-                            "عمود رقم الهاتف" if is_ar else "Phone column",
-                            df.columns.tolist(),
-                            key="wa_bengali_phone_col"
-                        )
-                    
-                    if st.button("📥 " + ("استخراج البيانات" if is_ar else "Extract Data"), key="extract_bengali_data"):
+                    ec_c1, ec_c2 = st.columns(2)
+                    with ec_c1:
+                        name_col = st.selectbox("عمود الاسم" if is_ar else "Name column", df.columns.tolist(), key="wa_emp_name_col")
+                    with ec_c2:
+                        phone_col = st.selectbox("عمود رقم الجوال" if is_ar else "Phone column", df.columns.tolist(), key="wa_emp_phone_col")
+
+                    if st.button("📥 " + ("استخراج وحفظ قائمة العملاء" if is_ar else "Extract & Load Customers"), type="primary", key="btn_extract_emp_excel"):
+                        extracted = []
+                        seen_phones = set()
                         for _, row in df.iterrows():
-                            name = str(row[name_col]).strip()
-                            phone = str(row[phone_col]).strip()
-                            # Clean phone number
-                            clean_phone = "".join(filter(str.isdigit, phone))
-                            if clean_phone and name != 'nan':
-                                target_phones.append(clean_phone)
-                                target_names.append(name)
+                            c_name = str(row[name_col]).strip() if pd.notna(row[name_col]) else "عميل"
+                            raw_p = str(row[phone_col]).strip() if pd.notna(row[phone_col]) else ""
+                            c_phone = "".join(filter(str.isdigit, raw_p))
+                            if c_phone and len(c_phone) >= 8 and c_phone not in seen_phones:
+                                seen_phones.add(c_phone)
+                                extracted.append({'name': c_name if c_name != 'nan' else 'عميل', 'phone': c_phone, 'is_sent': False})
+                        st.session_state.wa_emp_targets = extracted
+                        st.toast(f"✅ تم استخراج {len(extracted)} عميل بنجاح")
+                        st.rerun()
+                except Exception as ex:
+                    st.error(f"❌ {'خطأ في قراءة ملف الإكسل' if is_ar else 'Error reading Excel file'}: {str(ex)}")
+
+        elif data_source == ("بحث في قاعدة بيانات العملاء" if is_ar else "Search in Customer Database"):
+            from src.data.bengali_manager import BengaliDataManager
+            from src.core.search import SmartSearchEngine
+
+            # ── جلب البيانات من المصدرين ──────────────────────────────
+            all_sys_records = []  # list of dicts: {name, phone, city, job, source, company, responsible, nationality, salary, nature}
+
+            # 1) طلبات العملاء (Google Sheet) - مع المزيد من الحقول
+            try:
+                if hasattr(st.session_state, 'db') and st.session_state.db:
+                    cust_df = st.session_state.db.fetch_customer_requests()
+                    if cust_df is not None and not cust_df.empty:
+                        cols = cust_df.columns.tolist()
+                        # محاولة تحديد أعمدة الاسم، الجوال، المدينة، الوظيفة، إضافة المزيد من الحقول
+                        def _find_col(keywords):
+                            for kw in keywords:
+                                for c in cols:
+                                    if kw.lower() in str(c).lower():
+                                        return c
+                            return None
+                        name_c  = _find_col(["اسم", "name", "شركة", "company", "عميل"])
+                        phone_c = _find_col(["جوال", "موبايل", "تليفون", "هاتف", "phone", "mobile"])
+                        city_c  = _find_col(["مدينة", "city", "منطقة", "location"])
+                        job_c   = _find_col(["وظيفة", "مهنة", "طلب", "job", "category", "profession"])
+                        company_c = _find_col(["شركة", "company", "مؤسس"])
+                        responsible_c = _find_col(["مسؤول", "responsible"])
+                        nationality_c = _find_col(["جنسي", "nationality"])
+                        salary_c = _find_col(["راتب", "salary"])
+                        nature_c = _find_col(["طبيعة", "nature"])
                         
-                        st.success(f"✅ {'تم استخراج' if is_ar else 'Extracted'}: {len(target_phones)} {'عميل' if is_ar else 'employers'}")
-                except Exception as e:
-                    st.error(f"❌ {'خطأ في قراءة الملف' if is_ar else 'Error reading file'}: {str(e)}")
-        
-        if target_phones:
-            # Message input (empty for manual writing)
-            st.markdown(f"#### {'اكتب رسالتك' if is_ar else 'Write Your Message'}")
-            custom_message = st.text_area(
+                        for _, row in cust_df.iterrows():
+                            r_name  = str(row[name_c]).strip()  if name_c  and pd.notna(row[name_c])  else "عميل"
+                            r_phone = str(row[phone_c]).strip() if phone_c and pd.notna(row[phone_c]) else ""
+                            r_city  = str(row[city_c]).strip()  if city_c  and pd.notna(row[city_c])  else ""
+                            r_job   = str(row[job_c]).strip()   if job_c   and pd.notna(row[job_c])   else ""
+                            r_company = str(row[company_c]).strip() if company_c and pd.notna(row[company_c]) else ""
+                            r_responsible = str(row[responsible_c]).strip() if responsible_c and pd.notna(row[responsible_c]) else ""
+                            r_nationality = str(row[nationality_c]).strip() if nationality_c and pd.notna(row[nationality_c]) else ""
+                            r_salary = str(row[salary_c]).strip() if salary_c and pd.notna(row[salary_c]) else ""
+                            r_nature = str(row[nature_c]).strip() if nature_c and pd.notna(row[nature_c]) else ""
+                            r_phone_clean = "".join(filter(str.isdigit, r_phone))
+                            if r_phone_clean and len(r_phone_clean) >= 8:
+                                all_sys_records.append({
+                                    'name': r_name if r_name not in ('', 'nan') else 'عميل',
+                                    'phone': r_phone_clean,
+                                    'city': r_city,
+                                    'job': r_job,
+                                    'source': '📋 طلبات العملاء',
+                                    'company': r_company,
+                                    'responsible': r_responsible,
+                                    'nationality': r_nationality,
+                                    'salary': r_salary,
+                                    'nature': r_nature
+                                })
+            except Exception as _ce:
+                st.warning(f"⚠️ تعذّر جلب طلبات العملاء: {_ce}")
+
+            # 2) Bengali Supply - مع المزيد من الحقول
+            try:
+                bm = BengaliDataManager()
+                for e in (bm.get_employers() or []):
+                    raw_p = "".join(filter(str.isdigit, str(e.get('mobile', ''))))
+                    if raw_p and len(raw_p) >= 8:
+                        all_sys_records.append({
+                            'name': str(e.get('name', 'عميل')).strip(),
+                            'phone': raw_p,
+                            'city': str(e.get('city', '')).strip(),
+                            'job': str(e.get('cafe', '')).strip(),
+                            'source': '🏢 Bengali Supply',
+                            'company': str(e.get('cafe', '')).strip(),
+                            'responsible': '',
+                            'nationality': '',
+                            'salary': '',
+                            'nature': ''
+                        })
+            except Exception as _be:
+                st.warning(f"⚠️ تعذّر جلب Bengali Supply: {_be}")
+
+            if not all_sys_records:
+                st.warning("⚠️ لا توجد بيانات في النظام حالياً")
+            else:
+                # ── عرض عينة من البيانات للتحقق (Debug) ──────────────────────────────
+                with st.expander("🔍 عينة من البيانات (للتأكد من المحتوى)", expanded=False):
+                    sample_df = pd.DataFrame(all_sys_records[:5])
+                    st.dataframe(sample_df, width='content', hide_index=True, column_config=build_auto_column_config(sample_df))
+                
+                # ─ـ تحويل البيانات إلى DataFrame لاستخدام SmartSearchEngine ──────────────────────────────
+                sys_df = pd.DataFrame(all_sys_records)
+                
+                # ── خانة البحث ────────────────────────────────────────
+                st.markdown(f"**📊 إجمالي السجلات:** {len(all_sys_records)} سجل")
+                search_q = st.text_input(
+                    "🔍 ابحث بالاسم، رقم الجوال، المدينة، المهنة، الشركة، المسؤول، الجنسية، الراتب، الكوفي...",
+                    key="wa_sys_search_box",
+                    placeholder="مثال: محمد  أو  0501234567  أو  الرياض  أو  مطعم  أو  Barista"
+                )
+
+                # ── تصفية النتائج باستخدام TranslationManager (مثل معالجة الطلبات) ─────────────────────────────────────
+                if search_q and search_q.strip():
+                    from src.core.translation import TranslationManager
+                    
+                    def _normalize_phone(text):
+                        """تطبيع رقم الهاتف"""
+                        arabic_to_western = str.maketrans('٠١٢٣٤٥٦٧٨٩', '0123456789')
+                        s = str(text).translate(arabic_to_western)
+                        digits = re.sub(r'\D', '', s)
+                        if not digits: return ""
+                        if digits.startswith('00'): digits = digits[2:]
+                        if digits.startswith('966'): digits = digits[3:]
+                        while digits.startswith('0'): digits = digits[1:]
+                        return digits
+
+                    def _is_phone_query(q):
+                        """التحقق مما إذا كان البحث رقم هاتف"""
+                        arabic_to_western = str.maketrans('٠١٢٣٤٥٦٧٨٩', '0123456789')
+                        clean = re.sub(r'[\s\+\-\(\)]', '', str(q)).translate(arabic_to_western)
+                        return clean.isdigit() and len(clean) >= 5
+
+                    is_phone_search = _is_phone_query(search_q)
+                    
+                    if is_phone_search:
+                        # البحث برقم الهاتف
+                        q_phone = _normalize_phone(search_q)
+                        filtered = [
+                            r for r in all_sys_records
+                            if q_phone and q_phone in _normalize_phone(r['phone'])
+                        ]
+                    else:
+                        # استخدام TranslationManager للبحث ثنائي اللغة
+                        tm = st.session_state.get('tm')
+                        
+                        # تحليل الاستعلام للحصول على المرادفات
+                        query_bundles = tm.analyze_query(search_q) if tm else [[search_q.lower()]]
+                        
+                        # Debug: عرض المرادفات للتحقق
+                        with st.expander("🔍 تفاصيل تحليل البحث (Debug)", expanded=False):
+                            st.write(f"كلمات البحث: {search_q}")
+                            st.write(f"المرادفات المحللة: {query_bundles}")
+                            st.write(f"عدد السجلات الكلي: {len(all_sys_records)}")
+                        
+                        filtered = []
+                        for r in all_sys_records:
+                            # تجميع جميع الحقول في نص واحد للبحث (مثل معالجة الطلبات)
+                            search_text = " ".join([
+                                r['name'],
+                                r['phone'],
+                                r['city'],
+                                r['job'],
+                                r['source'],
+                                r.get('company', ''),
+                                r.get('responsible', ''),
+                                r.get('nationality', ''),
+                                r.get('salary', ''),
+                                r.get('nature', '')
+                            ]).lower()
+                            
+                            # منطق AND بين جميع الكلمات (مثل معالجة الطلبات)
+                            match_all_words = True
+                            for bundle in query_bundles:
+                                found_synonym = False
+                                for syn in bundle:
+                                    if syn.lower() in search_text:
+                                        found_synonym = True
+                                        break
+                                if not found_synonym:
+                                    match_all_words = False
+                                    break
+                            
+                            if match_all_words:
+                                filtered.append(r)
+                    
+                    if not filtered:
+                        st.warning(f"⚠️ لا توجد نتائج مطابقة لجميع كلمات البحث: \"{search_q}\"")
+                        st.info("💡 نصيحة: جرب البحث بكلمات أقل أو استخدم كلمات عامة")
+                else:
+                    filtered = all_sys_records
+
+                st.markdown(f"**🔎 نتائج البحث:** {len(filtered)} سجل")
+
+                if not filtered:
+                    pass  # تم عرض الرسالة أعلاه
+                else:
+                    # ── عرض النتائج كجدول قابل للاختيار ─────────────
+                    # بناء DataFrame للعرض مع جميع البيانات
+                    display_rows = []
+                    for i, r in enumerate(filtered):
+                        display_rows.append({
+                            '#': i + 1,
+                            'الاسم': r['name'],
+                            '📱 رقم التليفون': r['phone'],
+                            'المدينة': r['city'],
+                            'المهنة / النشاط': r['job'],
+                            'المصدر': r['source'],
+                            'الشركة': r.get('company', ''),
+                            'المسؤول': r.get('responsible', ''),
+                            'الجنسية': r.get('nationality', ''),
+                            'الراتب': r.get('salary', ''),
+                            'طبيعة العمل': r.get('nature', ''),
+                        })
+                    disp_df = pd.DataFrame(display_rows)
+
+                    # multiselect باستخدام options مبسطة (الاسم + رقم الهاتف)
+                    options_list = [
+                        f"{r['name']} | 📱 {r['phone']} | {r['city']} | {r['source']}"
+                        for r in filtered
+                    ]
+
+                    # إظهار الجدول للمعاينة مع العنوان
+                    st.markdown("### 📊 جدول نتائج البحث الشامل")
+                    st.dataframe(
+                        disp_df,
+                        width='content',
+                        hide_index=True,
+                        column_config=build_auto_column_config(disp_df, {
+                            '#': st.column_config.NumberColumn('#'),
+                            'الاسم': st.column_config.TextColumn('الاسم'),
+                            '📱 رقم التليفون': st.column_config.TextColumn('📱 رقم التليفون'),
+                            'المدينة': st.column_config.TextColumn('المدينة'),
+                            'المهنة / النشاط': st.column_config.TextColumn('المهنة / النشاط'),
+                            'المصدر': st.column_config.TextColumn('المصدر'),
+                            'الشركة': st.column_config.TextColumn('الشركة'),
+                            'المسؤول': st.column_config.TextColumn('المسؤول'),
+                            'الجنسية': st.column_config.TextColumn('الجنسية'),
+                            'الراتب': st.column_config.TextColumn('الراتب'),
+                            'طبيعة العمل': st.column_config.TextColumn('طبيعة العمل'),
+                        })
+                    )
+
+                    st.markdown("**اختر السجلات للإضافة:**")
+                    selected_sys = st.multiselect(
+                        "✅ حدد العملاء المراد إرسالهم",
+                        options=options_list,
+                        default=options_list,
+                        key="wa_emp_sys_multiselect_new",
+                        format_func=lambda x: x
+                    )
+
+                    btn_col1, btn_col2 = st.columns(2)
+                    with btn_col1:
+                        if st.button(
+                            f"📥 اعتماد المحددين ({len(selected_sys)})",
+                            type="primary",
+                            key="btn_load_sys_selected",
+                            use_container_width=True
+                        ):
+                            extracted = []
+                            seen_phones = set()
+                            for opt in selected_sys:
+                                # استخراج رقم الهاتف من الخيار
+                                try:
+                                    parts = opt.split('|')
+                                    raw_name = parts[0].strip()
+                                    raw_phone = parts[1].replace('📱', '').strip() if len(parts) > 1 else ''
+                                    c_phone = "".join(filter(str.isdigit, raw_phone))
+                                    if c_phone and len(c_phone) >= 8 and c_phone not in seen_phones:
+                                        seen_phones.add(c_phone)
+                                        extracted.append({'name': raw_name, 'phone': c_phone, 'is_sent': False})
+                                except Exception:
+                                    pass
+                            st.session_state.wa_emp_targets = extracted
+                            st.toast(f"✅ تم اعتماد {len(extracted)} عميل")
+                            st.rerun()
+                    with btn_col2:
+                        if st.button(
+                            f"⚡ اعتماد كافة نتائج البحث ({len(filtered)})",
+                            key="btn_load_sys_all_filtered",
+                            use_container_width=True
+                        ):
+                            extracted = []
+                            seen_phones = set()
+                            for r in filtered:
+                                if r['phone'] not in seen_phones:
+                                    seen_phones.add(r['phone'])
+                                    extracted.append({'name': r['name'], 'phone': r['phone'], 'is_sent': False})
+                            st.session_state.wa_emp_targets = extracted
+                            st.toast(f"✅ تم اعتماد كافة {len(extracted)} نتيجة بحث")
+                            st.rerun()
+
+        else: # Manual input
+            raw_txt = st.text_area(lbl['paste_numbers'], placeholder="05XXXXXXXX\n05YYYYYYYY...", height=120, key="wa_emp_manual_raw")
+            if st.button("📥 " + ("اعتماد الأرقام" if is_ar else "Load Numbers"), key="btn_load_manual_emp"):
+                m_list, _, _ = validate_numbers(raw_txt)
+                extracted = [{'name': 'عميل', 'phone': p, 'is_sent': False} for p in m_list]
+                st.session_state.wa_emp_targets = extracted
+                st.toast(f"✅ تم تحميل {len(extracted)} رقم")
+                st.rerun()
+
+        # ──────────────────────────────────────────────────────────────
+        # 2. عرض القائمة وإعداد الرسالة والإرسال
+        # ──────────────────────────────────────────────────────────────
+        targets = st.session_state.get('wa_emp_targets', [])
+        if targets:
+            st.markdown("---")
+            t_hdr_col1, t_hdr_col2 = st.columns([3, 1])
+            with t_hdr_col1:
+                pending_count = sum(1 for t in targets if not t.get('is_sent', False))
+                sent_count = len(targets) - pending_count
+                st.markdown(f"#### 📋 {'قائمة العملاء المستهدفين' if is_ar else 'Target Customers'} ({len(targets)} إجمالي | {pending_count} بانتظار الإرسال | {sent_count} تم الإرسال)")
+            with t_hdr_col2:
+                if st.button("🗑️ " + ("مسح القائمة بالكامل" if is_ar else "Clear List"), key="emp_clear_targets_btn"):
+                    st.session_state.wa_emp_targets = []
+                    st.session_state.wa_emp_running = False
+                    st.session_state.wa_emp_idx = 0
+                    st.session_state.wa_emp_saved_attachments = []
+                    st.rerun()
+
+            with st.expander("👁️ " + ("عرض وتعديل قائمة العملاء المستخرجين" if is_ar else "View & Edit Target List"), expanded=False):
+                for idx_t, trg in enumerate(targets):
+                    col_t1, col_t2, col_t3 = st.columns([3, 2, 1])
+                    with col_t1:
+                        status_mark = "✅ تم الإرسال" if trg.get('is_sent') else "⏳ بانتظار الإرسال"
+                        st.write(f"**{trg['name']}** ({status_mark})")
+                    with col_t2:
+                        st.code(trg['phone'], language=None)
+                    with col_t3:
+                        if st.button("❌", key=f"del_emp_trg_{idx_t}", help="حذف من القائمة"):
+                            st.session_state.wa_emp_targets.pop(idx_t)
+                            st.rerun()
+
+            # 📝 Message Composition
+            st.markdown("---")
+            st.markdown(f"#### 📝 {'نص الرسالة' if is_ar else 'Message Content'}")
+            st.caption("💡 يمكنك استخدام `{Name}` أو `{الاسم}` لإدراج اسم العميل تلقائياً، والـ Spintax مثل `{مرحباً|أهلاً|السلام عليكم}` لتنويع الرسائل وتجنب الحظر.")
+            
+            default_emp_msg = "مرحباً {Name}،\n\nنأمل أن تكونوا بخير.\nيسعدنا خدمتكم في توفير أفضل الكوادر المهنية والعمالة المناسبة لمتطلباتكم بأسرع وقت.\n\nللتواصل والاستفسار يرجى الرد على هذه الرسالة.\n\nمع خالص التحية والتقدير،\nأبو فهد\nHR"
+            emp_message = st.text_area(
                 "الرسالة" if is_ar else "Message",
-                placeholder="اكتب رسالتك هنا... استخدم {Name} لاسم العميل" if is_ar else "Write your message here... Use {Name} for customer name",
-                height=200,
-                key="wa_bengali_message"
+                value=st.session_state.get('wa_emp_last_msg', default_emp_msg),
+                height=160,
+                key="wa_emp_msg_input"
+            )
+            st.session_state.wa_emp_last_msg = emp_message
+
+            # 👀 معاينة حية كما ستظهر في واتساب: رسالة واحدة (المتن + التوقيع)
+            try:
+                _pv = emp_message.replace("{Name}", "مثال").replace("{name}", "مثال").replace("{الاسم}", "مثال")
+                _pv = _pv.replace("\u202A", "").replace("\u202C", "").replace("\u2066", "").replace("\u2069", "")
+                _m = re.search(
+                    r'\n*((?:مع خالص التحية والتقدير|مع جزيل الشكر والتقدير|مع أطيب التحيات|مع فائق الاحترام|مع فائق الاحترام والتقدير|مع الفائق الاحترام والتقدير|مع خالص التقدير والاحترام|شاكرين ومقدرين|دمتم بخير)[،,]?\nأبو فهد\nHR)\s*$',
+                    _pv,
+                )
+                if not _m and _pv.strip():
+                    _pv = _pv.rstrip() + "\n\nمع خالص التحية والتقدير،\nأبو فهد\nHR"
+                _bh = "<br>".join(html.escape(_pv).split("\n"))
+                st.markdown(
+                    f"""<div style="background:#0b141a; border:1px solid rgba(255,255,255,0.12); border-radius:12px; padding:14px 16px; margin:6px 0 2px 0;">
+<div style="background:#005c4b; color:#e7ffdb; border-radius:8px; padding:10px 12px; font-size:0.92rem; line-height:1.9;">
+<div dir="rtl" style="text-align:right;">{_bh}</div></div>
+<div style="color:rgba(255,255,255,0.45); font-size:0.72rem; margin-top:6px;">{"👁️ رسالة واحدة كما ستصل في واتساب" if is_ar else "👁️ Single message as delivered in WhatsApp"}</div></div>""",
+                    unsafe_allow_html=True,
+                )
+            except Exception:
+                pass
+
+            # 📎 مرفقات الرسالة للعملاء (PDF / فيديوهات / صور)
+            st.markdown("---")
+            st.markdown(f"#### 📎 {'مرفقات الرسالة للعملاء (PDF / فيديوهات / صور)' if is_ar else 'Customer Attachments (PDF / Videos / Photos)'}")
+            st.caption("💡 يمكنك رفع ملفات PDF، مقاطع فيديو (MP4/MOV)، وصور (JPG/PNG) لإرسالها كمرفقات مع الرسالة المخصصة لكل عميل.")
+
+            # قائمة منسدلة لاختيار نوع المرفق - زر واحد فقط
+            att_type = st.selectbox(
+                "📎 " + ("BROWSE files" if is_ar else "BROWSE files"),
+                options=[
+                    "📄 " + ("مستند" if is_ar else "Document"),
+                    "🖼️ " + ("الصور ومقاطع الفيديو" if is_ar else "Images & Videos"),
+                    "🎵 " + ("الصوت" if is_ar else "Audio")
+                ],
+                key="wa_emp_att_type_select"
+            )
+
+            emp_uploaded_files = []
+            
+            # تحديد أنواع الملفات حسب الاختيار
+            if "مستند" in att_type or "Document" in att_type:
+                emp_uploaded_files = st.file_uploader(
+                    "📄 " + ("اختر المستندات (PDF, DOC, DOCX, XLS, XLSX, PPT, PPTX, TXT)" if is_ar else "Select documents (PDF, DOC, DOCX, XLS, XLSX, PPT, PPTX, TXT)"),
+                    type=["pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "txt"],
+                    accept_multiple_files=True,
+                    key="wa_emp_files_uploader_doc"
+                )
+            elif "الصور" in att_type or "Images" in att_type:
+                emp_uploaded_files = st.file_uploader(
+                    "🖼️ " + ("اختر الصور ومقاطع الفيديو (JPG, PNG, MP4, MOV, AVI, MKV)" if is_ar else "Select images & videos (JPG, PNG, MP4, MOV, AVI, MKV)"),
+                    type=["png", "jpg", "jpeg", "webp", "gif", "mp4", "mov", "avi", "mkv", "webm"],
+                    accept_multiple_files=True,
+                    key="wa_emp_files_uploader_media"
+                )
+            elif "الصوت" in att_type or "Audio" in att_type:
+                emp_uploaded_files = st.file_uploader(
+                    "🎵 " + ("اختر الملفات الصوتية (MP3, WAV, M4A, OGG, AAC)" if is_ar else "Select audio files (MP3, WAV, M4A, OGG, AAC)"),
+                    type=["mp3", "wav", "m4a", "ogg", "aac"],
+                    accept_multiple_files=True,
+                    key="wa_emp_files_uploader_audio"
+                )
+
+            # معالجة وحفظ المرفقات في مجلد مؤقت للجلسة
+            emp_saved_attachments = st.session_state.get('wa_emp_saved_attachments', [])
+            
+            # عرض المرفقات المحفوظة مع إمكانية الحذف
+            if emp_saved_attachments:
+                st.markdown(f"**📎 {'المرفقات المحفوظة:' if is_ar else 'Saved Attachments:'}** ({len(emp_saved_attachments)})")
+                for idx, att_path in enumerate(emp_saved_attachments):
+                    col_att1, col_att2 = st.columns([4, 1])
+                    with col_att1:
+                        file_name = os.path.basename(att_path)
+                        file_ext = os.path.splitext(file_name)[1].lower()
+                        if file_ext == '.pdf':
+                            icon = "📄"
+                        elif file_ext in ['.mp4', '.mov', '.avi', '.mkv', '.3gp']:
+                            icon = "🎥"
+                        elif file_ext in ['.png', '.jpg', '.jpeg', '.webp', '.gif', '.bmp']:
+                            icon = "🖼️"
+                        elif file_ext in ['.mp3', '.wav', '.ogg']:
+                            icon = "🎵"
+                        else:
+                            icon = "📎"
+                        st.markdown(f"{icon} **{file_name}**")
+                    with col_att2:
+                        if st.button("❌", key=f"del_emp_att_{idx}", help="حذف المرفق"):
+                            emp_saved_attachments.pop(idx)
+                            st.session_state.wa_emp_saved_attachments = emp_saved_attachments
+                            st.rerun()
+            
+            # معالجة الملفات المرفوعة حديثاً (مجلد خاص بكل مستخدم)
+            if emp_uploaded_files:
+                base_dir = os.path.join(os.getcwd(), "whatsapp_session")
+                if not os.path.exists(base_dir):
+                    base_dir_alt = os.path.join(os.getcwd(), ".whatsapp_session")
+                    if os.path.exists(base_dir_alt):
+                        base_dir = base_dir_alt
+                emp_uploads_dir = os.path.join(base_dir, f"user_{get_wa_username()}", "emp_temp_uploads")
+                os.makedirs(emp_uploads_dir, exist_ok=True)
+
+                total_size_bytes = 0
+                st.markdown("<div style='margin: 8px 0;'>", unsafe_allow_html=True)
+                for f in emp_uploaded_files:
+                    total_size_bytes += f.size
+                    file_ext = os.path.splitext(f.name)[1].lower()
+                    if file_ext == '.pdf':
+                        icon = "📄 [PDF]"
+                    elif file_ext in ['.mp4', '.mov', '.avi', '.mkv', '.3gp']:
+                        icon = "🎥 [فيديو]"
+                    elif file_ext in ['.png', '.jpg', '.jpeg', '.webp', '.gif', '.bmp']:
+                        icon = "🖼️ [صورة]"
+                    elif file_ext in ['.mp3', '.wav', '.ogg']:
+                        icon = "🎵 [صوت]"
+                    else:
+                        icon = "📎 [مستند]"
+
+                    sz_str = f"{f.size / (1024*1024):.2f} MB" if f.size >= 1024*1024 else f"{f.size / 1024:.1f} KB"
+                    st.markdown(
+                        f"<div style='background: rgba(0, 229, 255, 0.08); border: 1px solid rgba(0, 229, 255, 0.3); border-radius: 8px; padding: 6px 12px; margin-bottom: 5px; display: inline-block; margin-inline-end: 8px;'>"
+                        f"<b>{icon}</b> {f.name} <span style='color: #00E5FF;'>({sz_str})</span>"
+                        f"</div>",
+                        unsafe_allow_html=True
+                    )
+                    # حفظ الملف محلياً
+                    save_path = os.path.join(emp_uploads_dir, f.name)
+                    try:
+                        with open(save_path, "wb") as out_f:
+                            out_f.write(f.getbuffer())
+                        if save_path not in emp_saved_attachments:
+                            emp_saved_attachments.append(save_path)
+                    except Exception as err:
+                        st.error(f"❌ خطأ في حفظ المرفق {f.name}: {err}")
+                st.markdown("</div>", unsafe_allow_html=True)
+                st.session_state.wa_emp_saved_attachments = emp_saved_attachments
+
+            has_attachments = bool(st.session_state.get('wa_emp_saved_attachments', []))
+
+            # 🛡️ إشعار وتنبيه الأمان لمكافحة الحظر عند وجود مرفقات
+            if has_attachments:
+                st.markdown(f"""
+                <div style="background: rgba(255, 170, 0, 0.08); border: 1.5px solid rgba(255, 170, 0, 0.4); border-radius: 12px; padding: 12px 18px; margin: 12px 0;">
+                    <div style="color: #FFA500; font-weight: 700; font-size: 0.95rem; margin-bottom: 4px;">
+                        🛡️ {'تم تفعيل درع الأمان التلقائي لمرفقات الوسائط (صور / فيديوهات / PDF)' if is_ar else 'Media Anti-Ban Shield Activated'}
+                    </div>
+                    <div style="color: #E0E0E0; font-size: 0.85rem; line-height: 1.5;">
+                        {'⚠️ <b>تنبيه لحماية الحساب من الحظر:</b> إرسال الوسائط والمستندات يتطلب وقتاً أطول لرفع البيانات ومعالجتها على خوادم واتساب ويخضع لرقابة صارمة من خوارزميات مكافحة السبام.<br>✅ <b>تم تفعيل فترات التهدئة الآمنة:</b> تم ضبط أدنى وقت انتظار بين <b>45 إلى 90 ثانية</b> مع استراحة دورية كل عدة رسائل لحماية رقمك تماماً من الحظر.' if is_ar else '⚠️ <b>Anti-ban notice:</b> Sending media & documents requires longer upload times and strict anti-spam pacing.<br>✅ Safe auto-delays and periodic batch breaks have been enabled to protect your account.'}
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+
+            # 🛡️ Anti-ban Settings
+            st.markdown(f"#### ⚙️ {'إعدادات الأمان والتأخير ومكافحة الحظر' if is_ar else 'Safety, Delay & Anti-Ban Settings'}")
+            
+            # إضافة وضع الإرسال (Presets)
+            preset_mode = st.radio(
+                "وضع الإرسال" if is_ar else "Sending Mode",
+                ["🛡️ آمن (موصى به)", "⚡ سريع", "⚖️ متوازن"],
+                horizontal=True,
+                key="emp_preset_mode"
             )
             
-            # Random delay settings
-            st.markdown(f"#### {'إعدادات التأخير العشوائي' if is_ar else 'Random Delay Settings'}")
-            col_d1, col_d2 = st.columns(2)
-            with col_d1:
-                min_delay = st.number_input(
-                    "الحد الأدنى (ثواني)" if is_ar else "Min delay (seconds)",
-                    min_value=5,
-                    max_value=300,
-                    value=30,
-                    key="wa_bengali_min_delay"
-                )
-            with col_d2:
-                max_delay = st.number_input(
-                    "الحد الأقصى (ثواني)" if is_ar else "Max delay (seconds)",
-                    min_value=10,
-                    max_value=600,
-                    value=60,
-                    key="wa_bengali_max_delay"
-                )
+            if preset_mode == "🛡️ آمن (موصى به)":
+                def_min, def_max = 45, 90
+                def_break, def_pause = 8, 4
+            elif preset_mode == "⚡ سريع":
+                def_min, def_max = 25, 45
+                def_break, def_pause = 15, 3
+            else:  # متوازن
+                def_min, def_max = 30, 60
+                def_break, def_pause = 10, 3
             
-            # Message variation settings
-            st.markdown(f"#### {'إعدادات تغيير الرسالة' if is_ar else 'Message Variation Settings'}")
-            col_v1, col_v2 = st.columns(2)
-            with col_v1:
-                enable_variation = st.checkbox(
-                    "تفعيل تغيير الصيغة" if is_ar else "Enable Message Variation",
-                    value=True,
-                    help="تغيير صيغة الرسالة كل 5 رسائل بنفس المعنى لتجنب الحظر"
-                )
-            with col_v2:
-                variation_interval = st.number_input(
-                    "تغيير كل (رسالة)" if is_ar else "Change every (messages)",
-                    min_value=1,
-                    max_value=20,
-                    value=5,
-                    key="wa_bengali_interval"
-                )
+            # تعديل القيم حسب المرفقات
+            if has_attachments:
+                def_min = max(def_min, 45)
+                def_max = max(def_max, 90)
+                def_break = max(def_break, 8)
+                def_pause = max(def_pause, 4)
             
-            # Send button
-            if st.button("📨 إرسال الرسائل" if is_ar else "📨 Send Messages", type="primary", key="send_bengali_wa"):
-                if not custom_message:
-                    st.error("❌ " + ("يرجى كتابة الرسالة أولاً" if is_ar else "Please write a message first"))
-                elif not target_phones:
-                    st.error("❌ " + ("لا يوجد أرقام هواتف صالحة" if is_ar else "No valid phone numbers"))
+            c_d1, c_d2, c_d3, c_d4 = st.columns(4)
+            with c_d1:
+                min_allowed = 20
+                emp_min_delay = st.number_input(
+                    "أدنى تأخير (ثانية)" if is_ar else "Min delay (s)",
+                    min_value=min_allowed, max_value=300, value=def_min,
+                    help="الحد الأدنى الآمن للانتظار بين كل رسالة (أعلى عند إرسال المرفقات لحماية الرقم)",
+                    key="emp_min_delay_val"
+                )
+            with c_d2:
+                min_max_allowed = max(emp_min_delay + 5, 25)
+                emp_max_delay = st.number_input(
+                    "أقصى تأخير (ثانية)" if is_ar else "Max delay (s)",
+                    min_value=min_max_allowed, max_value=600, value=max(def_max, min_max_allowed),
+                    help="الحد الأقصى للتأخير العشوائي بين الرسائل (لمحاكاة السلوك البشري الطبيعي)",
+                    key="emp_max_delay_val"
+                )
+            with c_d3:
+                emp_batch_break = st.number_input(
+                    "استراحة كل (رسائل)" if is_ar else "Pause every (msgs)",
+                    min_value=3, max_value=50, value=def_break,
+                    help="التوقف لأخذ استراحة أمان لمحاكاة السلوك البشري الطبيعي",
+                    key="emp_batch_break_val"
+                )
+            with c_d4:
+                emp_batch_pause_mins = st.number_input(
+                    "مدة الاستراحة (دقائق)" if is_ar else "Pause duration (min)",
+                    min_value=2, max_value=20, value=def_pause,
+                    help="مدة الاستراحة الأمنية بين الدفعات",
+                    key="emp_batch_pause_mins"
+                )
+
+            # 🚀 Send / Stop Controls
+            st.markdown("---")
+            is_sending = st.session_state.get('wa_emp_running', False)
+            btn_box1, btn_box2 = st.columns([1, 2])
+
+            with btn_box1:
+                if is_sending:
+                    if st.button("🛑 " + ("إيقاف الإرسال" if is_ar else "Stop Sending"), type="primary", width='stretch', key="btn_stop_emp_send"):
+                        st.session_state.wa_emp_running = False
+                        st.toast("🛑 " + ("تم إيقاف الإرسال" if is_ar else "Sending stopped"))
+                        st.rerun()
                 else:
-                    # Send messages
-                    success_count = 0
-                    fail_count = 0
-                    
-                    progress_bar = st.progress(0)
-                    status_text = st.empty()
-                    
-                    for i, (phone, name) in enumerate(zip(target_phones, target_names)):
-                        status_text.text(f"{'جاري الإرسال إلى' if is_ar else 'Sending to'}: {name} ({i+1}/{len(target_phones)})")
-                        
-                        # Generate message variation
-                        if enable_variation and (i + 1) % variation_interval == 0:
-                            # Simple variation: change greeting and structure
-                            variations = [
-                                custom_message,
-                                custom_message.replace("مرحبا", "أهلاً").replace("Hello", "Hi"),
-                                custom_message.replace("،", ".").replace(",", "."),
-                                custom_message.replace("\n\n", "\n"),
-                                custom_message.replace(".", "...")
-                            ]
-                            message_to_send = variations[(i // variation_interval) % len(variations)]
+                    ready_to_send = (pending_count > 0) and (bool(emp_message.strip()) or has_attachments)
+                    att_label = f" ({len(st.session_state.wa_emp_saved_attachments)} مرفقات)" if has_attachments else ""
+                    btn_send_label = f"📨 {'إرسال إلى' if is_ar else 'Send to'} {pending_count} {'عميل' if is_ar else 'clients'}{att_label}"
+                    if st.button(btn_send_label, disabled=not ready_to_send, type="primary", width='stretch', key="btn_start_emp_send"):
+                        # فحص اتصال واتساب
+                        wa_stat = st.session_state.wa_service.get_status() if st.session_state.wa_service else "Stopped"
+                        if wa_stat != "Connected":
+                            st.error("⚠️ " + ("يرجى تشغيل محرك واتساب والاتصال أولاً" if is_ar else "WhatsApp is not connected!"))
                         else:
-                            message_to_send = custom_message
+                            st.session_state.wa_emp_running = True
+                            st.session_state.wa_emp_idx = 0
+                            st.rerun()
+
+            # ══════════════════════════════════════════════════════════
+            # 🚀 حلقة الإرسال المباشرة لواتساب للعملاء (مع دعم المرفقات والأمان)
+            # ══════════════════════════════════════════════════════════
+            if is_sending:
+                targets_to_send = st.session_state.wa_emp_targets
+                total_t = len(targets_to_send)
+                curr_idx = st.session_state.get('wa_emp_idx', 0)
+
+                # البحث عن أول رقم لم يتم إرساله بدءاً من curr_idx
+                while curr_idx < total_t and targets_to_send[curr_idx].get('is_sent', False):
+                    curr_idx += 1
+                st.session_state.wa_emp_idx = curr_idx
+
+                if curr_idx >= total_t:
+                    st.session_state.wa_emp_running = False
+                    st.balloons()
+                    st.success("🎉 " + ("اكتمل إرسال الرسائل والمرفقات لجميع العملاء بنجاح!" if is_ar else "All customer messages & attachments sent!"))
+                    time.sleep(1)
+                    st.rerun()
+                else:
+                    current_client = targets_to_send[curr_idx]
+                    c_name = current_client.get('name', 'عميل')
+                    c_phone = current_client.get('phone', '')
+                    saved_attachments = st.session_state.get('wa_emp_saved_attachments', [])
+
+                    # بطاقة حالة الإرسال المباشرة مع تفاصيل المرفقات
+                    st.progress((curr_idx + 1) / total_t)
+                    att_info_html = ""
+                    if saved_attachments:
+                        att_names = ", ".join([os.path.basename(p) for p in saved_attachments])
+                        att_info_html = f"""
+                        <div style="margin-top: 6px; font-size: 0.88rem; color: #00E5FF;">
+                            📎 <b>{'المرفقات الملحقة بالرسالة' if is_ar else 'Attached files'}:</b> {att_names}
+                        </div>
+                        """
+
+                    st.markdown(f"""
+                    <div style="background: rgba(0, 255, 100, 0.05); padding: 16px 20px; border-radius: 14px; border: 1.5px solid rgba(0, 255, 100, 0.3); margin: 12px 0;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                            <span style="color: #00FF88; font-weight: 700; font-size: 1.05rem;">📤 {'جاري الإرسال للعميل' if is_ar else 'Sending to'}: {curr_idx + 1} / {total_t}</span>
+                            <span style="color: #D4AF37; font-weight: 700; font-size: 1.05rem;">⌛ {'متبقٍ' if is_ar else 'Remaining'}: {total_t - (curr_idx + 1)}</span>
+                        </div>
+                        <div style="color: #FFFFFF; font-size: 0.95rem;">
+                            👤 <strong>{c_name}</strong> · 📱 <span style="font-family: monospace; color: #00FF88;">{c_phone}</span>
+                        </div>
+                        {att_info_html}
+                    </div>
+                    """, unsafe_allow_html=True)
+
+                    # تجهيز نص الرسالة وتخصيصه للعميل — رسالة واحدة (المتن + التوقيع)
+                    personalized_msg = emp_message.replace("{Name}", c_name).replace("{name}", c_name).replace("{الاسم}", c_name)
+                    personalized_msg = personalized_msg.replace("\u202A", "").replace("\u202C", "").replace("\u2066", "").replace("\u2069", "")
+                    _has_sig = re.search(
+                        r'(?:مع خالص التحية والتقدير|مع جزيل الشكر والتقدير|مع أطيب التحيات|مع فائق الاحترام|مع فائق الاحترام والتقدير|مع الفائق الاحترام والتقدير|مع خالص التقدير والاحترام|شاكرين ومقدرين|دمتم بخير)[،,]?\nأبو فهد\nHR',
+                        personalized_msg,
+                    )
+                    if not _has_sig and personalized_msg.strip():
+                        personalized_msg = personalized_msg.rstrip() + "\n\nمع خالص التحية والتقدير،\nأبو فهد\nHR"
+
+                    # إرسال الرسالة والمرفقات عبر محرك واتساب
+                    spin_text = f"🚀 {'جاري إرسال الرسالة والمرفقات إلى' if is_ar else 'Sending message & attachments to'} {c_name} ({c_phone})..." if saved_attachments else f"🚀 {'جاري الإرسال إلى' if is_ar else 'Sending to'} {c_name} ({c_phone})..."
+                    import inspect as _insp
+                    try:
+                        _vg = "verbatim" in _insp.signature(st.session_state.wa_service.send_message).parameters
+                    except Exception:
+                        _vg = False
+                    _vkw = {"verbatim": True} if _vg else {}
+
+                    # التحقق من حالة الخدمة قبل الإرسال
+                    if not st.session_state.wa_service or not getattr(st.session_state.wa_service, 'driver', None):
+                        ok_send = False
+                        log_detail = "محرك واتساب غير متصل (يرجى تشغيل المحرك أولاً)"
+                        st.error("❌ محرك واتساب غير متصل! يرجى الضغط على 'Start Engine' أولاً")
+                    else:
+                        with st.spinner(spin_text):
+                            ok_send, log_detail = st.session_state.wa_service.send_message(
+                                c_phone,
+                                personalized_msg,
+                                attachment_path=saved_attachments if saved_attachments else None,
+                                **_vkw,
+                            )
+
+                    # تسجيل النتيجة في سجل الإرسال العام مع تفاصيل المرفقات
+                    att_summary = f" (مع {len(saved_attachments)} مرفق)" if (saved_attachments and ok_send) else ""
+                    att_status = "تم الإرسال" if ok_send else "فشل الإرسال"
+                    log_entry = {
+                        "idx": curr_idx + 1,
+                        "name": c_name,
+                        "phone": c_phone,
+                        "status": f"{log_detail}{att_summary}" if ok_send else f"فشل ({log_detail})",
+                        "ok": ok_send,
+                        "attachments_count": len(saved_attachments) if saved_attachments else 0,
+                        "attachments_status": att_status,
+                        "time": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    }
+                    st.session_state.wa_logs.append(log_entry)
+
+                    if ok_send:
+                        st.session_state.wa_emp_targets[curr_idx]['is_sent'] = True
+                        st.session_state.wa_history.add(c_phone)
+                        save_wa_history(st.session_state.wa_history)
+
+                    # 🛡️ إيقاف فوري إذا كان خطأ أمان لحماية الحساب من الحظر
+                    if not ok_send and str(log_detail).startswith("🛑"):
+                        st.session_state.wa_emp_running = False
+                        st.error(f"🛑 {log_detail}")
+                        st.toast("🛑 تم إيقاف الإرسال لحماية الحساب من الحظر", icon="⚠️")
+                    else:
+                        st.session_state.wa_emp_idx = curr_idx + 1
                         
-                        # Replace {Name} placeholder
-                        message_to_send = message_to_send.replace("{Name}", name).replace("{name}", name)
-                        
-                        # Send message
-                        success, msg = st.session_state.wa_service.send_message(phone, message_to_send)
-                        
-                        if success:
-                            success_count += 1
-                        else:
-                            fail_count += 1
-                            st.warning(f"⚠️ {name}: {msg}")
-                        
-                        progress_bar.progress((i + 1) / len(target_phones))
-                        
-                        # Random delay between messages (anti-ban)
-                        if i < len(target_phones) - 1:  # Don't delay after last message
-                            # Use uniform for more natural random delay
-                            random_delay = int(random.uniform(min_delay, max_delay))
-                            delay_text = f"⏳ {'تأخير عشوائي' if is_ar else 'Random delay'}: {random_delay} {'ثانية' if is_ar else 'seconds'}"
-                            
-                            for s_sec in range(random_delay, 0, -1):
-                                status_text.text(f"{delay_text} ({s_sec}s)")
-                                if s_sec % 10 == 0:
-                                    st.session_state.wa_service.keep_alive()
+                        # حساب التأخير العشوائي الذكي بين الرسائل (حماية الحساب ضد الحظر)
+                        if st.session_state.wa_emp_idx < total_t:
+                            # فحص استراحة الدفعات
+                            is_break = (emp_batch_break > 0 and st.session_state.wa_emp_idx % emp_batch_break == 0)
+                            if is_break:
+                                delay_sec = int(emp_batch_pause_mins * 60)
+                                break_msg = f"🛡️ استراحة دفعات أمان دورية لحماية الحساب ({emp_batch_pause_mins} دقيقة)"
+                            else:
+                                low_s = max(30 if saved_attachments else 20, int(emp_min_delay))
+                                high_s = max(low_s + 5, int(emp_max_delay))
+                                delay_sec = random.randint(low_s, high_s)
+                                # إضافة تشتيت عشوائي ذكي (Jitter) لمحاكاة السلوك البشري الطبيعي
+                                delay_sec = max(low_s, delay_sec + random.randint(-2, 3))
+                                media_tag = " (محملة بمرفقات)" if saved_attachments else ""
+                                break_msg = f"⏳ انتظار أمان ذكي لحماية الحساب من الحظر{media_tag} ({delay_sec} ثانية)"
+
+                            # عداد تنازلي تفاعلي أنيق
+                            timer_ph = st.empty()
+                            timer_color = "#FFA500" if saved_attachments else "#00E5FF"
+                            for rem in range(delay_sec, 0, -1):
+                                if not st.session_state.get('wa_emp_running', False):
+                                    break
+                                m, s = divmod(rem, 60)
+                                timer_str = f"{m:02d}:{s:02d}" if m > 0 else f"{s} ثانية"
+                                timer_ph.markdown(f"""
+                                <div style="background: rgba(0, 229, 255, 0.05); border: 1.5px solid {timer_color}; border-radius: 14px; padding: 15px; text-align: center; margin: 10px 0;">
+                                    <div style="color: {timer_color}; font-weight: 700; font-size: 1.05rem;">{break_msg}</div>
+                                    <div style="font-size: 2.2rem; font-weight: 800; color: #FFFFFF; font-family: monospace; margin: 5px 0;">{timer_str}</div>
+                                    <div style="font-size: 0.8rem; color: #AAA;">🛡️ حماية متقدمة ضد الحظر التلقائي من خوارزميات واتساب</div>
+                                </div>
+                                """, unsafe_allow_html=True)
                                 time.sleep(1)
-                            
-                            # Anti-ban: Secondary random micro-rest (1-3 seconds)
-                            micro_rest = random.uniform(1.0, 3.0)
-                            time.sleep(micro_rest)
-                            
-                            # 🛡️ استراحة "تفكير" مفاجئة كل 3-6 رسائل لمحاكاة التعب البشري
-                            if i > 0 and i % random.randint(3, 6) == 0:
-                                stealth_break = random.uniform(6.0, 15.0)
-                                st.toast("🛡️ " + ("استراحة تمويهية قصيرة..." if is_ar else "Short stealth break..."), icon="⏳")
-                                time.sleep(stealth_break)
-                    
-                    status_text.empty()
-                    progress_bar.empty()
-                    
-                    st.success(f"✅ {'تم الإرسال بنجاح' if is_ar else 'Sending completed'}: {success_count} {'رسالة' if is_ar else 'messages'}")
-                    if fail_count > 0:
-                        st.warning(f"⚠️ {'فشل' if is_ar else 'Failed'}: {fail_count}")
+                            timer_ph.empty()
+
+                        if st.session_state.get('wa_emp_running', False):
+                            st.rerun()
+
+        else:
+            st.info("💡 " + ("يرجى اختيار مصدر البيانات بالأعلى واستخراج قائمة العملاء للبدء في كتابة الرسالة والإرسال." if is_ar else "Please choose a data source and extract customer list to begin."))
+
+        # ──────────────────────────────────────────────────────────────
+        # 3. سجل الإرسال الحديث ببطاقات أنيقة (Send Log)
+        # ──────────────────────────────────────────────────────────────
+        if st.session_state.get('wa_logs', []):
+            st.markdown("---")
+            with st.expander(lbl['log_title'], expanded=True):
+                lg_col1, lg_col2 = st.columns([3, 1])
+                with lg_col2:
+                    if st.button(lbl['delete_log'], width='stretch', key="emp_clear_log_btn"):
+                        st.session_state.wa_logs = []
+                        st.rerun()
+                
+                for entry in reversed(st.session_state.wa_logs):
+                    if isinstance(entry, str):
+                        st.text(entry)
+                        continue
+                    status_cls = "status-success" if entry.get('ok') else "status-error"
+                    status_t = entry.get('status', '')
+                    att_count = entry.get('attachments_count', 0)
+                    att_status = entry.get('attachments_status', '')
+                    att_info = f" | 📎 {att_count} مرفق ({att_status})" if att_count > 0 else ""
+                    st.markdown(f"""
+                    <div class="log-card">
+                        <div class="log-info">
+                            <div class="log-name">{entry.get('name', 'عميل')}</div>
+                            <div class="log-phone">📱 {entry.get('phone', '')}</div>
+                        </div>
+                        <div class="log-status-group">
+                            <div class="log-status">
+                                <span class="status-badge {status_cls}">{status_t}</span>
+                                <span class="log-time">🕒 {entry.get('time', '')}</span>
+                            </div>
+                            <div class="log-attachments">
+                                <span style="color: #bbb; font-size: 0.85rem;">{att_info}</span>
+                            </div>
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)
+
         return
 
 
@@ -589,12 +1796,12 @@ def render_whatsapp_page():
     with c2:
         if st.button(lbl['start_engine'], type="primary", width='stretch'):
             with st.spinner(lbl['starting']):
-                if st.session_state.wa_service is None:
-                    st.session_state.wa_service = WhatsAppService()
+                # خدمة المستخدم الحالي (تُنشأ ببروفايله الخاص عند الحاجة)
+                st.session_state.wa_service = ensure_wa_service()
                 if hasattr(st.session_state.wa_service, 'close'):
                     try: st.session_state.wa_service.close()
                     except Exception: pass
-                ok, msg = st.session_state.wa_service.start_driver(headless=is_cloud, force_clean=False)
+                ok, msg = st.session_state.wa_service.start_driver(headless=True, force_clean=False)
                 if ok:
                     st.toast(f"✅ {msg}")
                     st.rerun()
@@ -604,12 +1811,12 @@ def render_whatsapp_page():
         help_msg = "سيتم مسح بيانات تسجيل الدخول بالكامل. ستحتاج لمسح الباركود مرة أخرى." if is_ar else "This will clear all login data. You will need to scan the QR code again."
         if st.button(lbl['full_reset'], width='stretch', help=help_msg):
             with st.spinner(lbl['resetting']):
-                if st.session_state.wa_service is None:
-                    st.session_state.wa_service = WhatsAppService()
+                # خدمة المستخدم الحالي (تُنشأ ببروفايله الخاص عند الحاجة)
+                st.session_state.wa_service = ensure_wa_service()
                 if hasattr(st.session_state.wa_service, 'close'):
                     try: st.session_state.wa_service.close()
                     except Exception: pass
-                ok, msg = st.session_state.wa_service.start_driver(headless=is_cloud, force_clean=True)
+                ok, msg = st.session_state.wa_service.start_driver(headless=True, force_clean=True)
                 if ok:
                     st.toast(f"✅ {msg}")
                     st.rerun()
@@ -649,6 +1856,30 @@ def render_whatsapp_page():
 
     # 3. INPUT + BROADCAST
     if status == "Connected" or st.session_state.get('wa_running', False):
+        st.markdown("---")
+        # 🛡️ شريط الأمان وإحصائيات اليوم وزر فك القفل في وضع ماركتنج
+        m_sec1, m_sec2 = st.columns([3, 1])
+        with m_sec1:
+            stats_m = st.session_state.wa_service.get_daily_stats() if st.session_state.wa_service else {}
+            ok_m = stats_m.get('sent_ok', 0)
+            fail_m = stats_m.get('sent_fail', 0)
+            inval_m = stats_m.get('invalid_numbers', 0)
+            st.markdown(
+                f'<div style="background: rgba(0,255,136,0.06); padding: 10px 15px; border-radius: 10px; border: 1px solid rgba(0,255,136,0.2); font-size: 0.9rem;">'
+                f'🛡️ <b>{"درع الحماية من الحظر" if is_ar else "Anti-Ban Shield"}:</b> '
+                f'{"تم إرسال اليوم" if is_ar else "Today Sent"}: <span style="color:#00FF88; font-weight:bold;">{ok_m}</span> | '
+                f'{"محاولات فاشلة" if is_ar else "Failed"}: <span style="color:#FF6B6B; font-weight:bold;">{fail_m}</span> | '
+                f'{"أرقام غير صالحة" if is_ar else "Invalid"}: <span style="color:#FFA500; font-weight:bold;">{inval_m}</span>'
+                f'</div>',
+                unsafe_allow_html=True
+            )
+        with m_sec2:
+            if st.button("🔄 " + ("فك قفل الأمان" if is_ar else "Reset Counter"), key="mkt_unblock_btn", help="تصفير عداد الأخطاء وفك أي قفل أمان مؤقت"):
+                if st.session_state.wa_service:
+                    st.session_state.wa_service.reset_daily_stats()
+                    st.toast("✅ " + ("تم فك قفل الأمان وتصفير العداد بنجاح" if is_ar else "Anti-ban counters reset successfully!"))
+                    st.rerun()
+
         st.markdown("---")
         
         # --- 🏗️ Linear Layout: Images Top, Main Middle, Review Bottom ---
@@ -742,7 +1973,7 @@ def render_whatsapp_page():
                 </div>
                 """, unsafe_allow_html=True)
 
-            t_manual, t_xl = st.tabs([lbl['tab_manual'], lbl['tab_excel']])
+            t_manual, t_xl, t_db = st.tabs([lbl['tab_manual'], lbl['tab_excel'], lbl['tab_db_search']])
             
             rebuild_review = False
             manual_list = []
@@ -785,59 +2016,736 @@ def render_whatsapp_page():
                             st.session_state.wa_last_uploaded_name = None
                             st.session_state.wa_upload_key = 'xl_1' if st.session_state.get('wa_upload_key') == 'xl_0' else 'xl_0'
                             st.rerun()
-            
-            # Build review targets if data changed or list is empty but data exists
-            if rebuild_review or (not st.session_state.wa_review_targets and (manual_list or st.session_state.wa_data is not None)):
-                new_targets = []
-                seen_in_current_file = set()
-                dups_count = 0
-                
-                # Manual
-                if manual_list:
-                    for n in manual_list:
-                        if n in seen_in_current_file: dups_count += 1; continue 
-                        new_targets.append({'phone': n, 'name': 'Client', 'cv': '', 'is_sent': (n in st.session_state.wa_history)})
-                        seen_in_current_file.add(n)
-                # Excel
-                if st.session_state.wa_data is not None:
-                    df_curr = st.session_state.wa_data
-                    def find_c(keys):
-                        for c in df_curr.columns:
-                            if any(k in str(c).lower() for k in keys): return c
-                        return None
-                    c_name = find_c(["اسم", "name"])
-                    c_phone = find_c(["واتساب", "رقم", "هاتف", "phone", "جوال"])
-                    c_cv = find_c(["سيرة", "cv", "resume", "link"])
+
+            with t_db:
+                from src.core.search import SmartSearchEngine
+
+                st.markdown("#### 🔍 " + ("بحث في قاعدة بيانات العمال" if is_ar else "Search Workers Database"))
+                st.caption(
+                    "نفس محرك البحث الذكي للعمال — ثم اعتماد النتائج لإرسالها عبر واتساب."
+                    if is_ar else
+                    "Uses the same Smart Search engine as workers, then loads results for WhatsApp sending."
+                )
+
+                with st.expander(t("advanced_filters", lang), expanded=False):
+                    st.markdown(f"📅 {t('filter_dates_group', lang)}")
+                    fc1, fc2, fc3 = st.columns(3)
+                    with fc1:
+                        wa_use_age = st.checkbox(("تفعيل " if is_ar else "Enable ") + t("age", lang), key="wa_wrk_use_age")
+                        if wa_use_age:
+                            wa_age_min = st.number_input("من سن" if is_ar else "From", 1, 100, 16, key="wa_wrk_age_min")
+                            wa_age_max = st.number_input("إلى سن" if is_ar else "To", 1, 100, 35, key="wa_wrk_age_max")
+                        else:
+                            wa_age_min, wa_age_max = 16, 35
+                    with fc2:
+                        wa_use_contract = st.checkbox(("تفعيل " if is_ar else "Enable ") + t("contract_end", lang), key="wa_wrk_use_contract")
+                        if wa_use_contract:
+                            wa_contract_range = st.date_input(
+                                "Contract Range",
+                                (datetime.now().date(), datetime.now().date() + timedelta(days=30)),
+                                label_visibility="collapsed",
+                                key="wa_wrk_contract_range",
+                            )
+                        else:
+                            wa_contract_range = []
+                    with fc3:
+                        wa_use_reg = st.checkbox(("تفعيل " if is_ar else "Enable ") + t("registration_date", lang), key="wa_wrk_use_reg")
+                        if wa_use_reg:
+                            wa_reg_range = st.date_input(
+                                "Registration Range",
+                                (datetime.now().date().replace(day=1), datetime.now().date()),
+                                label_visibility="collapsed",
+                                key="wa_wrk_reg_range",
+                            )
+                        else:
+                            wa_reg_range = []
+
+                    st.markdown(f"⚙️ {t('filter_advanced_group', lang)}")
+                    sc1, sc2, sc3 = st.columns(3)
+                    with sc1:
+                        wa_use_expired = st.checkbox(t("expired_filter", lang), key="wa_wrk_expired")
+                    with sc2:
+                        wa_use_not_working = st.checkbox(t("not_working_no", lang), key="wa_wrk_not_working")
+                    with sc3:
+                        transfer_options = {
+                            "": f"— {t('transfer_all', lang)} —",
+                            "First time": t("transfer_1", lang),
+                            "Second time": t("transfer_2", lang),
+                            "The third time": t("transfer_3", lang),
+                            "More than three": t("transfer_more", lang),
+                        }
+                        selected_transfer_label = st.selectbox(
+                            t("transfer_count_label", lang),
+                            options=list(transfer_options.values()),
+                            key="wa_wrk_transfer_count",
+                        )
+                        wa_selected_transfer_key = [k for k, v in transfer_options.items() if v == selected_transfer_label][0]
+
+                    tc1, tc2, tc3, tc4, tc5 = st.columns(5)
+                    with tc1:
+                        wa_use_domestic = st.checkbox(t("domestic_worker_filter", lang), key="wa_wrk_domestic")
+                    with tc2:
+                        wa_use_no_huroob = st.checkbox(t("no_huroob", lang), key="wa_wrk_no_huroob")
+                    with tc3:
+                        wa_use_yes_huroob = st.checkbox(t("yes_huroob_label", lang), key="wa_wrk_yes_huroob")
+                    with tc4:
+                        wa_use_sponsor = st.checkbox(t("sponsor_transfer_yes", lang), key="wa_wrk_sponsor")
+                    with tc5:
+                        wa_use_outside = st.checkbox(t("work_outside_city", lang), key="wa_wrk_outside")
+
+                    # New: Ready to Work / Iqama Valid / Experience filters
+                    nc1, nc2, nc3 = st.columns(3)
+                    wa_yes_no_opts = [t("filter_option_all", lang), t("filter_option_yes", lang), t("filter_option_no", lang)]
+                    with nc1:
+                        st.markdown(f'<div style="font-family: \'Cairo\', sans-serif; font-size: 0.88rem; font-weight: 600; color: #FFFFFF; text-align: right; margin-bottom: 6px;">{t("ready_to_work_filter", lang)}</div>', unsafe_allow_html=True)
+                        wa_sel_ready = st.selectbox("", options=wa_yes_no_opts, key="wa_wrk_ready_to_work", label_visibility="collapsed")
+                    with nc2:
+                        st.markdown(f'<div style="font-family: \'Cairo\', sans-serif; font-size: 0.88rem; font-weight: 600; color: #FFFFFF; text-align: right; margin-bottom: 6px;">{t("iqama_valid_filter", lang)}</div>', unsafe_allow_html=True)
+                        wa_sel_iqama = st.selectbox("", options=wa_yes_no_opts, key="wa_wrk_iqama_valid", label_visibility="collapsed")
+                    with nc3:
+                        st.markdown(f'<div style="font-family: \'Cairo\', sans-serif; font-size: 0.88rem; font-weight: 600; color: #FFFFFF; text-align: right; margin-bottom: 6px;">{t("experience_field_filter", lang)}</div>', unsafe_allow_html=True)
+                        wa_exp_placeholder = "مثل: < 1 أو > 5 أو = 3 سنوات" if lang == 'ar' else "e.g. < 1 or > 5 or = 3 years"
+                        wa_sel_exp = st.text_input("", placeholder=wa_exp_placeholder, key="wa_wrk_experience_input", label_visibility="collapsed")
+
+                wa_filters = {}
+                if wa_use_age:
+                    wa_filters.update({"age_enabled": True, "age_min": wa_age_min, "age_max": wa_age_max})
+                if wa_use_contract and len(wa_contract_range) == 2:
+                    wa_filters.update({
+                        "contract_enabled": True,
+                        "contract_end_start": wa_contract_range[0],
+                        "contract_end_end": wa_contract_range[1],
+                    })
+                if wa_use_reg and len(wa_reg_range) == 2:
+                    wa_filters.update({
+                        "date_enabled": True,
+                        "date_start": wa_reg_range[0],
+                        "date_end": wa_reg_range[1],
+                    })
+                if wa_use_expired:
+                    wa_filters["expired_only"] = True
+                if wa_use_not_working:
+                    wa_filters["not_working_only"] = True
+                if wa_use_no_huroob:
+                    wa_filters["no_huroob"] = True
+                if wa_use_yes_huroob:
+                    wa_filters["yes_huroob"] = True
+                if wa_use_sponsor:
+                    wa_filters["sponsor_transfer"] = True
+                if wa_use_outside:
+                    wa_filters["work_outside_city"] = True
+                if wa_use_domestic:
+                    wa_filters["domestic_worker"] = True
+                if wa_selected_transfer_key:
+                    wa_filters["transfer_count"] = wa_selected_transfer_key
+                # New advanced filters: Ready to Work / Iqama Valid / Experience
+                if wa_sel_ready and wa_sel_ready != t("filter_option_all", lang):
+                    wa_filters["ready_to_work"] = 'Yes' if 'Yes' in wa_sel_ready else 'No'
+                if wa_sel_iqama and wa_sel_iqama != t("filter_option_all", lang):
+                    wa_filters["iqama_valid"] = 'Yes' if 'Yes' in wa_sel_iqama else 'No'
+                if wa_sel_exp and wa_sel_exp.strip() and wa_sel_exp.strip() != t("filter_option_all", lang):
+                    _w_exp_text = wa_sel_exp.strip()
+                    _w_exp_m = re.match(r'\s*(<=|>=|<|>|=)\s*(\d+)', _w_exp_text)
+                    if _w_exp_m:
+                        _w_exp_op = _w_exp_m.group(1)
+                        _w_exp_val = int(_w_exp_m.group(2))
+                    else:
+                        _w_exp_m2 = re.match(r'\s*(\d+)\s*', _w_exp_text)
+                        if _w_exp_m2:
+                            _w_exp_op = '>='
+                            _w_exp_val = int(_w_exp_m2.group(1))
+                        else:
+                            _w_exp_op = None
+                            _w_exp_val = None
+                    if _w_exp_val is not None:
+                        wa_filters["experience_op"] = _w_exp_op
+                        wa_filters["experience_val"] = _w_exp_val
+
+                q_col, btn_col, ref_col = st.columns([4, 1, 1])
+                with q_col:
+                    wa_worker_q = st.text_input(
+                        t("smart_search", lang),
+                        placeholder=t("search_placeholder", lang),
+                        key="wa_worker_search_query",
+                    )
+                with btn_col:
+                    st.markdown("<div style='height: 1.7rem'></div>", unsafe_allow_html=True)
+                    wa_search_clicked = st.button(t("search_btn", lang), type="primary", width="stretch", key="wa_worker_search_btn")
+                with ref_col:
+                    st.markdown("<div style='height: 1.7rem'></div>", unsafe_allow_html=True)
+                    if st.button(t("refresh_data_btn", lang), width="stretch", key="wa_worker_refresh_data"):
+                        st.session_state.pop("wa_workers_df", None)
+                        st.rerun()
+
+                has_wa_filter = bool(wa_filters)
+                should_search = wa_search_clicked or bool(str(wa_worker_q or "").strip()) or has_wa_filter
+
+                if should_search:
+                    db = st.session_state.get("db")
+                    if db is None or not hasattr(db, "fetch_data"):
+                        st.error("❌ " + ("قاعدة بيانات العمال غير متاحة حالياً." if is_ar else "Workers database is not available."))
+                    else:
+                        if "wa_workers_df" not in st.session_state or st.session_state.wa_workers_df is None:
+                            with st.spinner("⏳ " + ("جاري تحميل قاعدة بيانات العمال..." if is_ar else "Loading workers database...")):
+                                st.session_state.wa_workers_df = db.fetch_data()
+
+                        workers_src = st.session_state.wa_workers_df
+                        if workers_src is None or getattr(workers_src, "empty", True):
+                            st.warning("⚠️ " + ("لا توجد بيانات في قاعدة العمال." if is_ar else "No workers found in the database."))
+                        else:
+                            total_workers = len(workers_src)
+                            st.markdown(f"**📊 {'إجمالي العمال' if is_ar else 'Total workers'}:** {total_workers}")
+                            try:
+                                engine = SmartSearchEngine(workers_src)
+                                res = engine.search(wa_worker_q, filters=wa_filters)
+                            except Exception as se:
+                                st.error(f"❌ {'خطأ أثناء البحث' if is_ar else 'Search error'}: {se}")
+                                res = pd.DataFrame()
+
+                            if res is None or getattr(res, "empty", True):
+                                st.warning(t("no_results", lang))
+                                st.session_state.wa_worker_search_res = pd.DataFrame()
+                            else:
+                                # 🗑️ حذف المكرر برقم الإقامة — الاحتفاظ بالأحدث بتاريخ التسجيل
+                                _iq_col = None
+                                _ts_col = None
+                                try:
+                                    res, iqama_removed, _iq_col, _ts_col = _dedup_workers_by_iqama_keep_newest(res)
+                                except Exception:
+                                    iqama_removed = 0
+                                # 📅 ترتيب دائم: الأحدث بتاريخ التسجيل أولاً
+                                try:
+                                    res = _sort_df_by_registration_newest(res, _ts_col)
+                                except Exception:
+                                    pass
+                                st.session_state.wa_worker_search_res = res
+                                st.success(
+                                    f"✅ {'تم العثور على' if is_ar else 'Found'} {len(res)} "
+                                    f"{'نتيجة من أصل' if is_ar else 'results out of'} {total_workers}"
+                                )
+                                if True:
+                                    st.caption(
+                                        f"🗑️ {'المكرر المحذوف برقم الإقامة' if is_ar else 'Duplicates removed by Iqama'}: {iqama_removed}"
+                                        + (f" {'(تم الاحتفاظ بالأحدث بتاريخ التسجيل)' if is_ar else '(kept newest by registration date)'}" if iqama_removed > 0 else "")
+                                    )
+
+                                cols = list(res.columns)
+                                c_name = _find_df_col(cols, ["full name", "الاسم الكامل", "اسم العامل", "name", "الاسم"])
+                                c_phone = _find_df_col(cols, ["whatsapp", "phone number", "mobile", "رقم الجوال", "رقم الهاتف", "phone", "جوال"])
+                                # 🪪 عمود رقم الإقامة فقط (مع استبعاد المهنة في الإقامة) — للعرض في جدول النتائج
+                                c_iqama = _iq_col if (_iq_col is not None and _iq_col in cols) else None
+                                if c_iqama is None:
+                                    for _c in cols:
+                                        if str(_c).startswith("__"):
+                                            continue
+                                        _cl = str(_c).lower().strip()
+                                        _has = any(k in _cl for k in ["رقم الاقامة", "رقم الإقامة", "iqama id", "iqama", "residency", "national id", "رقم الهوية", "باسبورد"])
+                                        _excl = any(x in _cl for x in ["مهنة", "مهنه", "profession", "occupation", "listed on", "job"])
+                                        if _has and not _excl:
+                                            if "رقم" in str(_c):
+                                                c_iqama = _c
+                                                break
+                                            if c_iqama is None:
+                                                c_iqama = _c
+                                c_city = _find_df_col(cols, ["city", "مدينة"])
+                                c_job = _find_df_col(cols, ["which job are you looking", "requested job", "الوظيفة", "المهنة", "job"])
+                                c_nat = _find_df_col(cols, ["nationality", "الجنسية", "الجنسيه"])
+                                c_gender = _find_df_col(cols, ["gender", "الجنس"])
+                                # 📅 عمود تاريخ التسجيل (نفس العمود المستخدم للترتيب/حذف المكرر)
+                                c_reg = _ts_col if (_ts_col is not None and _ts_col in cols) else _find_df_col(cols, ["طابع زمني", "تاريخ التسجيل", "وقت التسجيل", "timestamp", "registration date", "تاريخ التقديم", "date submitted"])
+                                c_age = _find_df_col(cols, ["age", "العمر"])
+                                c_cv = _find_df_col(cols, ["download cv", "سيرة", "cv", "resume"])
+
+                                _LBL_FLAG = ("دولة" if is_ar else "Country")
+                                _LBL_NAT = ("الجنسية" if is_ar else "Nationality")
+                                _LBL_GENDER = ("الجنس" if is_ar else "Gender")
+                                _LBL_REG = ("تاريخ التسجيل" if is_ar else "Registration Date")
+
+                                # 🗂️ جميع الحقول: أي عمود من قاعدة البيانات لم يُعرض أعلاه يُضاف كما هو
+                                _used_src = {c for c in [c_name, c_phone, c_iqama, c_city, c_job, c_nat, c_gender, c_age, c_cv, c_reg] if c is not None}
+                                _extra_cols = [c for c in cols if not str(c).startswith("__") and c not in _used_src]
+                                display_rows = []
+                                options_list = []
+                                option_map = {}
+                                for i, (idx, row) in enumerate(res.iterrows()):
+                                    name_v = str(row[c_name]).strip() if c_name and pd.notna(row[c_name]) else "عامل"
+                                    phone_raw = str(row[c_phone]).strip() if c_phone and pd.notna(row[c_phone]) else ""
+                                    phone_v = format_phone_number(phone_raw) or "".join(filter(str.isdigit, phone_raw))
+                                    iqama_v = str(row[c_iqama]).strip() if c_iqama and pd.notna(row[c_iqama]) else ""
+                                    if iqama_v.lower() == "nan":
+                                        iqama_v = ""
+                                    city_v = str(row[c_city]).strip() if c_city and pd.notna(row[c_city]) else ""
+                                    job_v = str(row[c_job]).strip() if c_job and pd.notna(row[c_job]) else ""
+                                    nat_raw = str(row[c_nat]).strip() if c_nat and pd.notna(row[c_nat]) else ""
+                                    if nat_raw.lower() == "nan":
+                                        nat_raw = ""
+                                    nat_v = nat_raw
+                                    flag_v = _wa_flag_url(nat_raw)
+                                    gender_raw = str(row[c_gender]).strip() if c_gender and pd.notna(row[c_gender]) else ""
+                                    gender_v = _wa_gender_label(gender_raw, is_ar=is_ar)
+                                    reg_v = _wa_format_reg_date(row[c_reg]) if c_reg and pd.notna(row[c_reg]) else ""
+                                    age_v = str(row[c_age]).strip() if c_age and pd.notna(row[c_age]) else ""
+                                    cv_v = str(row[c_cv]).strip() if c_cv and pd.notna(row[c_cv]) else ""
+                                    _row = {
+                                        "#": i + 1,
+                                        _LBL_REG: reg_v,
+                                        ("الاسم" if is_ar else "Name"): name_v,
+                                        ("الجوال" if is_ar else "Phone"): phone_v,
+                                        ("رقم الإقامة" if is_ar else "Iqama ID"): iqama_v,
+                                        ("المدينة" if is_ar else "City"): city_v,
+                                        ("المهنة" if is_ar else "Job"): job_v,
+                                        _LBL_FLAG: flag_v,
+                                        _LBL_NAT: nat_v,
+                                        _LBL_GENDER: gender_v,
+                                        ("العمر" if is_ar else "Age"): age_v,
+                                        ("السيرة" if is_ar else "CV"): cv_v,
+                                    }
+                                    for _ec in _extra_cols:
+                                        try:
+                                            _ev = row[_ec]
+                                            _es = "" if _ev is None or (pd.notna(_ev) is False) else str(_ev).strip()
+                                            if _es.lower() == "nan":
+                                                _es = ""
+                                        except Exception:
+                                            _es = ""
+                                        _ek = str(_ec).strip()
+                                        if _ek in _row:
+                                            _ek = f"{_ek} (2)"
+                                        _row[_ek] = _es
+                                    display_rows.append(_row)
+                                    opt = f"{name_v} | 📱 {phone_v} | 🪪 {iqama_v} | {city_v} | {job_v} | {nat_v} | #{i}"
+                                    options_list.append(opt)
+                                    option_map[opt] = i
+
+                                st.markdown("### 📊 " + ("جدول نتائج البحث" if is_ar else "Search Results") + f"  —  🗑️ {'المحذوف' if is_ar else 'Removed'}: {iqama_removed}")
+                                try:
+                                    _disp_df = pd.DataFrame(display_rows)
+
+                                    def _wa_color(v):
+                                        _s = str(v).lower()
+                                        if "🚺" in _s or "أنث" in _s or "انث" in _s or "female" in _s:
+                                            return "color: #e91e63; font-weight: bold;"
+                                        if "🚹" in _s or "ذكر" in _s or "male" in _s:
+                                            return "color: #3498db; font-weight: bold;"
+                                        return "color: #4CAF50;"
+
+                                    _styler = _disp_df.style.map(_wa_color, subset=[c for c in [_LBL_NAT, _LBL_GENDER] if c in _disp_df.columns]).set_properties(
+                                        **{'text-align': 'left'}
+                                    ).set_table_styles([
+                                        {'selector': 'th', 'props': [('text-align', 'center'), ('vertical-align', 'middle')]},
+                                        {'selector': 'td', 'props': [('text-align', 'left')]}
+                                    ])
+                                    _col_cfg = {}
+                                    if _LBL_FLAG in _disp_df.columns:
+                                        try:
+                                            _col_cfg[_LBL_FLAG] = st.column_config.ImageColumn(_LBL_FLAG, width="small")
+                                        except Exception:
+                                            pass
+                                    st.dataframe(_styler, width="content", hide_index=True, column_config=build_auto_column_config(_styler, _col_cfg))
+                                except Exception:
+                                    try:
+                                        _fb = pd.DataFrame(display_rows)
+                                        st.dataframe(_fb, width="content", hide_index=True, column_config=build_auto_column_config(_fb))
+                                    except Exception:
+                                        st.dataframe(pd.DataFrame(display_rows), width="content", hide_index=True)
+
+                                with_phone = sum(1 for r in display_rows if str(r[("الجوال" if is_ar else "Phone")]).strip())
+                                st.caption(
+                                    f"{'سجلات بجوال صالح للإرسال' if is_ar else 'Records with a sendable phone'}: {with_phone}"
+                                )
+
+                                selected_workers = st.multiselect(
+                                    "✅ " + ("حدد العمال المراد إرسالهم" if is_ar else "Select workers to send"),
+                                    options=options_list,
+                                    default=options_list,
+                                    key="wa_worker_sys_multiselect",
+                                )
+
+                                b1, b2 = st.columns(2)
+                                with b1:
+                                    if st.button(
+                                        f"📥 {'اعتماد المحددين' if is_ar else 'Load selected'} ({len(selected_workers)})",
+                                        type="primary",
+                                        key="btn_load_wa_workers_selected",
+                                        width="stretch",
+                                    ):
+                                        selected_pos = [option_map[o] for o in selected_workers if o in option_map]
+                                        picked = res.iloc[selected_pos] if selected_pos else res.iloc[0:0]
+                                        extracted = _worker_df_to_wa_targets(picked, st.session_state.wa_history)
+                                        _adopt_wa_worker_targets(extracted)
+                                        st.session_state.wa_from_worker_db = True
+                                        st.toast(f"✅ {'تم اعتماد' if is_ar else 'Loaded'} {len(extracted)} {'عامل' if is_ar else 'workers'}")
+                                        st.rerun()
+                                with b2:
+                                    if st.button(
+                                        f"⚡ {'اعتماد كافة نتائج البحث' if is_ar else 'Load all search results'} ({len(res)})",
+                                        key="btn_load_wa_workers_all",
+                                        width="stretch",
+                                    ):
+                                        extracted = _worker_df_to_wa_targets(res, st.session_state.wa_history)
+                                        _adopt_wa_worker_targets(extracted)
+                                        st.session_state.wa_from_worker_db = True
+                                        st.toast(f"✅ {'تم اعتماد كافة' if is_ar else 'Loaded all'} {len(extracted)} {'نتيجة' if is_ar else 'results'}")
+                                        st.rerun()
+
+                else:
+                    st.info("💡 " + (
+                        "اكتب في البحث الذكي (مهنة، جنسية، مدينة، رقم جوال...) ثم اعتمد النتائج لإرسال واتساب."
+                        if is_ar else
+                        "Type in Smart Search (job, nationality, city, phone...) then load results for WhatsApp sending."
+                    ))
+
+                # 📎 مرفقات رسالة العمال (صور / فيديوهات / صوت / PDF) — حصراً في تبويب بحث العمال
+                st.markdown("---")
+                st.markdown(f"#### 📎 {'مرفقات رسالة العمال (صور / فيديوهات / صوت / PDF)' if is_ar else 'Worker Message Attachments (Photos / Videos / Audio / PDF)'}")
+                st.caption("💡 " + ("يمكنك رفع صور متعددة، مقاطع فيديو، ملفات صوتية، وملفات PDF لإرفاقها مع الرسائل المرسلة للعمال من قاعدة البيانات." if is_ar else "You can upload multiple images, video clips, audio files, and PDFs to attach with messages sent to workers from the database."))
+
+                # نمط CSS حديث لمعاينة المرفقات والبطاقات
+                st.markdown("""
+                <style>
+                .wdb-card-box {
+                    background: rgba(255, 255, 255, 0.03);
+                    border: 1px solid rgba(0, 229, 255, 0.2);
+                    border-radius: 12px;
+                    padding: 10px;
+                    margin-bottom: 12px;
+                    transition: all 0.25s ease;
+                }
+                .wdb-card-box:hover {
+                    border-color: rgba(0, 229, 255, 0.5);
+                    background: rgba(255, 255, 255, 0.05);
+                }
+                .wdb-chip {
+                    display: inline-block;
+                    padding: 3px 8px;
+                    border-radius: 6px;
+                    font-size: 0.76rem;
+                    font-weight: 600;
+                }
+                .wdb-chip-img { background: rgba(0, 255, 136, 0.15); color: #00FF88; border: 1px solid rgba(0, 255, 136, 0.3); }
+                .wdb-chip-vid { background: rgba(0, 229, 255, 0.15); color: #00E5FF; border: 1px solid rgba(0, 229, 255, 0.3); }
+                .wdb-chip-aud { background: rgba(255, 187, 0, 0.15); color: #FFBB00; border: 1px solid rgba(255, 187, 0, 0.3); }
+                .wdb-chip-doc { background: rgba(233, 30, 99, 0.15); color: #FF4081; border: 1px solid rgba(233, 30, 99, 0.3); }
+                </style>
+                """, unsafe_allow_html=True)
+
+                if 'wa_wdb_att_category' not in st.session_state:
+                    st.session_state.wa_wdb_att_category = "images"
+
+                wdb_cat = st.session_state.wa_wdb_att_category
+
+                # أزرار حديثة لاختيار نوع الملف (صور متعددة / فيديو / صوتي / PDF)
+                c_btn1, c_btn2, c_btn3, c_btn4 = st.columns(4)
+                with c_btn1:
+                    if st.button(
+                        "🖼️ " + ("رفع أكثر من صورة" if is_ar else "Upload Multiple Images"),
+                        key="btn_wdb_cat_img",
+                        type="primary" if wdb_cat == "images" else "secondary",
+                        width="stretch"
+                    ):
+                        st.session_state.wa_wdb_att_category = "images"
+                        st.rerun()
+                with c_btn2:
+                    if st.button(
+                        "🎬 " + ("اختيار ملف فيديو" if is_ar else "Choose Video File"),
+                        key="btn_wdb_cat_vid",
+                        type="primary" if wdb_cat == "video" else "secondary",
+                        width="stretch"
+                    ):
+                        st.session_state.wa_wdb_att_category = "video"
+                        st.rerun()
+                with c_btn3:
+                    if st.button(
+                        "🎵 " + ("اختيار ملف صوتي" if is_ar else "Choose Audio File"),
+                        key="btn_wdb_cat_aud",
+                        type="primary" if wdb_cat == "audio" else "secondary",
+                        width="stretch"
+                    ):
+                        st.session_state.wa_wdb_att_category = "audio"
+                        st.rerun()
+                with c_btn4:
+                    if st.button(
+                        "📄 " + ("ملف PDF / مستندات" if is_ar else "PDF / Documents"),
+                        key="btn_wdb_cat_pdf",
+                        type="primary" if wdb_cat == "pdf" else "secondary",
+                        width="stretch"
+                    ):
+                        st.session_state.wa_wdb_att_category = "pdf"
+                        st.rerun()
+
+                # حقل الرفع التفاعلي حسب النوع المختار
+                wdb_uploaded_files = []
+                if wdb_cat == "images":
+                    wdb_uploaded_files = st.file_uploader(
+                        "🖼️ " + ("اختر صور (يمكنك اختيار عدة صور معاً)" if is_ar else "Select images (multiple allowed)"),
+                        type=["png", "jpg", "jpeg", "webp", "gif", "bmp"],
+                        accept_multiple_files=True,
+                        key="wa_wdb_uploader_images"
+                    )
+                elif wdb_cat == "video":
+                    wdb_uploaded_files = st.file_uploader(
+                        "🎬 " + ("اختر ملف فيديو (MP4, MOV, AVI, MKV, 3GP, WEBM)" if is_ar else "Select video file (MP4, MOV, AVI, MKV...)"),
+                        type=["mp4", "mov", "avi", "mkv", "3gp", "webm"],
+                        accept_multiple_files=True,
+                        key="wa_wdb_uploader_video"
+                    )
+                elif wdb_cat == "audio":
+                    wdb_uploaded_files = st.file_uploader(
+                        "🎵 " + ("اختر ملف صوتي أو تسجيل (MP3, WAV, M4A, OGG, AAC)" if is_ar else "Select audio file (MP3, WAV, M4A, OGG, AAC)"),
+                        type=["mp3", "wav", "m4a", "ogg", "aac"],
+                        accept_multiple_files=True,
+                        key="wa_wdb_uploader_audio"
+                    )
+                elif wdb_cat == "pdf":
+                    wdb_uploaded_files = st.file_uploader(
+                        "📄 " + ("اختر ملف PDF أو مستندات" if is_ar else "Select PDF or documents"),
+                        type=["pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "txt", "csv"],
+                        accept_multiple_files=True,
+                        key="wa_wdb_uploader_doc"
+                    )
+
+                # حفظ الملفات المرفوعة في مجلد الجلسة مع منع التكرار بناءً على الـ Hash
+                wdb_saved_attachments = st.session_state.get('wa_worker_db_attachments', [])
+                wdb_existing_hashes = st.session_state.get('wa_worker_db_attachments_hashes', set())
+
+                if wdb_uploaded_files:
+                    base_dir = os.path.join(os.getcwd(), "whatsapp_session")
+                    os.makedirs(base_dir, exist_ok=True)
+                    import uuid as _uuid
+                    import hashlib as _hashlib
+                    new_files_count = 0
+                    for uf in wdb_uploaded_files:
+                        file_bytes = uf.getvalue()
+                        file_hash = _hashlib.md5(file_bytes).hexdigest()
+                        if file_hash in wdb_existing_hashes:
+                            continue
+                        file_ext = os.path.splitext(uf.name)[1]
+                        unique_name = f"wdb_{_uuid.uuid4().hex[:8]}{file_ext}"
+                        save_path = os.path.join(base_dir, unique_name)
+                        with open(save_path, "wb") as f:
+                            f.write(file_bytes)
+                        if save_path not in wdb_saved_attachments:
+                            wdb_saved_attachments.append(save_path)
+                            wdb_existing_hashes.add(file_hash)
+                            new_files_count += 1
+                    st.session_state.wa_worker_db_attachments = wdb_saved_attachments
+                    st.session_state.wa_worker_db_attachments_hashes = wdb_existing_hashes
+                    if new_files_count > 0:
+                        st.toast(f"✅ {'تم إضافة' if is_ar else 'Added'} {new_files_count} {'ملف' if is_ar else 'file(s)'}")
+
+                # تنقية المسارات الموجودة فعلياً على القرص
+                wdb_saved_attachments = [p for p in wdb_saved_attachments if p and os.path.exists(p)]
+                st.session_state.wa_worker_db_attachments = wdb_saved_attachments
+
+                # عرض المرفقات الحالية بتصميم ومعاينة عصرية
+                if wdb_saved_attachments:
+                    img_exts = {'.png', '.jpg', '.jpeg', '.webp', '.gif', '.bmp'}
+                    vid_exts = {'.mp4', '.mov', '.avi', '.mkv', '.3gp', '.webm'}
+                    aud_exts = {'.mp3', '.wav', '.m4a', '.ogg', '.aac'}
                     
-                    for idx, row in df_curr.iterrows():
-                        raw_p = str(row[c_phone]).strip() if c_phone else ""
-                        phone = format_phone_number(raw_p)
-                        if not phone: phone = format_phone_number("".join(raw_p.split()))
+                    images_list = []
+                    videos_list = []
+                    audio_list = []
+                    docs_list = []
+
+                    for idx, att_path in enumerate(wdb_saved_attachments):
+                        fname = os.path.basename(att_path)
+                        fext = os.path.splitext(fname)[1].lower()
+                        try:
+                            fsize_bytes = os.path.getsize(att_path)
+                            fsize_str = f"{fsize_bytes/1024:.1f} KB" if fsize_bytes < 1048576 else f"{fsize_bytes/1048576:.2f} MB"
+                        except Exception:
+                            fsize_str = ""
+
+                        item = (idx, att_path, fname, fsize_str)
+                        if fext in img_exts:
+                            images_list.append(item)
+                        elif fext in vid_exts:
+                            videos_list.append(item)
+                        elif fext in aud_exts:
+                            audio_list.append(item)
+                        else:
+                            docs_list.append(item)
+
+                    # شريط الملخص العلوي للمرفقات وزر الحذف الكلي
+                    sum_col1, sum_col2 = st.columns([4, 1])
+                    with sum_col1:
+                        summary_parts = []
+                        if images_list: summary_parts.append(f"🖼️ {len(images_list)} صور")
+                        if videos_list: summary_parts.append(f"🎬 {len(videos_list)} فيديو")
+                        if audio_list: summary_parts.append(f"🎵 {len(audio_list)} صوتي")
+                        if docs_list: summary_parts.append(f"📄 {len(docs_list)} مستند/PDF")
+                        sum_text = " · ".join(summary_parts) if summary_parts else ""
+
+                        st.markdown(f"""
+                        <div style="background: rgba(0, 229, 255, 0.08); border: 1.5px solid rgba(0, 229, 255, 0.35); border-radius: 10px; padding: 10px 14px; margin: 8px 0;">
+                            <span style="color: #00E5FF; font-weight: 700; font-size: 0.95rem;">📎 {'المرفقات الجاهزة للإرسال مع رسائل العمال' if is_ar else 'Ready Attachments for Workers'}: {len(wdb_saved_attachments)} ملف</span>
+                            <div style="color: #ccc; font-size: 0.85rem; margin-top: 3px;">{sum_text}</div>
+                        </div>
+                        """, unsafe_allow_html=True)
+                    with sum_col2:
+                        st.markdown("<div style='height: 8px;'></div>", unsafe_allow_html=True)
+                        if st.button("🗑️ " + ("مسح الكل" if is_ar else "Clear All"), key="btn_wdb_clear_all", width="stretch"):
+                            for p in wdb_saved_attachments:
+                                if os.path.exists(p):
+                                    try: os.remove(p)
+                                    except: pass
+                            st.session_state.wa_worker_db_attachments = []
+                            st.session_state.wa_worker_db_attachments_hashes = set()
+                            st.rerun()
+
+                    # 1. معاينة عصرية للصور (Modern Image Gallery Grid)
+                    if images_list:
+                        st.markdown(f"**🖼️ {'معاينة حديثة للصور المرفوعة' if is_ar else 'Uploaded Images Gallery'} ({len(images_list)}):**")
+                        cols_grid = st.columns(3)
+                        for i_img, (real_idx, a_path, a_name, a_sz) in enumerate(images_list):
+                            with cols_grid[i_img % 3]:
+                                st.markdown(f"""
+                                <div class="wdb-card-box">
+                                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                                        <span class="wdb-chip wdb-chip-img">🖼️ صورة #{i_img + 1}</span>
+                                        <span style="font-size: 0.72rem; color: #aaa;">{a_sz}</span>
+                                    </div>
+                                </div>
+                                """, unsafe_allow_html=True)
+                                st.image(a_path, use_container_width=True)
+                                if st.button(f"🗑️ {'حذف' if is_ar else 'Delete'}", key=f"del_wdb_img_{real_idx}", width="stretch"):
+                                    wdb_saved_attachments.pop(real_idx)
+                                    if os.path.exists(a_path):
+                                        try: os.remove(a_path)
+                                        except: pass
+                                    st.session_state.wa_worker_db_attachments = wdb_saved_attachments
+                                    st.rerun()
+
+                    # 2. معاينة مقاطع الفيديو
+                    if videos_list:
+                        st.markdown(f"**🎬 {'مقاطع الفيديو المرفوعة' if is_ar else 'Uploaded Videos'} ({len(videos_list)}):**")
+                        v_cols = st.columns(2)
+                        for i_vid, (real_idx, a_path, a_name, a_sz) in enumerate(videos_list):
+                            with v_cols[i_vid % 2]:
+                                st.markdown(f"""
+                                <div class="wdb-card-box">
+                                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                                        <span class="wdb-chip wdb-chip-vid">🎬 فيديو #{i_vid + 1}</span>
+                                        <span style="font-size: 0.72rem; color: #aaa;">{a_sz}</span>
+                                    </div>
+                                </div>
+                                """, unsafe_allow_html=True)
+                                st.video(a_path)
+                                if st.button(f"🗑️ {'حذف الفيديو' if is_ar else 'Delete Video'}", key=f"del_wdb_vid_{real_idx}", width="stretch"):
+                                    wdb_saved_attachments.pop(real_idx)
+                                    if os.path.exists(a_path):
+                                        try: os.remove(a_path)
+                                        except: pass
+                                    st.session_state.wa_worker_db_attachments = wdb_saved_attachments
+                                    st.rerun()
+
+                    # 3. معاينة الملفات الصوتية
+                    if audio_list:
+                        st.markdown(f"**🎵 {'الملفات الصوتية والتسجيلات' if is_ar else 'Uploaded Audio'} ({len(audio_list)}):**")
+                        a_cols = st.columns(2)
+                        for i_aud, (real_idx, a_path, a_name, a_sz) in enumerate(audio_list):
+                            with a_cols[i_aud % 2]:
+                                st.markdown(f"""
+                                <div class="wdb-card-box">
+                                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                                        <span class="wdb-chip wdb-chip-aud">🎵 ملف صوتي #{i_aud + 1}</span>
+                                        <span style="font-size: 0.72rem; color: #aaa;">{a_sz}</span>
+                                    </div>
+                                </div>
+                                """, unsafe_allow_html=True)
+                                st.audio(a_path)
+                                if st.button(f"🗑️ {'حذف الصوت' if is_ar else 'Delete Audio'}", key=f"del_wdb_aud_{real_idx}", width="stretch"):
+                                    wdb_saved_attachments.pop(real_idx)
+                                    if os.path.exists(a_path):
+                                        try: os.remove(a_path)
+                                        except: pass
+                                    st.session_state.wa_worker_db_attachments = wdb_saved_attachments
+                                    st.rerun()
+
+                    # 4. معاينة ملفات PDF والمستندات
+                    if docs_list:
+                        st.markdown(f"**📄 {'ملفات PDF والمستندات المرفوعة' if is_ar else 'Uploaded Documents'} ({len(docs_list)}):**")
+                        d_cols = st.columns(2)
+                        for i_doc, (real_idx, a_path, a_name, a_sz) in enumerate(docs_list):
+                            with d_cols[i_doc % 2]:
+                                st.markdown(f"""
+                                <div class="wdb-card-box">
+                                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                                        <div>
+                                            <span class="wdb-chip wdb-chip-doc">📄 PDF / مستند</span>
+                                            <div style="font-weight: 600; font-size: 0.88rem; color: #FFF; margin-top: 5px;">{a_name}</div>
+                                            <div style="font-size: 0.75rem; color: #aaa;">{a_sz}</div>
+                                        </div>
+                                    </div>
+                                </div>
+                                """, unsafe_allow_html=True)
+                                if st.button(f"🗑️ {'حذف المستند' if is_ar else 'Delete Document'}", key=f"del_wdb_doc_{real_idx}", width="stretch"):
+                                    wdb_saved_attachments.pop(real_idx)
+                                    if os.path.exists(a_path):
+                                        try: os.remove(a_path)
+                                        except: pass
+                                    st.session_state.wa_worker_db_attachments = wdb_saved_attachments
+                                    st.rerun()
+
+            
+            # 🛡️ Build review targets only when NOT sending — never interrupt the send loop
+            from_worker_db = st.session_state.get('wa_from_worker_db', False)
+            wdb_has_attachments = bool(st.session_state.get('wa_worker_db_attachments', []))
+            if not st.session_state.get('wa_running', False):
+                # 🛡️ إذا كانت هناك مرفقات عامل محفوظة، حافظ على wa_from_worker_db = True
+                # حتى لا تُفقد المرفقات عند rerun قبل النقر على إرسال
+                if wdb_has_attachments:
+                    st.session_state.wa_from_worker_db = True
+                elif from_worker_db and not rebuild_review:
+                    pass
+                elif rebuild_review or (not st.session_state.wa_review_targets and (manual_list or st.session_state.wa_data is not None)):
+                    st.session_state.wa_from_worker_db = False
+                    new_targets = []
+                    seen_in_current_file = set()
+                    dups_count = 0
+                    
+                    # Manual
+                    if manual_list:
+                        for n in manual_list:
+                            if n in seen_in_current_file: dups_count += 1; continue 
+                            new_targets.append({'phone': n, 'name': 'Client', 'cv': '', 'is_sent': (n in st.session_state.wa_history)})
+                            seen_in_current_file.add(n)
+                    # Excel
+                    if st.session_state.wa_data is not None:
+                        df_curr = st.session_state.wa_data
+                        def find_c(keys):
+                            for c in df_curr.columns:
+                                if any(k in str(c).lower() for k in keys): return c
+                            return None
+                        c_name = find_c(["اسم", "name"])
+                        c_phone = find_c(["واتساب", "رقم", "هاتف", "phone", "جوال"])
+                        c_cv = find_c(["سيرة", "cv", "resume", "link"])
                         
-                        if phone:
-                            if phone in seen_in_current_file: dups_count += 1; continue
-                            target_data = {str(col): str(row[col]).strip() if pd.notna(row[col]) else "" for col in df_curr.columns}
-                            target_data.update({'idx': idx, 'phone': phone, 'is_sent': (phone in st.session_state.wa_history)})
-                            target_data['name'] = str(row[c_name]).strip() if (c_name and pd.notna(row[c_name])) else "عميل"
-                            target_data['cv'] = str(row[c_cv]).strip() if (c_cv and pd.notna(row[c_cv])) else ""
-                            new_targets.append(target_data)
-                            seen_in_current_file.add(phone)
-                
-                if dups_count > 0: st.toast(lbl['dups_removed'].format(dups_count), icon="✂️")
-                if new_targets:
-                    st.session_state.wa_review_targets = new_targets
-                    st.session_state.wa_done = False
-                    st.rerun()
+                        for idx, row in df_curr.iterrows():
+                            raw_p = str(row[c_phone]).strip() if c_phone else ""
+                            phone = format_phone_number(raw_p)
+                            if not phone: phone = format_phone_number("".join(raw_p.split()))
+                            
+                            if phone:
+                                if phone in seen_in_current_file: dups_count += 1; continue
+                                target_data = {str(col): str(row[col]).strip() if pd.notna(row[col]) else "" for col in df_curr.columns}
+                                target_data.update({'idx': idx, 'phone': phone, 'is_sent': (phone in st.session_state.wa_history)})
+                                target_data['name'] = str(row[c_name]).strip() if (c_name and pd.notna(row[c_name])) else "عميل"
+                                target_data['cv'] = str(row[c_cv]).strip() if (c_cv and pd.notna(row[c_cv])) else ""
+                                new_targets.append(target_data)
+                                seen_in_current_file.add(phone)
+                    
+                    if dups_count > 0: st.toast(lbl['dups_removed'].format(dups_count), icon="✂️")
+                    if new_targets:
+                        st.session_state.wa_review_targets = new_targets
+                        st.session_state.wa_done = False
+                        st.rerun()
             
         # Consolidate Pending Targets for the rest of the application
-        # Only recalculate if not currently running to avoid state issues
-        if not st.session_state.wa_running:
-            final_targets = [trg for trg in st.session_state.wa_review_targets if not trg['is_sent']]
-        else:
-            # Use active targets during sending to maintain consistency
-            final_targets = st.session_state.get('wa_active_targets', [])
+        final_targets = [trg for trg in st.session_state.wa_review_targets if not trg['is_sent']]
 
-        
+
         # LTR for English messages
         st.markdown("""
         <style>
@@ -891,6 +2799,77 @@ HR Manager"""
         if not st.session_state.wa_messages[0]:
             st.session_state.wa_messages[0] = default_msg
         
+        # --- ⚙️ Smart Templates Components Editor (before preview so live edits apply) ---
+        # NOTE: expanded=False دائماً — لا تفتح تلقائياً عند تفعيل الرسائل الذكية
+        # أو عند الضغط على Enter في حقل اسم الوظيفة، فقط بالفتح اليدوي.
+        with st.expander("🛠️ " + ("تعديل مكونات الرسائل الذكية" if is_ar else "Edit Smart Message Components"), expanded=False):
+            templates_data_smart = load_templates()
+            smart_parts = {k: list(v) for k, v in templates_data_smart.get("smart", SMART_TEMPLATES).items()}
+            original_smart_parts = {k: list(v) for k, v in smart_parts.items()}
+
+            st.caption("💡 " + (
+                "افصل بين الخيارات بسطر يحتوي --- حتى تبقى النصوص متعددة الأسطر خياراً واحداً."
+                if is_ar else
+                "Separate options with a line containing --- so multi-line texts stay as one option."
+            ))
+
+            for part_key, part_list in smart_parts.items():
+                st.markdown(f"**{part_key.replace('_', ' ').title()}**")
+                new_list_str = st.text_area(
+                    f"Options for {part_key}",
+                    value=_join_smart_part_list(part_list),
+                    height=120,
+                    key=f"smart_comp_{part_key}",
+                )
+                smart_parts[part_key] = _split_smart_part_text(new_list_str, key=part_key)
+
+            st.session_state.smart_parts_live = smart_parts
+            has_changes = any(original_smart_parts.get(k) != smart_parts.get(k) for k in original_smart_parts)
+
+            btn_save_col, btn_preview_col = st.columns(2)
+            with btn_save_col:
+                if st.button(
+                    "💾 " + ("حفظ التغييرات" if is_ar else "Save Changes"),
+                    type="primary",
+                    key="save_smart_parts",
+                    width="stretch",
+                ):
+                    _save_smart_parts_from_editor()
+                    _st = st.session_state.get("smart_save_status", {}) or {}
+                    if _st.get("ok"):
+                        st.toast("✅ " + ("تم حفظ التغييرات وتحديث المعاينة بنجاح!" if is_ar else "Changes saved and preview updated!"))
+                        st.rerun()
+                    else:
+                        _err = _st.get("error") or ("تعذر الكتابة" if is_ar else "write failed")
+                        st.error("❌ " + ("فشل الحفظ" if is_ar else "Save failed") + f": {_err}")
+
+            with btn_preview_col:
+                if st.button(
+                    "👁️ " + ("معاينة الرسالة كما ستظهر" if is_ar else "Preview Message As It Will Appear"),
+                    key="preview_smart_parts",
+                    width="stretch",
+                ):
+                    # Popup preview (dialog) without saving: disappears on close
+                    try:
+                        _live = _read_smart_parts_from_widgets(templates_data_smart.get("smart"))
+                    except Exception:
+                        _live = smart_parts
+                    st.session_state.smart_parts_live = _live
+                    _sample = generate_smart_message(
+                        "Ahmed",
+                        "",
+                        custom_job=st.session_state.get("wa_custom_job_val", ""),
+                        templates=_live,
+                        stable=False,
+                    )
+                    st.session_state.smart_preview_dialog_msg = _sample
+                    _smart_preview_dialog()
+
+            if has_changes:
+                st.info("📝 " + ("هناك تغييرات غير محفوظة — اضغط حفظ التغييرات" if is_ar else "Unsaved changes — press Save Changes"))
+            else:
+                st.success("✅ " + ("جميع التغييرات محفوظة" if is_ar else "All changes saved"))
+
         # --- ⌨️ Message Input Logic ---
         if not is_smart:
             for i in range(len(st.session_state.wa_messages)):
@@ -911,10 +2890,58 @@ HR Manager"""
                 st.session_state.wa_messages.append(new_smart_msg)
                 st.rerun()
         else:
-            # Preview of Smart Message
             st.info("💡 " + ("سيتم توليد رسالة فريدة لكل رقم تلقائياً عند بدء الإرسال." if is_ar else "A unique message will be generated for each number upon sending."))
-            preview_msg = generate_smart_message("{Name}", "{CV}", custom_job=st.session_state.get('wa_custom_job_val', ''))
-            st.text_area("معاينة الرسالة الذكية (Smart Message Preview)", value=preview_msg, height=250, disabled=True)
+
+            live_templates = get_live_smart_templates()
+            use_random_preview = bool(st.session_state.pop("smart_preview_randomize", False))
+            # Realistic preview text (first option after edits, sample name Ahmed)
+            sample_name = st.session_state.get("smart_preview_sample_name", "Ahmed") or "Ahmed"
+            preview_msg = generate_smart_message(
+                sample_name,
+                "",
+                custom_job=st.session_state.get("wa_custom_job_val", ""),
+                templates=live_templates,
+                stable=not use_random_preview,
+            )
+
+            # Streamlit ignores `value` on a keyed widget after first render; remount when content changes.
+            preview_token = abs(hash(preview_msg + str(st.session_state.get("smart_preview_nonce", 0))))
+            for stale_key in [k for k in st.session_state.keys() if str(k).startswith("smart_preview_area")]:
+                if stale_key != f"smart_preview_area_{preview_token}":
+                    try:
+                        del st.session_state[stale_key]
+                    except Exception:
+                        pass
+
+            preview_col1, preview_col2 = st.columns([4, 1])
+            with preview_col1:
+                st.text_area(
+                    "معاينة الرسالة الذكية (Smart Message Preview)",
+                    value=preview_msg,
+                    height=200,
+                    disabled=True,
+                    key=f"smart_preview_area_{preview_token}",
+                )
+                st.caption("🔎 " + (
+                    "النص أعلاه للقراءة السريعة. اضغط معاينة لفتح شاشة منبثقة بشكل واتساب تختفي عند الإغلاق."
+                    if is_ar else
+                    "Text above is for quick reading. Press Preview to open a popup WhatsApp view that disappears on close."
+                ))
+            with preview_col2:
+                if st.button("🔄 " + ("تحديث النص" if is_ar else "Refresh text"), key="refresh_preview"):
+                    st.session_state.smart_preview_randomize = True
+                    st.session_state.smart_preview_nonce = st.session_state.get("smart_preview_nonce", 0) + 1
+                    st.rerun()
+                if st.button("👁️ " + ("معاينة منبثقة" if is_ar else "Popup preview"), key="refresh_preview_bubble"):
+                    _sample = generate_smart_message(
+                        "Ahmed",
+                        "",
+                        custom_job=st.session_state.get("wa_custom_job_val", ""),
+                        templates=get_live_smart_templates(),
+                        stable=False,
+                    )
+                    st.session_state.smart_preview_dialog_msg = _sample
+                    _smart_preview_dialog()
             
         # --- 📁 Templates Library Logic (Self-contained at start to avoid state conflicts) ---
         templates_data = load_templates()
@@ -996,25 +3023,6 @@ HR Manager"""
                     m_col2.button(lbl['wa_delete_template'], key=f"del_tpl_{t_name}", on_click=delete_tpl)
             st.info(lbl['wa_placeholders_guide'])
 
-        # --- ⚙️ Smart Templates Components Editor ---
-        with st.expander("🛠️ " + ("تعديل مكونات الرسائل الذكية" if is_ar else "Edit Smart Message Components")):
-            templates_data = load_templates()
-            smart_parts = templates_data.get("smart", SMART_TEMPLATES)
-            changed_parts = False
-            for part_key, part_list in smart_parts.items():
-                st.markdown(f"**{part_key.replace('_', ' ').title()}**")
-                new_list_str = st.text_area(f"Options for {part_key}", value="\n".join(part_list), height=100, key=f"smart_part_{part_key}")
-                new_list = [line.strip() for line in new_list_str.split("\n") if line.strip()]
-                if new_list != part_list:
-                    smart_parts[part_key] = new_list
-                    changed_parts = True
-            if changed_parts:
-                if st.button("💾 " + ("حفظ جميع التغييرات" if is_ar else "Save All Changes"), key="save_smart_parts"):
-                    templates_data["smart"] = smart_parts
-                    save_templates(templates_data)
-                    st.toast("✅ Smart components updated!")
-                    st.rerun()
-        
         # Attachment
         attachment = st.file_uploader(lbl['attach'], 
                                       type=["png","jpg","jpeg","gif","bmp","webp",
@@ -1026,16 +3034,23 @@ HR Manager"""
             st.success(lbl['attached'].format(attachment.name, round(attachment.size/1024, 1)))
         
         st.markdown(lbl['settings_title'])
-        col_s1, col_s2, col_s3, col_s4 = st.columns(4)
+        col_s1, col_s2, col_s3, col_s4, col_s5 = st.columns(5)
         with col_s1:
-            delay = st.number_input(lbl['delay'], min_value=5, max_value=600, value=60, disabled=st.session_state.wa_running)
+            min_delay = st.number_input("أدنى مهلة (ثانية)" if is_ar else "Min Delay (s)", min_value=30, max_value=300, value=60, disabled=st.session_state.wa_running,
+                                        help=("🛡️ أدنى وقت انتظار عشوائي بين الرسائل (الافتراضي 60 ثانية)" if is_ar else "🛡️ Minimum random delay (default 60s)"))
         with col_s2:
-            batch_size = st.number_input(lbl['batch_size'], min_value=0, max_value=1000, value=10, help=lbl['batch_help'], disabled=st.session_state.wa_running)
+            max_delay = st.number_input("أقصى مهلة (ثانية)" if is_ar else "Max Delay (s)", min_value=30, max_value=600, value=120, disabled=st.session_state.wa_running,
+                                        help=("🛡️ أقصى وقت انتظار عشوائي بين الرسائل (الافتراضي 120 ثانية)" if is_ar else "🛡️ Maximum random delay (default 120s)"))
         with col_s3:
-            batch_delay_mins = st.number_input(lbl['batch_delay'], min_value=1, max_value=60, value=10, disabled=st.session_state.wa_running)
-            batch_delay = int(batch_delay_mins * 60)
+            # 🛡️ min_value = 5 على الأقل — ممنوع الصفر (كان يسمح بإلغاء الاستراحة تماماً)
+            batch_size = st.number_input(lbl['batch_size'], min_value=5, max_value=100, value=10, help=lbl['batch_help'], disabled=st.session_state.wa_running)
         with col_s4:
-            msg_switch_threshold = st.number_input("تبديل الرسالة بعد" if is_ar else "Switch msg after", min_value=1, max_value=1000, value=1, disabled=st.session_state.wa_running)
+            # 🛡️ min 3 دقائق بدل 1 (يوصى 10 دقائق فما فوق)
+            batch_delay_mins = st.number_input(lbl['batch_delay'], min_value=3, max_value=60, value=10, disabled=st.session_state.wa_running,
+                                               help=("🛡️ 3 دقائق على الأقل بين الدفعات (يوصى 10+)" if is_ar else "🛡️ Min 3 min between batches (recommended 10+)"))
+            batch_delay = int(batch_delay_mins * 60)
+        with col_s5:
+            msg_switch_threshold = st.number_input("تبديل الرسالة بعد" if is_ar else "Switch msg after", min_value=1, max_value=50, value=2, disabled=st.session_state.wa_running)
 
         # Smart detect target changes
         current_fp = ",".join([trg['phone'] for trg in final_targets]) if final_targets else ""
@@ -1043,154 +3058,300 @@ HR Manager"""
             st.session_state.wa_done = False
 
         # ══════════════════════════════════════════════════════════
-        # 🚀 وضع الإرسال الخلفي - يعمل حتى بعد إغلاق المتصفح
+        # 🚀 أزرار الإرسال / الإيقاف
         # ══════════════════════════════════════════════════════════
-        worker_state = mgr.get_state()
-        worker_status = worker_state.get("status", "not_started")
-        worker_alive  = mgr.is_worker_alive()
-        is_sending    = worker_alive and worker_status == "sending"
-
-        # تحديث سجلات الإرسال من العامل الخلفي
-        bg_logs = mgr.get_logs()
-        if bg_logs:
-            # دمج السجلات الجديدة فقط
-            existing_phones_times = {(e.get('phone',''), e.get('time','')) for e in st.session_state.wa_logs if isinstance(e, dict)}
-            for entry in bg_logs:
-                key = (entry.get('phone',''), entry.get('time',''))
-                if key not in existing_phones_times:
-                    st.session_state.wa_logs.append(entry)
-                    existing_phones_times.add(key)
-
-        # ─── أزرار الإرسال / الإيقاف ───
         btn1, btn2, btn3 = st.columns([1, 1, 2])
         with btn1:
-            if is_sending:
-                if st.button(lbl['stop'], type="primary", width='stretch', key="bg_stop_btn"):
-                    mgr.stop_worker()
+            if st.session_state.get('wa_running', False):
+                if st.button(lbl['stop'], type="primary", width='stretch', key="wa_stop_btn"):
                     st.session_state.wa_running = False
+                    # تنظيف المسارات المؤقتة غير المحفوظة في قاعدة العمال
+                    _wdb_saved = set(st.session_state.get('wa_worker_db_attachments', []) or [])
+                    for _p in [st.session_state.get('wa_temp_path')] + list(st.session_state.get('wa_temp_paths', []) or []):
+                        if _p and _p not in _wdb_saved and os.path.exists(_p):
+                            try: os.remove(_p)
+                            except: pass
+                    st.session_state.wa_temp_path = None
+                    st.session_state.wa_temp_paths = []
                     st.toast("🛑 " + ("تم إيقاف الإرسال" if is_ar else "Sending stopped"))
                     st.rerun()
             else:
-                has_valid_msg = any(msg.strip() != "" for msg in st.session_state.wa_messages)
+                has_valid_msg = any(msg.strip() != "" for msg in st.session_state.wa_messages) or st.session_state.get('wa_smart_mode', False)
                 ready = len(final_targets) > 0 and has_valid_msg
 
-                if worker_status == "done" and current_fp == st.session_state.get('wa_sent_fingerprint', ''):
+                if st.session_state.get('wa_done', False) and current_fp == st.session_state.get('wa_sent_fingerprint', ''):
                     st.button(lbl['sent_done'], disabled=True, width='stretch')
                 else:
-                    if st.button(lbl['send'].format(len(final_targets)), disabled=not ready, width='stretch', type="primary", key="bg_send_btn"):
-                        # ── حفظ المرفق في ملف مؤقت ──
-                        temp_path = None
-                        if attachment:
-                            import tempfile
-                            suffix = os.path.splitext(attachment.name)[1]
-                            t_file = tempfile.NamedTemporaryFile(delete=False, suffix=suffix,
-                                                                 dir=os.path.join(os.getcwd(), ".whatsapp_session"))
-                            t_file.write(attachment.getvalue())
-                            t_file.close()
-                            temp_path = t_file.name
-                            st.session_state.wa_temp_path = temp_path
+                    if st.button(lbl['send'].format(len(final_targets)), disabled=not ready, width='stretch', type="primary", key="wa_send_btn"):
+                        # Check WhatsApp connection
+                        wa_stat = st.session_state.wa_service.get_status() if st.session_state.wa_service else "Stopped"
+                        if wa_stat != "Connected":
+                            st.error("⚠️ " + ("يرجى تشغيل محرك واتساب ومسح الباركود أولاً للاتصال" if is_ar else "Please start WhatsApp engine and scan QR first to connect"))
+                        else:
+                            # تحديد المرفقات: أولوية لمرفقات بحث قاعدة العمال إذا كان الإرسال منها
+                            wdb_attachments = st.session_state.get('wa_worker_db_attachments', []) or []
+                            is_from_wdb = st.session_state.get('wa_from_worker_db', False) or any(t.get('source') == 'worker_db' for t in final_targets)
 
-                        # ── تشغيل العامل الخلفي ──
-                        mgr.start_worker()
-                        time.sleep(1.5)
+                            temp_paths = []
+                            attachment_info = ""
+                            if is_from_wdb and wdb_attachments:
+                                # استخدام مرفقات بحث العمال مباشرة (محفوظة كمسارات ملفات)
+                                temp_paths = [p for p in wdb_attachments if p and os.path.exists(p)]
+                                st.session_state.wa_temp_paths = temp_paths
+                                st.session_state.wa_temp_path = None
+                                # استخراج تفاصيل الأنواع لتأكيد الإرسال
+                                _cnt_img = sum(1 for _tp in temp_paths if os.path.splitext(_tp)[1].lower() in ['.png', '.jpg', '.jpeg', '.webp', '.gif', '.bmp'])
+                                _cnt_vid = sum(1 for _tp in temp_paths if os.path.splitext(_tp)[1].lower() in ['.mp4', '.mov', '.avi', '.mkv', '.3gp', '.webm'])
+                                _cnt_aud = sum(1 for _tp in temp_paths if os.path.splitext(_tp)[1].lower() in ['.mp3', '.wav', '.m4a', '.ogg', '.aac'])
+                                _cnt_doc = sum(1 for _tp in temp_paths if os.path.splitext(_tp)[1].lower() in ['.pdf', '.doc', '.docx', '.txt', '.xls', '.xlsx', '.csv'])
+                                _parts = []
+                                if _cnt_img: _parts.append(f"{_cnt_img} صور" if is_ar else f"{_cnt_img} image(s)")
+                                if _cnt_vid: _parts.append(f"{_cnt_vid} فيديو" if is_ar else f"{_cnt_vid} video(s)")
+                                if _cnt_aud: _parts.append(f"{_cnt_aud} صوت" if is_ar else f"{_cnt_aud} audio")
+                                if _cnt_doc: _parts.append(f"{_cnt_doc} PDF/مستند" if is_ar else f"{_cnt_doc} doc(s)")
+                                _types_desc = f" ({' · '.join(_parts)})" if _parts else ""
+                                attachment_info = f"📎 {'تم تجهيز' if is_ar else 'Loaded'} {len(temp_paths)} {'مرفق' if is_ar else 'attachment(s)'}{_types_desc}"
+                                print(f"[{time.strftime('%H:%M:%S')}] 📎 WDB_ATTACHMENTS: Found {len(temp_paths)} valid attachment paths for worker DB send: {_types_desc}")
+                            elif attachment:
+                                import tempfile
+                                suffix = os.path.splitext(attachment.name)[1]
+                                base_no_dot = os.path.join(os.getcwd(), "whatsapp_session")
+                                base_with_dot = os.path.join(os.getcwd(), ".whatsapp_session")
+                                temp_dir = base_no_dot if os.path.exists(base_no_dot) else (base_with_dot if os.path.exists(base_with_dot) else base_no_dot)
+                                os.makedirs(temp_dir, exist_ok=True)
+                                try:
+                                    t_file = tempfile.NamedTemporaryFile(delete=False, suffix=suffix, dir=temp_dir)
+                                    t_file.write(attachment.getvalue())
+                                    t_file.close()
+                                    temp_paths = [t_file.name]
+                                    st.session_state.wa_temp_paths = temp_paths
+                                    st.session_state.wa_temp_path = t_file.name
+                                    attachment_info = f"📎 {'مع' if is_ar else 'With'} 1 {'مرفق' if is_ar else 'attachment'}"
+                                    print(f"[{time.strftime('%H:%M:%S')}] 📎 SINGLE_ATTACHMENT: Saved {t_file.name}")
+                                except Exception as att_err:
+                                    st.error(f"❌ {'فشل حفظ الملف المرفق: ' if is_ar else 'Failed to save attachment: '}{str(att_err)}")
+                                    temp_paths = []
+                                    st.session_state.wa_temp_paths = []
+                                    st.session_state.wa_temp_path = None
+                            else:
+                                # 🛡️ تنظيف المسارات القديمة إذا لم يوجد مرفق
+                                st.session_state.wa_temp_path = None
+                                st.session_state.wa_temp_paths = []
 
-                        # ── أرسل الوظيفة ──
-                        job_id = mgr.send_job(
-                            targets            = final_targets,
-                            messages           = st.session_state.wa_messages,
-                            delay              = delay,
-                            batch_size         = int(batch_size),
-                            batch_delay        = int(batch_delay),
-                            is_smart           = bool(st.session_state.get('wa_smart_mode', False)),
-                            custom_job         = st.session_state.get('wa_custom_job_val', ''),
-                            attachment_path    = temp_path,
-                            msg_switch_threshold = int(msg_switch_threshold),
-                            start_from         = 0
-                        )
-                        st.session_state.wa_running = True
-                        st.session_state.wa_done = False
-                        st.session_state.wa_sent_fingerprint = current_fp
-                        st.session_state.wa_active_job_id = job_id
-                        st.toast("🚀 " + ("بدأ الإرسال في الخلفية! يمكنك إغلاق المتصفح" if is_ar else "Sending started in background! You can close the browser"), icon="✅")
-                        st.rerun()
+                            # عرض رسالة تأكيد للمستخدم قبل بدء الإرسال
+                            if attachment_info:
+                                st.info(attachment_info + " " + ("سوف تُرسل مع كل رسالة" if is_ar else "will be sent with each message"))
 
-        # ─── بطاقة الحالة الخلفية ───
-        if is_sending or worker_status in ("starting", "awaiting_login"):
-            w_idx   = worker_state.get("current_idx", 0)
-            w_total = worker_state.get("total", len(final_targets))
-            w_name  = worker_state.get("current_name", "")
-            w_phone = worker_state.get("current_phone", "")
-            countdown = worker_state.get("countdown", 0)
-            countdown_type = worker_state.get("countdown_type", "normal")
+                            st.session_state.wa_running = True
+                            st.session_state.wa_idx = 0
+                            st.session_state.wa_done = False
+                            st.session_state.wa_sent_fingerprint = current_fp
+                            st.rerun()
 
-            countdown_icons = {
-                "batch_break": "🛡️", "think_break": "🧠",
-                "stealth_break": "🥷", "normal": "⏳"
-            }
-            c_icon = countdown_icons.get(countdown_type, "⏳")
 
-            if countdown > 0:
-                m, s = divmod(countdown, 60)
-                time_str = f"{m}د {s}ث" if is_ar else f"{m}m {s}s"
-                countdown_label = f"{c_icon} {'الانتظار بين الرسائل' if is_ar else 'Waiting'}: {time_str}"
-            else:
-                countdown_label = f"📤 {'جاري الإرسال' if is_ar else 'Sending'}..."
-
-            sent_pct = (w_idx / w_total * 100) if w_total > 0 else 0
-
-            st.markdown(f"""
-            <div style="background:rgba(0,255,100,0.05);padding:16px;border-radius:14px;border:1.5px solid rgba(0,255,100,0.25);margin-bottom:12px;">
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-                    <span style="color:#00FF88;font-weight:700;font-size:1.05rem;">✅ {'تم الإرسال' if is_ar else 'Sent'}: {w_idx}</span>
-                    <span style="color:#D4AF37;font-weight:700;font-size:1.05rem;">⌛ {'متبقٍ' if is_ar else 'Remaining'}: {w_total - w_idx}</span>
-                </div>
-                <div style="background:rgba(255,255,255,0.06);border-radius:8px;height:8px;margin-bottom:10px;overflow:hidden;">
-                    <div style="background:linear-gradient(90deg,#00FF88,#D4AF37);height:100%;width:{sent_pct:.1f}%;transition:width 0.5s;"></div>
-                </div>
-                <div style="color:#aaa;font-size:0.85rem;display:flex;justify-content:space-between;">
-                    <span>👤 {w_name} · 📱 {w_phone}</span>
-                    <span>{countdown_label}</span>
-                </div>
-            </div>
-            <div style="background:rgba(0,180,255,0.08);padding:10px 16px;border-radius:10px;border:1px solid rgba(0,180,255,0.2);text-align:center;margin-bottom:8px;">
-                <span style="color:#00AAFF;font-weight:600;font-size:0.9rem;">
-                    🟢 {'الإرسال يعمل في الخلفية — يمكنك إغلاق هذا التبويب بأمان' if is_ar else 'Sending runs in background — safe to close this tab'}
-                </span>
-            </div>
-            """, unsafe_allow_html=True)
-
-            st.progress(min(1.0, sent_pct / 100))
-
-            # تحديث تلقائي كل 5 ثوان لعرض التقدم
-            st.markdown("""
-            <script>
-            (function(){
-                if(!window.__wa_bg_refresh){
-                    window.__wa_bg_refresh = setInterval(function(){
-                        if(document.hasFocus() || true){
-                            // Trigger a lightweight Streamlit rerun via clicking a hidden element
-                            var btns = window.parent.document.querySelectorAll('button[data-testid="baseButton-secondary"]');
-                        }
-                    }, 5000);
-                }
-            })();
-            </script>
-            """, unsafe_allow_html=True)
-
-            time.sleep(4)
-            st.rerun()
-
-        elif worker_status == "done" and worker_alive:
-            st.success("🎉 " + ("اكتمل الإرسال بنجاح!" if is_ar else "Sending completed successfully!"))
-            st.balloons()
+        # ══════════════════════════════════════════════════════════
+        # 🚀 حلقة الإرسال والعداد التنازلي المباشر (Live Sending Loop & Countdown)
+        # ══════════════════════════════════════════════════════════
+        # 🛡️ إذا كان wa_running لكن لا توجد أهداف — أوقف الحلقة بأمان
+        if st.session_state.get('wa_running', False) and not final_targets:
             st.session_state.wa_running = False
             st.session_state.wa_done = True
+            st.warning("⚠️ " + ("لا توجد أرقام جاهزة للإرسال. ربما تم إرسالها جميعاً." if is_ar else "No numbers ready to send. They may have all been sent already."))
+        elif st.session_state.get('wa_running', False) and final_targets:
+            total_targets = len(final_targets)
+            curr_i = st.session_state.get('wa_idx', 0)
 
-        elif worker_status == "error":
-            st.error("❌ " + worker_state.get("error", "خطأ في الإرسال"))
+            if curr_i < total_targets:
+                trg = final_targets[curr_i]
+                p = trg.get('phone', '')
+                n = trg.get('name', 'Client')
+                v = trg.get('cv', '')
 
-        elif worker_status == "awaiting_login":
-            st.warning("📱 " + ("يرجى مسح رمز QR من واتساب ثم الضغط تحقق" if is_ar else "Please scan QR code from WhatsApp then click Verify"))
+                # 1. Progress Bar & Live Status Card
+                sent_pct = (curr_i / total_targets * 100) if total_targets > 0 else 0
+                st.progress(min(1.0, (curr_i + 1) / total_targets))
+
+                temp_paths = st.session_state.get('wa_temp_paths', []) or []
+                att_badge_html = ""
+                att_log_tag = ""
+                if temp_paths:
+                    _cnt_img = sum(1 for _tp in temp_paths if os.path.splitext(_tp)[1].lower() in ['.png', '.jpg', '.jpeg', '.webp', '.gif', '.bmp'])
+                    _cnt_vid = sum(1 for _tp in temp_paths if os.path.splitext(_tp)[1].lower() in ['.mp4', '.mov', '.avi', '.mkv', '.3gp', '.webm'])
+                    _cnt_aud = sum(1 for _tp in temp_paths if os.path.splitext(_tp)[1].lower() in ['.mp3', '.wav', '.m4a', '.ogg', '.aac'])
+                    _cnt_doc = sum(1 for _tp in temp_paths if os.path.splitext(_tp)[1].lower() in ['.pdf', '.doc', '.docx', '.txt', '.xls', '.xlsx', '.csv'])
+                    _parts = []
+                    if _cnt_img: _parts.append(f"🖼️ {_cnt_img} صور")
+                    if _cnt_vid: _parts.append(f"🎬 {_cnt_vid} فيديو")
+                    if _cnt_aud: _parts.append(f"🎵 {_cnt_aud} صوت")
+                    if _cnt_doc: _parts.append(f"📄 {_cnt_doc} PDF/مستند")
+                    _types_str = " · ".join(_parts) if _parts else f"{len(temp_paths)} ملفات"
+                    att_badge_html = f"""
+                    <div style="margin-top: 8px; padding: 6px 12px; background: rgba(0, 229, 255, 0.08); border: 1px solid rgba(0, 229, 255, 0.35); border-radius: 8px; color: #00E5FF; font-size: 0.88rem; font-weight: 600;">
+                        📎 {'تم إرفاق ورفع المرفقات مع الرسالة بنجاح' if is_ar else 'Attachments attached with message'}: ({_types_str})
+                    </div>
+                    """
+                    att_log_tag = f" [📎 مرفق معها: {_types_str}]"
+
+                st.markdown(f"""
+                <div style="background: rgba(0, 255, 100, 0.05); padding: 16px 20px; border-radius: 14px; border: 1.5px solid rgba(0, 255, 100, 0.3); margin: 12px 0; box-shadow: 0 0 15px rgba(0, 255, 100, 0.1);">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                        <span style="color: #00FF88; font-weight: 700; font-size: 1.05rem;">📤 {'جاري إرسال الرسالة' if is_ar else 'Sending Message'}: {curr_i + 1} / {total_targets}</span>
+                        <span style="color: #D4AF37; font-weight: 700; font-size: 1.05rem;">⌛ {'متبقٍ' if is_ar else 'Remaining'}: {total_targets - (curr_i + 1)}</span>
+                    </div>
+                    <div style="color: #FFFFFF; font-size: 0.95rem;">
+                        👤 <strong>{n}</strong> · 📱 <span style="font-family: monospace; color: #00FF88;">{p}</span>
+                    </div>
+                    {att_badge_html}
+                </div>
+                """, unsafe_allow_html=True)
+
+                # 2. Message Generation
+                if st.session_state.get('wa_smart_mode', False):
+                    final_msg = generate_smart_message(
+                        n,
+                        v,
+                        custom_job=st.session_state.get('wa_custom_job_val', ''),
+                        templates=get_live_smart_templates(),
+                    )
+                else:
+                    msg_idx = (curr_i // max(1, int(msg_switch_threshold))) % len(st.session_state.wa_messages)
+                    msg_template = st.session_state.wa_messages[msg_idx]
+                    
+                    final_msg = msg_template
+                    for k, val_k in trg.items():
+                        final_msg = final_msg.replace("{" + str(k) + "}", str(val_k))
+                    final_msg = final_msg.replace("{Name}", n).replace("{name}", n).replace("{الاسم}", n)
+                    final_msg = final_msg.replace("{CV}", v).replace("{cv}", v).replace("{السيرة}", v)
+                    final_msg = re.sub(r'\n{3,}', '\n\n', final_msg).strip()
+
+                # إزالة سطر HR Manager المكرر في الأعلى إن كان التوقيع نفسه
+                # موجوداً بالأسفل (تكرار واضح) — مع الحفاظ على باقي المتن
+                _sig_tail_re = r'(?:Best regards|Kind regards|Warm regards|Sincerely|With respect),?\nAbu Fahd\nHR Manager\s*$'
+                if re.search(r'^HR Manager\s*(\n|$)', final_msg) and re.search(_sig_tail_re, final_msg):
+                    final_msg = re.sub(r'^HR Manager\s*\n+', '', final_msg, count=1)
+
+                # إضافة التوقيع الإنجليزي + إصلاح الاتجاه (LRM) حتى لا يلتصق الطابع الزمني بـ HR Manager
+                if "HR Manager" not in final_msg:
+                    final_msg = final_msg.rstrip() + "\n\nBest regards,\nAbu Fahd\nHR Manager"
+                try:
+                    final_msg = _fix_whatsapp_direction(final_msg)
+                except Exception:
+                    pass
+
+                # 3. Send Message via WhatsApp Service
+                # التحقق من حالة الخدمة قبل الإرسال
+                if not st.session_state.wa_service or not getattr(st.session_state.wa_service, 'driver', None):
+                    ok = False
+                    log_msg = "محرك واتساب غير متصل (يرجى تشغيل المحرك أولاً)"
+                    st.error("❌ محرك واتساب غير متصل! يرجى الضغط على 'Start Engine' أولاً")
+                else:
+                    try:
+                        with st.spinner(f"🚀 {'جاري إرسال الرسالة والمرفقات إلى' if temp_paths else 'جاري إرسال الرسالة إلى'} {n} ({p})..."):
+                            ok, log_msg = st.session_state.wa_service.send_message(p, final_msg, attachment_path=temp_paths)
+                    except Exception as send_err:
+                        ok = False
+                        log_msg = f"خطأ في الإرسال: {str(send_err)}"
+                        print(f"[{time.strftime('%H:%M:%S')}] ❌ SEND_EXCEPTION for {p}: {send_err}")
+
+                # 4. Record Log
+                entry = {
+                    "idx": curr_i + 1,
+                    "name": n,
+                    "phone": p,
+                    "status": (log_msg + att_log_tag) if ok else f"فشل ({log_msg})",
+                    "ok": ok,
+                    "time": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                }
+                st.session_state.wa_logs.append(entry)
+                if ok:
+                    st.session_state.wa_history.add(p)
+                    save_wa_history(st.session_state.wa_history)
+                    for r_i, r_trg in enumerate(st.session_state.wa_review_targets):
+                        if r_trg.get('phone') == p:
+                            st.session_state.wa_review_targets[r_i]['is_sent'] = True
+                            break
+
+                # 🛡️ إيقاف فوري للحملة إذا تم إرجاع تنبيه أمان لمنع حظر الحساب وحفظ باقي الأرقام
+                if not ok and str(log_msg).startswith("🛑"):
+                    st.session_state.wa_running = False
+                    st.error(f"🛑 تم إيقاف الحملة لحماية الحساب من الحظر: {log_msg}")
+                    st.toast("🛑 تم إيقاف الحملة لحماية الحساب", icon="⚠️")
+                else:
+                    # 5. Move to next index
+                    st.session_state.wa_idx += 1
+
+                    # 6. Check if completed
+                    if st.session_state.wa_idx >= total_targets:
+                        st.session_state.wa_running = False
+                        st.session_state.wa_done = True
+                        # تنظيف جميع المسارات المؤقتة عدا المرفقات المحفوظة لقاعدة العمال
+                        _wdb_saved = set(st.session_state.get('wa_worker_db_attachments', []) or [])
+                        for _p in list(st.session_state.get('wa_temp_paths', []) or []):
+                            if _p and _p not in _wdb_saved and os.path.exists(_p):
+                                try: os.remove(_p)
+                                except: pass
+                        st.session_state.wa_temp_path = None
+                        st.session_state.wa_temp_paths = []
+                        st.balloons()
+                        st.success("🎉 " + ("اكتمل إرسال جميع الرسائل بنجاح!" if is_ar else "All messages sent successfully!"))
+                        time.sleep(1)
+                        st.rerun()
+
+                    else:
+                        # 7. ⏱️ LIVE DYNAMIC RANDOM COUNTDOWN TIMER (60s - 120s unique per message)
+                        is_batch_break = (batch_size > 0 and st.session_state.wa_idx % batch_size == 0)
+                        if is_batch_break:
+                            wait_seconds = batch_delay
+                        else:
+                            low_d = min(int(min_delay), int(max_delay))
+                            high_d = max(int(min_delay), int(max_delay))
+                            wait_seconds = random.randint(low_d, high_d)
+                        
+                        next_target = final_targets[st.session_state.wa_idx]
+                        next_n = next_target.get('name', 'Client')
+                        next_p = next_target.get('phone', '')
+
+                        c_title = "🛡️ استراحة دفعات بين الرسائل (حماية من الحظر)" if is_batch_break else f"⏳ انتظار عشوائي بين الرسائل ({wait_seconds} ثانية)"
+                        if not is_ar:
+                            c_title = "🛡️ Batch Break (Anti-Ban Protection)" if is_batch_break else f"⏳ Random Delay Between Messages ({wait_seconds}s)"
+                        c_icon = "🛡️" if is_batch_break else "🎲"
+                        c_border = "rgba(0, 229, 255, 0.4)" if is_batch_break else "rgba(0, 255, 136, 0.4)"
+                        c_bg = "rgba(0, 229, 255, 0.06)" if is_batch_break else "rgba(0, 255, 136, 0.06)"
+                        c_text = "#00E5FF" if is_batch_break else "#00FF88"
+
+                        countdown_ph = st.empty()
+                        for remaining in range(wait_seconds, 0, -1):
+                            if not st.session_state.get('wa_running', False):
+                                break
+                            m, s = divmod(remaining, 60)
+                            if m > 0:
+                                time_display = f"{m:02d}:{s:02d} دقيقة" if is_ar else f"{m:02d}:{s:02d} min"
+                            else:
+                                time_display = f"{s} ثانية" if is_ar else f"{s} sec"
+
+                            countdown_ph.markdown(f"""
+                            <div style="background: {c_bg}; border: 1.5px solid {c_border}; border-radius: 16px; padding: 20px; text-align: center; margin: 15px 0; box-shadow: 0 0 25px rgba(0,0,0,0.3);">
+                                <div style="color: {c_text}; font-size: 1.15rem; font-weight: 700; margin-bottom: 8px;">
+                                    {c_icon} {c_title}
+                                </div>
+                                <div style="font-size: 2.6rem; font-weight: 800; color: #FFFFFF; font-family: 'Courier New', monospace; letter-spacing: 2px; text-shadow: 0 0 15px {c_text};">
+                                    {time_display}
+                                </div>
+                                <div style="color: #bbb; font-size: 0.9rem; margin-top: 10px; border-top: 1px solid rgba(255,255,255,0.08); padding-top: 8px;">
+                                    👤 {'الرقم التالي' if is_ar else 'Next'}: <strong>{next_n}</strong> · 📱 <span style="font-family: monospace;">{next_p}</span> · ({st.session_state.wa_idx} / {total_targets})
+                                </div>
+                            </div>
+                            """, unsafe_allow_html=True)
+                            time.sleep(1)
+                        
+                        countdown_ph.empty()
+                        if st.session_state.get('wa_running', False):
+                            st.rerun()
+
+            else:
+                st.session_state.wa_running = False
+                st.session_state.wa_done = True
+                st.rerun()
 
         # 📄 Professional 2026 Log Section
         if st.session_state.wa_logs:

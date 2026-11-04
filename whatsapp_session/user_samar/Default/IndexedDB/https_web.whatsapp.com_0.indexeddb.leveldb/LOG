@@ -1,0 +1,71 @@
+2026/10/17-00:12:21.653 3d70 Reusing MANIFEST C:\app\whatsapp_session\user_samar\Default\IndexedDB\https_web.whatsapp.com_0.indexeddb.leveldb/MANIFEST-000001
+2026/10/17-00:12:21.653 3d70 Recovering log #1013
+2026/10/17-00:12:21.656 3d70 Reusing old log C:\app\whatsapp_session\user_samar\Default\IndexedDB\https_web.whatsapp.com_0.indexeddb.leveldb/001013.log 
+2026/10/17-00:12:23.742 3d70 Compacting 1@1 + 5@2 files
+2026/10/17-00:12:23.803 3d70 Generated table #1028@1: 12929 keys, 2140610 bytes
+2026/10/17-00:12:23.940 3d70 Generated table #1029@1: 61116 keys, 2198642 bytes
+2026/10/17-00:12:24.089 3d70 Generated table #1030@1: 96197 keys, 2245661 bytes
+2026/10/17-00:12:24.184 3d70 Generated table #1031@1: 95168 keys, 2244971 bytes
+2026/10/17-00:12:24.240 3d70 Generated table #1032@1: 43229 keys, 1285548 bytes
+2026/10/17-00:12:24.240 3d70 Compacted 1@1 + 5@2 files => 10115432 bytes
+2026/10/17-00:12:24.241 3d70 compacted to: files[ 0 0 21 0 0 0 0 ]
+2026/10/17-00:12:24.242 3d70 Delete type=2 #1008
+2026/10/17-00:12:24.242 3d70 Delete type=2 #1009
+2026/10/17-00:12:24.242 3d70 Delete type=2 #1010
+2026/10/17-00:12:24.242 3d70 Delete type=2 #1011
+2026/10/17-00:12:24.242 3d70 Delete type=2 #1012
+2026/10/17-00:12:24.242 3d70 Delete type=2 #1016
+2026/10/17-00:17:05.263 3d70 Level-0 table #1034: started
+2026/10/17-00:17:05.298 3d70 Level-0 table #1034: 1218510 bytes OK
+2026/10/17-00:17:05.300 3d70 Delete type=0 #1013
+2026/10/17-00:17:28.625 3d70 Compacting 1@0 + 0@1 files
+2026/10/17-00:17:28.658 3d70 Generated table #1035@0: 27035 keys, 529529 bytes
+2026/10/17-00:17:28.660 3d70 Generated table #1036@0: 72 keys, 7782 bytes
+2026/10/17-00:17:28.660 3d70 Compacted 1@0 + 0@1 files => 537311 bytes
+2026/10/17-00:17:28.661 3d70 compacted to: files[ 0 2 21 0 0 0 0 ]
+2026/10/17-00:17:28.662 3d70 Delete type=2 #1034
+2026/10/17-00:18:05.923 3d70 Compacting 1@1 + 11@2 files
+2026/10/17-00:18:05.987 3d70 Generated table #1037@1: 89311 keys, 2239504 bytes
+2026/10/17-00:18:06.041 3d70 Generated table #1038@1: 80032 keys, 2311704 bytes
+2026/10/17-00:18:06.106 3d70 Generated table #1039@1: 37669 keys, 2192098 bytes
+2026/10/17-00:18:06.145 3d70 Generated table #1040@1: 25660 keys, 2182387 bytes
+2026/10/17-00:18:06.176 3d70 Generated table #1041@1: 2436 keys, 2150586 bytes
+2026/10/17-00:18:06.206 3d70 Generated table #1042@1: 1796 keys, 2138998 bytes
+2026/10/17-00:18:06.236 3d70 Generated table #1043@1: 2411 keys, 2150347 bytes
+2026/10/17-00:18:06.267 3d70 Generated table #1044@1: 2387 keys, 2144860 bytes
+2026/10/17-00:18:06.341 3d70 Generated table #1045@1: 31350 keys, 2247035 bytes
+2026/10/17-00:18:06.387 3d70 Generated table #1046@1: 17090 keys, 1427299 bytes
+2026/10/17-00:18:06.387 3d70 Compacted 1@1 + 11@2 files => 21184818 bytes
+2026/10/17-00:18:06.389 3d70 compacted to: files[ 0 1 20 0 0 0 0 ]
+2026/10/17-00:18:06.389 3d70 Delete type=2 #827
+2026/10/17-00:18:06.389 3d70 Delete type=2 #1017
+2026/10/17-00:18:06.389 3d70 Delete type=2 #1018
+2026/10/17-00:18:06.389 3d70 Delete type=2 #1019
+2026/10/17-00:18:06.389 3d70 Delete type=2 #1020
+2026/10/17-00:18:06.389 3d70 Delete type=2 #1021
+2026/10/17-00:18:06.389 3d70 Delete type=2 #1022
+2026/10/17-00:18:06.389 3d70 Delete type=2 #1023
+2026/10/17-00:18:06.389 3d70 Delete type=2 #1024
+2026/10/17-00:18:06.389 3d70 Delete type=2 #1025
+2026/10/17-00:18:06.389 3d70 Delete type=2 #1026
+2026/10/17-00:18:06.389 3d70 Delete type=2 #1035
+2026/10/17-00:43:39.195 3d70 Compacting 1@1 + 10@2 files
+2026/10/17-00:43:41.779 3d70 Generated table #1047@1: 22910 keys, 2198553 bytes
+2026/10/17-00:43:44.321 3d70 Generated table #1048@1: 22933 keys, 2168160 bytes
+2026/10/17-00:43:45.465 3d70 Generated table #1049@1: 40814 keys, 2172990 bytes
+2026/10/17-00:43:47.065 3d70 Generated table #1050@1: 96130 keys, 2246075 bytes
+2026/10/17-00:43:48.577 3d70 Generated table #1051@1: 95888 keys, 2244078 bytes
+2026/10/17-00:43:51.403 3d70 Generated table #1052@1: 64293 keys, 1786651 bytes
+2026/10/17-00:43:51.403 3d70 Compacted 1@1 + 10@2 files => 12816507 bytes
+2026/10/17-00:43:51.804 3d70 compacted to: files[ 0 0 16 0 0 0 0 ]
+2026/10/17-00:43:51.822 3d70 Delete type=2 #731
+2026/10/17-00:43:51.823 3d70 Delete type=2 #751
+2026/10/17-00:43:51.823 3d70 Delete type=2 #775
+2026/10/17-00:43:51.823 3d70 Delete type=2 #789
+2026/10/17-00:43:51.826 3d70 Delete type=2 #808
+2026/10/17-00:43:51.826 3d70 Delete type=2 #1028
+2026/10/17-00:43:51.826 3d70 Delete type=2 #1029
+2026/10/17-00:43:51.826 3d70 Delete type=2 #1030
+2026/10/17-00:43:51.844 3d70 Delete type=2 #1031
+2026/10/17-00:43:51.844 3d70 Delete type=2 #1032
+2026/10/17-00:43:51.844 3d70 Delete type=2 #1036

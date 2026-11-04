@@ -1,8 +1,0 @@
-2366: # For streamlit object like ImageColumn
-2535: final_cfg[f"🚩_{col}"] = st.column_config.ImageColumn(" ", width="small")
-2897: column_config[f"🚩_{col}"] = st.column_config.ImageColumn(" ", width="small")
-4078: col_cfg_city[f"🚩_{col}"] = st.column_config.ImageColumn(" ", width="small")
-4125: col_cfg_reg[f"🚩_{col}"] = st.column_config.ImageColumn(" ", width="small")
-4162: col_cfg_oth[f"🚩_{col}"] = st.column_config.ImageColumn(" ", width="small")
-4495: col_cfg_match[f"🚩_{col}"] = st.column_config.ImageColumn(" ", width="small")
-4744: col_cfg_b[f"🚩_{col}"] = st.column_config.ImageColumn(" ", width="small")

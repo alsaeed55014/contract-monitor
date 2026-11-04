@@ -342,17 +342,25 @@ class TranslationManager:
         if not self._is_arabic(word):
             return None
         
+        word_str = str(word).strip()
+        if not re.search(r'[a-zA-Z\u0600-\u06FF]', word_str) or re.match(r'^[\+\d\s\-\(\)\./:,#%*!=@&]+$', word_str):
+            return None
+            
         # Check cache first
-        cache_key = word.strip().lower()
+        cache_key = word_str.lower()
         if cache_key in TranslationManager._google_cache:
-            return TranslationManager._google_cache[cache_key]
+            cached_val = TranslationManager._google_cache[cache_key]
+            if not any(err in str(cached_val).lower() for err in ["error 500", "server error", "that's an error", "that’s an error", "translation error", "<html"]):
+                return cached_val
         
         try:
-            translator = GoogleTranslator(source='ar', target='en')
-            result = translator.translate(word)
-            if result and result.lower() != word.lower():
-                TranslationManager._google_cache[cache_key] = result
-                return result
+            from src.core.file_translator import TranslationService
+            svc = TranslationService(source_lang='ar', target_lang='en')
+            result = svc.translate_text(word_str)
+            if result and result.lower() != word_str.lower():
+                if not any(err in str(result).lower() for err in ["error 500", "server error", "that's an error", "that’s an error", "translation error", "<html"]):
+                    TranslationManager._google_cache[cache_key] = result
+                    return result
         except Exception:
             pass
         return None
@@ -360,9 +368,84 @@ class TranslationManager:
     # ---------------------------------
     # Query Analyzer
     # ---------------------------------
+    # English nationality values (lowercase) — أي كلمة تترجم لواحدة منها
+    # تُعتبر جنسية وتُدمج مع باقي الجنسيات في bundle واحد (OR بدل AND)
+    NATIONALITY_EN = {
+        "filipino", "philippine", "philippines",
+        "indian", "india",
+        "pakistani", "pakistan",
+        "bangladeshi", "bangladesh",
+        "egyptian", "egypt",
+        "nepali", "nepalese", "nepal",
+        "sri lankan", "sri lanka",
+        "kenyan", "kenya",
+        "ugandan", "uganda",
+        "ethiopian", "ethiopia",
+        "indonesian", "indonesia",
+        "moroccan", "morocco",
+        "sudanese", "sudan",
+        "yemeni", "yemen",
+        "rwandan", "rwanda",
+        "afghan", "afghanistan",
+        "nigerian", "nigeria",
+        "ghanaian", "ghana",
+        "senegalese", "senegal",
+        "tunisian", "tunisia",
+        "tanzanian", "tanzania",
+        "somalian", "somalia", "somali",
+        "eritrean", "eritrea",
+        "burundian", "burundi",
+        "african",
+    }
+    GENDER_EN = {"male", "female"}
+
     def _normalize_query_word(self, word):
         """Helper to normalize a single word for matching"""
         return self.normalize_text(word)
+
+    def _bundle_category(self, bundle):
+        """تصنيف الـ bundle: nationality / gender / other — للدمج بمنطق OR."""
+        for term in bundle:
+            t = str(term).strip().lower()
+            if t in self.NATIONALITY_EN or t in self.GENDER_EN:
+                return "nationality" if t in self.NATIONALITY_EN else "gender"
+            # تحقق عربي: هل الكلمة الأصلية (أول عنصر) جنسية؟
+            nt = self.normalize_text(str(term))
+            for k, v in self.dictionary.items():
+                vals = v if isinstance(v, list) else [v]
+                if any(str(x).strip().lower() in self.NATIONALITY_EN for x in vals):
+                    if self.normalize_text(k) == nt:
+                        return "nationality"
+                if any(str(x).strip().lower() in self.GENDER_EN for x in vals):
+                    if self.normalize_text(k) == nt:
+                        return "gender"
+        return "other"
+
+    def _merge_or_bundles(self, bundle_list):
+        """دمج bundles الجنسيات المتعددة في bundle واحد (OR):
+        'فلبيني نيبالي هندي' كانت 3 bundles تتطلب AND (مستحيل — الصف جنسية
+        واحدة) فتصبح bundle واحد يقبل أياً منها. نفس الشيء للجنس."""
+        if len(bundle_list) <= 1:
+            return bundle_list
+        cats = [self._bundle_category(b) for b in bundle_list]
+        if cats.count("nationality") <= 1 and cats.count("gender") <= 1:
+            return bundle_list
+        merged_nat = set()
+        merged_gen = set()
+        others = []
+        for b, c in zip(bundle_list, cats):
+            if c == "nationality":
+                merged_nat.update(b)
+            elif c == "gender":
+                merged_gen.update(b)
+            else:
+                others.append(b)
+        out = list(others)
+        if merged_nat:
+            out.append(sorted(merged_nat))
+        if merged_gen:
+            out.append(sorted(merged_gen))
+        return out
 
     def analyze_query(self, query):
         clean_query = query.lower().strip()
@@ -389,10 +472,22 @@ class TranslationManager:
                 remaining_query = remaining_query.replace(ck, "").strip()
 
         # --- Step 1: Split and translate remaining words ---
-        words = re.split(r'[\s,،/\\|]+', remaining_query)
+        words = re.split(r'[\s,،/\\|&+]+', remaining_query)
 
         for word in words:
             if not word or word in ignore_words or len(word) < 2:
+                continue
+
+            # تنظيف أدوات العطف الملتصقة: "ونيبالي" → "نيبالي"، "وهندي" → "هندي"
+            # (المستخدم يكتب "فلبيني ونيبالي وهندي" أو "فلبيني و نيبالي و هندي")
+            if len(word) > 3 and word[0] in ("و", "وَ"):
+                cand = word[1:]
+                try:
+                    if self.translate_word(cand) != cand:
+                        word = cand
+                except Exception:
+                    pass
+            if word in ignore_words or len(word) < 2:
                 continue
             
             # Use a Set to avoid duplicates
@@ -423,6 +518,10 @@ class TranslationManager:
             if full_google:
                 bundle_list.append([clean_query, full_google])
 
+        # 4. دمج الجنسيات/الأجناس المتعددة في bundle واحد (OR):
+        # 'شيف حلويات ذكر فلبيني نيبالي هندي' → يقبل أي جنسية من الثلاث
+        bundle_list = self._merge_or_bundles(bundle_list)
+
         return bundle_list
 
     # ---------------------------------
@@ -450,35 +549,49 @@ class TranslationManager:
         if not text:
             return ""
 
+        text_str = str(text).strip()
+        if not text_str:
+            return ""
+
+        # Check if text contains no letters (pure digits, phone numbers, dates, times, symbols)
+        if not re.search(r'[a-zA-Z\u0600-\u06FF]', text_str) or re.match(r'^[\+\d\s\-\(\)\./:,#%*!=@&]+$', text_str):
+            return text_str
+
+        # If text is already an error signature, return original without re-translating
+        if any(err in text_str.lower() for err in ["error 500", "server error", "that's an error", "that’s an error", "translation error"]):
+            return text_str
+
         # Global Cache check
-        cache_key = f"{target_lang}_{hashlib.md5(str(text).strip().encode()).hexdigest()}"
+        cache_key = f"{target_lang}_{hashlib.md5(text_str.encode()).hexdigest()}"
         if 'translation_cache' not in st.session_state:
             st.session_state.translation_cache = {}
         
         if cache_key in st.session_state.translation_cache:
-            return st.session_state.translation_cache[cache_key]
+            cached_val = st.session_state.translation_cache[cache_key]
+            if not any(err in str(cached_val).lower() for err in ["error 500", "server error", "that's an error", "that’s an error", "translation error", "<html"]):
+                return cached_val
 
         # Explicit Exceptions (Do not translate to Arabic, keep strictly in English)
         if target_lang == 'ar':
-            lower_val = str(text).strip().lower()
+            lower_val = text_str.lower()
             if any(kw in lower_val for kw in ["aamal", "lebar", "labor"]):
-                st.session_state.translation_cache[cache_key] = text
-                return text
+                st.session_state.translation_cache[cache_key] = text_str
+                return text_str
 
         try:
-            chunks = [text[i:i+4000] for i in range(0, len(text), 4000)]
-            translated_text = ""
-            translator = GoogleTranslator(source='auto', target=target_lang)
-
-            for chunk in chunks:
-                translated_text += translator.translate(chunk) + "\n"
+            from src.core.file_translator import TranslationService
+            svc = TranslationService(source_lang='auto', target_lang=target_lang)
+            translated_text = svc.translate_text(text_str)
+            translated_text = translated_text.strip() if translated_text else ""
+            if not translated_text:
+                return text_str
 
             # Save to session cache
             st.session_state.translation_cache[cache_key] = translated_text
             return translated_text
 
-        except Exception as e:
-            return f"Translation Error: {str(e)}"
+        except Exception:
+            return text_str
 
     def translate_ui_value(self, val, target_lang='ar'):
         """Bidirectional UI value translation using dictionaries and heuristics."""
@@ -508,8 +621,6 @@ class TranslationManager:
             "jeddah": "جدة",
             "dammam": "الدمام",
             "madinah": "المدينة المنورة",
-            "rizal": "الجنس",
-            "rizal | male": "الجنس | ذكر",
             "filipino": "فلبيني",
             "indian": "هندي",
             "bangladeshi": "بنجلاديشي",
@@ -556,7 +667,3 @@ AR_TO_EN = {
     "لا توجد خبرة": "No experience",
     "خبرة": "Experience",
 }
-
-def translate_to_english(keyword: str):
-    keyword = keyword.strip().lower()
-    return AR_TO_EN.get(keyword, [])

@@ -1,4 +1,0 @@
-1096: return f"https://flagcdn.com/w20/{code}.png"
-1099: return f"https://flagcdn.com/w20/{code}.png"
-1712: sa_icon = '<img src="https://flagcdn.com/w40/sa.png" style="width:24px; vertical-align:middle; border-radius:3px; margin:0 4px; box-shadow:0 0 8px rgba(0,0,0,0.4);">'
-1713: ph_icon = '<img src="https://flagcdn.com/w40/ph.png" style="width:24px; vertical-align:middle; border-radius:3px; margin:0 4px; box-shadow:0 0 8px rgba(0,0,0,0.4);">'

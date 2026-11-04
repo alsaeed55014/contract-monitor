@@ -1034,6 +1034,39 @@ class ContractMonitorApp:
             query_terms = [q.strip() for q in raw_query.split('&') if q.strip()]
         else:
             query_terms = [q.strip() for q in raw_query.split() if q.strip()]
+
+        # تنظيف أدوات العطف الملتصقة: "ونيبالي" → "نيبالي"
+        _cleaned_terms = []
+        for _t in query_terms:
+            if len(_t) > 3 and _t[0] == 'و':
+                _cand = _t[1:]
+                try:
+                    if self.translator.translate(_cand) != _cand:
+                        _t = _cand
+                except Exception:
+                    pass
+            _cleaned_terms.append(_t)
+        query_terms = _cleaned_terms
+
+        # تقسيم الجنسيات (OR) عن باقي الشروط (AND): "فلبيني نيبالي هندي"
+        # كانت تتطلب AND (مستحيل) فأصبحت تقبل أياً منها
+        _NAT_MARKERS = {
+            "indian", "india", "filipino", "philippines", "pakistani", "pakistan",
+            "bangladeshi", "bangladesh", "bengali", "egyptian", "egypt",
+            "nepali", "nepal", "lanka", "lankan", "kenyan", "kenya",
+            "ugandan", "uganda", "ethiopian", "ethiopia", "indonesian", "indonesia",
+            "moroccan", "morocco", "sudanese", "sudan", "yemeni", "yemen",
+            "vietnamese", "vietnam",
+        }
+        def _is_nat_term(_t):
+            try:
+                _tr = str(self.translator.translate(_t) or "").lower()
+            except Exception:
+                _tr = ""
+            return any(_m in _tr for _m in _NAT_MARKERS)
+        nat_terms = [t for t in query_terms if _is_nat_term(t)]
+        other_terms = [t for t in query_terms if t not in nat_terms]
+        # إذا كل الشروط جنسيات، nat_terms تحملها و other_terms فارغة (OR خالص)
         
         # ... (date/age parsing)
         d_f = self.date_from_de.get_date().strftime('%Y-%m-%d')
@@ -1050,36 +1083,43 @@ class ContractMonitorApp:
             # --- Smart Match Logic ---
             row_str = " ".join([str(v).lower() for v in row])
             
-            for q in query_terms:
-                term_found = False
-                if q in row_str: term_found = True
-                if not term_found and sum(c.isdigit() for c in q) >= 5:
-                    q_core = self.normalize_phone(q)
+            def _term_found(_q):
+                _found = False
+                if _q in row_str: _found = True
+                if not _found and sum(c.isdigit() for c in _q) >= 5:
+                    q_core = self.normalize_phone(_q)
                     if q_core:
                         if p_idx != -1 and p_idx < len(row):
                             cell_core = self.normalize_phone(row[p_idx])
-                            if q_core in cell_core: term_found = True
-                        if not term_found:
+                            if q_core in cell_core: _found = True
+                        if not _found:
                              for cell in row:
                                  if self.normalize_phone(cell) and q_core in self.normalize_phone(cell):
-                                     term_found = True; break
+                                     _found = True; break
                 
-                if not term_found:
-                    full_translated = self.translator.translate(q)
+                if not _found:
+                    full_translated = self.translator.translate(_q)
                     keywords = [full_translated.lower()] if full_translated else []
-                    q_words = q.split()
+                    q_words = _q.split()
                     if len(q_words) > 1:
                         for qw in q_words:
                             w_trans = self.translator.translate(qw)
                             if w_trans: keywords.extend(w_trans.lower().split())
-                    keywords.append(self.normalize_text(q))
+                    keywords.append(self.normalize_text(_q))
                     row_norm_str = self.normalize_text(" ".join([str(v) for v in row]))
                     for kw in keywords:
                         if len(kw) < 2: continue
-                        if kw in row_norm_str: term_found = True; break
-                
-                if not term_found:
+                        if kw in row_norm_str: _found = True; break
+                return _found
+
+            for q in other_terms:
+                if not _term_found(q):
                     match = False; break
+
+            # الجنسيات بمنطق OR: يكفي تطابق واحدة منها
+            if match and nat_terms:
+                if not any(_term_found(t) for t in nat_terms):
+                    match = False
             
             if not match: continue
 

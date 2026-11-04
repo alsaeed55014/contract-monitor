@@ -1,17 +1,17 @@
 import streamlit as st
-print(">>> DEBUG: Streamlit imported")
 import pandas as pd
-print(">>> DEBUG: Pandas imported")
 import os
 import sys
 import json
 import hashlib
 import time
 from datetime import datetime, timedelta
+from typing import Dict, List, Any, Union
 import pytz
-print(">>> DEBUG: Core libraries imported")
 import base64
 import re
+import hmac
+import urllib.parse
 
 # Saudi Arabia timezone for consistent time display
 SAUDI_TZ = pytz.timezone('Asia/Riyadh')
@@ -24,7 +24,6 @@ def get_saudi_time():
 # Get the absolute path of the directory containing app.py
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 ROOT_DIR = BASE_DIR
-PERSIST_FILE = os.path.join(BASE_DIR, 'src', '.persist_login.json')
 if BASE_DIR not in sys.path:
     sys.path.insert(0, BASE_DIR)
 
@@ -33,20 +32,19 @@ SRC_DIR = os.path.join(BASE_DIR, 'src')
 if SRC_DIR not in sys.path:
     sys.path.insert(0, SRC_DIR)
 
-print(">>> DEBUG: Importing project modules...")
 try:
     from src.core.contracts import ContractManager
     from src.data.bengali_manager import BengaliDataManager
     from src.utils.phone_utils import create_pasha_whatsapp_excel, format_phone_number, save_to_local_desktop, render_pasha_export_button, is_local_windows_pc
+    from src.utils.data_utils import sort_by_reg_date_desc
     from src.core.matcher import CandidateMatcher, format_match_result, _find_city_region, _fuzzy_match, REGION_PROXIMITY, REGION_MAP
-    print(">>> DEBUG: Project modules (src.*) imported successfully")
 except ImportError:
     # Fallback for different environment path configurations
     from core.contracts import ContractManager
     from data.bengali_manager import BengaliDataManager
     from utils.phone_utils import create_pasha_whatsapp_excel, format_phone_number, save_to_local_desktop, render_pasha_export_button, is_local_windows_pc
+    from utils.data_utils import sort_by_reg_date_desc
     from core.matcher import CandidateMatcher, format_match_result, _find_city_region, _fuzzy_match, REGION_PROXIMITY, REGION_MAP
-    print(">>> DEBUG: Project modules (core.*) imported successfully via fallback")
 
 # 2. Local Auth Class to prevent Import/Sync Errors
 class AuthManager:
@@ -66,7 +64,45 @@ class AuthManager:
                 # Store error for UI feedback
                 self.load_error = str(e)
                 self.users = {}
-        
+
+        # Silent cloud mirror (background only, no UI): Streamlit Cloud wipes
+        # the local filesystem on sleep/wake (the "Yes, get this app back up!"
+        # button reboots from the repo), so users.json alone would revert and
+        # password changes / new users would be lost. The hidden AppUsers
+        # worksheet is the source of truth across restarts.
+        try:
+            from src.logic.users_cloud import pull_users, push_users
+            cloud = pull_users()
+            if isinstance(cloud, dict) and cloud:
+                local_only = [u for u in self.users if u not in cloud]
+                for uname, cdata in cloud.items():
+                    if uname in self.users and isinstance(self.users[uname], dict):
+                        av = self.users[uname].get("avatar")
+                        self.users[uname].update({k: v for k, v in cdata.items() if k != "avatar"})
+                        if av and not self.users[uname].get("avatar"):
+                            self.users[uname]["avatar"] = av
+                    else:
+                        self.users[uname] = cdata
+                try:
+                    with open(self.users_file, 'w', encoding='utf-8') as f:
+                        json.dump({"users": self.users}, f, ensure_ascii=False, indent=4)
+                except Exception:
+                    pass
+                # Converge: push back any local-only users so nothing is lost
+                if local_only:
+                    try:
+                        push_users(self.users)
+                    except Exception:
+                        pass
+            elif cloud is not None:
+                # Sheet reachable but empty (first run): seed it from local
+                try:
+                    push_users(self.users)
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
         # Ensure Default Admin
         if "admin" not in self.users:
             self.users["admin"] = {
@@ -86,6 +122,12 @@ class AuthManager:
                 json.dump({"users": self.users}, f, ensure_ascii=False, indent=4)
         except Exception as e:
             print(f"Error saving users: {e}")
+        # Silent background mirror so password changes / new users survive sleep/wake
+        try:
+            from src.logic.users_cloud import push_users
+            push_users(self.users)
+        except Exception as e:
+            print(f"[AUTH] cloud mirror failed: {e}")
 
     def hash_password(self, password):
         return hashlib.sha256(str(password).encode()).hexdigest()
@@ -199,37 +241,52 @@ class AuthManager:
         target = str(username).lower().strip()
         return self.users.get(target, {}).get("avatar", None)
 
-def load_saved_credentials():
-    if os.path.exists(PERSIST_FILE):
-        try:
-            with open(PERSIST_FILE, 'r', encoding='utf-8') as f:
-                return json.load(f)
-        except:
-            return None
-    return None
+DEVICE_REMEMBER_COOKIE = "_recruitment_remember_token"
+DEVICE_REMEMBER_SECRET = b"alwazzan_luxury_recruitment_salt_2026_auth"
+DEVICE_USER_COOKIE = "_rec_saved_user"
+DEVICE_PERSIST_COOKIE = "_rec_saved_persist"
 
-def save_credentials(u, p):
-    try:
-        os.makedirs(os.path.dirname(PERSIST_FILE), exist_ok=True)
-        with open(PERSIST_FILE, 'w', encoding='utf-8') as f:
-            json.dump({"u": u, "p": p}, f)
-    except Exception as e:
-        print(f"Error saving credentials: {e}")
+def get_device_saved_credentials() -> Dict[str, Any]:
+    """Read saved login convenience data from client browser cookies.
 
-def clear_credentials():
-    if os.path.exists(PERSIST_FILE):
+    Cookies carry username, encrypted password, and persist flag.
+    All data is stored client-side (this browser only) to survive restarts.
+    There is no silent auto-login: the login form is always shown explicitly.
+    """
+    if hasattr(st, "context") and hasattr(st.context, "cookies"):
         try:
-            os.remove(PERSIST_FILE)
-        except:
+            cookies = st.context.cookies
+            is_p = cookies.get(DEVICE_PERSIST_COOKIE)
+            if is_p in ["1", "true", "True"]:
+                raw_u = cookies.get(DEVICE_USER_COOKIE, "")
+                raw_p = cookies.get("_rec_saved_pass_enc", "")
+                u = urllib.parse.unquote(raw_u) if raw_u else ""
+                p = urllib.parse.unquote(raw_p) if raw_p else ""
+                if u:
+                    return {"u": u, "p": p, "persist": True}
+        except Exception:
             pass
+    return {"u": "", "p": "", "persist": False}
+
+def create_device_token(username: str, days: int = 30) -> str:
+    """Create a signed client-only authentication token for the specific device."""
+    expires_at = int(time.time()) + (days * 86400)
+    payload = f"{str(username).lower().strip()}:{expires_at}"
+    sig = hmac.new(DEVICE_REMEMBER_SECRET, payload.encode(), hashlib.sha256).hexdigest()
+    raw = f"{payload}:{sig}"
+    return base64.urlsafe_b64encode(raw.encode()).decode()
 
 @st.cache_data(ttl=3600, show_spinner=False)
 def get_base64_image(image_path):
+    """Cache base64 encoded images to improve performance."""
+    if not os.path.exists(image_path):
+        return None
     with open(image_path, "rb") as img_file:
         return base64.b64encode(img_file.read()).decode()
 
 @st.cache_data(ttl=600, show_spinner=False)
 def get_css(lang='ar'):
+    """Generate optimized CSS based on language direction."""
     direction = 'rtl' if lang == 'ar' else 'ltr'
     toggle_side = 'right' if lang == 'ar' else 'left'
     toggle_opposite = 'left' if lang == 'ar' else 'right'
@@ -409,6 +466,13 @@ def get_css(lang='ar'):
             transition: all 0.4s cubic-bezier(0.165, 0.84, 0.44, 1) !important;
             box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5) !important;
             width: 100% !important; /* Default to full width for better mobile behavior */
+            min-height: 48px !important;
+            display: inline-flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            text-align: center !important;
+            white-space: normal !important;
+            line-height: 1.3 !important;
         }}
 
         /* Mobile specific button refinements */
@@ -417,6 +481,7 @@ def get_css(lang='ar'):
                 padding: 0.6rem 1.2rem !important;
                 font-size: 0.85rem !important;
                 letter-spacing: 1px !important;
+                min-height: 46px !important;
             }}
         }}
 
@@ -426,6 +491,28 @@ def get_css(lang='ar'):
             border-color: var(--luxury-gold) !important;
             box-shadow: 0 0 25px rgba(212, 175, 55, 0.5) !important;
             transform: translateY(-3px) scale(1.02) !important;
+        }}
+
+        /* Streamlit Dialog / Modal Luxury Styling */
+        div[data-testid="stDialog"] div[role="dialog"] {{
+            background: rgba(14, 14, 14, 0.96) !important;
+            border: 1.5px solid rgba(212, 175, 55, 0.4) !important;
+            border-radius: 20px !important;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.9), 0 0 35px rgba(212, 175, 55, 0.25) !important;
+            backdrop-filter: blur(20px) !important;
+            color: #FFFFFF !important;
+            max-width: 900px !important;
+        }}
+        div[data-testid="stDialog"] div[role="dialog"] h2,
+        div[data-testid="stDialog"] div[role="dialog"] [data-testid="stDialogHeader"] {{
+            color: var(--luxury-gold) !important;
+            font-family: 'Cinzel', 'Cairo', serif !important;
+            border-bottom: 1px solid rgba(212, 175, 55, 0.2) !important;
+            padding-bottom: 10px !important;
+        }}
+        div[data-testid="stDialog"] button[aria-label="Close"],
+        div[data-testid="stDialog"] button[aria-label="close"] {{
+            color: var(--luxury-gold) !important;
         }}
 
         /* Primary Search Variation */
@@ -482,11 +569,48 @@ def get_css(lang='ar'):
             border-radius: 50% !important;
         }}
         
-        /* Header specific for dataframes to handle high brightness */
-        [data-testid="stDataFrame"] div[role="columnheader"] {{
-            background-color: rgba(240, 240, 240, 0.9) !important;
-            color: #000000 !important;
-            font-weight: 700 !important;
+        /* Center dataframe/table headers (HTML-rendered tables + accessibility tree).
+           NOTE: st.dataframe body cells are canvas-drawn and aligned via column
+           config `alignment=left`; headers render centered with exact-fit widths. */
+        [data-testid="stDataFrame"] th[role="columnheader"],
+        [data-testid="stDataFrame"] div[role="columnheader"],
+        [data-testid="stDataFrame"] [role="columnheader"],
+        [data-testid="stTable"] thead th,
+        [data-testid="stTable"] th {{
+            text-align: center !important;
+        }}
+        [data-testid="stDataFrame"] th[role="columnheader"] > div,
+        [data-testid="stDataFrame"] div[role="columnheader"] > div,
+        [data-testid="stDataFrame"] [role="columnheader"] > div {{
+            text-align: center !important;
+            justify-content: center !important;
+            margin: 0 auto !important;
+        }}
+        /* Headers on one line when space allows (widths are content-fitted,
+           so no truncation); allow wrapping on small screens */
+        [data-testid="stDataFrame"] [role="columnheader"],
+        [data-testid="stTable"] thead th {{
+            white-space: nowrap !important;
+            vertical-align: middle !important;
+        }}
+        @media screen and (max-width: 768px) {{
+            [data-testid="stDataFrame"] [role="columnheader"],
+            [data-testid="stTable"] thead th {{
+                white-space: normal !important;
+            }}
+        }}
+        /* Body cells far-left, headers stay centered */
+        [data-testid="stDataFrame"] td[role="gridcell"],
+        [data-testid="stDataFrame"] div[role="gridcell"],
+        [data-testid="stDataFrame"] [role="gridcell"],
+        [data-testid="stTable"] td {{
+            text-align: left !important;
+        }}
+        [data-testid="stDataFrame"] td[role="gridcell"] > div,
+        [data-testid="stDataFrame"] div[role="gridcell"] > div,
+        [data-testid="stDataFrame"] [role="gridcell"] > div {{
+            text-align: left !important;
+            justify-content: flex-start !important;
         }}
 
         /* Status Column Glows - Enhanced for 2026 High-Tech Look */
@@ -1294,6 +1418,82 @@ def get_css(lang='ar'):
             font-size: 0.95rem;
             text-shadow: 0 2px 4px rgba(0,0,0,0.5);
         }}
+
+        /* 15) Responsive: flexible layout for PC / Laptop / Tablet / Mobile */
+        html {{ -webkit-text-size-adjust: 100% !important; }}
+
+        /* ---- Tablet (<=1024px): breathe, shrink heroes ---- */
+        @media screen and (max-width: 1024px) {{
+            .main .block-container {{ padding: 1.5rem 1.2rem 3rem 1.2rem !important; }}
+            .luxury-main-title {{ font-size: 18px !important; }}
+            .translator-hero {{ padding: 25px 22px !important; margin-bottom: 20px !important; }}
+            .translator-title {{ font-size: 1.6rem !important; }}
+        }}
+
+        /* ---- Mobile (<=768px): stack columns, enlarge touch targets ---- */
+        @media screen and (max-width: 768px) {{
+            .main .block-container {{ padding: 1rem 0.8rem 4rem 0.8rem !important; max-width: 100% !important; }}
+
+            /* Stack every Streamlit column row vertically (badge scroller keeps
+               its own nowrap rule which outranks this one) */
+            div[data-testid="stHorizontalBlock"] {{ flex-wrap: wrap !important; gap: 0.5rem !important; }}
+            div[data-testid="stHorizontalBlock"] > div[data-testid="column"] {{
+                flex: 1 1 100% !important;
+                min-width: 100% !important;
+                max-width: 100% !important;
+            }}
+
+            /* Titles & heroes */
+            .luxury-main-title {{ font-size: 16px !important; letter-spacing: 0 !important; }}
+            .glowing-title {{ font-size: 1.3rem !important; }}
+            .translator-hero {{ padding: 20px 14px !important; border-radius: 14px !important; }}
+            .translator-title {{ font-size: 1.3rem !important; }}
+
+            /* Prevent iOS auto-zoom on focus (needs >=16px inputs) */
+            div[data-testid="stTextInput"] input,
+            div[data-testid="stTextArea"] textarea,
+            div[data-testid="stNumberInput"] input,
+            div[data-testid="stSelectbox"] div[data-baseweb="select"] {{
+                font-size: 16px !important;
+            }}
+
+            /* Tables stay usable: internal scroll + compact text */
+            [data-testid="stDataFrame"], [data-testid="stTable"] {{
+                font-size: 0.8rem !important;
+                margin: 12px 0 !important;
+            }}
+
+            /* Banners & cards: center stacked content */
+            .persistent-top-banner {{ text-align: center !important; }}
+            .banner-avatar {{ width: 60px !important; height: 60px !important; }}
+
+            /* Login/profile media */
+            .profile-img-circular {{ width: 64px !important; height: 64px !important; }}
+
+            /* Drop GPU-heavy blur on phones (solid bg is faster to paint) */
+            div[data-testid="stForm"] {{
+                backdrop-filter: none !important;
+                -webkit-backdrop-filter: none !important;
+                background: rgba(10, 10, 10, 0.94) !important;
+            }}
+        }}
+
+        /* ---- Small phones (<=480px): tighten further ---- */
+        @media screen and (max-width: 480px) {{
+            .main .block-container {{ padding: 0.8rem 0.5rem 4rem 0.5rem !important; }}
+            .luxury-main-title {{ font-size: 14px !important; }}
+            .glowing-title {{ font-size: 1.1rem !important; }}
+            .translator-hero {{ padding: 16px 10px !important; }}
+            .stButton button, div[data-testid="stFormSubmitButton"] button {{
+                font-size: 0.8rem !important;
+                padding: 0.55rem 1rem !important;
+            }}
+            [data-testid="stDataFrame"], [data-testid="stTable"] {{
+                font-size: 0.72rem !important;
+            }}
+            .banner-avatar {{ width: 48px !important; height: 48px !important; }}
+            .profile-img-circular {{ width: 56px !important; height: 56px !important; }}
+        }}
     </style>
     """
 
@@ -1322,13 +1522,28 @@ FLAG_MAP = {
     "سيراليون": "sl",
     "بوروندي": "bi",
     # English
-    "indian": "in", "filipino": "ph", "nepi": "np", "nepali": "np", "nepal": "np",
-    "bangla": "bd", "bangladeshi": "bd", "pakistan": "pk", "pakistani": "pk",
-    "egypt": "eg", "egyptian": "eg", "sudan": "sd", "sudanese": "sd",
-    "sri lanka": "lk", "sri lankan": "lk", "kenya": "ke", "kenyan": "ke",
-    "uganda": "ug", "ugandan": "ug", "ethiopia": "et", "ethiopian": "et",
-    "indonesian": "id", "indonesia": "id", "rwandan": "rw", "rwanda": "rw",
-    "afghan": "af", "afghanistan": "af", "nigerian": "ng", "nigeria": "ng"
+    "indian": "in", "india": "in", "in": "in",
+    "filipino": "ph", "filipina": "ph", "philippines": "ph", "philippine": "ph", "ph": "ph",
+    "nepi": "np", "nepali": "np", "nepal": "np", "np": "np",
+    "bangla": "bd", "bangladeshi": "bd", "bangladesh": "bd", "bd": "bd",
+    "pakistan": "pk", "pakistani": "pk", "pk": "pk",
+    "egypt": "eg", "egyptian": "eg", "eg": "eg",
+    "sudan": "sd", "sudanese": "sd", "sd": "sd",
+    "sri lanka": "lk", "sri lankan": "lk", "lk": "lk",
+    "kenya": "ke", "kenyan": "ke", "ke": "ke",
+    "uganda": "ug", "ugandan": "ug", "ug": "ug",
+    "ethiopia": "et", "ethiopian": "et", "et": "et",
+    "indonesian": "id", "indonesia": "id", "id": "id",
+    "morocco": "ma", "moroccan": "ma", "ma": "ma",
+    "yemen": "ye", "yemeni": "ye", "ye": "ye",
+    "rwandan": "rw", "rwanda": "rw", "rw": "rw",
+    "afghan": "af", "afghanistan": "af", "af": "af",
+    "nigerian": "ng", "nigeria": "ng", "ng": "ng",
+    "ghana": "gh", "ghanaian": "gh", "gh": "gh",
+    "vietnam": "vn", "vietnamese": "vn", "vn": "vn",
+    "sierra leone": "sl", "sierra leonean": "sl", "sl": "sl",
+    "burundi": "bi", "burundian": "bi", "bi": "bi",
+    "saudi": "sa", "saudi arabia": "sa", "sa": "sa"
 }
 
 GENDER_MAP = {
@@ -1349,20 +1564,11 @@ def _get_flag_url_cached(val):
         s_val = s_val[2:]
         
     # Standardize Arabic characters
-    s_val = (s_val.replace("أ", "ا")
-                  .replace("إ", "ا")
-                  .replace("آ", "ا")
-                  .replace("ة", "ه")
-                  .replace("ى", "ي"))
+    s_val = _normalize_arabic_text(s_val)
     
     # 3. Match against FLAG_MAP
     for key, code in FLAG_MAP_SORTED:
-        # Normalize the key too for safety
-        norm_key = (key.replace("أ", "ا")
-                       .replace("إ", "ا")
-                       .replace("آ", "ا")
-                       .replace("ة", "ه")
-                       .replace("ى", "ي"))
+        norm_key = _normalize_arabic_text(key)
                        
         if len(norm_key) <= 3:
             # Short keys (like ISO codes if any) need strict word matching
@@ -1376,33 +1582,40 @@ def _get_flag_url_cached(val):
                 
     return None
 
-# Pre-sort FLAG_MAP keys once at startup
+# Pre-sort FLAG_MAP keys once at startup for performance
 FLAG_MAP_SORTED = sorted(FLAG_MAP.items(), key=lambda x: len(x[0]), reverse=True)
 
+def _normalize_arabic_text(text):
+    """Normalize Arabic text for consistent matching."""
+    return (text.replace("أ", "ا")
+                 .replace("إ", "ا")
+                 .replace("آ", "ا")
+                 .replace("ة", "ه")
+                 .replace("ى", "ي"))
+
 def _get_nationality_code(val):
+    try:
+        return _get_nationality_code_cached(val)
+    except Exception:
+        return None
+
+
+@st.cache_data(ttl=600, show_spinner=False)
+def _get_nationality_code_cached(val):
     if not val or pd.isna(val): return None
     s_val = str(val).strip().lower()
     
-    # Remove emoji flags
+    # Remove emoji flags and extra non-word chars
     s_val = re.sub(r'[\U0001F1E6-\U0001F1FF]{2}\s*', '', s_val)
-    # Remove extra non-word chars
     s_val = re.sub(r'[^\w\s]', ' ', s_val).strip()
     
+    # Remove Arabic definite article and normalize
     if s_val.startswith("ال") and len(s_val) > 4:
         s_val = s_val[2:]
-        
-    s_val = (s_val.replace("أ", "ا")
-                  .replace("إ", "ا")
-                  .replace("آ", "ا")
-                  .replace("ة", "ه")
-                  .replace("ى", "ي"))
+    s_val = _normalize_arabic_text(s_val)
                   
     for key, code in FLAG_MAP_SORTED:
-        norm_key = (key.replace("أ", "ا")
-                       .replace("إ", "ا")
-                       .replace("آ", "ا")
-                       .replace("ة", "ه")
-                       .replace("ى", "ي"))
+        norm_key = _normalize_arabic_text(key)
         if len(norm_key) <= 3:
             pattern = rf'(?:^|[\s,:;.\-/]){re.escape(norm_key)}(?:[\s,:;.\-/]|$)'
             if re.search(pattern, s_val):
@@ -1622,9 +1835,6 @@ def render_table_translator(df, key_prefix="table"):
 
     if not cols_to_translate:
         return df
-
-    from src.core.translation import TranslationManager
-    tm = TranslationManager()
 
     # --- Record Count Header & Nationality Stats ---
     lang = st.session_state.get('lang', 'ar')
@@ -1877,6 +2087,8 @@ div[data-testid="stHorizontalBlock"]:has(.nat-flag-badge) .nat-clear-badge .stBu
     
     target_lang = st.session_state.get(t_state_key)
     if target_lang in ['ar', 'tl']:
+        from src.core.translation import TranslationManager
+        tm = st.session_state.get('tm') or TranslationManager()
         spinner_msg = "جارِ الترجمة..." if target_lang == 'ar' else "Isinasalin sa Tagalog..."
         with st.spinner(spinner_msg):
             for col in cols_to_translate:
@@ -1897,9 +2109,15 @@ div[data-testid="stHorizontalBlock"]:has(.nat-flag-badge) .nat-clear-badge .stBu
 def get_cached_translation(val, target_lang):
     try:
         if not val: return val
+        val_str = str(val).strip()
+        if not re.search(r'[a-zA-Z\u0600-\u06FF]', val_str) or re.match(r'^[\+\d\s\-\(\)\./:,#%*!=@&]+$', val_str):
+            return val_str
         from src.core.translation import TranslationManager
         tm = TranslationManager()
-        return tm.translate_full_text(val, target_lang=target_lang)
+        res = tm.translate_full_text(val_str, target_lang=target_lang)
+        if res and not any(err in str(res).lower() for err in ["error 500", "server error", "that's an error", "that’s an error", "translation error", "<html"]):
+            return res
+        return val_str
     except:
         return val
 
@@ -1913,6 +2131,14 @@ def auto_translate(val, target_lang='en', force_stay_ar=False):
     val_str = str(val).strip()
     if not val_str or len(val_str) < 2:
         return val
+        
+    # Skip translation for numbers, phone numbers, timestamps, dates, symbols
+    if not re.search(r'[a-zA-Z\u0600-\u06FF]', val_str) or re.match(r'^[\+\d\s\-\(\)\./:,#%*!=@&]+$', val_str):
+        return val_str
+
+    # Guard against error strings leaking
+    if any(err in val_str.lower() for err in ["error 500", "server error", "that's an error", "that’s an error", "translation error"]):
+        return val_str
     
     try:
         # Get TM from session state
@@ -1922,19 +2148,31 @@ def auto_translate(val, target_lang='en', force_stay_ar=False):
             st.session_state.tm = TranslationManager()
             tm = st.session_state.tm
         
-        # SPECIAL: If force_stay_ar is True and it's already Arabic, don't translate to EN
+        # Check Arabic and Latin letters
         is_ar = bool(re.search(r'[\u0600-\u06FF]', val_str))
+        has_en = bool(re.search(r'[a-zA-Z]', val_str))
+
         if force_stay_ar and is_ar:
             return val_str
 
-        # Use our new bidirectional UI translator
+        # If target is Arabic and the string already contains Arabic, keep it as is
+        if target_lang == 'ar' and is_ar:
+            return val_str
+
+        # If target is English and the string already contains English without Arabic, keep it as is
+        if target_lang == 'en' and has_en and not is_ar:
+            return val_str
+
+        # Use our bidirectional UI translator
         translated = tm.translate_ui_value(val_str, target_lang)
         if translated != val_str:
             return translated
             
         # Fallback to cached full text translation if allowed and needed
-        if (is_ar and target_lang == 'en') or (not is_ar and target_lang == 'ar'):
-             return get_cached_translation(val_str, target_lang)
+        if (is_ar and target_lang == 'en') or (has_en and target_lang == 'ar'):
+             res = get_cached_translation(val_str, target_lang)
+             if res and not any(err in str(res).lower() for err in ["error 500", "server error", "that's an error", "that’s an error", "translation error", "<html"]):
+                 return res
              
         return val_str
     except:
@@ -2071,7 +2309,7 @@ try:
     from src.core.translation import TranslationManager
     from src.data.db_client import DBClient
     from src.config import USERS_FILE, ASSETS_DIR
-    from src.core.i18n import t, t_col # Added t_col
+    from src.core.i18n import t, t_col, t_val
     from src.ui.whatsapp_ui import render_whatsapp_page
 except ImportError as e:
     # Diagnostic: Check if 'src' exists
@@ -2117,6 +2355,11 @@ if 'tm' not in st.session_state:
 # 7. Session State Defaults
 if 'user' not in st.session_state:
     st.session_state.user = None
+
+# NOTE: no silent auto-login by design — the login form is always shown.
+# The "remember me" box only prefills username/password/checkbox state on
+# this browser; the user always presses دخول explicitly.
+
 if 'lang' not in st.session_state:
     st.session_state.lang = 'ar'
 if 'last_login_time' not in st.session_state:
@@ -2132,7 +2375,18 @@ query_params = st.query_params
 if query_params.get('logout') == 'inactive':
     st.session_state.user = None
     st.session_state.force_logout_inactive = False
-    clear_credentials()
+    st.html(f"""
+    <script>
+    (function() {{
+        var exp0 = "; max-age=0; path=/;";
+        // Only clear the remember token (current session), NOT cookies
+        document.cookie = "{DEVICE_REMEMBER_COOKIE}=" + exp0;
+        document.cookie = "{DEVICE_USER_COOKIE}=" + exp0;
+        document.cookie = "{DEVICE_PERSIST_COOKIE}=" + exp0;
+        // Do NOT clear _rec_saved_* cookies - preserve user's "Remember Me" preference
+    }})();
+    </script>
+    """, unsafe_allow_javascript=True)
     st.query_params.clear()
     st.rerun()
 
@@ -2197,7 +2451,7 @@ def render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search", 
                 }}, 300);
             </script>
             """
-        )
+        , unsafe_allow_javascript=True)
 
     # --- PROFESSIONAL PROFILE CARD (2026 LUXURY) ---
     st.markdown(f"<div id='cv-anchor-{key_prefix}'></div>", unsafe_allow_html=True)
@@ -2227,25 +2481,80 @@ def render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search", 
     @st.dialog("الملخص الاحترافي للعامل" if lang == "ar" else "Professional Worker Summary")
     def show_worker_summary_modal():
         import re as _re
-        # -- 1. Data Extraction --
-        def g(ar_col, en_col):
-            val = worker_row.get(en_col, worker_row.get(ar_col, ""))
-            return str(val).strip() if pd.notnull(val) else ""
+        # -- 1. Data Extraction (robust: handles all header variants + duplicates) --
+        def _norm_col(s):
+            return str(s).strip().lower()
 
-        name = g("الاسم الكامل", "Full Name:")
-        nat = g("الجنسية", "Nationality")
+        try:
+            _cols = list(worker_row.index)
+        except Exception:
+            try:
+                _cols = list(worker_row.keys())
+            except Exception:
+                _cols = []
+        _norm_map = {_norm_col(c): c for c in _cols}
+
+        def _clean_val(v):
+            if v is None:
+                return ""
+            try:
+                import pandas as _pd
+                # isna on list/array returns array -> guard
+                _isna = _pd.isna(v)
+                if isinstance(_isna, bool) and _isna:
+                    return ""
+            except Exception:
+                pass
+            s = str(v).strip()
+            if s.lower() in ("nan", "none", "null", "<na>", "nat", ""):
+                return ""
+            return s
+
+        def g(*aliases):
+            # 1) exact + normalized match
+            for a in aliases:
+                try:
+                    if a in worker_row.index:
+                        v = _clean_val(worker_row.get(a, ""))
+                        if v:
+                            return v
+                except Exception:
+                    pass
+                na = _norm_col(a)
+                if na in _norm_map:
+                    real = _norm_map[na]
+                    v = _clean_val(worker_row.get(real, ""))
+                    if v:
+                        return v
+            # 2) fallback: contains match (handles '?' / '↓' / extra spaces variants)
+            for a in aliases:
+                na = _norm_col(a).replace("?", "").replace("↓", "").replace(":", "").strip()
+                if len(na) < 3:
+                    continue
+                for c in _cols:
+                    nc = _norm_col(c).replace("?", "").replace("↓", "").replace(":", "").strip()
+                    if not nc:
+                        continue
+                    if na == nc or na in nc or nc in na:
+                        v = _clean_val(worker_row.get(c, ""))
+                        if v:
+                            return v
+            return ""
+
+        name = g("الاسم الكامل", "Full Name:", "Full Name", "Name", "الاسم")
+        nat = g("الجنسية", "الجنسيه", "Nationality")
         gen = g("الجنس", "Gender")
-        age = g("العمر", "your Age:")
-        ar_lang_val = g("هل تتحدث العربية؟", "Do you speak Arabic")
-        job = g("الوظيفة المطلوبة", "Which job are you looking for")
-        exp = g("الخبرة في هذا المجال", "Experience in this field")
-        skills = g("مهارات أخرى", "What other jobs can you do")
-        exp_other = g("الخبرة (أخرى)", "Other experience")
-        card = g("هل لديك كرت بلدية؟", "Do you have Card Baladiya")
-        card_val = g("مدة صلاحية الكرت (أشهر)", "how many months Card Baladiya valid")
-        iqama_prof = g("المهنة في الإقامة", "What is the occupation listed on your Iqama")
-        iqama_rem = g("المدة المتبقية في الإقامة", "If the Iqama is valid, how many months are left?")
-        transfers = g("عدد مرات نقل الكفالة", "How many times did you transfer your sponsorship")
+        age = g("العمر", "your Age:", "your Age", "Age")
+        ar_lang_val = g("هل تتحدث العربية؟", "هل تتحدث العربية", "Do you speak Arabic", "Do you speak Arabic?", "speaks arabic")
+        job = g("الوظيفة المطلوبة", "الوظيفه المطلوبه", "Which job are you looking for", "Which job are you looking for?")
+        exp = g("الخبرة في هذا المجال", "الخبرة في هذا المجال ↓", "Experience in this field", "Experience", "How much experience do you have in this field?", "How much experience do you have in this field")
+        skills = g("مهارات أخرى", "مهارات اخرى", "What other jobs can you do", "What other jobs can you do?", "Other Skills")
+        exp_other = g("الخبرة (أخرى)", "Experience (Other)", "Other experience", "How much experience do you have in this field?_1", "How much experience do you have in this field? _1")
+        card = g("هل لديك كرت بلدية؟", "هل لديك كرت بلدية", "Do you have Card Baladiya", "Do you have Card Baladiya?")
+        card_val = g("مدة صلاحية الكرت (أشهر)", "how many months Card Baladiya valid", "how many months Card Baladiya valid?", "Card Validity (Months)")
+        iqama_prof = g("المهنة في الإقامة", "What is the occupation listed on your Iqama", "What is the occupation listed on your Iqama?", "Iqama Profession")
+        iqama_rem = g("المدة المتبقية في الإقامة", "If the Iqama is valid, how many months are left?", "If the Iqama is valid, how many months are left", "Iqama Remaining")
+        transfers = g("عدد مرات نقل الكفالة", "How many times did you transfer your sponsorship", "How many times did you transfer your sponsorship?", "Transfer Count")
 
         # -- 2. EN→AR Dictionary for strict Arabic localization --
         is_ar = (lang == "ar")
@@ -2326,6 +2635,26 @@ def render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search", 
             if not val or not is_ar:
                 return val
             text = str(val).strip()
+            # 0. Bare number (Western or Arabic-Indic digits) -> years of experience
+            try:
+                _digit_map = str.maketrans("٠١٢٣٤٥٦٧٨٩", "0123456789")
+                tmp_digits = text.strip().translate(_digit_map)
+            except Exception:
+                tmp_digits = text.strip()
+            _m_bare = _re.match(r'^(\d+)\s*$', tmp_digits)
+            if _m_bare:
+                n = _m_bare.group(1)
+                try:
+                    if int(n) > 200:
+                        return n  # likely a year/id, not experience
+                except Exception:
+                    pass
+                if n == "1":
+                    return "1 سنة"
+                elif n == "2":
+                    return "2 سنوات"
+                else:
+                    return f"{n} سنوات"
             if not _re.search(r'[a-zA-Z]', text):
                 return text
             low = text.lower()
@@ -2344,19 +2673,47 @@ def render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search", 
                     return "يتحدث العربية بشكل جيد"
                 else:
                     return "يتحدث العربية"
-            # 2. Numeric experience pattern
+            # 2. Numeric experience pattern (strict + tolerant)
             cleaned = text.strip().replace("'s", "").replace("'", "")
+            try:
+                cleaned = cleaned.translate(str.maketrans("٠١٢٣٤٥٦٧٨٩", "0123456789"))
+            except Exception:
+                pass
             m = _re.match(r'^(\d+)\s*x?\s*(years?|months?)?(\s*experience|\s*experiance)?$', cleaned, _re.IGNORECASE)
             if m:
                 n = m.group(1)
                 unit = m.group(2)
-                if not unit and int(n) < 50:
-                    return f"{n} سنوات"
                 if not unit:
-                    return n
+                    try:
+                        if int(n) > 200:
+                            return n
+                    except Exception:
+                        pass
+                    if n == "1":
+                        return "1 سنة"
+                    elif n == "2":
+                        return "2 سنوات"
+                    return f"{n} سنوات"
                 u = "سنوات" if "year" in unit.lower() else "أشهر"
                 if n == "1":
                     u = "سنة" if "year" in unit.lower() else "شهر"
+                elif n == "2" and "year" in unit.lower():
+                    u = "سنوات"
+                return f"{n} {u}"
+            # 2b. Loose: number + year/month/experience words anywhere ("5 years experience", "3 years of work", ...)
+            low_c = cleaned.lower()
+            m2 = _re.search(r'(\d+)', cleaned)
+            if m2 and ('year' in low_c or 'month' in low_c or 'exper' in low_c):
+                n = m2.group(1)
+                if 'month' in low_c:
+                    u = "شهر" if n == "1" else "أشهر"
+                else:
+                    if n == "1":
+                        u = "سنة"
+                    elif n == "2":
+                        u = "سنوات"
+                    else:
+                        u = "سنوات"
                 return f"{n} {u}"
             # 3. Google Translate for everything else
             try:
@@ -2431,9 +2788,1232 @@ def render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search", 
         st.success(msg_success)
         st.code(summary, language="markdown")
         st.markdown("</div>", unsafe_allow_html=True)
-        
-    if st.button("✨ " + ("إنشاء ملخص العامل" if lang == 'ar' else "Create Worker Summary"), width='stretch', key=f"btn_summary_mk_{key_prefix}_{worker_id}"):
-        show_worker_summary_modal()
+        if st.button("✖️ " + ("إغلاق النافذة" if is_ar else "Close window"),
+                      key=f"close_summary_{key_prefix}_{worker_id}"):
+            st.session_state["active_dlg"] = None
+            st.rerun()
+
+    # === Full Worker Information Modal & Button === #
+    def luxury_modal_dialog(title):
+        try:
+            return st.dialog(title, width="large")
+        except TypeError:
+            return st.dialog(title)
+
+    @luxury_modal_dialog("📋 " + (t('full_worker_info_title', lang) if lang == 'ar' else "Complete Registered Worker Data"))
+    def show_worker_full_info_modal():
+        is_ar = (lang == 'ar')
+        d = 'rtl' if is_ar else 'ltr'
+        a = 'right' if is_ar else 'left'
+
+        # 1. Fetch complete worker data directly from the DB / worker_row
+        if isinstance(worker_row, pd.DataFrame):
+            w_series = worker_row.iloc[0]
+        elif isinstance(worker_row, pd.Series):
+            w_series = worker_row
+        elif isinstance(worker_row, dict):
+            w_series = pd.Series(worker_row)
+        else:
+            w_series = pd.Series(dict(worker_row))
+
+        full_data = w_series.to_dict()
+
+        # Enhance with complete database record if DBClient is connected
+        try:
+            if hasattr(st.session_state, 'db') and st.session_state.db is not None:
+                db_df = st.session_state.db.fetch_data()
+                if db_df is not None and not db_df.empty:
+                    sheet_row = full_data.get('__sheet_row', full_data.get('__sheet_row_backup'))
+                    matched_db_row = None
+                    if sheet_row and '__sheet_row' in db_df.columns:
+                        m = db_df[db_df['__sheet_row'] == sheet_row]
+                        if not m.empty: matched_db_row = m.iloc[0]
+                    if matched_db_row is None and sheet_row and '__sheet_row_backup' in db_df.columns:
+                        m = db_df[db_df['__sheet_row_backup'] == sheet_row]
+                        if not m.empty: matched_db_row = m.iloc[0]
+                    if matched_db_row is None and worker_name and worker_name != "Worker":
+                        for nk in ["Full Name:", "الاسم الكامل", "Name", "الاسم"]:
+                            if nk in db_df.columns:
+                                m = db_df[db_df[nk].astype(str).str.strip() == str(worker_name).strip()]
+                                if not m.empty:
+                                    matched_db_row = m.iloc[0]
+                                    break
+                    if matched_db_row is not None:
+                        db_dict = matched_db_row.to_dict()
+                        for k, v in full_data.items():
+                            if k not in db_dict or pd.isna(db_dict[k]) or str(db_dict[k]).strip() == "":
+                                if pd.notnull(v) and str(v).strip() != "":
+                                    db_dict[k] = v
+                        full_data = db_dict
+        except Exception:
+            pass
+
+        # 2. Filter out internal system columns and format fields
+        raw_fields = []
+        for col_name in full_data.keys():
+            col_str = str(col_name).strip()
+            if not col_str or col_str.startswith('__') or col_str.startswith('🚩_') or col_str.lower().startswith('unnamed:'):
+                continue
+
+            # Remove "كيف عرفت عنا؟" / "How did you know us?"
+            _c_low = col_str.lower()
+            if any(kw in _c_low for kw in ["كيف عرفت عنا", "how did you know", "how did you hear"]):
+                continue
+
+            raw_val = full_data.get(col_name)
+            if raw_val is None or pd.isna(raw_val):
+                clean_val = ""
+            elif isinstance(raw_val, float) and raw_val.is_integer():
+                clean_val = str(int(raw_val))
+            else:
+                clean_val = str(raw_val).strip()
+                if clean_val.lower() in ["nan", "none", "null", "<na>", "nat"]:
+                    clean_val = ""
+
+            # Remove trailing time if datetime date only
+            if clean_val.endswith(" 00:00:00"):
+                clean_val = clean_val.replace(" 00:00:00", "")
+
+            # Translation of value (for Arabic UI)
+            if is_ar and clean_val:
+                clean_val = t_val(clean_val, 'ar', col_str)
+
+            # Translation of column header
+            trans_label = t_col(col_str, lang) if is_ar else col_str
+
+            is_empty_val = (clean_val == "" or clean_val in ["---", "-"])
+            is_url_val = (clean_val.startswith("http://") or clean_val.startswith("https://") or "drive.google.com" in clean_val)
+
+            raw_fields.append({
+                "col_key": col_str,
+                "label": trans_label,
+                "orig_label": col_str,
+                "value": clean_val,
+                "is_empty": is_empty_val,
+                "is_url": is_url_val
+            })
+
+        if not raw_fields:
+            st.warning("⚠️ لا توجد بيانات مسجلة لهذا العامل في قاعدة البيانات." if is_ar else "⚠️ No recorded data found for this worker.")
+            return
+
+        # 2b. Per-worker hide/delete (display only — does NOT touch Google Sheet)
+        # Each Q&A box (card) can be removed for THIS worker only via 🗑️ button.
+        # Hidden items are excluded from cards/table/copy/print/PNG but stay in the Sheet.
+        import hashlib as _hl_del
+        _hide_key = f"deleted_fields_{key_prefix}_{worker_id}"
+        if _hide_key not in st.session_state:
+            st.session_state[_hide_key] = set()
+        _deleted_keys = st.session_state[_hide_key]
+        # Clean stale keys (e.g. sheet headers changed)
+        _all_keys = {f["col_key"] for f in raw_fields}
+        _stale = {k for k in _deleted_keys if k not in _all_keys}
+        if _stale:
+            _deleted_keys = {k for k in _deleted_keys if k in _all_keys}
+            st.session_state[_hide_key] = _deleted_keys
+        _deleted_list = [f for f in raw_fields if f["col_key"] in _deleted_keys]
+        visible_fields = [f for f in raw_fields if f["col_key"] not in _deleted_keys]
+
+        def _fld_uid(_col_key):
+            try:
+                return _hl_del.md5(str(_col_key).encode("utf-8")).hexdigest()[:10]
+            except Exception:
+                return str(abs(hash(str(_col_key))))[:10]
+
+        # 3. Categorize fields into logical sections while ensuring 100% inclusion
+        def classify_field(item):
+            t_str = f"{item['orig_label']} {item['label']}".lower()
+            if any(w in t_str for w in ["name", "اسم", "nationality", "جنسية", "age", "عمر", "gender", "جنس", "social", "marital", "متزوج", "religion", "ديانة", "عائلة", "أطفال", "children"]):
+                return "personal"
+            if any(w in t_str for w in ["job", "وظيفة", "profession", "occupation", "مهنة", "experience", "خبرة", "skill", "مهارة", "speak", "arabic", "عربية", "لغة", "qualification", "مؤهل"]):
+                return "quals"
+            if any(w in t_str for w in ["iqama", "إقامة", "sponsor", "كفالة", "كفيل", "transfer", "نقل", "baladiya", "بلدية", "card", "كرت", "huroob", "هروب", "obligation", "التزام", "contract", "عقد"]):
+                return "legal"
+            if any(w in t_str for w in ["city", "مدينة", "area", "حي", "منطقة", "location", "موقع", "phone", "جوال", "هاتف", "mobile", "outside", "خارج", "immediately", "فوراً", "ready", "جاهز", "working now", "تعمل حالياً"]):
+                return "contact"
+            return "other"
+
+        sections_def = [
+            ("personal", "👤 البيانات الشخصية والأساسية" if is_ar else "👤 Personal & Basic Information"),
+            ("quals", "💼 المؤهلات والمهنة والخبرات" if is_ar else "💼 Qualifications & Experience"),
+            ("legal", "🆔 الإقامة والجاهزية ونقل الكفالة" if is_ar else "🆔 Iqama, Legal & Sponsorship"),
+            ("contact", "📍 الموقع والتواصل والجاهزية" if is_ar else "📍 Location, Contact & Availability"),
+            ("other", "📋 بيانات وحقول مسجلة أخرى" if is_ar else "📋 Other Recorded Data Fields")
+        ]
+
+        # 4. Header Bar with Worker Name and Counts
+        total_fields_count = len(visible_fields)
+        filled_count = len([f for f in visible_fields if not f["is_empty"]])
+        empty_count = total_fields_count - filled_count
+
+        empty_badge_html = f"<span style='background: rgba(255, 255, 255, 0.08); color: #BBB; border: 1px solid rgba(255, 255, 255, 0.18); padding: 4px 12px; border-radius: 20px; font-size: 0.85rem; font-weight: 600;'>{'⚪ غير مسجل:' if is_ar else 'Empty:'} {empty_count}</span>" if empty_count > 0 else ""
+        header_banner_html = (
+            f"<div style='direction: {d}; text-align: {a}; margin-bottom: 20px; "
+            f"background: linear-gradient(135deg, rgba(212, 175, 55, 0.15) 0%, rgba(20, 20, 20, 0.85) 100%); "
+            f"border: 1px solid rgba(212, 175, 55, 0.35); border-radius: 16px; padding: 18px 22px; "
+            f"box-shadow: 0 10px 25px rgba(0,0,0,0.5);'>"
+            f"<div style='display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;'>"
+            f"<h3 style='color: #D4AF37; margin: 0; font-family: Cinzel, Cairo, serif; font-size: 1.4rem; letter-spacing: 1px;'>"
+            f"👤 {worker_name}"
+            f"</h3>"
+            f"<div style='display: flex; gap: 10px; flex-wrap: wrap;'>"
+            f"<span style='background: rgba(212, 175, 55, 0.2); color: #D4AF37; border: 1px solid rgba(212, 175, 55, 0.4); padding: 4px 12px; border-radius: 20px; font-size: 0.85rem; font-weight: 600;'>"
+            f"{'📊 إجمالي الحقول:' if is_ar else 'Total Fields:'} {total_fields_count}"
+            f"</span>"
+            f"<span style='background: rgba(0, 255, 65, 0.15); color: #00FF41; border: 1px solid rgba(0, 255, 65, 0.3); padding: 4px 12px; border-radius: 20px; font-size: 0.85rem; font-weight: 600;'>"
+            f"{'✅ مسجل:' if is_ar else 'Filled:'} {filled_count}"
+            f"</span>"
+            f"{empty_badge_html}"
+            f"</div>"
+            f"</div>"
+            f"</div>"
+        )
+        st.html(header_banner_html)
+
+        # Explicit close (use it instead of X so the dialog state resets;
+        # closing restores hidden Q&A automatically on next open).
+        if st.button("✖️ " + ("إغلاق النافذة" if is_ar else "Close window"),
+                      key=f"close_full_info_{key_prefix}_{worker_id}"):
+            st.session_state[_hide_key] = set()
+            st.session_state["active_dlg"] = None
+            st.rerun()
+
+        # 5. Quick Live Search inside Modal
+        filter_query = st.text_input(
+            "🔍 " + ("بحث سريع في الحقول..." if is_ar else "Quick search in fields..."),
+            key=f"search_full_info_{key_prefix}_{worker_id}",
+            placeholder="اكتب اسم الحقل أو القيمة للتصفية..." if is_ar else "Type to filter by field name or value..."
+        )
+
+        display_fields = visible_fields
+        if filter_query and filter_query.strip():
+            fq = filter_query.strip().lower()
+            display_fields = [
+                f for f in visible_fields 
+                if fq in f["label"].lower() or fq in f["orig_label"].lower() or fq in f["value"].lower()
+            ]
+
+        # 5b. Deleted-items manager (restore) — per worker only
+        if _deleted_list:
+            with st.expander(
+                f"🗑️ {'أسئلة محذوفة من العرض' if is_ar else 'Hidden questions'} ({len(_deleted_list)}) — "
+                + ("استرجاع" if is_ar else "restore"), expanded=False
+            ):
+                st.caption(
+                    (("هذه الأسئلة مخفية مؤقتاً من العرض والطباعة والصورة لهذا العامل فقط، وبياناتها ما زالت محفوظة في الشيت. "
+                       "عند إغلاق النافذة وإعادة فتحها من البحث أو أي مكان آخر ستعود تلقائياً.") if is_ar
+                     else "These questions are temporarily hidden from view/print/image for this worker only. Data stays in the Sheet. Close and reopen to restore them automatically.")
+                )
+                for _df in _deleted_list:
+                    _duid = _fld_uid(_df["col_key"])
+                    _c1, _c2 = st.columns([4, 1])
+                    with _c1:
+                        st.write(f"• **{_df['label']}** — {_df['value'][:60] if _df['value'] else ('غير مسجل' if is_ar else 'Not recorded')}")
+                    with _c2:
+                        if st.button("↩️ " + ("استرجاع" if is_ar else "Restore"),
+                                     key=f"restore_{key_prefix}_{worker_id}_{_duid}"):
+                            st.session_state[_hide_key].discard(_df["col_key"])
+                            st.rerun()
+                if st.button("↩️ " + ("استرجاع الكل" if is_ar else "Restore all"),
+                             key=f"restore_all_{key_prefix}_{worker_id}"):
+                    st.session_state[_hide_key] = set()
+                    st.rerun()
+
+        # 6. Presentation Tabs
+        tab_cards, tab_table, tab_copy, tab_print = st.tabs([
+            "🗂️ " + ("عرض البطاقات المنظمة" if is_ar else "Categorized Cards"),
+            "📊 " + ("جدول البيانات الكامل" if is_ar else "Full Data Table"),
+            "📄 " + ("نص شامل للنسخ" if is_ar else "Copyable Text Report"),
+            "🖨️ " + ("طباعة / حفظ صورة" if is_ar else "Print / Save Image")
+        ])
+
+        with tab_cards:
+            for sec_key, sec_title in sections_def:
+                sec_items = [item for item in display_fields if classify_field(item) == sec_key]
+                if not sec_items:
+                    continue
+                
+                sec_hdr_html = (
+                    f"<div style='margin: 20px 0 10px 0; padding-bottom: 6px; border-bottom: 1px solid rgba(212, 175, 55, 0.3); direction: {d}; text-align: {a};'>"
+                    f"<span style='color: #D4AF37; font-size: 1.1rem; font-weight: 700; font-family: Cairo, sans-serif;'>"
+                    f"{sec_title} ({len(sec_items)})"
+                    f"</span>"
+                    f"</div>"
+                )
+                st.html(sec_hdr_html)
+
+                col1, col2 = st.columns(2)
+                for idx_item, item in enumerate(sec_items):
+                    col_target = col1 if (idx_item % 2 == 0) else col2
+                    with col_target:
+                        v_str = item["value"]
+                        orig_lbl = item["orig_label"]
+                        lbl = item["label"]
+                        col_key_lower = orig_lbl.lower()
+
+                        # ── Detect field type ──────────────────────────────
+                        _col_all = f"{orig_lbl} {lbl}".lower()
+                        _v_low = v_str.lower().strip()
+
+                        _is_nat_field = any(kw in _col_all for kw in [
+                            "nationality", "الجنسية", "جنسية", "national"
+                        ])
+                        _is_gender_field = (
+                            any(kw in _col_all for kw in ["gender", "النوع", "نوع الجنس", "sex"])
+                            or (_col_all.strip() in ["الجنس", "جنس", "gender"])
+                            or ("الجنس" in _col_all and not _is_nat_field)
+                        ) and not _is_nat_field
+
+                        # 1. الوظيفة المطلوبة (برتقالي #FFA500)
+                        _is_job_field = any(kw in _col_all for kw in [
+                            "الوظيفة المطلوبة", "which job", "job requested", "الوظيفة المستهدفة"
+                        ]) and not any(kw in _col_all for kw in ["المهنة في الإقامة", "مهارات"])
+
+                        # 2. مهارات أخرى (برتقالي #FFA500)
+                        _is_skills_field = any(kw in _col_all for kw in [
+                            "مهارات أخرى", "مهارات اخرى", "what other jobs", "other skills"
+                        ]) or (_col_all.strip() == "مهارات")
+
+                        # 3. المهنة في الإقامة (برتقالي #FFA500)
+                        _is_iqama_prof_field = any(kw in _col_all for kw in [
+                            "المهنة في الإقامة", "المهنة في الاقامة", "occupation listed on your iqama", "iqama profession", "مهنة الإقامة"
+                        ])
+
+                        # 4. هل العقد منتهي؟ وتاريخ انتهاء العقد (منتهي = أخضر #00FF66 / غير منتهي = أحمر #FF3333)
+                        _is_contract_field = any(kw in _col_all for kw in [
+                            "تاريخ انتهاء العقد", "contract end date", "انتهاء العقد", "هل العقد منتهي", "حالة العقد", "contract status", "contract end"
+                        ])
+
+                        # 5. التزامات مالية للكفيل السابق (نعم = أحمر #FF3333)
+                        _is_fin_obl_field = any(kw in _col_all for kw in [
+                            "التزامات مالية", "financial obligations", "الكفيل السابق"
+                        ]) and "نقل" not in _col_all
+
+                        # 6. بلاغ هروب (نعم = أحمر #FF3333)
+                        _is_huroob_field = any(kw in _col_all for kw in [
+                            "بلاغ هروب", "huroob", "هروب"
+                        ]) and "مدة" not in _col_all and "duration" not in _col_all
+
+                        # 7. هل يقبل الكفيل النقل (نعم = أخضر #00FF66 / لا أو لااعرف = أحمر #FF3333)
+                        _is_transfer_accept_field = any(kw in _col_all for kw in [
+                            "يقبل الكفيل", "accept to transfer", "يقبل النقل"
+                        ]) or (("transfer" in _col_all or "نقل" in _col_all) and any(kw in _col_all for kw in ["accept", "يقبل", "employer", "كفيل"]) and "عدد" not in _col_all and "times" not in _col_all)
+
+                        # 8. عدد مرات نقل الكفالة (First time = أخضر #00FF66)
+                        _is_transfer_count_field = any(kw in _col_all for kw in [
+                            "عدد مرات نقل", "times did you transfer", "transfer count", "مرات نقل الكفالة"
+                        ])
+
+                        # 9. هل الإقامة سارية؟ (لا = أحمر #FF3333 / نعم = أخضر #00FF66)
+                        _is_iqama_valid_field = any(kw in _col_all for kw in [
+                            "هل الإقامة سارية", "هل الاقامة سارية", "الإقامة سارية", "الاقامة سارية",
+                            "iqama valid", "is your iqama valid", "your iqama valid", "is the iqama valid"
+                        ]) and not any(kw in _col_all for kw in [
+                            "مدة", "متى", "مهنة", "how many", "when", "occupation", "remaining", "left", "expired", "متبقية"
+                        ])
+
+                        # 10. مدة انتهاء الإقامة (أحمر #FF3333)
+                        _is_iqama_expired_duration_field = any(kw in _col_all for kw in [
+                            "مدة انتهاء الإقامة", "مدة انتهاء الاقامة", "انتهاء الإقامة", "انتهاء الاقامة",
+                            "iqama expired", "if the iqama expired"
+                        ]) and not any(kw in _col_all for kw in [
+                            "عقد", "contract", "متبقية", "remaining", "left", "baladiya", "بلدية", "هل الإقامة سارية", "هل الاقامة سارية", "iqama valid"
+                        ])
+
+                        # 11. هل تعمل حالياً؟ (لا = أخضر #00FF66)
+                        _is_working_now_field = any(kw in _col_all for kw in [
+                            "تعمل حالياً", "تعمل حاليا", "يعمل حالياً", "يعمل حاليا", "العمل حالياً", "العمل حاليا",
+                            "working now", "currently working", "are you working"
+                        ])
+
+                        # 12. هل يمكنك العمل خارج مدينتك؟ (نعم = أخضر #00FF66)
+                        _is_work_outside_field = any(kw in _col_all for kw in [
+                            "خارج مدينتك", "خارج المدينة", "outside your city", "outside city", "work outside"
+                        ])
+
+                        # ── Gender: bathroom-door icons (🚹 blue / 🚺 pink) ──
+                        _gender_prefix = ""
+                        if _is_gender_field and v_str and not _is_nat_field:
+                            _is_female = (
+                                _v_low in ["f", "female", "أنثى", "انثى", "اناث", "أناث", "نساء", "بنت", "girl", "woman", "lady"]
+                                or any(w in _v_low for w in ["female", "أنثى", "انثى", "اناث", "أناث", "امرأة", "امراة"])
+                            )
+                            _is_male = (
+                                not _is_female and (
+                                    _v_low in ["m", "male", "ذكر", "رجل", "رجال", "ولد", "boy", "man"]
+                                    or any(w in _v_low for w in ["male", "ذكر", "رجل"])
+                                )
+                            )
+                            if _is_female:
+                                _gender_prefix = (
+                                    "<span style='display:inline-flex; align-items:center; gap:8px; "
+                                    "background: rgba(255, 77, 141, 0.18); color: #FF4D8D; "
+                                    "border: 1px solid rgba(255, 77, 141, 0.55); "
+                                    "border-radius: 20px; padding: 3px 14px 3px 10px; font-size: 1rem; font-weight: 700; "
+                                    "margin-left: 6px;'>"
+                                    "<span style='font-size: 1.6rem; line-height: 1;'>🚺</span> أنثى</span>"
+                                )
+                            elif _is_male:
+                                _gender_prefix = (
+                                    "<span style='display:inline-flex; align-items:center; gap:8px; "
+                                    "background: rgba(33, 150, 243, 0.18); color: #2196F3; "
+                                    "border: 1px solid rgba(33, 150, 243, 0.55); "
+                                    "border-radius: 20px; padding: 3px 14px 3px 10px; font-size: 1rem; font-weight: 700; "
+                                    "margin-left: 6px;'>"
+                                    "<span style='font-size: 1.6rem; line-height: 1;'>🚹</span> ذكر</span>"
+                                )
+
+                        # ── Nationality: country name + flag image (works on Windows) ──
+                        _nat_flag = ""
+                        _nat_flag_url = ""
+                        _nat_country_name = ""
+                        if _is_nat_field and v_str and not item["is_empty"]:
+                            try:
+                                _nat_code = _get_nationality_code(v_str)
+                                if not _nat_code and len(_v_low) == 2 and _v_low in COUNTRY_NAMES_DISPLAY:
+                                    _nat_code = _v_low
+                                if _nat_code:
+                                    _nat_code = _nat_code.strip().lower()
+                                    _nat_flag = _country_code_to_emoji(_nat_code)
+                                    try:
+                                        _nat_flag_url = _get_flag_url_cached(v_str) or f"https://cdn.jsdelivr.net/gh/lipis/flag-icons@7.2.0/flags/4x3/{_nat_code}.svg"
+                                    except Exception:
+                                        _nat_flag_url = f"https://cdn.jsdelivr.net/gh/lipis/flag-icons@7.2.0/flags/4x3/{_nat_code}.svg"
+                                    _c_disp = get_country_display_name(_nat_code, 'ar' if is_ar else 'en')
+                                    _nat_country_name = _c_disp if _c_disp else v_str
+                                else:
+                                    _nat_country_name = v_str
+                            except Exception:
+                                _nat_country_name = v_str
+
+                        # ── Build val_html ─────────────────────────────────
+                        if item["is_empty"]:
+                            val_html = f"<span style='color: rgba(255,255,255,0.35); font-style: italic;'>{'غير مسجل' if is_ar else 'Not recorded'}</span>"
+                        elif item["is_url"]:
+                            link_lbl = "فتح رابط السيرة الذاتية" if ("cv" in orig_lbl.lower() or "سيرة" in orig_lbl.lower()) else ("فتح الرابط المرفق" if is_ar else "Open Link")
+                            val_html = f"<a href='{v_str}' target='_blank' style='color: #00FF66; text-decoration: underline; font-weight: 600;'>🔗 {link_lbl}</a>"
+                        elif _is_nat_field:
+                            _disp_name = _nat_country_name if _nat_country_name else v_str
+                            if _nat_flag_url:
+                                val_html = (
+                                    f"<span style='display:inline-flex; align-items:center; gap:8px;'>"
+                                    f"<img src='{_nat_flag_url}' style='width:32px; height:22px; object-fit:cover; "
+                                    f"border-radius:4px; box-shadow:0 1px 4px rgba(0,0,0,0.5); "
+                                    f"border:1px solid rgba(255,255,255,0.25); vertical-align:middle;' />"
+                                    f"<span style='color: #FFFFFF; font-weight: 600;'>{_disp_name}</span>"
+                                    f"</span>"
+                                )
+                            elif _nat_flag:
+                                val_html = (
+                                    f"<span style='display:inline-flex; align-items:center; gap:8px;'>"
+                                    f"<span style='color: #FFFFFF; font-weight: 600;'>{_disp_name}</span>"
+                                    f"<span style='font-size: 1.4rem; line-height: 1;'>{_nat_flag}</span>"
+                                    f"</span>"
+                                )
+                            else:
+                                val_html = f"<span style='color: #FFFFFF; font-weight: 600;'>{_disp_name}</span>"
+                        elif _is_gender_field and _gender_prefix:
+                            val_html = _gender_prefix
+                        elif _is_iqama_valid_field:
+                            # هل الإقامة سارية؟ لا = أحمر #FF3333 / نعم = أخضر #00FF66
+                            if any(kw in _v_low for kw in ["no", "لا", "false", "n", "غير سارية", "منتهية", "expired", "not valid"]):
+                                val_html = f"<span style='color: #FF3333; font-weight: 700;'>{v_str}</span>"
+                            elif any(kw in _v_low for kw in ["yes", "نعم", "true", "y", "سارية", "valid"]):
+                                val_html = f"<span style='color: #00FF66; font-weight: 700;'>{v_str}</span>"
+                            else:
+                                val_html = f"<span style='color: #FFFFFF; font-weight: 600;'>{v_str}</span>"
+                        elif _is_iqama_expired_duration_field:
+                            # مدة انتهاء الإقامة: أي قيمة مسجلة تكون باللون الأحمر #FF3333
+                            val_html = f"<span style='color: #FF3333; font-weight: 700;'>{v_str}</span>"
+                        elif _is_working_now_field:
+                            # هل تعمل حالياً؟ لا = أخضر #00FF66
+                            if any(kw in _v_low for kw in ["no", "لا", "false", "n", "لا أعمل", "لا اعمل", "not working", "غير موظف", "عاطل", "عاطلا"]):
+                                val_html = f"<span style='color: #00FF66; font-weight: 700;'>{v_str}</span>"
+                            else:
+                                val_html = f"<span style='color: #FFFFFF; font-weight: 600;'>{v_str}</span>"
+                        elif _is_work_outside_field:
+                            # هل يمكنك العمل خارج مدينتك؟ نعم = أخضر #00FF66
+                            if any(kw in _v_low for kw in ["yes", "نعم", "true", "y", "موافق", "نعم استطيع", "نعم أستطيع", "can work", "willing"]):
+                                val_html = f"<span style='color: #00FF66; font-weight: 700;'>{v_str}</span>"
+                            else:
+                                val_html = f"<span style='color: #FFFFFF; font-weight: 600;'>{v_str}</span>"
+                        elif _is_job_field:
+                            val_html = f"<span style='color: #FFA500; font-weight: 700;'>{v_str}</span>"
+                        elif _is_skills_field:
+                            val_html = f"<span style='color: #FFA500; font-weight: 700;'>{v_str}</span>"
+                        elif _is_iqama_prof_field:
+                            val_html = f"<span style='color: #FFA500; font-weight: 700;'>{v_str}</span>"
+                        elif _is_contract_field:
+                            # إذا كان منتهي = أخضر #00FF66 / إذا كان غير منتهي = أحمر #FF3333
+                            _is_expired = False
+                            if any(kw in _v_low for kw in ["منتهي", "expired"]):
+                                _is_expired = True
+                            elif any(kw in _v_low for kw in ["ساري", "active", "عاجل", "urgent", "غير منتهي"]):
+                                _is_expired = False
+                            else:
+                                try:
+                                    dt = pd.to_datetime(v_str, errors='coerce')
+                                    if pd.notnull(dt) and dt.date() <= datetime.now().date():
+                                        _is_expired = True
+                                    else:
+                                        _is_expired = False
+                                except Exception:
+                                    _is_expired = False
+
+                            if _is_expired:
+                                val_html = f"<span style='color: #00FF66; font-weight: 700;'>{v_str}</span>"
+                            else:
+                                val_html = f"<span style='color: #FF3333; font-weight: 700;'>{v_str}</span>"
+                        elif _is_fin_obl_field:
+                            # التزامات مالية: نعم = أحمر
+                            if any(kw in _v_low for kw in ["yes", "نعم", "true", "y"]):
+                                val_html = f"<span style='color: #FF3333; font-weight: 700;'>{v_str}</span>"
+                            elif any(kw in _v_low for kw in ["no", "لا", "false", "n"]):
+                                val_html = f"<span style='color: #00FF66; font-weight: 600;'>{v_str}</span>"
+                            else:
+                                val_html = f"<span style='color: #FFFFFF; font-weight: 600;'>{v_str}</span>"
+                        elif _is_huroob_field:
+                            # بلاغ هروب: نعم = أحمر
+                            if any(kw in _v_low for kw in ["yes", "نعم", "true", "y"]):
+                                val_html = f"<span style='color: #FF3333; font-weight: 700;'>{v_str}</span>"
+                            elif any(kw in _v_low for kw in ["no", "لا", "false", "n"]):
+                                val_html = f"<span style='color: #00FF66; font-weight: 600;'>{v_str}</span>"
+                            else:
+                                val_html = f"<span style='color: #FFFFFF; font-weight: 600;'>{v_str}</span>"
+                        elif _is_transfer_accept_field:
+                            # هل يقبل الكفيل النقل: نعم = أخضر / لا أو لااعرف = أحمر
+                            if any(kw in _v_low for kw in ["yes", "نعم", "موافق", "يقبل"]):
+                                val_html = f"<span style='color: #00FF66; font-weight: 700;'>{v_str}</span>"
+                            elif any(kw in _v_low for kw in ["no", "لا", "رفض", "لااعرف", "لا اعرف", "لا أعرف", "don't know", "dont know", "not sure", "غير معروف"]):
+                                val_html = f"<span style='color: #FF3333; font-weight: 700;'>{v_str}</span>"
+                            else:
+                                val_html = f"<span style='color: #FFFFFF; font-weight: 600;'>{v_str}</span>"
+                        elif _is_transfer_count_field:
+                            # عدد مرات نقل الكفالة: First time = أخضر
+                            if any(kw in _v_low for kw in ["first time", "first", "المرة الأولى", "المرة الاولى", "مرة واحدة", "لم يتم", "never"]):
+                                val_html = f"<span style='color: #00FF66; font-weight: 700;'>{v_str}</span>"
+                            else:
+                                val_html = f"<span style='color: #FFFFFF; font-weight: 600;'>{v_str}</span>"
+                        elif any(kw in _v_low for kw in ["عاجل", "urgent", "warning"]):
+                            val_html = f"<span style='color: #FF9900; font-weight: 700;'>{v_str}</span>"
+                        else:
+                            val_html = f"<span style='color: #FFFFFF; font-weight: 600;'>{v_str}</span>"
+
+                        orig_tag = ""
+                        if is_ar and orig_lbl != lbl and orig_lbl != "":
+                            orig_tag = (
+                                f"<span dir='ltr' style='direction: ltr; unicode-bidi: isolate; display: inline-block; "
+                                f"color: rgba(212, 175, 55, 0.6); font-size: 0.75rem; font-family: sans-serif;'>"
+                                f"({orig_lbl})"
+                                f"</span>"
+                            )
+
+                        card_html = (
+                            f"<div style='background: rgba(24, 24, 24, 0.75); border: 1px solid rgba(212, 175, 55, 0.22); "
+                            f"border-right: 4px solid #D4AF37; border-radius: 10px; padding: 10px 14px; margin-bottom: 10px; "
+                            f"box-shadow: 0 4px 12px rgba(0,0,0,0.3); direction: {d}; text-align: {a};'>"
+                            f"<div style='display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; flex-wrap: wrap; gap: 4px;'>"
+                            f"<span style='color: #D4AF37; font-weight: 700; font-size: 0.88rem;'>{lbl}</span>"
+                            f"{orig_tag}"
+                            f"</div>"
+                            f"<div style='font-size: 0.98rem; line-height: 1.4; word-break: break-word;'>"
+                            f"{val_html}"
+                            f"</div>"
+                            f"</div>"
+                        )
+                        st.html(card_html)
+                        _fuid = _fld_uid(item["col_key"])
+                        if st.button(
+                            "🗑️ " + ("حذف هذا السؤال" if is_ar else "Delete this Q&A"),
+                            key=f"del_field_{key_prefix}_{worker_id}_{_fuid}",
+                            help=("إخفاء مؤقت لهذا العامل فقط — يعود تلقائياً عند إغلاق النافذة وإعادة فتحها (لا يحذف من الشيت)" if is_ar else "Temporary hide for this worker only — restored automatically on close & reopen (kept in Sheet)"),
+                        ):
+                            st.session_state[_hide_key].add(item["col_key"])
+                            st.rerun()
+
+        with tab_table:
+            st.markdown(f"<div style='direction:{d}; text-align:{a};'>", unsafe_allow_html=True)
+            table_rows = []
+            for idx_f, f in enumerate(display_fields, 1):
+                val_display = f["value"] if not f["is_empty"] else ("غير مسجل" if is_ar else "Not recorded")
+                # Apply value translation for Arabic
+                if is_ar and not f["is_empty"]:
+                    val_display = t_val(val_display, 'ar', f["orig_label"])
+                _flbl = f"{f['orig_label']} {f['label']}".lower()
+                _is_nat_row = not f["is_empty"] and any(kw in _flbl for kw in ["nationality", "الجنسية", "جنسية"])
+                _is_gen_row = not f["is_empty"] and (
+                    any(kw in _flbl for kw in ["gender", "النوع", "نوع الجنس", "sex"])
+                    or (_flbl.strip() in ["الجنس", "جنس", "gender"])
+                    or ("الجنس" in _flbl and "الجنسية" not in _flbl and "جنسية" not in _flbl)
+                )
+                _flag_img = None
+                if _is_nat_row:
+                    try:
+                        n_code = _get_nationality_code(f["value"])
+                        if n_code:
+                            n_code = n_code.strip().lower()
+                            c_name = get_country_display_name(n_code, 'ar' if is_ar else 'en') or f["value"]
+                            val_display = c_name
+                            try:
+                                _flag_img = _get_flag_url_cached(f["value"]) or f"https://cdn.jsdelivr.net/gh/lipis/flag-icons@7.2.0/flags/4x3/{n_code}.svg"
+                            except Exception:
+                                _flag_img = f"https://cdn.jsdelivr.net/gh/lipis/flag-icons@7.2.0/flags/4x3/{n_code}.svg"
+                    except Exception:
+                        pass
+                if _is_gen_row:
+                    _vl = str(val_display).lower().strip()
+                    if any(w in _vl for w in ["female", "أنثى", "انثى", "اناث", "أناث", "امرأة", "امراة"]) or _vl in ["f", "أنثى", "انثى"]:
+                        val_display = f"🚺 {val_display}"
+                    elif any(w in _vl for w in ["male", "ذكر", "رجل"]) or _vl in ["m", "ذكر"]:
+                        val_display = f"🚹 {val_display}"
+                row_data = {
+                    "#" if is_ar else "No": idx_f,
+                    "اسم الحقل" if is_ar else "Field Name": f["label"],
+                    "القيمة المسجلة" if is_ar else "Recorded Value": val_display,
+                    "المسمى في قاعدة البيانات" if is_ar else "Database Header": f["orig_label"]
+                }
+                if _is_nat_row:
+                    row_data["🏳️ العلم" if is_ar else "🏳️ Flag"] = _flag_img
+                else:
+                    row_data["🏳️ العلم" if is_ar else "🏳️ Flag"] = None
+                table_rows.append(row_data)
+
+            df_modal = pd.DataFrame(table_rows)
+            try:
+                _flag_col = "🏳️ العلم" if is_ar else "🏳️ Flag"
+                st.dataframe(
+                    df_modal, width='content', hide_index=True,
+                    column_config=__apply_pinned_columns(df_modal, {_flag_col: st.column_config.ImageColumn(_flag_col, width="small")})
+                )
+            except Exception:
+                try:
+                    st.dataframe(df_modal, width='content', hide_index=True, column_config=__apply_pinned_columns(df_modal))
+                except Exception:
+                    st.dataframe(df_modal, width='content', hide_index=True)
+            st.markdown("</div>", unsafe_allow_html=True)
+
+        with tab_copy:
+            st.markdown(f"<div style='direction:{d}; text-align:{a};'>", unsafe_allow_html=True)
+            st.info("💡 " + ("يمكنك نسخ كافة البيانات المسجلة بنقرة واحدة باستخدام زر النسخ في الزاوية:" if is_ar else "You can copy all recorded data with one click using the copy icon:"))
+            
+            sep_line = "━" * 38
+            report_lines = [
+                f"📋 {'البيانات الكاملة المسجلة للعامل' if is_ar else 'Complete Registered Worker Data'}: {worker_name}",
+                sep_line,
+                f"📊 {'إجمالي الحقول' if is_ar else 'Total Fields'}: {total_fields_count} | {'المسجلة' if is_ar else 'Filled'}: {filled_count}",
+                ""
+            ]
+
+            for sec_key, sec_title in sections_def:
+                sec_items = [item for item in visible_fields if classify_field(item) == sec_key]
+                if not sec_items:
+                    continue
+                report_lines.append(f"\n{sec_title}:")
+                for itm in sec_items:
+                    v_clean = itm["value"] if not itm["is_empty"] else ("غير مسجل" if is_ar else "Not recorded")
+                    # Apply value translation for Arabic
+                    if is_ar and not itm["is_empty"]:
+                        v_clean = t_val(v_clean, 'ar', itm["orig_label"])
+                    _clbl = f"{itm['orig_label']} {itm['label']}".lower()
+                    if not itm["is_empty"] and any(kw in _clbl for kw in ["nationality", "الجنسية", "جنسية"]):
+                        try:
+                            n_code = _get_nationality_code(itm["value"])
+                            if n_code:
+                                c_name = get_country_display_name(n_code, 'ar' if is_ar else 'en') or itm["value"]
+                                flag_e = _country_code_to_emoji(n_code)
+                                v_clean = f"{c_name} {flag_e}"
+                        except Exception:
+                            pass
+                    elif not itm["is_empty"] and (any(kw in _clbl for kw in ["gender", "النوع", "sex"]) or (_clbl.strip() in ["الجنس", "جنس", "gender"]) or ("الجنس" in _clbl and "الجنسية" not in _clbl and "جنسية" not in _clbl)):
+                        _vl = str(v_clean).lower().strip()
+                        if any(w in _vl for w in ["female", "أنثى", "انثى", "اناث", "أناث", "امرأة", "امراة"]) or _vl in ["f", "أنثى", "انثى"]:
+                            v_clean = f"🚺 {v_clean}"
+                        elif any(w in _vl for w in ["male", "ذكر", "رجل"]) or _vl in ["m", "ذكر"]:
+                            v_clean = f"🚹 {v_clean}"
+                    report_lines.append(f"• {itm['label']}: {v_clean}")
+
+            report_lines.append(f"\n{sep_line}")
+            report_lines.append("✨ تم الاستخراج من قاعدة بيانات النظام بدقة كاملة." if is_ar else "✨ Extracted from system database with complete fidelity.")
+            
+            full_text_report = "\n".join(report_lines)
+            st.code(full_text_report, language="markdown")
+            st.markdown("</div>", unsafe_allow_html=True)
+
+        with tab_print:
+            import html as _html_lib
+            import re as _re_print
+            from datetime import datetime as _dt_print
+            _dir = 'rtl' if is_ar else 'ltr'
+            _align = 'right' if is_ar else 'left'
+            _now_str = _dt_print.now().strftime('%Y-%m-%d %H:%M')
+            _safe_name = _re_print.sub(r'[\\/:*?"<>|]', '', str(worker_name)).strip() or 'worker'
+
+            def _fmt_print_val(itm):
+                _v = itm["value"] if not itm["is_empty"] else ("غير مسجل" if is_ar else "Not recorded")
+                if is_ar and not itm["is_empty"]:
+                    try:
+                        _v = t_val(_v, 'ar', itm["orig_label"])
+                    except Exception:
+                        pass
+                _cl = f"{itm['orig_label']} {itm['label']}".lower()
+                _is_nat = any(kw in _cl for kw in ["nationality", "الجنسية", "جنسية"])
+                _is_gen = (any(kw in _cl for kw in ["gender", "النوع", "sex"])
+                           or (_cl.strip() in ["الجنس", "جنس", "gender"])
+                           or ("الجنس" in _cl and "الجنسية" not in _cl and "جنسية" not in _cl))
+                if _is_nat and not itm["is_empty"]:
+                    try:
+                        _nc = _get_nationality_code(itm["value"])
+                        if _nc:
+                            _nc = _nc.strip().lower()
+                            _cn = get_country_display_name(_nc, 'ar' if is_ar else 'en') or _v
+                            _furl = f"https://cdn.jsdelivr.net/gh/lipis/flag-icons@7.2.0/flags/4x3/{_nc}.svg"
+                            return f"<span style='font-weight:700;'>{_html_lib.escape(str(_cn))}</span> <img src='{_furl}' style='width:30px;height:20px;object-fit:cover;border:1px solid #ccc;vertical-align:middle;' crossorigin='anonymous' />"
+                    except Exception:
+                        pass
+                if _is_gen and not itm["is_empty"]:
+                    _vl = str(_v).lower().strip()
+                    if any(w in _vl for w in ["female", "أنثى", "انثى", "اناث", "أناث", "امرأة", "امراة"]) or _vl in ["f", "أنثى", "انثى"]:
+                        return "🚺 " + _html_lib.escape(str(_v))
+                    if any(w in _vl for w in ["male", "ذكر", "رجل"]) or _vl in ["m", "ذكر"]:
+                        return "🚹 " + _html_lib.escape(str(_v))
+                return _html_lib.escape(str(_v))
+
+            _print_sections = ""
+            for _sec_key, _sec_title in sections_def:
+                _sec_items = [item for item in visible_fields if classify_field(item) == _sec_key]
+                if not _sec_items:
+                    continue
+                _rows = ""
+                for _it in _sec_items:
+                    _rows += (
+                        "<tr>"
+                        f"<td style='border:1px solid #999;padding:6px 8px;width:32%;font-weight:700;background:#f2f2f2;color:#111;'>{_html_lib.escape(str(_it['label']))}</td>"
+                        f"<td style='border:1px solid #999;padding:6px 8px;color:#111;'>{_fmt_print_val(_it)}</td>"
+                        "</tr>"
+                    )
+                _print_sections += (
+                    f"<h3 style='background:#111;color:#fff;padding:8px 12px;border-radius:6px;margin:16px 0 8px 0;font-size:15px;'>{_html_lib.escape(str(_sec_title))} ({len(_sec_items)})</h3>"
+                    f"<table style='width:100%;border-collapse:collapse;font-size:13px;' dir='{_dir}'>{_rows}</table>"
+                )
+
+            _report_inner = (
+                f"<div id='worker-print-area' style='background:#fff;color:#111;padding:24px;font-family:Cairo,Arial,sans-serif;' dir='{_dir}'>"
+                f"<div style='text-align:center;border:3px double #111;border-radius:10px;padding:14px;margin-bottom:12px;'>"
+                f"<div style='font-size:20px;font-weight:900;'>{'البيانات الكاملة المسجلة للعامل' if is_ar else 'Complete Registered Worker Data'}</div>"
+                f"<div style='font-size:17px;font-weight:800;margin-top:4px;'>👤 {_html_lib.escape(str(worker_name))}</div>"
+                f"<div style='font-size:12px;color:#333;margin-top:6px;'>{'إجمالي الحقول' if is_ar else 'Total'}: {total_fields_count} | {'المسجلة' if is_ar else 'Filled'}: {filled_count} | 📅 {_now_str}</div>"
+                f"</div>"
+                f"{_print_sections}"
+                f"<div style='text-align:center;font-size:11px;color:#555;margin-top:16px;border-top:1px solid #999;padding-top:8px;'>{'تم الاستخراج من قاعدة بيانات النظام بدقة كاملة' if is_ar else 'Extracted from system database with complete fidelity.'}</div>"
+                f"</div>"
+            )
+
+            _print_css = (
+                "body{font-family:Cairo,Arial,sans-serif;background:#fff;color:#111;}"
+                "#worker-print-area{max-width:800px;margin:0 auto;}"
+                "table{width:100%;border-collapse:collapse;}"
+                "img{print-color-adjust:exact;-webkit-print-color-adjust:exact;}"
+                "@media print{"
+                ".no-print{display:none !important;}"
+                "button{display:none !important;}"
+                "}"
+            )
+
+            _standalone_html = (
+                "<!DOCTYPE html><html lang='" + ('ar' if is_ar else 'en') + "' dir='" + _dir + "'><head><meta charset='utf-8'>"
+                f"<title>{_html_lib.escape(str(worker_name))}</title>"
+                f"<style>{_print_css}</style></head><body>"
+                "<div class='no-print' style='text-align:center;padding:12px;'>"
+                "<button onclick='window.print()' style='font-size:16px;padding:10px 26px;cursor:pointer;border-radius:8px;border:1px solid #111;background:#111;color:#fff;'>🖨️ " + ('طباعة' if is_ar else 'Print') + "</button>"
+                "</div>"
+                f"{_report_inner}</body></html>"
+            )
+
+            _comp_html = (
+                f"<style id='print-styles'>{_print_css}</style>"
+                "<div class='no-print' style='margin-bottom:12px;'>"
+                "<button onclick='doWorkerPrint()' style='width:100%;font-size:15px;font-weight:800;padding:11px;cursor:pointer;border-radius:10px;border:none;background:linear-gradient(135deg,#D4AF37,#9C7C1E);color:#111;'>🖨️ " + ('طباعة البيانات' if is_ar else 'Print') + "</button>"
+                "</div>"
+                f"{_report_inner}"
+                "<script>"
+                "function doWorkerPrint(){"
+                "var content=document.getElementById('worker-print-area').outerHTML;"
+                "var styles=document.getElementById('print-styles').innerHTML;"
+                "var w=window.open('','_blank','width=950,height=750');"
+                "if(!w){alert('" + ('يرجى السماح بالنوافذ المنبثقة للطباعة' if is_ar else 'Please allow popups to print') + "');return;}"
+                "w.document.write('<html><head><meta charset=\"utf-8\"><title>" + _html_lib.escape(str(worker_name)).replace("'", "\\'") + "</title><style>'+styles+'</style></head><body>'+content+'<scr'+'ipt>window.onload=function(){setTimeout(function(){window.print()},350)}<\\/scr'+'ipt></body></html>');"
+                "w.document.close();"
+                "}"
+                "</script>"
+            )
+            st.components.v1.html(_comp_html, height=900, scrolling=True)
+
+            # ── Server-side PNG image (valid file, WhatsApp-safe) ──
+            def _build_worker_png_bytes():
+                from PIL import Image as _PILImage, ImageDraw as _PILDraw, ImageFont as _PILFont
+                import io as _io
+                import os as _os
+                import re as _rx2
+                try:
+                    import arabic_reshaper as _ar_resh
+                    from bidi.algorithm import get_display as _bidi_disp
+                    _has_resh = True
+                except Exception:
+                    _has_resh = False
+                try:
+                    import requests as _rq
+                    _has_rq = True
+                except Exception:
+                    _has_rq = False
+
+                _ar_rx = _rx2.compile(r'[\u0600-\u06FF]')
+                _emoji_rx = _rx2.compile('[\U0001F000-\U0001FAFF\u2600-\u27BF\u2B00-\u2BFF\uFE0F\u200D]')
+
+                def _pick(_paths, _size):
+                    for _p in _paths:
+                        if _p and _os.path.exists(_p):
+                            try:
+                                return _PILFont.truetype(_p, _size)
+                            except Exception:
+                                continue
+                    return _PILFont.load_default()
+
+                _winf = 'C:/Windows/Fonts/'
+                _dj = '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'
+                _dj_b = '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf'
+                _f_title = _pick([_winf + 'arialbd.ttf', _dj_b], 36)
+                _f_name = _pick([_winf + 'arialbd.ttf', _dj_b], 32)
+                _f_meta = _pick([_winf + 'arial.ttf', _dj], 23)
+                _f_sec = _pick([_winf + 'arialbd.ttf', _dj_b], 27)
+                _f_lab = _pick([_winf + 'arialbd.ttf', _dj_b], 25)
+                _f_val = _pick([_winf + 'arial.ttf', _dj], 26)
+                _f_prog = _pick([_winf + 'arial.ttf', _dj], 22)
+                _f_script = _pick([_winf + 'segoesc.ttf', _winf + 'segoescb.ttf'], 60)
+
+                def _clean(_t):
+                    return _emoji_rx.sub('', str(_t))
+
+                def _sh(_t):
+                    _t = _clean(_t)
+                    if _has_resh and _ar_rx.search(_t):
+                        try:
+                            return _bidi_disp(_ar_resh.reshape(_t))
+                        except Exception:
+                            return _t
+                    return _t
+
+                _rtl = bool(is_ar)
+                _W = 1440
+                _M = 40
+                _CW = _W - 2 * _M
+                _tmp = _PILImage.new('RGB', (10, 10), 'white')
+                _md = _PILDraw.Draw(_tmp)
+
+                def _tw(_t, _font):
+                    try:
+                        return _md.textlength(_sh(_t), font=_font)
+                    except Exception:
+                        return len(str(_t)) * 14
+
+                def _wrap(_t, _font, _maxw):
+                    _words = str(_t).split()
+                    _lines, _cur = [], ''
+                    for _w in _words:
+                        if _tw(_w, _font) > _maxw and len(_w) > 1:
+                            if _cur:
+                                _lines.append(_cur)
+                                _cur = ''
+                            _part = ''
+                            for _ch in _w:
+                                if _tw(_part + _ch, _font) <= _maxw:
+                                    _part += _ch
+                                else:
+                                    _lines.append(_part)
+                                    _part = _ch
+                            _cur = _part
+                            continue
+                        _cand = (_cur + ' ' + _w).strip()
+                        if _tw(_cand, _font) <= _maxw or not _cur:
+                            _cur = _cand
+                        else:
+                            _lines.append(_cur)
+                            _cur = _w
+                    if _cur:
+                        _lines.append(_cur)
+                    return _lines or ['']
+
+                def _is_nat(_itm):
+                    _c = f"{_itm['orig_label']} {_itm['label']}".lower()
+                    return any(k in _c for k in ['nationality', 'الجنسية', 'جنسية'])
+
+                def _is_gen(_itm):
+                    _c = f"{_itm['orig_label']} {_itm['label']}".lower()
+                    return (any(k in _c for k in ['gender', 'النوع', 'sex'])
+                            or _c.strip() in ['الجنس', 'جنس', 'gender']
+                            or ('الجنس' in _c and 'الجنسية' not in _c and 'جنسية' not in _c))
+
+                def _gen_kind(_v):
+                    _l = str(_v).lower().strip()
+                    if any(w in _l for w in ['female', 'أنثى', 'انثى', 'اناث', 'أناث', 'امرأة', 'امراة']) or _l in ['f', 'أنثى', 'انثى']:
+                        return 'F'
+                    if any(w in _l for w in ['male', 'ذكر', 'رجل']) or _l in ['m', 'ذكر']:
+                        return 'M'
+                    return ''
+
+                def _flag_img(_code):
+                    _ck = f'_flagpng_{str(_code).lower()}'
+                    if _ck in st.session_state and st.session_state[_ck] is not None:
+                        return st.session_state[_ck]
+                    _data = None
+                    if _has_rq:
+                        try:
+                            _r = _rq.get(f'https://flagcdn.com/w160/{str(_code).lower()}.png', timeout=10)
+                            if _r.status_code == 200 and _r.content:
+                                from PIL import Image as _P2
+                                _fim = _P2.open(_io.BytesIO(_r.content)).convert('RGB')
+                                _fim.thumbnail((144, 108))
+                                _data = _fim
+                        except Exception:
+                            _data = None
+                    st.session_state[_ck] = _data
+                    return _data
+
+                _title_txt = 'البيانات الكاملة المسجلة للعامل' if is_ar else 'Complete Registered Worker Data'
+                _meta_txt = f"{'إجمالي الحقول' if is_ar else 'Total'}: {total_fields_count} | {'المسجلة' if is_ar else 'Filled'}: {filled_count} | {_now_str}"
+                _t_lines = _wrap(_title_txt, _f_title, _CW - 80)
+                _n_lines = _wrap(str(worker_name), _f_name, _CW - 80)
+                _m_lines = _wrap(_meta_txt, _f_meta, _CW - 80)
+
+                _LH = 34
+                _VPAD = 8
+                _CELLGAP = 12
+                _CELLW = (_CW - _CELLGAP) // 2
+                _TXTPAD = 16
+
+                def _entry_text(_it2):
+                    if _it2['is_empty']:
+                        return ('غير مسجل' if is_ar else 'Not recorded')
+                    _vv = str(_it2['value'])
+                    if is_ar:
+                        try:
+                            _vv = t_val(_vv, 'ar', _it2['orig_label'])
+                        except Exception:
+                            pass
+                    return _vv
+
+                def _norm_lab(_label):
+                    _s = str(_label).strip()
+                    _s = _s.rstrip(':：').rstrip()
+                    return _s + ':'
+
+                def _cell_plan(_label, _vtext, _kind, _textw, _reserve):
+                    _avail = _textw - _reserve
+                    if _avail < 120:
+                        _avail = 120
+                    _lab_txt = _norm_lab(_label)
+                    _lab_lines = _wrap(_lab_txt + '  ', _f_lab, _avail)
+                    if not _lab_lines:
+                        _lab_lines = [_lab_txt]
+                    _vlines = _wrap(_vtext, _f_val, _avail)
+                    if not _vlines:
+                        _vlines = ['']
+                    _labw = _tw(_lab_lines[0], _f_lab)
+                    _comb = (len(_lab_lines) == 1 and len(_vlines) >= 1
+                             and (_labw + _tw(_vlines[0], _f_val) <= _avail))
+                    if _comb:
+                        _n = len(_lab_lines) + len(_vlines) - 1
+                    else:
+                        _n = len(_lab_lines) + len(_vlines)
+                    return (_comb, _labw, _lab_lines, _vlines, _n)
+
+                def _cell_h(_label, _vtext, _kind, _textw, _reserve):
+                    _h = _cell_plan(_label, _vtext, _kind, _textw, _reserve)[4] * _LH + _VPAD * 2
+                    return max(_h, 56)
+
+                _flat = []
+                for _sk2, _stitle2 in sections_def:
+                    _items2 = [it for it in visible_fields if classify_field(it) == _sk2]
+                    if not _items2:
+                        continue
+                    _flat.append({'t': 'sec', 'lines': _wrap(f'{_stitle2} ({len(_items2)})', _f_sec, _CW - 60)})
+                    for _it2 in _items2:
+                        _kind2, _g2, _flag2 = 'text', '', None
+                        _vtext2 = _entry_text(_it2)
+                        if not _it2['is_empty']:
+                            if _is_nat(_it2):
+                                try:
+                                    _nc2 = _get_nationality_code(_it2['value'])
+                                except Exception:
+                                    _nc2 = None
+                                if _nc2:
+                                    _nc2 = str(_nc2).strip().lower()
+                                    try:
+                                        _vtext2 = get_country_display_name(_nc2, 'ar' if is_ar else 'en') or _vtext2
+                                    except Exception:
+                                        pass
+                                    _flag2 = _flag_img(_nc2)
+                            elif _is_gen(_it2):
+                                _g2 = _gen_kind(_vtext2)
+                                if _g2:
+                                    _kind2 = 'gender'
+                        _flat.append({'t': 'row', 'label': str(_it2['label']), 'vtext': _vtext2,
+                                      'kind': _kind2, 'g': _g2, 'flag': _flag2, 'empty': bool(_it2['is_empty'])})
+
+                _TEXTW_CELL = _CELLW - _TXTPAD * 2
+                _TEXTW_FULL = _CW - _TXTPAD * 2
+
+                def _res_of(_en):
+                    if _en['kind'] == 'gender' and _en['g'] in ('M', 'F'):
+                        return 140
+                    if _en['flag'] is not None:
+                        return 100
+                    return 0
+
+                _layout = []
+                _i = 0
+                while _i < len(_flat):
+                    _en = _flat[_i]
+                    if _en['t'] == 'sec':
+                        _layout.append(_en)
+                        _i += 1
+                        continue
+                    if _i + 1 < len(_flat) and _flat[_i + 1]['t'] == 'row':
+                        _en2 = _flat[_i + 1]
+                        _h1 = _cell_h(_en['label'], _en['vtext'], _en['kind'], _TEXTW_CELL, _res_of(_en))
+                        _h2 = _cell_h(_en2['label'], _en2['vtext'], _en2['kind'], _TEXTW_CELL, _res_of(_en2))
+                        _layout.append({'t': 'pair', 'a': _en, 'b': _en2, 'h': max(_h1, _h2)})
+                        _i += 2
+                    else:
+                        _layout.append({'t': 'single', 'a': _en,
+                                        'h': _cell_h(_en['label'], _en['vtext'], _en['kind'], _TEXTW_FULL, _res_of(_en))})
+                        _i += 1
+
+                _head_h = len(_t_lines) * 44 + len(_n_lines) * 40 + len(_m_lines) * 28 + 60
+                _H = 32 + _head_h + 16
+                for _e in _layout:
+                    _H += (52 if _e['t'] == 'sec' else _e['h']) + 6
+                _H += 22 + 30 + 72 + 36
+
+                _img = _PILImage.new('RGB', (_W, _H), 'white')
+                _dr = _PILDraw.Draw(_img)
+                _y = 32
+                _dr.rounded_rectangle([_M - 12, _y, _W - _M + 12, _y + _head_h], radius=18, outline='black', width=4)
+                _y += 28
+                for _ln in _t_lines:
+                    _dr.text((_W // 2, _y), _sh(_ln), font=_f_title, fill='black', anchor='ma')
+                    _y += 44
+                _y += 2
+                for _ln in _n_lines:
+                    _dr.text((_W // 2, _y), _sh(_ln), font=_f_name, fill='black', anchor='ma')
+                    _y += 40
+                _y += 4
+                for _ln in _m_lines:
+                    _dr.text((_W // 2, _y), _sh(_ln), font=_f_meta, fill=(80, 80, 80), anchor='ma')
+                    _y += 28
+                _y += 26 + 16
+
+                def _draw_cell(_en, _cx0, _cx1, _rh, _yy):
+                    _textw = (_cx1 - _cx0) - _TXTPAD * 2
+                    _res = 140 if (_en['kind'] == 'gender' and _en['g'] in ('M', 'F')) else (100 if _en['flag'] is not None else 0)
+                    _comb, _labw, _lab_lines, _vlines, _n = _cell_plan(_en['label'], _en['vtext'], _en['kind'], _textw, _res)
+                    _ty = _yy + max(0, (_rh - _n * _LH)) // 2
+                    _vfill = (130, 130, 130) if _en.get('empty') else 'black'
+                    if _rtl:
+                        _xe = _cx1 - _TXTPAD
+                        if _en['kind'] == 'gender' and _en['g'] in ('M', 'F'):
+                            _bcol = (33, 150, 243) if _en['g'] == 'M' else (236, 64, 122)
+                            _btxt = 'ذكر' if _en['g'] == 'M' else 'أنثى'
+                            _by = _ty + (_LH - 40) // 2
+                            _dr.rounded_rectangle([_xe - 120, _by, _xe, _by + 40], radius=20, fill=_bcol)
+                            _dr.text((_xe - 60, _by + 20), _sh(_btxt), font=_f_lab, fill='white', anchor='mm')
+                            _xe -= 132
+                        elif _en['flag'] is not None:
+                            try:
+                                _fim2 = _en['flag']
+                                _fw, _fh = _fim2.size
+                                _sc = min(64 / _fw, 46 / _fh)
+                                _fim2 = _fim2.resize((max(1, int(_fw * _sc)), max(1, int(_fh * _sc))))
+                                _fw2, _fh2 = _fim2.size
+                                _img.paste(_fim2, (_xe - _fw2, _ty + (_LH - _fh2) // 2))
+                                _xe -= _fw2 + 12
+                            except Exception:
+                                pass
+                        if _comb:
+                            _dr.text((_xe, _ty), _sh(_lab_lines[0]), font=_f_lab, fill='black', anchor='ra')
+                            _dr.text((_xe - _labw, _ty), _sh(_vlines[0]), font=_f_val, fill=_vfill, anchor='ra')
+                            _vy = _ty + _LH
+                            for _ln in _vlines[1:]:
+                                _dr.text((_xe, _vy), _sh(_ln), font=_f_val, fill=_vfill, anchor='ra')
+                                _vy += _LH
+                        else:
+                            _vy = _ty
+                            for _ln in _lab_lines:
+                                _dr.text((_xe, _vy), _sh(_ln), font=_f_lab, fill='black', anchor='ra')
+                                _vy += _LH
+                            for _ln in _vlines:
+                                _dr.text((_xe, _vy), _sh(_ln), font=_f_val, fill=_vfill, anchor='ra')
+                                _vy += _LH
+                    else:
+                        _xs = _cx0 + _TXTPAD
+                        if _en['kind'] == 'gender' and _en['g'] in ('M', 'F'):
+                            _bcol = (33, 150, 243) if _en['g'] == 'M' else (236, 64, 122)
+                            _btxt = 'ذكر' if _en['g'] == 'M' else 'أنثى'
+                            _by = _ty + (_LH - 40) // 2
+                            _dr.rounded_rectangle([_xs, _by, _xs + 120, _by + 40], radius=20, fill=_bcol)
+                            _dr.text((_xs + 60, _by + 20), _sh(_btxt), font=_f_lab, fill='white', anchor='mm')
+                            _xs += 132
+                        elif _en['flag'] is not None:
+                            try:
+                                _fim2 = _en['flag']
+                                _fw, _fh = _fim2.size
+                                _sc = min(64 / _fw, 46 / _fh)
+                                _fim2 = _fim2.resize((max(1, int(_fw * _sc)), max(1, int(_fh * _sc))))
+                                _fw2, _fh2 = _fim2.size
+                                _img.paste(_fim2, (_xs, _ty + (_LH - _fh2) // 2))
+                                _xs += _fw2 + 12
+                            except Exception:
+                                pass
+                        if _comb:
+                            _dr.text((_xs, _ty), _sh(_lab_lines[0]), font=_f_lab, fill='black', anchor='la')
+                            _dr.text((_xs + _labw, _ty), _sh(_vlines[0]), font=_f_val, fill=_vfill, anchor='la')
+                            _vy = _ty + _LH
+                            for _ln in _vlines[1:]:
+                                _dr.text((_xs, _vy), _sh(_ln), font=_f_val, fill=_vfill, anchor='la')
+                                _vy += _LH
+                        else:
+                            _vy = _ty
+                            for _ln in _lab_lines:
+                                _dr.text((_xs, _vy), _sh(_ln), font=_f_lab, fill='black', anchor='la')
+                                _vy += _LH
+                            for _ln in _vlines:
+                                _dr.text((_xs, _vy), _sh(_ln), font=_f_val, fill=_vfill, anchor='la')
+                                _vy += _LH
+
+                for _e in _layout:
+                    if _e['t'] == 'sec':
+                        _dr.rounded_rectangle([_M, _y, _W - _M, _y + 46], radius=10, fill='black')
+                        _sy = _y + 23 - (len(_e['lines']) * 34) // 2
+                        for _ln in _e['lines']:
+                            _dr.text((_W // 2, _sy), _sh(_ln), font=_f_sec, fill='white', anchor='ma')
+                            _sy += 34
+                        _y += 46 + 6
+                        continue
+                    _rh = _e['h']
+                    _dr.rectangle([_M, _y, _W - _M, _y + _rh], outline='black', width=2)
+                    if _e['t'] == 'pair':
+                        _mid = _M + _CELLW + _CELLGAP // 2
+                        _dr.line([_mid, _y, _mid, _y + _rh], fill=(130, 130, 130), width=2)
+                        if _rtl:
+                            _draw_cell(_e['a'], _mid + _CELLGAP // 2, _W - _M, _rh, _y)
+                            _draw_cell(_e['b'], _M, _mid - _CELLGAP // 2, _rh, _y)
+                        else:
+                            _draw_cell(_e['a'], _M, _mid - _CELLGAP // 2, _rh, _y)
+                            _draw_cell(_e['b'], _mid + _CELLGAP // 2, _W - _M, _rh, _y)
+                    else:
+                        _draw_cell(_e['a'], _M, _W - _M, _rh, _y)
+                    _y += _rh + 6
+
+                _y += 14
+                _dr.line([_M + 60, _y, _W - _M - 60, _y], fill=(160, 160, 160), width=2)
+                _y += 10
+                _dr.text((_W // 2, _y), 'PROGRAMMING  •  PROG.', font=_f_prog, fill=(154, 124, 30), anchor='ma')
+                _y += 30
+                _dr.text((_W // 2, _y), 'Alsaeed Alwazzan', font=_f_script, fill=(138, 101, 8), anchor='ma')
+
+                _buf = _io.BytesIO()
+                _img.save(_buf, format='PNG', optimize=True)
+                return _buf.getvalue()
+
+            _png_state_key = f'worker_png_{key_prefix}_{worker_id}'
+            if st.button('📸 ' + ('حفظ كصورة PNG (تعمل على الواتساب ✅)' if is_ar else 'Save as PNG image (WhatsApp-ready ✅)'), key=f'mkpng_{key_prefix}_{worker_id}', width='stretch'):
+                with st.spinner('⏳ ' + ('جاري تجهيز الصورة...' if is_ar else 'Rendering image...')):
+                    try:
+                        st.session_state[_png_state_key] = _build_worker_png_bytes()
+                    except Exception as _pxe:
+                        st.session_state[_png_state_key] = None
+                        st.error('❌ ' + str(_pxe))
+            _png_data = st.session_state.get(_png_state_key)
+            if _png_data:
+                st.image(_png_data, caption=('معاينة الصورة — جاهزة للرفع على الواتساب ✅' if is_ar else 'Preview — ready for WhatsApp ✅'))
+                st.download_button(
+                    '⬇️ ' + ('تحميل الصورة PNG' if is_ar else 'Download PNG image'),
+                    data=_png_data,
+                    file_name=f'{_safe_name}.png',
+                    mime='image/png',
+                    key=f'dlpng_{key_prefix}_{worker_id}',
+                    width='stretch'
+                )
+            st.download_button(
+                "⬇️ " + ("تحميل نسخة الطباعة (HTML)" if is_ar else "Download printable (HTML)"),
+                data=_standalone_html.encode('utf-8'),
+                file_name=f"{_safe_name}_print.html",
+                mime="text/html",
+                key=f"dl_print_{key_prefix}_{worker_id}",
+                width='stretch'
+            )
+
+        # ── Footer: programming signature (handwritten shiny gold) ──
+        st.html(
+            "<style>"
+            "@import url('https://fonts.googleapis.com/css2?family=Great+Vibes&display=swap');"
+            "@keyframes goldShine{0%{background-position:0% 50%;}50%{background-position:100% 50%;}100%{background-position:0% 50%;}}"
+            "</style>"
+            "<div style='text-align:center; margin-top:22px; padding-top:12px; "
+            "border-top:1px solid rgba(212,175,55,0.25); direction:ltr;'>"
+            "<div style='font-size:0.7rem; color:rgba(212,175,55,0.8); "
+            "font-family:Verdana,sans-serif; letter-spacing:3px;'>PROGRAMMING &#8226; PROG.</div>"
+            "<div style=\"font-family:'Great Vibes','Dancing Script','Brush Script MT',cursive; "
+            "font-size:2rem; line-height:1.2; margin-top:2px; padding:0 10px 6px 10px; "
+            "background:linear-gradient(110deg,#8a6508,#d4af37 20%,#fff8d6 40%,#f5e7a8 50%,#fff8d6 60%,#d4af37 80%,#8a6508); "
+            "background-size:200% auto; "
+            "-webkit-background-clip:text; background-clip:text; color:transparent; "
+            "animation:goldShine 4s linear infinite; "
+            "filter:drop-shadow(0 0 6px rgba(212,175,55,0.45));\">"
+            "Alsaeed Alwazzan</div>"
+            "</div>"
+        )
+
+    col_full, col_sum = st.columns([1, 1])
+    with col_full:
+        if st.button("📋 " + t('full_worker_info_btn', lang), width='stretch', key=f"btn_full_info_{key_prefix}_{worker_id}"):
+            # Fresh open → temporary deletions reset, so previously hidden Q&A reappear.
+            # Single-slot state: only ONE dialog can exist per run (Streamlit limit),
+            # so opening this replaces any other open dialog instead of stacking.
+            try:
+                st.session_state["active_dlg"] = ("full", str(key_prefix), str(worker_id))
+                st.session_state[f"deleted_fields_{key_prefix}_{worker_id}"] = set()
+                _png_reset_key = f'worker_png_{key_prefix}_{worker_id}'
+                if _png_reset_key in st.session_state:
+                    del st.session_state[_png_reset_key]
+            except Exception:
+                pass
+    with col_sum:
+        if st.button("✨ " + ("إنشاء ملخص العامل" if lang == 'ar' else "Create Worker Summary"), width='stretch', key=f"btn_summary_mk_{key_prefix}_{worker_id}"):
+            try:
+                st.session_state["active_dlg"] = ("summary", str(key_prefix), str(worker_id))
+            except Exception:
+                pass
+    # Keep the dialog alive across inner reruns (delete/restore/search).
+    # Without this, ANY button inside the dialog closes it immediately,
+    # because the open-button above is False on those reruns.
+    # try/except = safety net: Streamlit allows max one dialog per run.
+    try:
+        _active = st.session_state.get("active_dlg")
+    except Exception:
+        _active = None
+    if _active == ("full", str(key_prefix), str(worker_id)):
+        try:
+            show_worker_full_info_modal()
+        except Exception as _dlg_e:
+            # Swallow ONLY the "single dialog per run" limit error; re-raise real bugs.
+            if type(_dlg_e).__name__ != "StreamlitAPIException":
+                raise
+    elif _active == ("summary", str(key_prefix), str(worker_id)):
+        try:
+            show_worker_summary_modal()
+        except Exception as _dlg_e:
+            if type(_dlg_e).__name__ != "StreamlitAPIException":
+                raise
 
     translate_configs = [
         {"lang_code": "ar", "label": t('translate_cv_btn', lang), "key_suffix": "ar", "target": "ar"},
@@ -2583,6 +4163,24 @@ def render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search", 
                     )
     
     st.markdown(f"#### 🔎 {t('preview_cv', lang)}")
+
+    # Direct per-worker CV download button (same original file & mechanism as the grid link).
+    # An HTML anchor styled as a button: no widget-ID conflicts across panels,
+    # opens the worker's own file in a new tab.
+    _cv_dl_url = str(cv_url).strip().replace('"', '') if cv_url else ""
+    if _cv_dl_url.lower().startswith("http"):
+        _dl_label = "⬇ تحميل السيرة الذاتية" if lang == 'ar' else "⬇ Download CV"
+        st.markdown(
+            f"""<a href="{_cv_dl_url}" target="_blank" rel="noopener noreferrer" style="
+                display: block; text-align: center; text-decoration: none;
+                background: linear-gradient(135deg, #1A1A1A 0%, #262626 100%);
+                color: #D4AF37; font-weight: 700; font-family: 'Cairo', sans-serif;
+                border: 1px solid rgba(212, 175, 55, 0.4); border-radius: 12px;
+                padding: 0.75rem 2rem; margin: 10px 0; letter-spacing: 1px;
+                box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);">{_dl_label}</a>""",
+            unsafe_allow_html=True)
+    else:
+        st.info("ℹ️ " + ("السيرة الذاتية غير متوفرة لهذا المرشح" if lang == 'ar' else "CV not available for this worker"))
     
     if cv_url and str(cv_url).startswith("http"):
         # NEW: Defer iframe loading to improve selection speed
@@ -2604,17 +4202,209 @@ def render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search", 
     else: st.info("لا يتوفر رابط معاينة لهذا العامل.")
 
 def login_screen():
-    # Request browser notification permission early
+    # Client-side Device Remember Script (Isolates storage strictly to this specific device/browser)
+    # NOTE: delivered as small sequential blocks — one large script block is
+    # not activated reliably by the renderer.
+    
+    # First, read localStorage and set a global variable BEFORE rendering
     st.html("""
 <script>
-// Request notification permission on page load
+window._recruitment_persist_from_storage = false;
+try {
+    var savedPersist = localStorage.getItem("_recruitment_device_persist");
+    window._recruitment_persist_from_storage = (savedPersist === "true");
+    console.log("Persist flag from storage:", window._recruitment_persist_from_storage);
+} catch(e) { console.error("read storage error:", e); }
+</script>
+""", unsafe_allow_javascript=True)
+    
+    st.html("""
+<script>
 if ('Notification' in window && Notification.permission === 'default') {
     Notification.requestPermission().then(function(permission) {
         console.log('Notification permission:', permission);
     });
 }
 </script>
-""")
+""", unsafe_allow_javascript=True)
+
+    st.html("""
+<script>
+(function() {
+    function setV(input, val) {
+        if (!input) return;
+        var lastVal = input.value;
+        try {
+            var nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+            if (nativeSetter) { nativeSetter.call(input, val); }
+            else { input.value = val; }
+        } catch (e) { input.value = val; }
+        if (lastVal !== val) {
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+            input.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+    }
+    function btoa_utf8(str) {
+        return window.btoa(unescape(encodeURIComponent(str)));
+    }
+    function atob_utf8(str) {
+        return decodeURIComponent(escape(window.atob(str)));
+    }
+    function getCookie(name) {
+        var value = "; " + document.cookie;
+        var parts = value.split("; " + name + "=");
+        if (parts.length == 2) return parts.pop().split(";").shift();
+        return null;
+    }
+    function lsGet(name) {
+        try { return window.localStorage.getItem(name); }
+        catch (e) { return null; }
+    }
+    function fillRemember() {
+        try {
+            // localStorage is the primary store (works on both localhost and
+            // Streamlit Cloud HTTPS); cookies are only a fallback because
+            // st.context.cookies does not reliably see JS-set cookies on Cloud.
+            var savedU = lsGet("_rec_saved_user") || getCookie("_rec_saved_user");
+            var savedP = lsGet("_rec_saved_pass_enc") || getCookie("_rec_saved_pass_enc");
+            var savedPersist = lsGet("_rec_saved_persist") || getCookie("_rec_saved_persist");
+            if (savedPersist !== "1" && savedPersist !== "true") return;
+            if (savedU) savedU = decodeURIComponent(savedU);
+            if (savedP) savedP = decodeURIComponent(savedP);
+            var forms = Array.from(document.querySelectorAll('div[data-testid="stForm"]'));
+            if (!forms.length) {
+                var f = document.querySelector('form[data-testid="stForm"]') || document.querySelector('form');
+                if (f) forms = [f];
+            }
+            forms.forEach(function(form) {
+                var inputs = form.querySelectorAll('input');
+                var ui = null, pi = null, ci = null;
+                inputs.forEach(function(input) {
+                    var t = (input.getAttribute('type') || 'text').toLowerCase();
+                    if (t === 'password') { pi = input; }
+                    else if (t === 'checkbox') { ci = input; }
+                    else if (t === 'text' || t === '') { ui = input; }
+                });
+                if (ui && !ui._remFilled && !ui.value && savedU) { setV(ui, savedU); ui._remFilled = true; }
+                if (pi && !pi._remFilled && !pi.value && savedP) {
+                    try {
+                        var decodedP = savedP;
+                        try { decodedP = atob_utf8(savedP); }
+                        catch (e2) { decodedP = savedP; }
+                        setV(pi, decodedP);
+                        pi._remFilled = true;
+                    } catch(e) { console.error("decode error:", e); }
+                }
+                if (ci && !ci._remChecked && !ci.checked) {
+                    ci.checked = true;
+                    ci.dispatchEvent(new Event('input', { bubbles: true }));
+                    ci.dispatchEvent(new Event('change', { bubbles: true }));
+                    ci._remChecked = true;
+                }
+            });
+        } catch (err) { console.error("fill error:", err); }
+    }
+    setTimeout(fillRemember, 200);
+    setTimeout(fillRemember, 800);
+    setTimeout(fillRemember, 2000);
+    setTimeout(fillRemember, 4000);
+})();
+</script>
+""", unsafe_allow_javascript=True)
+
+    st.html("""
+<script>
+(function() {
+    function btoa_utf8(str) {
+        return window.btoa(unescape(encodeURIComponent(str)));
+    }
+    function setCookie(name, value, days) {
+        var expires = "";
+        if (days) {
+            var date = new Date();
+            date.setTime(date.getTime() + (days * 24 * 60 * 60 * 1000));
+            expires = "; expires=" + date.toUTCString();
+        }
+        // Secure is REQUIRED for persistent cookies on HTTPS (Streamlit Cloud).
+        // localhost is http so the flag is omitted there.
+        var secure = (window.location && window.location.protocol === "https:") ? "; Secure" : "";
+        document.cookie = name + "=" + (value || "") + expires + "; path=/; SameSite=Lax" + secure;
+    }
+    function lsSet(name, value) {
+        try {
+            if (value === null || value === undefined) { window.localStorage.removeItem(name); }
+            else { window.localStorage.setItem(name, value); }
+        } catch (e) {}
+    }
+    function lsDel(name) {
+        try { window.localStorage.removeItem(name); } catch (e) {}
+    }
+    function deleteCookie(name) {
+        document.cookie = name + '=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT;';
+    }
+    function hookRemember() {
+        try {
+            var forms = Array.from(document.querySelectorAll('div[data-testid="stForm"]'));
+            if (!forms.length) {
+                var f = document.querySelector('form[data-testid="stForm"]') || document.querySelector('form');
+                if (f) forms = [f];
+            }
+            forms.forEach(function(form) {
+                var inputs = form.querySelectorAll('input');
+                var ui = null, pi = null, ci = null;
+                inputs.forEach(function(input) {
+                    var t = (input.getAttribute('type') || 'text').toLowerCase();
+                    if (t === 'password') { pi = input; }
+                    else if (t === 'checkbox') { ci = input; }
+                    else if (t === 'text' || t === '') { ui = input; }
+                });
+                var buttons = form.querySelectorAll('button');
+                buttons.forEach(function(btn) {
+                    if (btn._remHook) return;
+                    btn._remHook = true;
+                    btn.addEventListener('click', function() {
+                        var curU = ui ? ui.value : '';
+                        var curP = pi ? pi.value : '';
+                        var curC = ci ? ci.checked : false;
+                        if (curC && curU) {
+                            var encU = encodeURIComponent(curU);
+                            setCookie("_rec_saved_user", encU, 365);
+                            setCookie("_rec_saved_persist", "1", 365);
+                            lsSet("_rec_saved_user", encU);
+                            lsSet("_rec_saved_persist", "1");
+                            if (curP) {
+                                try {
+                                    var encodedP = encodeURIComponent(btoa_utf8(curP));
+                                    setCookie("_rec_saved_pass_enc", encodedP, 365);
+                                    lsSet("_rec_saved_pass_enc", encodedP);
+                                } catch(e) { console.error("encode error:", e); }
+                            } else {
+                                deleteCookie("_rec_saved_pass_enc");
+                                lsDel("_rec_saved_pass_enc");
+                            }
+                        } else if (!curC) {
+                            deleteCookie("_rec_saved_user");
+                            deleteCookie("_rec_saved_pass_enc");
+                            deleteCookie("_rec_saved_persist");
+                            lsDel("_rec_saved_user");
+                            lsDel("_rec_saved_pass_enc");
+                            lsDel("_rec_saved_persist");
+                        }
+                    }, true);
+                });
+            });
+        } catch (err) { console.error("hook error:", err); }
+    }
+    setTimeout(hookRemember, 200);
+    setTimeout(hookRemember, 800);
+    setTimeout(hookRemember, 2000);
+    try {
+        var remObs = new MutationObserver(function() { hookRemember(); });
+        if (document.body) { remObs.observe(document.body, { childList: true, subtree: true }); }
+    } catch (e) {}
+})();
+</script>
+""", unsafe_allow_javascript=True)
 
     lang = st.session_state.lang
     
@@ -2631,23 +4421,26 @@ if ('Notification' in window && Notification.permission === 'default') {
     st.markdown(f'<div id="login-container-wrapper"><div class="luxury-main-title">{title_text}</div>', unsafe_allow_html=True)
     
     def render_login_box(suffix):
-        saved = load_saved_credentials()
-        saved_u = saved.get("u", "") if saved else ""
-        saved_p = saved.get("p", "") if saved else ""
-        
         user_key = f"user_{suffix}"
         pass_key = f"pass_{suffix}"
         persist_key = f"persist_{suffix}"
         
-        # Pre-fill session state keys if saved credentials exist
-        if saved:
-            if user_key not in st.session_state:
-                st.session_state[user_key] = saved_u
-            if pass_key not in st.session_state:
-                st.session_state[pass_key] = saved_p
-            if persist_key not in st.session_state:
-                st.session_state[persist_key] = True
+        saved = get_device_saved_credentials()
+        saved_u = saved["u"]
+        # Persist flag is per-device (this browser's own cookies only):
+        # the box appears checked solely for the owner who enabled it,
+        # and stays off for anyone opening the link elsewhere.
+        saved_persist = bool(saved.get("persist", False))
+
+        # Username/persist convenience defaults live in Session State only
+        # (per-device cookies); the per-device JS fills the password field.
+        if user_key not in st.session_state and saved_u:
+            st.session_state[user_key] = saved_u
         
+        # Set persist checkbox state from cookies (localStorage is used by JS for syncing)
+        if persist_key not in st.session_state:
+            st.session_state[persist_key] = saved_persist
+
         with st.form(f"login_form_{suffix}"):
             # Row 1: Profile Image next to Welcome Text
             head_col1, head_col2 = st.columns([1, 2])
@@ -2659,13 +4452,15 @@ if ('Notification' in window && Notification.permission === 'default') {
                     b64 = get_base64_image(IMG_PATH)
                     st.markdown(f'<div style="text-align:right;"><img src="data:image/jpeg;base64,{b64}" class="profile-img-circular" style="width:80px; height:80px; border:2px solid #FFF; box-shadow: 0 0 15px #FFF;"></div>', unsafe_allow_html=True)
             
-            # Inputs - Pre-fill with saved credentials
-            u = st.text_input(t("username", lang), value=saved_u, label_visibility="collapsed", placeholder=t("username", lang), key=user_key)
-            p = st.text_input(t("password", lang), value=saved_p, type="password", label_visibility="collapsed", placeholder=t("password", lang), key=pass_key)
+            # Inputs: defaults live ONLY in Session State (passing value= too
+            # triggers Streamlit's "default + Session State" warning). The
+            # per-device JS fills username/password over these when saved.
+            u = st.text_input(t("username", lang), label_visibility="collapsed", placeholder=t("username", lang), key=user_key)
+            p = st.text_input(t("password", lang), type="password", label_visibility="collapsed", placeholder=t("password", lang), key=pass_key)
             
-            # Persistent check - White Neon Label
+            # Remember login on THIS device only (state also lives in Session State)
             persist_txt = "هل تريد حفظ الدخول" if lang == 'ar' else "Do you want to stay logged in?"
-            st.checkbox(persist_txt, value=(True if saved else False), key=persist_key)
+            persist = st.checkbox(persist_txt, key=persist_key)
             
             submit = st.form_submit_button(t("login_btn", lang), width='stretch')
             lang_toggle = st.form_submit_button("En" if lang == "ar" else "عربي", width='stretch')
@@ -2678,18 +4473,60 @@ if ('Notification' in window && Notification.permission === 'default') {
                     user = st.session_state.auth.authenticate(u, p.strip())
                     login_loader.empty()
                     if user:
-                        # Handle Persistence Logic
-                        should_persist = st.session_state.get(persist_key, False)
-                        if should_persist:
-                            save_credentials(u, p.strip())
-                        else:
-                            clear_credentials()
-                            
                         user['username'] = u.lower().strip()
                         st.session_state.user = user
                         st.session_state.last_login_time = time.time()
+                        record_login_event(user['username'], user)
                         st.session_state.show_welcome = True
                         
+                        # Handle Remember Me for THIS device ONLY: username +
+                        # persist flag in cookies (for field defaults).
+                        # Username/password/persist flag in this browser's
+                        # localStorage are saved by the form's click-hook
+                        # from the live fields (untouched here). No auto-login:
+                        # the login form is always shown explicitly.
+                        should_persist = st.session_state.get(persist_key, False)
+                        if should_persist:
+                            enc_u = urllib.parse.quote(u.strip())
+                            try:
+                                _enc_p_raw = base64.b64encode(p.strip().encode("utf-8")).decode()
+                            except Exception:
+                                _enc_p_raw = ""
+                            enc_p = urllib.parse.quote(_enc_p_raw)
+                            st.html(f"""
+                            <script>
+                            (function() {{
+                                var exp = "; max-age=31536000; path=/; SameSite=Lax";
+                                if (window.location && window.location.protocol === "https:") {{ exp += "; Secure"; }}
+                                document.cookie = "{DEVICE_USER_COOKIE}={enc_u}" + exp;
+                                document.cookie = "{DEVICE_PERSIST_COOKIE}=1" + exp;
+                                document.cookie = "_rec_saved_pass_enc={enc_p}" + exp;
+                                try {{
+                                    window.localStorage.setItem("_rec_saved_user", "{enc_u}");
+                                    window.localStorage.setItem("_rec_saved_persist", "1");
+                                    window.localStorage.setItem("_rec_saved_pass_enc", "{enc_p}");
+                                }} catch(e) {{}}
+                            }})();
+                            </script>
+                            """, unsafe_allow_javascript=True)
+                        else:
+                            st.html(f"""
+                            <script>
+                            (function() {{
+                                var exp0 = "; max-age=0; path=/;";
+                                document.cookie = "{DEVICE_REMEMBER_COOKIE}=" + exp0;
+                                document.cookie = "{DEVICE_USER_COOKIE}=" + exp0;
+                                document.cookie = "{DEVICE_PERSIST_COOKIE}=" + exp0;
+                                document.cookie = "_rec_saved_pass_enc=" + exp0;
+                                try {{
+                                    window.localStorage.removeItem("_rec_saved_user");
+                                    window.localStorage.removeItem("_rec_saved_persist");
+                                    window.localStorage.removeItem("_rec_saved_pass_enc");
+                                }} catch(e) {{}}
+                            }})();
+                            </script>
+                            """, unsafe_allow_javascript=True)
+
                         st.rerun()
                     else:
                         st.error(t("invalid_creds", lang))
@@ -2702,6 +4539,7 @@ if ('Notification' in window && Notification.permission === 'default') {
     col1, col2, col3 = st.columns([0.5, 2, 0.5]) 
     with col2:
         render_login_box("main")
+        st.caption("build b1013a")
     st.markdown('</div>', unsafe_allow_html=True)
         
 
@@ -2976,16 +4814,18 @@ def check_notifications():
                     })
                     st.session_state.notif_triggered = True
 
-        # Save current counts to file for persistence
-        try:
-            with open(NOTIF_STATE_FILE, 'w') as f:
-                json.dump({
-                    'worker_count': current_worker_count,
-                    'cust_count': current_cust_count,
-                    'last_check': get_saudi_time().isoformat()
-                }, f)
-        except Exception as e:
-            print(f"[DEBUG] Failed to save notification state: {e}")
+        # Save counts only when they actually changed (was: rewrite on every rerun)
+        if (current_worker_count != saved_worker_count
+                or current_cust_count != saved_cust_count):
+            try:
+                with open(NOTIF_STATE_FILE, 'w') as f:
+                    json.dump({
+                        'worker_count': current_worker_count,
+                        'cust_count': current_cust_count,
+                        'last_check': get_saudi_time().isoformat()
+                    }, f)
+            except Exception as e:
+                print(f"[DEBUG] Failed to save notification state: {e}")
 
         # Store counts in session for comparison on next check
         st.session_state.last_seen_worker_count = current_worker_count
@@ -3031,8 +4871,153 @@ def update_user_heartbeat(username, user_info=None):
     except Exception as e:
         pass
 
+LOGIN_HISTORY_FILE = os.path.join(BASE_DIR, "login_history.json")
+
+def _login_display_name(username, user_obj=None):
+    """Display name for login records (Arabic name preferred)."""
+    u_clean = str(username).lower().strip() if username else "user"
+    if isinstance(user_obj, dict):
+        fn_ar = str(user_obj.get("first_name_ar", "") or "").strip()
+        fa_ar = str(user_obj.get("father_name_ar", "") or "").strip()
+        if fn_ar or fa_ar:
+            return f"{fn_ar} {fa_ar}".strip()
+        fn_en = str(user_obj.get("first_name_en", "") or "").strip()
+        fa_en = str(user_obj.get("father_name_en", "") or "").strip()
+        if fn_en or fa_en:
+            return f"{fn_en} {fa_en}".strip()
+    return u_clean
+
+def record_login_event(username, user_obj=None):
+    """Appends a login event (username + date + time) to login_history.json."""
+    try:
+        if not username:
+            return
+        u_clean = str(username).lower().strip()
+        now = get_saudi_time()
+        entry = {
+            "username": u_clean,
+            "display_name": _login_display_name(u_clean, user_obj),
+            "role": (user_obj.get("role", "") if isinstance(user_obj, dict) else ""),
+            "ts": time.time(),
+            "date": now.strftime("%Y-%m-%d"),
+            "time": now.strftime("%I:%M %p").replace("AM", "ص").replace("PM", "م"),
+            "logout_ts": None,
+            "logout_date": None,
+            "logout_time": None,
+        }
+        log = []
+        if os.path.exists(LOGIN_HISTORY_FILE):
+            try:
+                with open(LOGIN_HISTORY_FILE, "r", encoding="utf-8") as f:
+                    log = json.load(f).get("log", [])
+            except:
+                log = []
+        log.append(entry)
+        with open(LOGIN_HISTORY_FILE, "w", encoding="utf-8") as f:
+            json.dump({"log": log}, f, ensure_ascii=False, indent=2)
+    except Exception:
+        pass
+
+def record_logout_event(username):
+    """Records the logout time for the latest open (no logout) session of the given user."""
+    try:
+        if not username:
+            return
+        u_clean = str(username).lower().strip()
+        if not os.path.exists(LOGIN_HISTORY_FILE):
+            return
+        try:
+            with open(LOGIN_HISTORY_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                log = data.get("log", []) if isinstance(data, dict) else []
+        except Exception:
+            return
+        now = get_saudi_time()
+        logout_ts = time.time()
+        # Find the latest entry for this user that has no logout_time yet
+        for entry in reversed(log):
+            if isinstance(entry, dict) and str(entry.get("username", "")).lower().strip() == u_clean:
+                if entry.get("logout_ts") is None:
+                    entry["logout_ts"] = logout_ts
+                    entry["logout_date"] = now.strftime("%Y-%m-%d")
+                    entry["logout_time"] = now.strftime("%I:%M %p").replace("AM", "ص").replace("PM", "م")
+                    break
+        with open(LOGIN_HISTORY_FILE, "w", encoding="utf-8") as f:
+            json.dump({"log": log}, f, ensure_ascii=False, indent=2)
+    except Exception:
+        pass
+
+def inject_browser_close_logout_script(username):
+    """Inject JavaScript that signals logout when the browser tab/window is closed or hidden.
+    Uses sendBeacon (most reliable on unload) with beforeunload/pagehide fallback."""
+    safe_user = str(username).replace("\\", "\\\\").replace('"', '\\"')
+    script = f"""
+    <script>
+    (function() {{
+        var username = "{safe_user}";
+        function signalLogout() {{
+            try {{
+                var url = new URL(window.location.href);
+                url.searchParams.set('logout', 'close');
+                url.searchParams.set('user', username);
+                url.searchParams.set('ts', String(Date.now()));
+                if (navigator.sendBeacon) {{
+                    navigator.sendBeacon(url.toString());
+                }} else {{
+                    window.location.replace(url.toString());
+                }}
+            }} catch(e) {{}}
+        }}
+        window.addEventListener('beforeunload', signalLogout);
+        window.addEventListener('pagehide', signalLogout);
+    }})();
+    </script>
+    """
+    st.html(script)
+
+def load_login_history():
+    """Returns login log list (oldest first)."""
+    try:
+        if os.path.exists(LOGIN_HISTORY_FILE):
+            with open(LOGIN_HISTORY_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                if isinstance(data, dict):
+                    return data.get("log", [])
+    except Exception:
+        pass
+    return []
+
+def clear_login_history():
+    """Clears the login history file."""
+    try:
+        with open(LOGIN_HISTORY_FILE, "w", encoding="utf-8") as f:
+            json.dump({"log": []}, f, ensure_ascii=False, indent=2)
+        return True
+    except Exception:
+        return False
+
+def get_last_login_map():
+    """Maps username -> latest login entry."""
+    latest = {}
+    for e in load_login_history():
+        if isinstance(e, dict) and e.get("username"):
+            latest[str(e["username"]).lower().strip()] = e
+    return latest
+
 def get_online_users_html(auth_manager, current_user, lang='ar'):
     """Generates clean HTML badges for online connected users."""
+    # Distinct readable color per username (deterministic via md5)
+    _USER_COLORS = ["#D4AF37", "#00E5FF", "#FF6B9D", "#4ADE80", "#FB923C",
+                    "#C084FC", "#FDE047", "#38BDF8", "#F87171", "#2DD4BF",
+                    "#A3E635", "#A5B4FC"]
+
+    def _ucolor(username):
+        try:
+            import hashlib as _hl
+            _d = _hl.md5(str(username).lower().strip().encode()).hexdigest()
+            return _USER_COLORS[int(_d[:8], 16) % len(_USER_COLORS)]
+        except Exception:
+            return "#FFFFFF"
     try:
         active_file = os.path.join(BASE_DIR, "online_users.json")
         data = {}
@@ -3057,11 +5042,21 @@ def get_online_users_html(auth_manager, current_user, lang='ar'):
             active_users.append({"username": curr_uname, "display_name": disp, "last_seen": now_ts})
             
         label = "المستخدمون المتصلون:" if lang == 'ar' else "Online Users:"
+        last_lbl = "آخر دخول" if lang == 'ar' else "Last login"
+        try:
+            last_map = get_last_login_map()
+        except Exception:
+            last_map = {}
         
         user_badges = []
         for u_info in active_users:
             uname = u_info.get("username", "user")
             disp_name = u_info.get("display_name", uname)
+            le = last_map.get(str(uname).lower().strip(), {}) if isinstance(last_map, dict) else {}
+            if le.get("date") and le.get("time"):
+                ll_txt = f"{last_lbl}: {le.get('date')} | {le.get('time')}"
+            else:
+                ll_txt = f"{last_lbl}: —"
             
             av_val = auth_manager.get_avatar(uname) if auth_manager and hasattr(auth_manager, 'get_avatar') else None
             if av_val:
@@ -3070,7 +5065,7 @@ def get_online_users_html(auth_manager, current_user, lang='ar'):
             else:
                 img_html = '<div style="width:22px;height:22px;border-radius:50%;background:linear-gradient(135deg,#D4AF37,#8B7520);display:flex;align-items:center;justify-content:center;font-size:12px;color:#fff;">👤</div>'
                 
-            badge = f'''<div style="display: flex; align-items: center; gap: 8px; background: rgba(212,175,55,0.1); padding: 5px 10px; border-radius: 20px; border: 1px solid rgba(212,175,55,0.3);">{img_html}<span style="color: #FFFFFF; font-size: 0.8rem; font-weight: 600; font-family: 'Cairo', sans-serif;">{disp_name}</span><span style="width: 8px; height: 8px; background-color: #22c55e; border-radius: 50%; display: inline-block; box-shadow: 0 0 6px #22c55e;"></span></div>'''
+            badge = f'''<div style="display: flex; align-items: center; gap: 8px; background: rgba(212,175,55,0.1); padding: 5px 10px; border-radius: 20px; border: 1px solid {_ucolor(uname)}55;">{img_html}<span style="color: {_ucolor(uname)}; font-size: 0.8rem; font-weight: 700; font-family: 'Cairo', sans-serif;">{disp_name}</span><span style="color: {_ucolor(uname)}; opacity: 0.75; font-size: 0.7rem; font-family: 'Cairo', sans-serif;">{ll_txt}</span><span style="width: 8px; height: 8px; background-color: #22c55e; border-radius: 50%; display: inline-block; box-shadow: 0 0 6px #22c55e;"></span></div>'''
             user_badges.append(badge)
             
         all_badges_html = "".join(user_badges)
@@ -3122,12 +5117,25 @@ def render_top_banner():
             st.markdown('</div>', unsafe_allow_html=True)
 
         with c2: # Profile
-            st.markdown(f'<div style="display:flex; align-items:center; gap:15px; margin-top:5px;">{avatar_html}<div><p style="margin:0; font-weight:700; color:white;">{welcome_prefix} {full_name}</p><p style="margin:0; font-size:0.75rem; color:#D4AF37;">{program_name}</p></div></div>', unsafe_allow_html=True)
+            try:
+                _lm = get_last_login_map()
+                _le = _lm.get(str(user.get('username', '')).lower().strip(), {}) if isinstance(_lm, dict) else {}
+                if _le.get("date") and _le.get("time"):
+                    _ll = f"{t('last_login', lang)}: {_le.get('date')} | {_le.get('time')}"
+                else:
+                    _ll = ""
+            except Exception:
+                _ll = ""
+            _ll_html = f'<p style="margin:0; font-size:0.7rem; color:rgba(255,255,255,0.55);">{_ll}</p>' if _ll else ''
+            st.markdown(f'<div style="display:flex; align-items:center; gap:15px; margin-top:5px;">{avatar_html}<div><p style="margin:0; font-weight:700; color:white;">{welcome_prefix} {full_name}</p><p style="margin:0; font-size:0.75rem; color:#D4AF37;">{program_name}</p>{_ll_html}</div></div>', unsafe_allow_html=True)
         
         with c3:
-            online_html = get_online_users_html(st.session_state.auth, user, lang)
-            if online_html:
-                st.markdown(online_html, unsafe_allow_html=True)
+            if isinstance(user, dict) and user.get("role") == "admin":
+                online_html = get_online_users_html(st.session_state.auth, user, lang)
+                if online_html:
+                    st.markdown(online_html, unsafe_allow_html=True)
+                else:
+                    st.write("")
             else:
                 st.write("")
             
@@ -3213,7 +5221,7 @@ if ('Notification' in window) {
     alert('متصفحك لا يدعم الإشعارات. ❌');
 }
 </script>
-""")
+""", unsafe_allow_javascript=True)
 
         st.markdown(f"""
     <div class="persistent-top-banner">
@@ -3394,6 +5402,16 @@ def dashboard():
 
 
     with st.sidebar:
+        # --- Handle browser-close logout signal (?logout=close&user=X) ---
+        # Triggered by inject_browser_close_logout_script when tab/window is closed
+        _qp_close = st.query_params
+        if _qp_close.get('logout') == 'close':
+            _close_user = str(_qp_close.get('user', '')).strip()
+            if _close_user:
+                record_logout_event(_close_user)
+            st.query_params.clear()
+            st.rerun()
+
         # Use columns to force horizontal centering for the image block
         sc1, sc2, sc3 = st.columns([1, 2, 1])
         with sc2:
@@ -3435,36 +5453,38 @@ def dashboard():
             </script>
             """, unsafe_allow_html=True)
 
-        if st.button(t("dashboard", lang), width='stretch', disabled=_wa_lock_nav):
-            st.session_state.page = "dashboard"
-            st.rerun()
-        if st.button(t("smart_search", lang), width='stretch', disabled=_wa_lock_nav):
-            # Reset the filter expander state to force open on entry
-            for key in list(st.session_state.keys()):
-                if key.startswith("filter_expander_"):
-                    del st.session_state[key]
-            st.session_state.page = "search"
-            st.rerun()
-        if st.button(t("cv_translator", lang), width='stretch', disabled=_wa_lock_nav):
-            st.session_state.page = "translator"
-            st.rerun()
-        if user.get("role") != "viewer":
-            if st.button(t("customer_requests", lang), width='stretch', disabled=_wa_lock_nav):
-                st.session_state.page = "customer_requests"
+        # Navigation menu - optimized with loop
+        nav_items = [
+            ("dashboard", "dashboard"),
+            ("smart_search", "search"),
+            ("cv_translator", "translator"),
+        ]
+        
+        for label_key, page_name in nav_items:
+            if st.button(t(label_key, lang), width='stretch', disabled=_wa_lock_nav, key=f"nav_{page_name}"):
+                if page_name == "search":
+                    # Reset filter expander state for search page
+                    for key in list(st.session_state.keys()):
+                        if key.startswith("filter_expander_"):
+                            del st.session_state[key]
+                st.session_state.page = page_name
                 st.rerun()
-        if st.button(t("order_processing", lang), width='stretch', disabled=_wa_lock_nav):
+        
+        if st.button(t("order_processing", lang), width='stretch', disabled=_wa_lock_nav, key="nav_order_processing"):
             st.session_state.page = "order_processing"
             st.rerun()
         
-        # WhatsApp Marketing 2026 Button
-        if st.button("📱 " + t("whatsapp_marketing", lang), width='stretch'):
-            st.session_state.page = "whatsapp_marketing"
-            st.rerun()
+        # Special navigation with icons
+        special_nav = [
+            ("📱 " + t("whatsapp_marketing", lang), "whatsapp_marketing"),
+            ("🗑️ " + t("duplicate_remover", lang), "duplicate_remover"),
+            ("🔒 " + t("cv_privacy_title", lang), "cv_privacy"),
+        ]
         
-        # Duplicate Remover Button
-        if st.button("🗑️ " + t("duplicate_remover", lang), width='stretch', disabled=_wa_lock_nav):
-            st.session_state.page = "duplicate_remover"
-            st.rerun()
+        for label, page_name in special_nav:
+            if st.button(label, width='stretch', disabled=_wa_lock_nav, key=f"nav_{page_name}"):
+                st.session_state.page = page_name
+                st.rerun()
         
         # Determine Bengali Supply Visibility
         user_perms = user.get("permissions", [])
@@ -3479,17 +5499,19 @@ def dashboard():
             st.sidebar.markdown("</div>", unsafe_allow_html=True)
 
         if user.get("role") == "admin":
-            if st.button(t("permissions", lang), width='stretch', disabled=_wa_lock_nav):
+            if st.button(t("permissions", lang), width='stretch', disabled=_wa_lock_nav, key="nav_permissions"):
                 st.session_state.page = "permissions"
+                st.rerun()
+            if st.button("🕓 " + t("login_history", lang), width='stretch', disabled=_wa_lock_nav, key="nav_login_history"):
+                st.session_state.page = "login_history"
                 st.rerun()
             
             # Refresh Data button below Permissions for Admins
             refresh_notif = st.empty()
             if st.button(t("refresh_data_btn", lang), key="force_refresh_db", width='stretch'):
-                refresh_loader = show_loading_hourglass()
-                st.session_state.db.fetch_data(force=True)
-                st.session_state.db.fetch_customer_requests(force=True)
-                refresh_loader.empty()
+                with st.spinner("Refreshing data..."):
+                    st.session_state.db.fetch_data(force=True)
+                    st.session_state.db.fetch_customer_requests(force=True)
                 st.session_state['_notif_refresh'] = ("success", "تم تحديث البيانات من Google Sheets بنجاح! ✅" if lang == 'ar' else "Data refreshed successfully! ✅")
                 st.rerun()
             
@@ -3501,9 +5523,28 @@ def dashboard():
         st.markdown("<div style='margin: 15px 0;'></div>", unsafe_allow_html=True)
         
         if st.button(t("logout", lang), type="primary", width='stretch'):
+            # Record logout time before ending session
+            current_user = st.session_state.get("user", {})
+            if isinstance(current_user, dict) and current_user.get("username"):
+                record_logout_event(current_user.get("username"))
             st.session_state.user = None
+            st.html(f"""
+            <script>
+            (function() {{
+                var exp0 = "; max-age=0; path=/;";
+                // Only clear the remember token (current session), NOT saved cookies
+                document.cookie = "{DEVICE_REMEMBER_COOKIE}=" + exp0;
+                // Do NOT clear _rec_saved_* cookies - preserve user's "Remember Me" preference
+            }})();
+            </script>
+            """, unsafe_allow_javascript=True)
             st.rerun()
         
+        # Inject auto-logout script for browser tab/window close
+        current_user = st.session_state.get("user", {})
+        if isinstance(current_user, dict) and current_user.get("username"):
+            inject_browser_close_logout_script(current_user.get("username"))
+
         # Global Deep Reset Opportunity
         st.sidebar.divider()
         with st.sidebar.expander(t("deep_reset", lang)):
@@ -3515,6 +5556,28 @@ def dashboard():
                         del st.session_state[k]
                 st.session_state.db.fetch_data(force=True)
                 st.success("تم تنظيف الذاكرة وتحديث البيانات!")
+                time.sleep(1)
+                st.rerun()
+            
+            st.sidebar.markdown("---")
+            if st.button("🗑️ " + ("مسح بيانات الدخول المحفوظة" if lang == 'ar' else "Clear Saved Login Data"), width='stretch'):
+                st.html("""
+                <script>
+                (function() {
+                    var exp0 = "; max-age=0; path=/;";
+                    document.cookie = "_recruitment_remember_token=" + exp0;
+                    document.cookie = "_rec_saved_user=" + exp0;
+                    document.cookie = "_rec_saved_persist=" + exp0;
+                    document.cookie = "_rec_saved_pass_enc=" + exp0;
+                    try {
+                        window.localStorage.removeItem("_rec_saved_user");
+                        window.localStorage.removeItem("_rec_saved_persist");
+                        window.localStorage.removeItem("_rec_saved_pass_enc");
+                    } catch(e) {}
+                })();
+                </script>
+                """, unsafe_allow_javascript=True)
+                st.success("تم مسح بيانات الدخول المحفوظة!" if lang == 'ar' else "Saved login data cleared!")
                 time.sleep(1)
                 st.rerun()
 
@@ -3538,20 +5601,27 @@ def dashboard():
 
     page = st.session_state.get('page', 'dashboard')
     
-    if page == "dashboard": render_dashboard_content()
-    elif page == "search": render_search_content()
-    elif page == "translator": render_translator_content()
-    elif page == "customer_requests":
-        if user.get("role") == "viewer":
-            st.error("🔒 لا تملك صلاحية الوصول لهذه الصفحة" if lang == 'ar' else "🔒 Access Denied")
-            st.session_state.page = "dashboard"
-            st.rerun()
-        render_order_processing_content()
-    elif page == "order_processing": render_order_processing_content()
-    elif page == "permissions": render_permissions_content()
-    elif page == "bengali_supply": render_bengali_supply_content()
-    elif page == "whatsapp_marketing": render_whatsapp_page()
-    elif page == "duplicate_remover": render_duplicate_remover_content()
+    # Page router with permission checks
+    page_handlers = {
+        "dashboard": render_dashboard_content,
+        "search": render_search_content,
+        "translator": render_translator_content,
+        "order_processing": render_order_processing_content,
+        "permissions": render_permissions_content,
+        "login_history": render_login_history_content,
+        "bengali_supply": render_bengali_supply_content,
+        "whatsapp_marketing": render_whatsapp_page,
+        "duplicate_remover": render_duplicate_remover_content,
+        "cv_privacy": render_cv_privacy_cleaner_content
+    }
+    
+    # Permission check for restricted pages
+    if page in ["permissions", "login_history"] and user.get("role") == "viewer":
+        st.error("🔒 لا تملك صلاحية الوصول لهذه الصفحة" if lang == 'ar' else "🔒 Access Denied")
+        st.session_state.page = "dashboard"
+        st.rerun()
+    elif page in page_handlers:
+        page_handlers[page]()
     # --- 3. Notification Check (Moved to BOTTOM to prevent hanging on login) ---
     check_notifications()
 
@@ -3559,80 +5629,200 @@ def __apply_pinned_columns(df_or_style, cfg=None):
     if cfg is None: cfg = {}
     import streamlit as st
     import pandas as pd
-    
+
     # Priority Keywords for Pinning
     pin_keywords = [
         "حالة العقد", "contract status", "status",
         "وقت", "طابع", "timestamp", "registration",
-        "الاسم", "name", 
+        "الاسم", "name",
         "جنسية", "nationality", "🚩", "دولة", "country",
         "جنس", "gender"
     ]
-    
+
     # Handle both DataFrame and Styler
     df_temp = None
     if hasattr(df_or_style, 'data'):
         df_temp = df_or_style.data
-        cols = df_temp.columns
+        cols = list(df_temp.columns)
     elif hasattr(df_or_style, 'columns'):
         df_temp = df_or_style
-        cols = df_temp.columns
+        cols = list(df_temp.columns)
     else:
         return cfg
-        
-    # Helper function to reliably estimate screen pixel width of a string in Streamlit's font
+
+    # Helper: estimate rendered pixel width of a string in Streamlit's font.
+    # Calibrated to fit exactly without extra blank space.
     def estimate_px(text):
+        s = str(text).replace("\xA0", "").strip()
+        if s in ("", "nan", "None", "NaT", "-"): return 0
         px = 0
-        for char in str(text):
-            if '\u0600' <= char <= '\u06FF': px += 8   # Arabic characters are wider
-            elif char.isupper(): px += 8.5            # Capital letters
-            elif char.isdigit(): px += 7.5            # Numbers
-            elif char.islower(): px += 6.5            # Lowercase letters
-            else: px += 5                             # Spaces and punctuation
+        for char in s:
+            o = ord(char)
+            if 0x1F300 <= o <= 0x1FAFF or 0x2600 <= o <= 0x27BF or 0xFE00 <= o <= 0xFE0F or char in ("✅", "❌", "⚠️", "🚹", "🚺"):
+                px += 14  # emoji / icons
+            elif '\u0600' <= char <= '\u06FF': px += 8
+            elif char.isupper(): px += 8.5
+            elif char.isdigit(): px += 7.5
+            elif char.islower(): px += 6.5
+            else: px += 5
         return px
-        
+
+    def _is_cv_col(col_key, col_str):
+        # CV download column by name (AR/EN) or by LinkColumn type.
+        try:
+            tc = cfg.get(col_key, {}).get("type_config") or {}
+            if isinstance(tc, dict) and tc.get("type") == "link":
+                return True
+        except Exception:
+            pass
+        cl = col_str.lower().strip()
+        return ("سيرة" in col_str) or ("download cv" in cl) or (cl == "cv")
+
+    def _col_needs_right(col_key, col_str):
+        # Verified (screenshot A/B): the canvas renderer ignores
+        # textAlign="left", which clips emoji-led/RTL strings to a sliver.
+        # "right" is the only fully-rendered alignment for such content.
+        try:
+            if any('\u0600' <= ch <= '\u06FF' for ch in col_str):
+                return True
+            _lk = col_key if col_key in df_temp.columns else col_str
+            if _lk not in df_temp.columns:
+                return False
+            vals = df_temp[_lk].astype(str)
+            sample = vals.head(60) if len(vals) > 60 else vals
+            for v in sample:
+                s = str(v)
+                if any('\u0600' <= ch <= '\u06FF' for ch in s):
+                    return True
+                for ch in s:
+                    o = ord(ch)
+                    if 0x1F300 <= o <= 0x1FAFF or 0x2600 <= o <= 0x27BF or 0xFE00 <= o <= 0xFE0F:
+                        return True
+        except Exception:
+            pass
+        return False
+
+    def _center(col_key):
+        # Canvas-level alignment: column configs are dicts serialized to JSON,
+        # the frontend reads `alignment` -> contentAlignment for every cell.
+        # Headers stay centered (verified). CV download column centered.
+        # RTL/emoji-led body MUST be right (left clips it - verified);
+        # Latin body stays far-left per requirement.
+        try:
+            col_str = str(col_key).replace("\xA0", "").strip()
+            if col_str.startswith("🚩") or "🏳️" in col_str:
+                return  # flag icons keep the renderer's default (centered)
+            try:
+                tc0 = cfg.get(col_key, {}).get("type_config") or {}
+                if isinstance(tc0, dict) and tc0.get("type") == "image":
+                    return
+            except Exception:
+                pass
+            if _is_cv_col(col_key, col_str):
+                cfg[col_key]["alignment"] = "center"
+            elif _col_needs_right(col_key, col_str):
+                cfg[col_key]["alignment"] = "right"
+            else:
+                cfg[col_key]["alignment"] = "left"
+        except Exception:
+            pass
+
     for col in cols:
-        col_str = str(col)
-        # Determine Pinning
+        # Clean any old NBSP padding from previous versions
+        col_str = str(col).replace("\xA0", "").strip()
+        if col_str.startswith("__"):
+            continue
         should_pin = any(kw.lower() in col_str.lower() for kw in pin_keywords)
-        
-        # Calculate pixel width of the header
+
+        # Flag image column: fixed narrow width, no text measuring
+        if col_str.startswith("🚩"):
+            target_w = 52
+            if col in cfg:
+                try:
+                    cfg[col]["width"] = target_w
+                    if should_pin: cfg[col]["pinned"] = True
+                except Exception:
+                    try: cfg[col].width = target_w
+                    except Exception: pass
+            else:
+                cfg[col] = st.column_config.ImageColumn(label=col_str, width=target_w, pinned=True if should_pin else None)
+            _center(col)
+            continue
+
         header_px = estimate_px(col_str)
         max_px = header_px
-        
-        if df_temp is not None and col in df_temp.columns:
+        try:
+            _cfg_tc = (cfg.get(col, {}) or {}).get("type_config") or {}
+        except Exception:
+            _cfg_tc = {}
+        _is_link_cfg = isinstance(_cfg_tc, dict) and _cfg_tc.get("type") == "link"
+        _is_img_cfg = isinstance(_cfg_tc, dict) and _cfg_tc.get("type") == "image"
+        if _is_link_cfg:
+            # LinkColumn shows a download icon/label, not raw URLs:
+            # fit the column to the header + icon, keeping it narrow.
+            max_px = max(max_px, 40.0)
+        elif _is_img_cfg:
+            # Image columns (flags, CV icon buttons): fit to the header only;
+            # never measure URL/data-URI strings.
+            max_px = header_px
+        elif df_temp is not None and col in df_temp.columns:
             try:
-                # Find maximum pixel width among all items in the column efficiently
-                data_px = df_temp[col].astype(str).apply(estimate_px).max()
-                if pd.notna(data_px):
-                    max_px = max(max_px, data_px + 20) # +20px safety margin for the cell padding
-            except:
+                vals = df_temp[col].astype(str)
+                # Skip empty placeholders for measuring
+                vals = vals[~vals.isin(["", "nan", "None", "NaT", "None ", "nan "])]
+                if not vals.empty:
+                    # Measure the whole column so width matches the longest word exactly
+                    data_px = vals.apply(estimate_px).max()
+                    if pd.notna(data_px):
+                        max_px = max(max_px, float(data_px))
+            except Exception:
                 pass
-                
-        # Force the column to be as wide as the longest string by injecting non-breaking spaces (\xA0)
-        diff_px = max_px - header_px
-        padded_label = col_str
-        
-        if diff_px > 0:
-            # A non-breaking space in Streamlit's font is approx 3 pixels wide
-            pad_amount = int(diff_px / 3) + 8 # +8 extra spaces for margin
-            left_pad = pad_amount // 2
-            right_pad = pad_amount - left_pad
-            padded_label = ("\xA0" * left_pad) + col_str + ("\xA0" * right_pad)
+
+        # Exact fit: content + minimal cell padding, no extra blank on the sides.
+        # Max raised so long headers (AR ~34 chars, EN originals) never truncate;
+        # horizontal scroll is preserved for wide tables.
+        fit_px = int(max_px + 14)
+        # Clamp to avoid one long column (e.g. skills) blowing up the layout
+        fit_px = max(50, min(fit_px, 460))
+
+        if col in cfg:
+            existing = cfg[col]
+            try:
+                # Column config objects behave like dicts in streamlit>=1.30
+                existing["width"] = fit_px
+                # Remove any old NBSP-padded label
+                try:
+                    lbl = existing.get("label")
+                    if isinstance(lbl, str) and "\xA0" in lbl:
+                        existing["label"] = col_str
+                except Exception:
+                    pass
+                if should_pin:
+                    try:
+                        if not existing.get("pinned"):
+                            existing["pinned"] = True
+                    except Exception:
+                        pass
+            except Exception:
+                try:
+                    existing.width = fit_px
+                except Exception:
+                    pass
+            _center(col)
         else:
-            # Minimal default padding just in case
-            padded_label = ("\xA0" * 4) + col_str + ("\xA0" * 4)
-        
-        if col not in cfg:
-            # Create new column config with padded width logic
-            cfg[col] = st.column_config.Column(pinned=should_pin, label=padded_label)
-        else:
-            # Update dictionary if passed as one
-            if isinstance(cfg[col], dict):
-                cfg[col]["pinned"] = should_pin
-                if "label" not in cfg[col]:
-                    cfg[col]["label"] = padded_label
-    
+            # Numeric dtypes (age, counts) must use TextColumn: the default
+            # number renderer only supports left/right and ignores center,
+            # while TextColumn centers. Sorting is done in pandas beforehand.
+            try:
+                is_num = pd.api.types.is_numeric_dtype(df_temp[col])
+            except Exception:
+                is_num = False
+            if is_num:
+                cfg[col] = st.column_config.TextColumn(label=col_str, width=fit_px, pinned=True if should_pin else None)
+            else:
+                cfg[col] = st.column_config.Column(label=col_str, width=fit_px, pinned=True if should_pin else None)
+            _center(col)
+
     return cfg
 
 def render_dashboard_content():
@@ -3797,6 +5987,22 @@ def render_dashboard_content():
         with tc1:
             use_work_outside = st.checkbox(t("work_outside_city", lang), key="dash_use_work_outside")
 
+        # 4. Row: New Smart Filters (Ready to Work / Iqama Valid / Experience) - Centered
+        st.markdown("<div style='margin-bottom: 10px;'></div>", unsafe_allow_html=True)
+        # Using 5 columns [Pad, Ready, Iqama, Experience, Pad] to center 3 items
+        n_pad1, nc1, nc2, nc3, n_pad2 = st.columns([0.4, 1, 1, 1.7, 0.4])
+        yes_no_opts = [t("filter_option_all", lang), t("filter_option_yes", lang), t("filter_option_no", lang)]
+        with nc1:
+            st.markdown(f'<div style="font-family: \'Cairo\', sans-serif; font-size: 0.88rem; font-weight: 600; color: #FFFFFF; text-align: right; margin-bottom: 6px;">{t("ready_to_work_filter", lang)}</div>', unsafe_allow_html=True)
+            sel_ready = st.selectbox("", options=yes_no_opts, key="dash_ready_to_work", label_visibility="collapsed")
+        with nc2:
+            st.markdown(f'<div style="font-family: \'Cairo\', sans-serif; font-size: 0.88rem; font-weight: 600; color: #FFFFFF; text-align: right; margin-bottom: 6px;">{t("iqama_valid_filter", lang)}</div>', unsafe_allow_html=True)
+            sel_iqama = st.selectbox("", options=yes_no_opts, key="dash_iqama_valid", label_visibility="collapsed")
+        with nc3:
+            st.markdown(f'<div style="font-family: \'Cairo\', sans-serif; font-size: 0.88rem; font-weight: 600; color: #FFFFFF; text-align: right; margin-bottom: 6px;">{t("experience_field_filter", lang)}</div>', unsafe_allow_html=True)
+            exp_placeholder = "مثل: < 1 أو > 5 أو = 3 سنوات" if lang == 'ar' else "e.g. < 1 or > 5 or = 3 years"
+            sel_exp = st.text_input("", placeholder=exp_placeholder, key="dash_experience_input", label_visibility="collapsed")
+
     dash_query = st.text_input(t("smart_search", lang), placeholder=t("search_placeholder", lang), key="dash_search_query")
     dash_search_clicked = st.button(t("search_btn", lang), key="dash_search_btn", width='stretch', type="primary")
 
@@ -3812,6 +6018,29 @@ def render_dashboard_content():
     if use_work_outside: dash_filters['work_outside_city'] = True
     if use_domestic_worker: dash_filters['domestic_worker'] = True
     if selected_transfer_key: dash_filters['transfer_count'] = selected_transfer_key
+    # --- New advanced filters: Ready to Work / Iqama Valid / Experience ---
+    if sel_ready and sel_ready != t("filter_option_all", lang):
+        dash_filters['ready_to_work'] = 'Yes' if 'Yes' in sel_ready else 'No'
+    if sel_iqama and sel_iqama != t("filter_option_all", lang):
+        dash_filters['iqama_valid'] = 'Yes' if 'Yes' in sel_iqama else 'No'
+    # Experience: parse custom condition like "< 1", "> 5", "= 3", "<= 2", ">= 10", or just "5"
+    if sel_exp and sel_exp.strip() and sel_exp.strip() != t("filter_option_all", lang):
+        _exp_text = sel_exp.strip()
+        _exp_m = re.match(r'\s*(<=|>=|<|>|=)\s*(\d+)', _exp_text)
+        if _exp_m:
+            _exp_op = _exp_m.group(1)
+            _exp_val = int(_exp_m.group(2))
+        else:
+            _exp_m2 = re.match(r'\s*(\d+)\s*', _exp_text)
+            if _exp_m2:
+                _exp_op = '>='
+                _exp_val = int(_exp_m2.group(1))
+            else:
+                _exp_op = None
+                _exp_val = None
+        if _exp_val is not None:
+            dash_filters['experience_op'] = _exp_op
+            dash_filters['experience_val'] = _exp_val
 
     st.markdown("---")
     # --- END SMART SEARCH UI ---
@@ -3842,6 +6071,8 @@ def render_dashboard_content():
         status_key = 'حالة العقد' if lang == 'ar' else 'Contract Status'
         show_cols = [status_key] + [c for c in cols if c in d.columns and not str(c).startswith('__')]
         d_final = d[show_cols].copy()
+        # 📊 تبويبات الرئيسية: الترتيب من عمود حالة العقد (الأيام) من الأصغر للأكبر —
+        # الفرز الرقمي تم أعلاه (__days_sort) وينعكس نصاً في عمود الحالة
         
         # --- Step 1: Render Table Translator FIRST (so it can find original column names like 'nationality') ---
         d_final = render_table_translator(d_final, key_prefix=f"dash_{tab_id}")
@@ -3868,9 +6099,13 @@ def render_dashboard_content():
         final_cfg = {}
         if cv_col and cv_col in new_names:
             trans_cv_col = new_names[cv_col]
+            # Clickable CV link (ImageColumn cells are NOT clickable in
+            # st.dataframe, so the link column stays: per-row file opens).
             final_cfg[trans_cv_col] = st.column_config.LinkColumn(
-                t("cv_download", lang), 
-                display_text=t("download_pdf", lang)
+                t("cv_download", lang),
+                display_text="🟦🟦🟦⬇️🟦🟦🟦",
+                help="⬇ " + ("تحميل السيرة الذاتية" if lang == 'ar' else "Download CV"),
+                validate="^https?://"
             )
         
         # Suffix Configuration for Numeric Remaining Column
@@ -4047,6 +6282,21 @@ def render_search_content():
         with tc1:
             use_work_outside = st.checkbox(t("work_outside_city", lang), key="use_work_outside_filter")
 
+        # Row 4: New Smart Filters (Ready to Work / Iqama Valid / Experience) - Centered
+        st.markdown("<div style='margin-bottom: 10px;'></div>", unsafe_allow_html=True)
+        n_pad1, nc1, nc2, nc3, n_pad2 = st.columns([0.4, 1, 1, 1.7, 0.4])
+        yes_no_opts = [t("filter_option_all", lang), t("filter_option_yes", lang), t("filter_option_no", lang)]
+        with nc1:
+            st.markdown(f'<div style="font-family: \'Cairo\', sans-serif; font-size: 0.88rem; font-weight: 600; color: #FFFFFF; text-align: right; margin-bottom: 6px;">{t("ready_to_work_filter", lang)}</div>', unsafe_allow_html=True)
+            sel_ready = st.selectbox("", options=yes_no_opts, key="search_ready_to_work", label_visibility="collapsed")
+        with nc2:
+            st.markdown(f'<div style="font-family: \'Cairo\', sans-serif; font-size: 0.88rem; font-weight: 600; color: #FFFFFF; text-align: right; margin-bottom: 6px;">{t("iqama_valid_filter", lang)}</div>', unsafe_allow_html=True)
+            sel_iqama = st.selectbox("", options=yes_no_opts, key="search_iqama_valid", label_visibility="collapsed")
+        with nc3:
+            st.markdown(f'<div style="font-family: \'Cairo\', sans-serif; font-size: 0.88rem; font-weight: 600; color: #FFFFFF; text-align: right; margin-bottom: 6px;">{t("experience_field_filter", lang)}</div>', unsafe_allow_html=True)
+            exp_placeholder = "مثل: < 1 أو > 5 أو = 3 سنوات" if lang == 'ar' else "e.g. < 1 or > 5 or = 3 years"
+            sel_exp = st.text_input("", placeholder=exp_placeholder, key="search_experience_input", label_visibility="collapsed")
+
     # 2. Search Input & Button
     st.markdown('<div class="search-container">', unsafe_allow_html=True)
     query = st.text_input(t("smart_search", lang), placeholder=t("search_placeholder", lang), key="search_query_input")
@@ -4105,6 +6355,29 @@ def render_search_content():
         
     if selected_transfer_key:
         filters['transfer_count'] = selected_transfer_key
+    
+    # --- New advanced filters: Ready to Work / Iqama Valid / Experience ---
+    if sel_ready and sel_ready != t("filter_option_all", lang):
+        filters['ready_to_work'] = 'Yes' if 'Yes' in sel_ready else 'No'
+    if sel_iqama and sel_iqama != t("filter_option_all", lang):
+        filters['iqama_valid'] = 'Yes' if 'Yes' in sel_iqama else 'No'
+    if sel_exp and sel_exp.strip() and sel_exp.strip() != t("filter_option_all", lang):
+        _exp_text = sel_exp.strip()
+        _exp_m = re.match(r'\s*(<=|>=|<|>|=)\s*(\d+)', _exp_text)
+        if _exp_m:
+            _exp_op = _exp_m.group(1)
+            _exp_val = int(_exp_m.group(2))
+        else:
+            _exp_m2 = re.match(r'\s*(\d+)\s*', _exp_text)
+            if _exp_m2:
+                _exp_op = '>='
+                _exp_val = int(_exp_m2.group(1))
+            else:
+                _exp_op = None
+                _exp_val = None
+        if _exp_val is not None:
+            filters['experience_op'] = _exp_op
+            filters['experience_val'] = _exp_val
     
     # Check if any filter is actually active
     has_active_filter = bool(filters)
@@ -4197,6 +6470,9 @@ def render_search_content():
                     except:
                         pass
             
+            # 📅 ترتيب موحد: الأحدث بتاريخ التسجيل أولاً في كل الجداول
+            res = sort_by_reg_date_desc(res)
+
             # Show count in UI
             count_found = len(res)
             if count_found > 0:
@@ -4272,14 +6548,15 @@ def render_search_content():
             # --- ROW SELECTION & PROFESSIONAL UI ---
 
             
-            # Configure columns for better look
+            # Clickable CV link per row (opens that worker's own file).
+            # ImageColumn cells are not clickable in st.dataframe.
             column_config = {}
             cv_col_name = t_col("Download CV", lang)
             column_config[cv_col_name] = st.column_config.LinkColumn(
                 cv_col_name,
-                help="Click to open original file",
-                validate="^http",
-                display_text="فتح الملف 🔗"
+                display_text="🟦🟦🟦⬇️🟦🟦🟦",
+                help="⬇ " + ("تحميل السيرة الذاتية" if lang == 'ar' else "Download CV"),
+                validate="^https?://",
             )
             
             # Numeric Suffix for Search
@@ -4299,15 +6576,16 @@ def render_search_content():
             # Smart Translator Button
             res_display = render_table_translator(res_display, key_prefix="search_res")
             
-            # Use on_select to capture row selection
+            # Use on_select to capture row selection (style computed ONCE)
             df_height = min((len(res_display) + 1) * 35 + 40, 600)
+            _search_styled = style_df(res_display)
             event = st.dataframe(
-                style_df(res_display), 
+                _search_styled,
                 width='content',
                 on_select="rerun",
                 selection_mode="single-row",
                 hide_index=True,
-                column_config=__apply_pinned_columns(style_df(res_display), column_config),
+                column_config=__apply_pinned_columns(_search_styled, column_config),
                 key=f"search_results_table_{st.session_state.get('search_entry_count', 0)}",
                 height=df_height
             )
@@ -4661,6 +6939,315 @@ def render_translator_content():
         </div>
         """, unsafe_allow_html=True)
 
+def render_login_history_content():
+    """Admin-only login history log: view, clear, or keep records as-is."""
+    lang = st.session_state.lang
+    is_ar = lang == 'ar'
+    user = st.session_state.get("user", {})
+    if not isinstance(user, dict) or user.get("role") != "admin":
+        st.error("🔒 لا تملك صلاحية الوصول لهذه الصفحة" if is_ar else "🔒 Access Denied")
+        return
+    st.title("🕓 " + t("login_history_title", lang))
+    log = load_login_history()
+    rows = [e for e in log if isinstance(e, dict)]
+    rows = sorted(rows, key=lambda e: e.get("ts", 0), reverse=True)
+    st.markdown(f"**📊 {'إجمالي السجلات' if is_ar else 'Total records'}:** {len(rows)}")
+    if not rows:
+        st.info(t("no_login_history", lang))
+    else:
+        disp = pd.DataFrame([{
+            ("اسم المستخدم" if is_ar else "Username"): e.get("username", ""),
+            ("الاسم" if is_ar else "Name"): e.get("display_name", ""),
+            ("الدور" if is_ar else "Role"): e.get("role", ""),
+            ("تاريخ الدخول" if is_ar else "Login Date"): e.get("date", ""),
+            ("وقت الدخول" if is_ar else "Login Time"): e.get("time", ""),
+            ("تاريخ الخروج" if is_ar else "Logout Date"): e.get("logout_date") or ("—" if is_ar else "—"),
+            ("وقت الخروج" if is_ar else "Logout Time"): e.get("logout_time") or ("لم يسجل خروج" if is_ar else "Not logged out"),
+        } for e in rows])
+        st.dataframe(disp, width="content", hide_index=True, column_config=__apply_pinned_columns(disp))
+    st.divider()
+    c1, c2 = st.columns(2)
+    with c1:
+        with st.popover(t("clear_history_btn", lang)):
+            st.warning(t("confirm_clear_history", lang))
+            if st.button("✅ " + ("نعم، امسح السجل" if is_ar else "Yes, clear history"), type="primary", width="stretch", key="confirm_clear_login_hist"):
+                if clear_login_history():
+                    show_toast(t("history_cleared", lang), "success")
+                    time.sleep(1)
+                    st.rerun()
+                else:
+                    show_toast(t("error", lang), "error")
+            if st.button("↩️ " + t("keep_history_btn", lang), width="stretch", key="keep_login_hist"):
+                st.rerun()
+    with c2:
+        st.caption("💡 " + (t("keep_history_btn", lang) + " — " + ("تبقى البيانات في السجل كما هي" if is_ar else "data stays in the log as is")))
+
+def render_cv_privacy_cleaner_content():
+    """CV Privacy Cleaner: Remove email addresses only from CV files.
+    Keeps phone numbers as requested. Preserves original PDF format including images."""
+    import io
+    import re
+    import fitz  # PyMuPDF
+    from PIL import Image
+    import pdfplumber
+
+    lang = st.session_state.lang
+    is_ar = lang == 'ar'
+    
+    st.title("🔒 " + t("cv_privacy_title", lang))
+    st.markdown(t("cv_privacy_desc", lang))
+    st.divider()
+    
+    # --- Email and Phone removal ---
+    EMAIL_PATTERN = r'[a-zA-Z0-9._%+\u200b-]+@[a-zA-Z0-9.\u200b-]+\.[a-zA-Z]{2,}'
+    PHONE_PATTERNS = [
+        # International with country code: +966 56 036 2968 / +966-56-036-2968 / +966.56.036.2968
+        r'\+\d{1,3}[\s\-.\u200b]?\d{2}[\s\-.\u200b]?\d{3}[\s\-.\u200b]?\d{4}',
+        r'\+\d{1,3}[\s\-.\u200b]?\d{3}[\s\-.\u200b]?\d{3}[\s\-.\u200b]?\d{4}',
+        # With parentheses: (+966) 56 036 2968
+        r'\(\+\d{1,3}\)\s?\d{2}[\s\-.\u200b]?\d{3}[\s\-.\u200b]?\d{4}',
+        r'\(\+\d{1,3}\)\s?\d{3}[\s\-.\u200b]?\d{3}[\s\-.\u200b]?\d{4}',
+        # Saudi mobile: 056 036 2968 / 0560362968 / 056-036-2968
+        r'05\d{2}[\s\-.\u200b]?\d{3}[\s\-.\u200b]?\d{3}',
+        r'05\d{8}',
+        # General 10-digit patterns
+        r'\d{3}[\s\-.\u200b]?\d{3}[\s\-.\u200b]?\d{4}',
+        # General spaced format: 56 036 2968
+        r'\d{2}[\s\-.\u200b]?\d{3}[\s\-.\u200b]?\d{4}',
+    ]
+    
+    def remove_emails_and_phones_from_text(text):
+        """Remove both email addresses and phone numbers from text."""
+        cleaned = text
+        phones_found = []
+        emails_found = []
+        
+        # Find and remove emails first
+        emails_found = re.findall(EMAIL_PATTERN, cleaned)
+        for email in sorted(set(emails_found), key=len, reverse=True):
+            cleaned = cleaned.replace(email, "[EMAIL REMOVED]")
+        
+        # Find and remove phones (longest matches first to avoid partial matches)
+        all_phones = []
+        for pattern in PHONE_PATTERNS:
+            matches = re.findall(pattern, cleaned)
+            for match in matches:
+                if match not in all_phones:
+                    all_phones.append(match)
+        for phone in sorted(set(all_phones), key=len, reverse=True):
+            if phone not in phones_found:
+                phones_found.append(phone)
+            cleaned = cleaned.replace(phone, "[PHONE REMOVED]")
+        
+        return cleaned, phones_found, emails_found
+    
+    def clean_pdf_preserve_format(pdf_bytes):
+        """Remove emails and phone numbers from PDF while preserving images, fonts, layout, and formatting.
+        Returns cleaned PDF bytes."""
+        import fitz as fitz_module
+        doc = fitz_module.open(stream=pdf_bytes, filetype="pdf")
+        total_emails = 0
+        total_phones = 0
+        
+        for page_num in range(len(doc)):
+            page = doc[page_num]
+            
+            # Get all text blocks with their positions
+            text_dict = page.get_text("dict")
+            
+            for block in text_dict["blocks"]:
+                if block["type"] != 0:  # Skip non-text blocks (images, etc.)
+                    continue
+                for line in block["lines"]:
+                    for span in line["spans"]:
+                        span_text = span["text"]
+                        
+                        # Find emails in this span
+                        emails_in_span = re.findall(EMAIL_PATTERN, span_text)
+                        for email in emails_in_span:
+                            instances = page.search_for(email)
+                            for inst in instances:
+                                rect = fitz_module.Rect(inst)
+                                page.add_redact_annot(rect, fill=(1, 1, 1))
+                                total_emails += 1
+                        
+                        # Find phones in this span
+                        phones_in_span = []
+                        for pattern in PHONE_PATTERNS:
+                            phones_in_span.extend(re.findall(pattern, span_text))
+                        for phone in sorted(set(phones_in_span), key=len, reverse=True):
+                            instances = page.search_for(phone)
+                            for inst in instances:
+                                rect = fitz_module.Rect(inst)
+                                page.add_redact_annot(rect, fill=(1, 1, 1))
+                                total_phones += 1
+        
+        # Apply all redactions (this permanently removes the email and phone text)
+        if total_emails > 0 or total_phones > 0:
+            for page_num in range(len(doc)):
+                page = doc[page_num]
+                page.apply_redactions()
+        
+        # Save to memory buffer
+        output = io.BytesIO()
+        doc.save(output, garbage=4, deflate=True)
+        doc.close()
+        output.seek(0)
+        return output.read(), total_emails, total_phones
+    
+    def extract_text_from_pdf(pdf_file):
+        """Extract text from PDF using pdfplumber."""
+        text_parts = []
+        with pdfplumber.open(pdf_file) as pdf:
+            for page in pdf.pages:
+                page_text = page.extract_text()
+                if page_text:
+                    text_parts.append(page_text)
+        return "\n".join(text_parts)
+    
+    def extract_text_from_image(image_file):
+        """Extract text from image using OCR if available."""
+        try:
+            import pytesseract
+            image = Image.open(image_file)
+            text = pytesseract.image_to_string(image)
+            return text
+        except ImportError:
+            return None  # OCR not available
+        except Exception:
+            return None
+    
+    # Info about capabilities
+    st.info("ℹ️ " + ("هذا النموذج يحذف الإيميلات وأرقام الهواتف. يتم الحفاظ على تنسيق PDF الأصلي بما في ذلك الصور والخطوط والجداول." if is_ar else "This cleaner removes emails and phone numbers. Original PDF format is preserved including images, fonts, and tables."))
+    
+    # File uploader
+    uploaded_file = st.file_uploader(
+        t("cv_upload_label", lang),
+        type=["pdf", "jpg", "jpeg", "png"],
+        help=t("cv_upload_help", lang)
+    )
+    
+    if uploaded_file is not None:
+        file_ext = uploaded_file.name.split('.')[-1].lower()
+        
+        # --- CLEAR OLD SESSION STATE WHEN NEW FILE IS UPLOADED ---
+        if 'cv_last_file_name' not in st.session_state:
+            st.session_state.cv_last_file_name = ""
+        if st.session_state.cv_last_file_name != uploaded_file.name:
+            # New file detected - clear all previous cleaned data
+            for key in ['cv_original_text', 'cv_cleaned_text', 'cv_phones_count', 'cv_emails_count', 'cv_file_ext', 'cv_file_name', 'cv_last_file_name', 'cv_pdf_bytes', 'cv_cleaned_pdf_bytes']:
+                if key in st.session_state:
+                    del st.session_state[key]
+            st.session_state.cv_last_file_name = uploaded_file.name
+            st.session_state.cv_file_ext = file_ext
+            st.session_state.cv_file_name = uploaded_file.name
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.subheader("📄 " + (t("cv_original_text", lang)))
+            original_text = ""
+            
+            if file_ext == "pdf":
+                try:
+                    # Read PDF bytes for preview
+                    pdf_bytes = uploaded_file.read()
+                    uploaded_file.seek(0)  # Reset for later use
+                    original_text = extract_text_from_pdf(io.BytesIO(pdf_bytes))
+                    st.text_area("PDF Content", original_text, height=400, key="cv_original_pdf")
+                    # Store bytes for cleaning
+                    st.session_state.cv_pdf_bytes = pdf_bytes
+                except Exception as e:
+                    st.error(t("cv_error", lang) + ": " + str(e))
+                    original_text = ""
+            elif file_ext in ["jpg", "jpeg", "png"]:
+                image = Image.open(uploaded_file)
+                st.image(image, caption=uploaded_file.name, use_column_width=True)
+                # Try OCR
+                ocr_text = extract_text_from_image(uploaded_file)
+                if ocr_text:
+                    original_text = ocr_text
+                    st.text_area("OCR Text", ocr_text, height=300, key="cv_original_ocr")
+                else:
+                    st.warning("⚠️ " + ("OCR غير متوفر للتنظيف التلقائي للصور. يرجى رفع ملف PDF بدلاً من ذلك." if is_ar else "OCR not available for automatic image cleaning. Please upload a PDF instead."))
+            
+            if original_text:
+                st.session_state.cv_original_text = original_text
+        
+        with col2:
+            st.subheader("✨ " + (t("cv_cleaned_text", lang)))
+            
+            # Clear / Reset button
+            if st.button("🗑️ " + ("مسح البيانات وبدء جديد" if is_ar else "Clear & Start Fresh"), width='stretch', key="cv_clear_btn"):
+                for key in ['cv_original_text', 'cv_cleaned_text', 'cv_phones_count', 'cv_emails_count', 'cv_file_ext', 'cv_file_name', 'cv_last_file_name', 'cv_pdf_bytes', 'cv_cleaned_pdf_bytes']:
+                    if key in st.session_state:
+                        del st.session_state[key]
+                st.rerun()
+            
+            if st.button(t("cv_clean_btn", lang), type="primary", width='stretch', key="cv_clean_btn"):
+                if file_ext == "pdf" and 'cv_pdf_bytes' in st.session_state:
+                    # Clean PDF preserving format
+                    try:
+                        cleaned_pdf_bytes, email_count, phone_count = clean_pdf_preserve_format(st.session_state.cv_pdf_bytes)
+                        st.session_state.cv_cleaned_pdf_bytes = cleaned_pdf_bytes
+                        st.session_state.cv_emails_count = email_count
+                        st.session_state.cv_phones_count = phone_count
+                        st.success(t("cv_cleaned_success", lang))
+                    except Exception as e:
+                        st.error("خطأ في تنظيف PDF: " + str(e) if is_ar else "Error cleaning PDF: " + str(e))
+                elif 'cv_original_text' in st.session_state and st.session_state.cv_original_text:
+                    # Fallback for text-only cleaning
+                    cleaned_text, phones, emails = remove_emails_and_phones_from_text(st.session_state.cv_original_text)
+                    st.session_state.cv_cleaned_text = cleaned_text
+                    st.session_state.cv_phones_count = len(phones)
+                    st.session_state.cv_emails_count = len(emails)
+                    st.success(t("cv_cleaned_success", lang))
+                else:
+                    st.warning("الرجاء رفع ملف أولاً" if is_ar else "Please upload a file first")
+            
+            # Display cleaned content and download
+            if 'cv_cleaned_pdf_bytes' in st.session_state:
+                # PDF download - same format as original
+                clean_filename = "cleaned_" + st.session_state.get('cv_file_name', 'cv.pdf')
+                st.download_button(
+                    label="⬇️ " + t("cv_download_btn", lang),
+                    data=st.session_state.cv_cleaned_pdf_bytes,
+                    file_name=clean_filename,
+                    mime="application/pdf",
+                    width='stretch',
+                    key="cv_download_cleaned_pdf"
+                )
+                st.info("ℹ️ " + ("تم حفظ PDF مع الحفاظ على الصور والتنسيق الأصلي. الإيميلات وأرقام الهواتف محذوفة." if is_ar else "PDF saved preserving images and original format. Emails and phone numbers removed."))
+                
+                # Also show text preview
+                st.text_area("Cleaned Text Preview", st.session_state.cv_original_text, height=200, key="cv_cleaned_preview", disabled=True)
+                
+            elif 'cv_cleaned_text' in st.session_state:
+                cleaned_text = st.session_state.cv_cleaned_text
+                st.text_area("Cleaned Content", cleaned_text, height=400, key="cv_cleaned_display")
+                
+                # Stats - emails and phones removed
+                c_stats1, c_stats2 = st.columns(2)
+                with c_stats1:
+                    st.metric(t("cv_phones_removed", lang), st.session_state.get('cv_phones_count', 0))
+                with c_stats2:
+                    st.metric(t("cv_emails_removed", lang), st.session_state.get('cv_emails_count', 0))
+                
+                # Download button - txt fallback
+                base_name = "cleaned_" + st.session_state.get('cv_file_name', 'cv')
+                clean_filename = base_name + ".txt"
+                st.download_button(
+                    label="⬇️ " + t("cv_download_btn", lang),
+                    data=cleaned_text.encode('utf-8'),
+                    file_name=clean_filename,
+                    mime="text/plain",
+                    width='stretch',
+                    key="cv_download_cleaned_txt"
+                )
+                st.info("ℹ️ " + ("تم حفظ النص المنظف كملف نصي." if is_ar else "Cleaned text saved as text file."))
+            elif 'cv_original_text' in st.session_state:
+                st.info(t("cv_no_sensitive", lang))
+
 def render_permissions_content():
     lang = st.session_state.lang
     st.title(f" {t('permissions_title', lang)}")
@@ -4858,9 +7445,10 @@ def render_permissions_content():
             t_col("Role", lang): v.get('role', 'viewer')
         })
     
-    # Stylized DataFrame
+    # Stylized DataFrame (styled once)
     df_users = pd.DataFrame(table_data)
-    st.dataframe(style_df(df_users), width='content', column_config=__apply_pinned_columns(style_df(df_users)))
+    _users_styled = style_df(df_users)
+    st.dataframe(_users_styled, width='content', column_config=__apply_pinned_columns(_users_styled))
 
 def render_order_processing_content():
     """Order Processing: Matches Customer Requests with available Workers."""
@@ -4955,6 +7543,21 @@ def render_order_processing_content():
         with tc1:
             work_outside = st.checkbox(t("work_outside_city", lang), key="op_outside")
 
+        # 4. Row: New Smart Filters (Ready to Work / Iqama Valid / Experience) - Centered
+        st.markdown("<div style='margin-bottom: 10px;'></div>", unsafe_allow_html=True)
+        n_pad1, nc1, nc2, nc3, n_pad2 = st.columns([0.4, 1, 1, 1.7, 0.4])
+        yes_no_opts = [t("filter_option_all", lang), t("filter_option_yes", lang), t("filter_option_no", lang)]
+        with nc1:
+            st.markdown(f'<div style="font-family: \'Cairo\', sans-serif; font-size: 0.88rem; font-weight: 600; color: #FFFFFF; text-align: right; margin-bottom: 6px;">{t("ready_to_work_filter", lang)}</div>', unsafe_allow_html=True)
+            op_sel_ready = st.selectbox("", options=yes_no_opts, key="op_ready_to_work", label_visibility="collapsed")
+        with nc2:
+            st.markdown(f'<div style="font-family: \'Cairo\', sans-serif; font-size: 0.88rem; font-weight: 600; color: #FFFFFF; text-align: right; margin-bottom: 6px;">{t("iqama_valid_filter", lang)}</div>', unsafe_allow_html=True)
+            op_sel_iqama = st.selectbox("", options=yes_no_opts, key="op_iqama_valid", label_visibility="collapsed")
+        with nc3:
+            st.markdown(f'<div style="font-family: \'Cairo\', sans-serif; font-size: 0.88rem; font-weight: 600; color: #FFFFFF; text-align: right; margin-bottom: 6px;">{t("experience_field_filter", lang)}</div>', unsafe_allow_html=True)
+            op_exp_placeholder = "مثل: < 1 أو > 5 أو = 3 سنوات" if lang == 'ar' else "e.g. < 1 or > 5 or = 3 years"
+            op_sel_exp = st.text_input("", placeholder=op_exp_placeholder, key="op_experience_input", label_visibility="collapsed")
+
         # Apply Filters using SmartSearchEngine
         filters = {
             'age_enabled': age_enabled,
@@ -4973,14 +7576,30 @@ def render_order_processing_content():
             'sponsor_transfer': sponsor_transfer,
             'work_outside_city': work_outside,
             'domestic_worker': domestic_worker,
-            'transfer_count': trans_count if trans_count != "" else None
+            'transfer_count': trans_count if trans_count != "" else None,
+            
+            # --- New advanced filters: Ready to Work / Iqama Valid / Experience ---
+            'ready_to_work': 'Yes' if (op_sel_ready and 'Yes' in op_sel_ready) else ('No' if op_sel_ready and op_sel_ready != t("filter_option_all", lang) else None),
+            'iqama_valid': 'Yes' if (op_sel_iqama and 'Yes' in op_sel_iqama) else ('No' if op_sel_iqama and op_sel_iqama != t("filter_option_all", lang) else None),
         }
         
-        # Execute global filter on worker dataset
+        # Parse experience condition for order processing
+        if op_sel_exp and op_sel_exp.strip() and op_sel_exp.strip() != t("filter_option_all", lang):
+            _op_exp_text = op_sel_exp.strip()
+            _op_exp_m = re.match(r'\s*(<=|>=|<|>|=)\s*(\d+)', _op_exp_text)
+            if _op_exp_m:
+                filters['experience_op'] = _op_exp_m.group(1)
+                filters['experience_val'] = int(_op_exp_m.group(2))
+            else:
+                _op_exp_m2 = re.match(r'\s*(\d+)\s*', _op_exp_text)
+                if _op_exp_m2:
+                    filters['experience_op'] = '>='
+                    filters['experience_val'] = int(_op_exp_m2.group(1))
         if any(filters.values()):
+            total_orig_workers = len(workers_df)
             engine = SmartSearchEngine(workers_df)
             workers_df = engine.search("", filters=filters)
-            st.info(f"💡 {'تم تطبيق التصفية: متاح حالياً ' if lang == 'ar' else 'Filter applied: available '} {len(workers_df)} {' عامل' if lang == 'ar' else ' workers'}")
+            st.info(f"💡 {'تم تطبيق التصفية: متاح حالياً ' if lang == 'ar' else 'Filter applied: available '} {len(workers_df)} {' عامل' if lang == 'ar' else ' workers'} ({'من أصل ' if lang == 'ar' else 'out of '} {total_orig_workers})")
 
     # --- Resume Original Logic ---
 
@@ -5381,11 +8000,21 @@ def render_order_processing_content():
         if not value or str(value).strip().lower() in ["nan", "none", ""]:
             return ""
         
-        # Bidirectional translation based on current UI language
-        disp_val = auto_translate(str(value), target_lang=lang, force_stay_ar=force_ar)
+        val_raw = str(value).strip()
         
-        # Detect if this is a phone/number field for LTR direction
+        # Detect if this is a phone/number/date/time field for LTR direction and skipping translation
         is_phone_field = any(kw in label_text.lower() for kw in ["phone", "mobile", "جوال", "هاتف", "موبايل"])
+        is_numeric_or_date = any(kw in label_text.lower() for kw in ["تاريخ", "date", "وقت", "time", "ساعات", "hours", "راتب", "salary", "عدد", "employees", "يوم", "days", "كفالة"])
+        
+        if is_phone_field or is_numeric_or_date:
+            disp_val = val_raw
+        else:
+            # Bidirectional translation based on current UI language
+            disp_val = auto_translate(val_raw, target_lang=lang, force_stay_ar=force_ar)
+            
+        # Emergency safeguard against error strings leaking into UI
+        if any(err in str(disp_val).lower() for err in ["error 500", "server error", "that's an error", "that’s an error", "translation error"]):
+            disp_val = val_raw
         
         # Explicitly set text alignment and direction for stability across browsers
         cell_direction = 'ltr' if is_phone_field else 'rtl'
@@ -5466,7 +8095,8 @@ def render_order_processing_content():
             c_timestamp = customers_df.columns[0]
 
     # --- Container for all requests ---
-    st.markdown("### 📋 " + t('customer_requests', lang))
+    total_active_clients = len([idx for idx in customers_df.index if f"client_{idx}" not in st.session_state.op_hidden_clients])
+    st.markdown(f"### 📋 {t('customer_requests', lang)} <span style='font-size: 0.9rem; color: #888; font-weight: normal;'>({total_active_clients} {'طلب' if lang == 'ar' else 'requests'})</span>", unsafe_allow_html=True)
     
     # NEW SEARCH INPUT
     search_lbl = "🔍 بحث عن بطاقة طلب (الجوال، المسؤول، الموقع، الجنسية، المهنة، الملاحظات)" if lang == 'ar' else "🔍 Search Request (Mobile, Manager, Location, Nationality, Job, Notes)"
@@ -5577,6 +8207,20 @@ def render_order_processing_content():
     total_items = len(filtered_indices)
     total_pages = max(1, (total_items + PAGE_SIZE - 1) // PAGE_SIZE)
     
+    # --- Search Results Count Display ---
+    if cust_search_q:
+        if total_items > 0:
+            count_msg = f"🔍 **عدد نتائج البحث: {total_items}** من أصل {total_active_clients} طلب" if lang == 'ar' else f"🔍 **Search results: {total_items}** out of {total_active_clients} requests"
+            st.info(count_msg)
+        else:
+            no_res_msg = f"⚠️ **عدد نتائج البحث: 0** — لا توجد أي طلبات مطابقة للبحث عن: \"{cust_search_q}\"" if lang == 'ar' else f"⚠️ **Search results: 0** — No requests found matching: \"{cust_search_q}\""
+            st.warning(no_res_msg)
+            return
+
+    if total_items == 0:
+        st.warning(t("no_data", lang))
+        return
+    
     if "op_page_number" not in st.session_state:
         st.session_state.op_page_number = 1
         
@@ -5604,6 +8248,8 @@ def render_order_processing_content():
                 st.rerun()
         with pc2:
             page_text = f"صفحة {st.session_state.op_page_number} من {total_pages}" if lang == 'ar' else f"Page {st.session_state.op_page_number} of {total_pages}"
+            if cust_search_q:
+                page_text += f" (نتائج البحث: {total_items})" if lang == 'ar' else f" ({total_items} results)"
             st.markdown(f"<div style='text-align:center; padding-top:10px; color:#ddd;'>{page_text}</div>", unsafe_allow_html=True)
         with pc3:
             if st.button("➡️ التالي" if lang == 'ar' else "Next ➡️", disabled=(st.session_state.op_page_number == total_pages), key="next_top", width='stretch'):

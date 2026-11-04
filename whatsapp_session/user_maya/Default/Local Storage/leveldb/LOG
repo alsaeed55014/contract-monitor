@@ -1,0 +1,11 @@
+2026/10/16-20:19:46.039 617c Creating DB C:\app\whatsapp_session\user_maya\Default\Local Storage\leveldb since it was missing.
+2026/10/16-20:19:46.155 617c Reusing MANIFEST C:\app\whatsapp_session\user_maya\Default\Local Storage\leveldb/MANIFEST-000001
+2026/10/16-20:53:47.232 22b8 Level-0 table #5: started
+2026/10/16-20:53:47.237 22b8 Level-0 table #5: 18865 bytes OK
+2026/10/16-20:53:47.240 22b8 Delete type=0 #3
+2026/10/16-22:01:01.173 617c Level-0 table #7: started
+2026/10/16-22:01:01.184 617c Level-0 table #7: 13055 bytes OK
+2026/10/16-22:01:01.187 617c Delete type=0 #4
+2026/10/17-00:10:37.187 617c Level-0 table #9: started
+2026/10/17-00:10:37.197 617c Level-0 table #9: 15677 bytes OK
+2026/10/17-00:10:37.201 617c Delete type=0 #6

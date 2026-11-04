@@ -1,0 +1,6 @@
+2026/10/20-02:40:29.299 51a0 Reusing MANIFEST C:\app\whatsapp_session\user_admin\Default\Local Storage\leveldb/MANIFEST-000001
+2026/10/20-02:40:29.301 51a0 Recovering log #12
+2026/10/20-02:40:29.305 51a0 Reusing old log C:\app\whatsapp_session\user_admin\Default\Local Storage\leveldb/000012.log 
+2026/10/20-02:49:17.922 51a0 Level-0 table #16: started
+2026/10/20-02:49:17.928 51a0 Level-0 table #16: 13871 bytes OK
+2026/10/20-02:49:17.932 51a0 Delete type=0 #12
