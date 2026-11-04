@@ -5878,16 +5878,16 @@ def render_dashboard_content():
             if lang == 'ar':
                 if global_status == 'expired':
                     r['حالة العقد'] = f"❌ منتهي (منذ {abs(days)} يوم)"
-                elif global_status in ['urgent', 'warning']:
-                    r['حالة العقد'] = f"⚠️ عاجل (متبقى {days} يوم)"
+                elif 0 <= days <= 7:
+                    r['حالة العقد'] = "⚠️ عاجل (ينتهي اليوم)" if days == 0 else f"⚠️ عاجل (متبقي {days} يوم)"
                 else: # active
-                    r['حالة العقد'] = f"✅ ساري (متبقى {days} يوم)"
+                    r['حالة العقد'] = f"✅ ساري (متبقي {days} يوم)" if days != 9999 else "✅ ساري"
             else:
-                r['Contract Status'] = f"{status['label_en']} ({abs(days)} Days)"
+                r['Contract Status'] = ("Urgent (Expires Today)" if days == 0 else f"Urgent ({days} Days Left)") if 0 <= days <= 7 else (f"Expired {abs(days)} days ago" if days < 0 else (f"Active ({days} Days)" if days != 9999 else "Active"))
 
-            if global_status == 'urgent' or global_status == 'warning': stats['urgent'].append(r)
+            if 0 <= days <= 7: stats['urgent'].append(r)
             elif global_status == 'expired': stats['expired'].append(r)
-            elif global_status == 'active': stats['active'].append(r)
+            elif global_status in ['active', 'warning']: stats['active'].append(r)
         except Exception:
             continue
 
@@ -6435,12 +6435,12 @@ def render_search_content():
                     if lang == 'ar':
                         if gs == 'expired':
                             status_list.append(f"❌ منتهي (منذ {abs(ds)} يوم)")
-                        elif gs in ['urgent', 'warning']:
-                            status_list.append(f"⚠️ عاجل (متبقى {ds} يوم)")
+                        elif 0 <= ds <= 7:
+                            status_list.append("⚠️ عاجل (ينتهي اليوم)" if ds == 0 else f"⚠️ عاجل (متبقي {ds} يوم)")
                         else:
-                            status_list.append(f"✅ ساري (متبقى {ds} يوم)")
+                            status_list.append(f"✅ ساري (متبقي {ds} يوم)" if ds != 9999 else "✅ ساري")
                     else:
-                        status_list.append(f"{s['label_en']} ({abs(ds)} Days)")
+                        status_list.append(("Urgent (Expires Today)" if ds == 0 else f"Urgent ({ds} Days Left)") if 0 <= ds <= 7 else (f"Expired {abs(ds)} days ago" if ds < 0 else (f"Active ({ds} Days)" if ds != 9999 else "Active")))
                 
                 status_key = 'حالة العقد' if lang == 'ar' else 'Contract Status'
                 res[status_key] = status_list
