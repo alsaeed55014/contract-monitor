@@ -1,33 +1,95 @@
-# WhatsApp Automation & Contract Monitor (2026 Edition)
+# نظام تسجيل الحضور والانصراف مع خروج تلقائي عند إغلاق المتصفح
 
-This is a premium WhatsApp automation and candidate matching system built with Streamlit and Selenium.
+هذا النظام يحل مشكلة "لم يسجل خروج" عندما يغلق المستخدم المتصفح بدون الضغط على زر تسجيل الخروج. يتم تسجيل وقت الخروج الفعلي تلقائياً سواء تم الخروج من زر تسجيل الخروج أو إغلاق المتصفح مباشرة.
 
-## 🚀 Local Deployment (Windows)
+## مميزات النظام
+- ✅ كشف إغلاق المتصفح وإرسال طلب خروج تلقائي باستخدام `navigator.sendBeacon`
+- ✅ دعم multi-user من أجهزة مختلفة عبر الإنترنت
+- ✅ آلية احتياطية (Cron Job) لإغلاق الجلسات المنتهية تلقائياً
+- ✅ تسجيل وقت الخروج الفعلي في السجل بدلاً من "لم يسجل خروج"
+- ✅ بسيط وجاهز للرفع على GitHub وتطبيقه على أي خادم
 
-1. **Install Dependencies**:
-   ```bash
-   pip install -r requirements.txt
-   ```
+## هيكل الملفات
+```
+├── README.md
+├── database.sql
+├── config.php
+├── login.php
+├── logout.php
+├── dashboard.php
+├── attendance.php
+├── auto_close_sessions.php
+└── .gitignore
+```
 
-2. **Run the App**:
-   ```bash
-   streamlit run app.py
-   ```
+## متطلبات التشغيل
+- خادم ويب يدعم PHP (Apache / Nginx)
+- قاعدة بيانات MySQL أو MariaDB
+- PHP 7.4 أو أعلى
+- صلاحية إنشاء scheduled task (cron job) على السيرفر
 
-## ☁️ Cloud Deployment (GitHub/Streamlit Cloud)
+## خطوات التثبيت
 
-1. **Push to GitHub**:
-   - The `.gitignore` file will ensure your private WhatsApp sessions and login credentials are not uploaded.
-   - The `requirements.txt` and `packages.txt` files are included for automatic environment setup on Streamlit Cloud.
+### 1. رفع الملفات على السيرفر
+انسخ جميع الملفات إلى مجلد المشروع على الخادم.
 
-2. **Streamlit Cloud Setup**:
-   - Connect your repository to [Streamlit Cloud](https://share.streamlit.io/).
-   - The system will automatically detect and install Chrome via `packages.txt`.
+### 2. إنشاء قاعدة البيانات
+استورد ملف `database.sql` إلى قاعدة البيانات الخاصة بك:
+```bash
+mysql -u username -p database_name < database.sql
+```
 
-## 🛡️ Anti-Ban Security Features
-- **Dynamic User-Agents**: Mimics different browsers.
-- **Human-Like Interaction**: Random delays, mouse movements, and typing simulations.
-- **Session Persistence**: Keeps you logged in safely across restarts (when using a persistent disk).
+### 3. إعداد إعدادات قاعدة البيانات
+افتح ملف `config.php` وعدل بيانات الاتصال بقاعدة البيانات:
+```php
+define('DB_HOST', 'localhost');
+define('DB_NAME', 'اسم_قاعدة_البيانات');
+define('DB_USER', 'اسم_المستخدم');
+define('DB_PASS', 'كلمة_المرور');
+```
 
----
-*Developed for Alsaeed Alwazzan*
+### 4. إعداد scheduled task (Cron Job) — مهم جداً
+أضف مهمة مجدولة تعمل كل 5 دقائق لإغلاق الجلسات التي انقطع اتصالها فجأة:
+
+```
+*/5 * * * * /usr/bin/php /مسار/المشروع/auto_close_sessions.php
+```
+
+أو إذا كنت تستخدم لوحة تحكم مثل cPanel، أضف 명령 Cron كل 5 دقائق يشغل ملف `auto_close_sessions.php`.
+
+## كيف يعمل النظام
+
+### عند تسجيل الدخول
+يجلس المستخدم في صفحة `dashboard.php` ويُسجل وقت الدخول في قاعدة البيانات.
+
+### عند الضغط على زر "تسجيل الخروج"
+يتم استدعاء `logout.php` وتسجيل وقت الخروج الفعلي وتحديث الحالة إلى "تم تسجيل الخروج".
+
+### عند إغلاق المتصفح بدون زر خروج
+1. كود JavaScript في `dashboard.php` يكشف أن الصفحة أصبحت مخفية (`visibilitychange`) أو أن المتصفح أُغلق (`beforeunload`)
+2. يرسل طلب خروج تلقائي باستخدام `navigator.sendBeacon` إلى `logout.php`
+3. الخادم يسجل وقت الخروج الفعلي ويحدث السجل
+
+### إذا فشل إرسال طلب الخروج (انقطاع الإنترنت فجأة)
+يتم تشغيل ملف `auto_close_sessions.php` عبر cron كل 5 دقائق، يبحث عن جميع الجلسات التي لم يكن لها نشاط منذ 30 دقيقة ويعتبرها "تم تسجيل الخروج تلقائياً".
+
+## قاعدة البيانات
+الجدول الرئيسي: `attendance_logs`
+- `id`: معرف فريد
+- `user_id`: معرف المستخدم
+- `employee_name`: اسم الموظف
+- `login_time`: وقت تسجيل الدخول
+- `logout_time`: وقت تسجيل الخروج (يتم تحديثه تلقائياً)
+- `logout_status`: حالة الخروج (تم تسجيل الخروج / لم يسجل خروج)
+- `last_activity`: وقت آخر نشاط (يستخدمه نظام الإغلاق التلقائي)
+
+## ملاحظات أمنية
+- تأكد من استخدام HTTPS في بيئة الإنتاج لحماية جلسات المستخدمين.
+- غير بيانات الدخول الافتراضية في `login.php` بعد التركيب الأول.
+- يفضل إضافة حماية CSRF لـ `logout.php` في بيئة الإنتاج reales.
+
+## المساهمة
+يمكنك Fork هذا المشروع وإرسال طلبات السحب (Pull Requests) لتحسين الميزات.
+
+## الترخيص
+هذا المشروع مرخص تحت رخصة MIT - انظر ملف LICENSE للتفاصيل.
