@@ -2311,6 +2311,7 @@ try:
     from src.config import USERS_FILE, ASSETS_DIR
     from src.core.i18n import t, t_col, t_val
     from src.ui.whatsapp_ui import render_whatsapp_page
+    from src.ui.cv_privacy import render_cv_privacy_cleaner_content
 except ImportError as e:
     # Diagnostic: Check if 'src' exists
     import os
@@ -6982,7 +6983,8 @@ def render_login_history_content():
     with c2:
         st.caption("💡 " + (t("keep_history_btn", lang) + " — " + ("تبقى البيانات في السجل كما هي" if is_ar else "data stays in the log as is")))
 
-def render_cv_privacy_cleaner_content():
+# CV Privacy Cleaner logic is modularized in src.ui.cv_privacy
+def _legacy_render_cv_privacy_cleaner_content():
     """CV Privacy Cleaner: Remove email addresses only from CV files.
     Keeps phone numbers as requested. Preserves original PDF format including images."""
     import io

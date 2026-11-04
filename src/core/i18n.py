@@ -46,7 +46,7 @@ TRANSLATIONS = {
     "cv_privacy_title": {"ar": "منظف السيرة الذاتية", "en": "CV Privacy Cleaner"},
     "cv_privacy_desc": {"ar": "ارفع ملف السيرة الذاتية (PDF أو صورة) لحذف أرقام الهواتف والإيميلات منه قبل التحميل", "en": "Upload a CV (PDF or Image) to remove phone numbers and email addresses before downloading"},
     "cv_upload_label": {"ar": "رفع ملف السيرة الذاتية", "en": "Upload CV File"},
-    "cv_upload_help": {"ar": "يدعم ملفات PDF والصور (JPG, PNG)", "en": "Supports PDF and images (JPG, PNG)"},
+    "cv_upload_help": {"ar": "يدعم ملفات PDF وجميع أنواع الصور (JPG, PNG, JPEG, WEBP, BMP)", "en": "Supports PDF and all image formats (JPG, PNG, JPEG, WEBP, BMP)"},
     "cv_clean_btn": {"ar": "تنظيف الملف وحذف البيانات الحساسة", "en": "Clean File & Remove Sensitive Data"},
     "cv_cleaned_success": {"ar": "تم تنظيف الملف بنجاح! تم حذف أرقام الهواتف والإيميلات", "en": "File cleaned successfully! Phone numbers and email addresses removed"},
     "cv_download_btn": {"ar": "تحميل الملف المنظف", "en": "Download Cleaned File"},

@@ -15,3 +15,4 @@ pdfplumber
 undetected-chromedriver
 setuptools
 PyMuPDF
+pytesseract
