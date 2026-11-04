@@ -6987,9 +6987,17 @@ def render_cv_privacy_cleaner_content():
     Keeps phone numbers as requested. Preserves original PDF format including images."""
     import io
     import re
-    import fitz  # PyMuPDF
     from PIL import Image
     import pdfplumber
+
+    # PyMuPDF (fitz) is optional: guard the import so this page still loads
+    # on environments (e.g. Streamlit Cloud) where PyMuPDF is not installed.
+    try:
+        import fitz  # PyMuPDF
+        FITZ_AVAILABLE = True
+    except ImportError:
+        fitz = None
+        FITZ_AVAILABLE = False
 
     lang = st.session_state.lang
     is_ar = lang == 'ar'
@@ -7016,11 +7024,29 @@ def render_cv_privacy_cleaner_content():
         r'\d{2}[\s\-.\u200b]?\d{3}[\s\-.\u200b]?\d{4}',
     ]
     
+    # Labels to remove along with emails and phones
+    LABEL_PATTERNS = [
+        r'Email\s*:',
+        r'Email',
+        r'Mobile No\s*\.\s*',
+        r'Mobile No\s*',
+        r'Mobile',
+    ]
+    
     def remove_emails_and_phones_from_text(text):
-        """Remove both email addresses and phone numbers from text."""
+        """Remove emails, phone numbers, and their labels from text."""
         cleaned = text
         phones_found = []
         emails_found = []
+        labels_found = []
+        
+        # Remove labels first (e.g. "Email:", "Mobile No.", "Mobile")
+        for pattern in LABEL_PATTERNS:
+            matches = re.findall(pattern, cleaned, flags=re.IGNORECASE)
+            for match in sorted(set(matches), key=len, reverse=True):
+                if match not in labels_found:
+                    labels_found.append(match)
+                cleaned = cleaned.replace(match, "")
         
         # Find and remove emails first
         emails_found = re.findall(EMAIL_PATTERN, cleaned)
@@ -7039,12 +7065,14 @@ def render_cv_privacy_cleaner_content():
                 phones_found.append(phone)
             cleaned = cleaned.replace(phone, "[PHONE REMOVED]")
         
-        return cleaned, phones_found, emails_found
+        return cleaned, phones_found, emails_found, labels_found
     
     def clean_pdf_preserve_format(pdf_bytes):
         """Remove emails and phone numbers from PDF while preserving images, fonts, layout, and formatting.
         Returns cleaned PDF bytes."""
-        import fitz as fitz_module
+        if not FITZ_AVAILABLE:
+            raise RuntimeError("PyMuPDF (fitz) is not installed in this environment; PDF format-preserving cleaning is unavailable.")
+        fitz_module = fitz
         doc = fitz_module.open(stream=pdf_bytes, filetype="pdf")
         total_emails = 0
         total_phones = 0
@@ -7119,6 +7147,8 @@ def render_cv_privacy_cleaner_content():
     
     # Info about capabilities
     st.info("ℹ️ " + ("هذا النموذج يحذف الإيميلات وأرقام الهواتف. يتم الحفاظ على تنسيق PDF الأصلي بما في ذلك الصور والخطوط والجداول." if is_ar else "This cleaner removes emails and phone numbers. Original PDF format is preserved including images, fonts, and tables."))
+    if not FITZ_AVAILABLE:
+        st.warning("⚠️ " + ("PyMuPDF (fitz) غير مثبت في هذه البيئة، لذا تنظيف PDF الذي يحافظ على التنسيق غير متوفر. يرجى استخدام تنظيف النص فقط، أو تثبيت مكتبة PyMuPDF." if is_ar else "PyMuPDF (fitz) is not installed in this environment, so PDF format-preserving cleaning is unavailable. Please use text-only cleaning, or install the PyMuPDF library."))
     
     # File uploader
     uploaded_file = st.file_uploader(
@@ -7135,7 +7165,7 @@ def render_cv_privacy_cleaner_content():
             st.session_state.cv_last_file_name = ""
         if st.session_state.cv_last_file_name != uploaded_file.name:
             # New file detected - clear all previous cleaned data
-            for key in ['cv_original_text', 'cv_cleaned_text', 'cv_phones_count', 'cv_emails_count', 'cv_file_ext', 'cv_file_name', 'cv_last_file_name', 'cv_pdf_bytes', 'cv_cleaned_pdf_bytes']:
+            for key in ['cv_original_text', 'cv_cleaned_text', 'cv_phones_count', 'cv_emails_count', 'cv_labels_count', 'cv_file_ext', 'cv_file_name', 'cv_last_file_name', 'cv_pdf_bytes', 'cv_cleaned_pdf_bytes']:
                 if key in st.session_state:
                     del st.session_state[key]
             st.session_state.cv_last_file_name = uploaded_file.name
@@ -7179,28 +7209,32 @@ def render_cv_privacy_cleaner_content():
             
             # Clear / Reset button
             if st.button("🗑️ " + ("مسح البيانات وبدء جديد" if is_ar else "Clear & Start Fresh"), width='stretch', key="cv_clear_btn"):
-                for key in ['cv_original_text', 'cv_cleaned_text', 'cv_phones_count', 'cv_emails_count', 'cv_file_ext', 'cv_file_name', 'cv_last_file_name', 'cv_pdf_bytes', 'cv_cleaned_pdf_bytes']:
+                for key in ['cv_original_text', 'cv_cleaned_text', 'cv_phones_count', 'cv_emails_count', 'cv_labels_count', 'cv_file_ext', 'cv_file_name', 'cv_last_file_name', 'cv_pdf_bytes', 'cv_cleaned_pdf_bytes']:
                     if key in st.session_state:
                         del st.session_state[key]
                 st.rerun()
             
             if st.button(t("cv_clean_btn", lang), type="primary", width='stretch', key="cv_clean_btn"):
                 if file_ext == "pdf" and 'cv_pdf_bytes' in st.session_state:
-                    # Clean PDF preserving format
-                    try:
-                        cleaned_pdf_bytes, email_count, phone_count = clean_pdf_preserve_format(st.session_state.cv_pdf_bytes)
-                        st.session_state.cv_cleaned_pdf_bytes = cleaned_pdf_bytes
-                        st.session_state.cv_emails_count = email_count
-                        st.session_state.cv_phones_count = phone_count
-                        st.success(t("cv_cleaned_success", lang))
-                    except Exception as e:
-                        st.error("خطأ في تنظيف PDF: " + str(e) if is_ar else "Error cleaning PDF: " + str(e))
+                    if not FITZ_AVAILABLE:
+                        st.error("PyMuPDF (fitz) is not installed in this environment, so PDF format-preserving cleaning is unavailable." if not is_ar else "مكتبة PyMuPDF (fitz) غير مثبتة في هذه البيئة، لذا التنظيف الذي يحفظ تنسيق PDF غير متاح.")
+                    else:
+                        # Clean PDF preserving format
+                        try:
+                            cleaned_pdf_bytes, email_count, phone_count = clean_pdf_preserve_format(st.session_state.cv_pdf_bytes)
+                            st.session_state.cv_cleaned_pdf_bytes = cleaned_pdf_bytes
+                            st.session_state.cv_emails_count = email_count
+                            st.session_state.cv_phones_count = phone_count
+                            st.success(t("cv_cleaned_success", lang))
+                        except Exception as e:
+                            st.error("خطأ في تنظيف PDF: " + str(e) if is_ar else "Error cleaning PDF: " + str(e))
                 elif 'cv_original_text' in st.session_state and st.session_state.cv_original_text:
                     # Fallback for text-only cleaning
-                    cleaned_text, phones, emails = remove_emails_and_phones_from_text(st.session_state.cv_original_text)
+                    cleaned_text, phones, emails, labels = remove_emails_and_phones_from_text(st.session_state.cv_original_text)
                     st.session_state.cv_cleaned_text = cleaned_text
                     st.session_state.cv_phones_count = len(phones)
                     st.session_state.cv_emails_count = len(emails)
+                    st.session_state.cv_labels_count = len(labels)
                     st.success(t("cv_cleaned_success", lang))
                 else:
                     st.warning("الرجاء رفع ملف أولاً" if is_ar else "Please upload a file first")
@@ -7226,12 +7260,14 @@ def render_cv_privacy_cleaner_content():
                 cleaned_text = st.session_state.cv_cleaned_text
                 st.text_area("Cleaned Content", cleaned_text, height=400, key="cv_cleaned_display")
                 
-                # Stats - emails and phones removed
-                c_stats1, c_stats2 = st.columns(2)
+                # Stats - emails, phones and labels removed
+                c_stats1, c_stats2, c_stats3 = st.columns(3)
                 with c_stats1:
                     st.metric(t("cv_phones_removed", lang), st.session_state.get('cv_phones_count', 0))
                 with c_stats2:
                     st.metric(t("cv_emails_removed", lang), st.session_state.get('cv_emails_count', 0))
+                with c_stats3:
+                    st.metric("التسميات المحذوفة" if is_ar else "Labels removed", st.session_state.get('cv_labels_count', 0))
                 
                 # Download button - txt fallback
                 base_name = "cleaned_" + st.session_state.get('cv_file_name', 'cv')
