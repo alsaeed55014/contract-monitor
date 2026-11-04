@@ -4947,6 +4947,34 @@ def record_logout_event(username):
     except Exception:
         pass
 
+def inject_browser_close_logout_script(username):
+    """Inject JavaScript that signals logout when the browser tab/window is closed or hidden.
+    Uses sendBeacon (most reliable on unload) with beforeunload/pagehide fallback."""
+    safe_user = str(username).replace("\\", "\\\\").replace('"', '\\"')
+    script = f"""
+    <script>
+    (function() {{
+        var username = "{safe_user}";
+        function signalLogout() {{
+            try {{
+                var url = new URL(window.location.href);
+                url.searchParams.set('logout', 'close');
+                url.searchParams.set('user', username);
+                url.searchParams.set('ts', String(Date.now()));
+                if (navigator.sendBeacon) {{
+                    navigator.sendBeacon(url.toString());
+                }} else {{
+                    window.location.replace(url.toString());
+                }}
+            }} catch(e) {{}}
+        }}
+        window.addEventListener('beforeunload', signalLogout);
+        window.addEventListener('pagehide', signalLogout);
+    }})();
+    </script>
+    """
+    st.html(script)
+
 def load_login_history():
     """Returns login log list (oldest first)."""
     try:
@@ -5374,6 +5402,16 @@ def dashboard():
 
 
     with st.sidebar:
+        # --- Handle browser-close logout signal (?logout=close&user=X) ---
+        # Triggered by inject_browser_close_logout_script when tab/window is closed
+        _qp_close = st.query_params
+        if _qp_close.get('logout') == 'close':
+            _close_user = str(_qp_close.get('user', '')).strip()
+            if _close_user:
+                record_logout_event(_close_user)
+            st.query_params.clear()
+            st.rerun()
+
         # Use columns to force horizontal centering for the image block
         sc1, sc2, sc3 = st.columns([1, 2, 1])
         with sc2:
@@ -5440,6 +5478,7 @@ def dashboard():
         special_nav = [
             ("📱 " + t("whatsapp_marketing", lang), "whatsapp_marketing"),
             ("🗑️ " + t("duplicate_remover", lang), "duplicate_remover"),
+            ("🔒 " + t("cv_privacy_title", lang), "cv_privacy"),
         ]
         
         for label, page_name in special_nav:
@@ -5501,6 +5540,11 @@ def dashboard():
             """, unsafe_allow_javascript=True)
             st.rerun()
         
+        # Inject auto-logout script for browser tab/window close
+        current_user = st.session_state.get("user", {})
+        if isinstance(current_user, dict) and current_user.get("username"):
+            inject_browser_close_logout_script(current_user.get("username"))
+
         # Global Deep Reset Opportunity
         st.sidebar.divider()
         with st.sidebar.expander(t("deep_reset", lang)):
@@ -5567,7 +5611,8 @@ def dashboard():
         "login_history": render_login_history_content,
         "bengali_supply": render_bengali_supply_content,
         "whatsapp_marketing": render_whatsapp_page,
-        "duplicate_remover": render_duplicate_remover_content
+        "duplicate_remover": render_duplicate_remover_content,
+        "cv_privacy": render_cv_privacy_cleaner_content
     }
     
     # Permission check for restricted pages
@@ -6936,6 +6981,272 @@ def render_login_history_content():
                 st.rerun()
     with c2:
         st.caption("💡 " + (t("keep_history_btn", lang) + " — " + ("تبقى البيانات في السجل كما هي" if is_ar else "data stays in the log as is")))
+
+def render_cv_privacy_cleaner_content():
+    """CV Privacy Cleaner: Remove email addresses only from CV files.
+    Keeps phone numbers as requested. Preserves original PDF format including images."""
+    import io
+    import re
+    import fitz  # PyMuPDF
+    from PIL import Image
+    import pdfplumber
+
+    lang = st.session_state.lang
+    is_ar = lang == 'ar'
+    
+    st.title("🔒 " + t("cv_privacy_title", lang))
+    st.markdown(t("cv_privacy_desc", lang))
+    st.divider()
+    
+    # --- Email and Phone removal ---
+    EMAIL_PATTERN = r'[a-zA-Z0-9._%+\u200b-]+@[a-zA-Z0-9.\u200b-]+\.[a-zA-Z]{2,}'
+    PHONE_PATTERNS = [
+        # International with country code: +966 56 036 2968 / +966-56-036-2968 / +966.56.036.2968
+        r'\+\d{1,3}[\s\-.\u200b]?\d{2}[\s\-.\u200b]?\d{3}[\s\-.\u200b]?\d{4}',
+        r'\+\d{1,3}[\s\-.\u200b]?\d{3}[\s\-.\u200b]?\d{3}[\s\-.\u200b]?\d{4}',
+        # With parentheses: (+966) 56 036 2968
+        r'\(\+\d{1,3}\)\s?\d{2}[\s\-.\u200b]?\d{3}[\s\-.\u200b]?\d{4}',
+        r'\(\+\d{1,3}\)\s?\d{3}[\s\-.\u200b]?\d{3}[\s\-.\u200b]?\d{4}',
+        # Saudi mobile: 056 036 2968 / 0560362968 / 056-036-2968
+        r'05\d{2}[\s\-.\u200b]?\d{3}[\s\-.\u200b]?\d{3}',
+        r'05\d{8}',
+        # General 10-digit patterns
+        r'\d{3}[\s\-.\u200b]?\d{3}[\s\-.\u200b]?\d{4}',
+        # General spaced format: 56 036 2968
+        r'\d{2}[\s\-.\u200b]?\d{3}[\s\-.\u200b]?\d{4}',
+    ]
+    
+    def remove_emails_and_phones_from_text(text):
+        """Remove both email addresses and phone numbers from text."""
+        cleaned = text
+        phones_found = []
+        emails_found = []
+        
+        # Find and remove emails first
+        emails_found = re.findall(EMAIL_PATTERN, cleaned)
+        for email in sorted(set(emails_found), key=len, reverse=True):
+            cleaned = cleaned.replace(email, "[EMAIL REMOVED]")
+        
+        # Find and remove phones (longest matches first to avoid partial matches)
+        all_phones = []
+        for pattern in PHONE_PATTERNS:
+            matches = re.findall(pattern, cleaned)
+            for match in matches:
+                if match not in all_phones:
+                    all_phones.append(match)
+        for phone in sorted(set(all_phones), key=len, reverse=True):
+            if phone not in phones_found:
+                phones_found.append(phone)
+            cleaned = cleaned.replace(phone, "[PHONE REMOVED]")
+        
+        return cleaned, phones_found, emails_found
+    
+    def clean_pdf_preserve_format(pdf_bytes):
+        """Remove emails and phone numbers from PDF while preserving images, fonts, layout, and formatting.
+        Returns cleaned PDF bytes."""
+        import fitz as fitz_module
+        doc = fitz_module.open(stream=pdf_bytes, filetype="pdf")
+        total_emails = 0
+        total_phones = 0
+        
+        for page_num in range(len(doc)):
+            page = doc[page_num]
+            
+            # Get all text blocks with their positions
+            text_dict = page.get_text("dict")
+            
+            for block in text_dict["blocks"]:
+                if block["type"] != 0:  # Skip non-text blocks (images, etc.)
+                    continue
+                for line in block["lines"]:
+                    for span in line["spans"]:
+                        span_text = span["text"]
+                        
+                        # Find emails in this span
+                        emails_in_span = re.findall(EMAIL_PATTERN, span_text)
+                        for email in emails_in_span:
+                            instances = page.search_for(email)
+                            for inst in instances:
+                                rect = fitz_module.Rect(inst)
+                                page.add_redact_annot(rect, fill=(1, 1, 1))
+                                total_emails += 1
+                        
+                        # Find phones in this span
+                        phones_in_span = []
+                        for pattern in PHONE_PATTERNS:
+                            phones_in_span.extend(re.findall(pattern, span_text))
+                        for phone in sorted(set(phones_in_span), key=len, reverse=True):
+                            instances = page.search_for(phone)
+                            for inst in instances:
+                                rect = fitz_module.Rect(inst)
+                                page.add_redact_annot(rect, fill=(1, 1, 1))
+                                total_phones += 1
+        
+        # Apply all redactions (this permanently removes the email and phone text)
+        if total_emails > 0 or total_phones > 0:
+            for page_num in range(len(doc)):
+                page = doc[page_num]
+                page.apply_redactions()
+        
+        # Save to memory buffer
+        output = io.BytesIO()
+        doc.save(output, garbage=4, deflate=True)
+        doc.close()
+        output.seek(0)
+        return output.read(), total_emails, total_phones
+    
+    def extract_text_from_pdf(pdf_file):
+        """Extract text from PDF using pdfplumber."""
+        text_parts = []
+        with pdfplumber.open(pdf_file) as pdf:
+            for page in pdf.pages:
+                page_text = page.extract_text()
+                if page_text:
+                    text_parts.append(page_text)
+        return "\n".join(text_parts)
+    
+    def extract_text_from_image(image_file):
+        """Extract text from image using OCR if available."""
+        try:
+            import pytesseract
+            image = Image.open(image_file)
+            text = pytesseract.image_to_string(image)
+            return text
+        except ImportError:
+            return None  # OCR not available
+        except Exception:
+            return None
+    
+    # Info about capabilities
+    st.info("ℹ️ " + ("هذا النموذج يحذف الإيميلات وأرقام الهواتف. يتم الحفاظ على تنسيق PDF الأصلي بما في ذلك الصور والخطوط والجداول." if is_ar else "This cleaner removes emails and phone numbers. Original PDF format is preserved including images, fonts, and tables."))
+    
+    # File uploader
+    uploaded_file = st.file_uploader(
+        t("cv_upload_label", lang),
+        type=["pdf", "jpg", "jpeg", "png"],
+        help=t("cv_upload_help", lang)
+    )
+    
+    if uploaded_file is not None:
+        file_ext = uploaded_file.name.split('.')[-1].lower()
+        
+        # --- CLEAR OLD SESSION STATE WHEN NEW FILE IS UPLOADED ---
+        if 'cv_last_file_name' not in st.session_state:
+            st.session_state.cv_last_file_name = ""
+        if st.session_state.cv_last_file_name != uploaded_file.name:
+            # New file detected - clear all previous cleaned data
+            for key in ['cv_original_text', 'cv_cleaned_text', 'cv_phones_count', 'cv_emails_count', 'cv_file_ext', 'cv_file_name', 'cv_last_file_name', 'cv_pdf_bytes', 'cv_cleaned_pdf_bytes']:
+                if key in st.session_state:
+                    del st.session_state[key]
+            st.session_state.cv_last_file_name = uploaded_file.name
+            st.session_state.cv_file_ext = file_ext
+            st.session_state.cv_file_name = uploaded_file.name
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.subheader("📄 " + (t("cv_original_text", lang)))
+            original_text = ""
+            
+            if file_ext == "pdf":
+                try:
+                    # Read PDF bytes for preview
+                    pdf_bytes = uploaded_file.read()
+                    uploaded_file.seek(0)  # Reset for later use
+                    original_text = extract_text_from_pdf(io.BytesIO(pdf_bytes))
+                    st.text_area("PDF Content", original_text, height=400, key="cv_original_pdf")
+                    # Store bytes for cleaning
+                    st.session_state.cv_pdf_bytes = pdf_bytes
+                except Exception as e:
+                    st.error(t("cv_error", lang) + ": " + str(e))
+                    original_text = ""
+            elif file_ext in ["jpg", "jpeg", "png"]:
+                image = Image.open(uploaded_file)
+                st.image(image, caption=uploaded_file.name, use_column_width=True)
+                # Try OCR
+                ocr_text = extract_text_from_image(uploaded_file)
+                if ocr_text:
+                    original_text = ocr_text
+                    st.text_area("OCR Text", ocr_text, height=300, key="cv_original_ocr")
+                else:
+                    st.warning("⚠️ " + ("OCR غير متوفر للتنظيف التلقائي للصور. يرجى رفع ملف PDF بدلاً من ذلك." if is_ar else "OCR not available for automatic image cleaning. Please upload a PDF instead."))
+            
+            if original_text:
+                st.session_state.cv_original_text = original_text
+        
+        with col2:
+            st.subheader("✨ " + (t("cv_cleaned_text", lang)))
+            
+            # Clear / Reset button
+            if st.button("🗑️ " + ("مسح البيانات وبدء جديد" if is_ar else "Clear & Start Fresh"), width='stretch', key="cv_clear_btn"):
+                for key in ['cv_original_text', 'cv_cleaned_text', 'cv_phones_count', 'cv_emails_count', 'cv_file_ext', 'cv_file_name', 'cv_last_file_name', 'cv_pdf_bytes', 'cv_cleaned_pdf_bytes']:
+                    if key in st.session_state:
+                        del st.session_state[key]
+                st.rerun()
+            
+            if st.button(t("cv_clean_btn", lang), type="primary", width='stretch', key="cv_clean_btn"):
+                if file_ext == "pdf" and 'cv_pdf_bytes' in st.session_state:
+                    # Clean PDF preserving format
+                    try:
+                        cleaned_pdf_bytes, email_count, phone_count = clean_pdf_preserve_format(st.session_state.cv_pdf_bytes)
+                        st.session_state.cv_cleaned_pdf_bytes = cleaned_pdf_bytes
+                        st.session_state.cv_emails_count = email_count
+                        st.session_state.cv_phones_count = phone_count
+                        st.success(t("cv_cleaned_success", lang))
+                    except Exception as e:
+                        st.error("خطأ في تنظيف PDF: " + str(e) if is_ar else "Error cleaning PDF: " + str(e))
+                elif 'cv_original_text' in st.session_state and st.session_state.cv_original_text:
+                    # Fallback for text-only cleaning
+                    cleaned_text, phones, emails = remove_emails_and_phones_from_text(st.session_state.cv_original_text)
+                    st.session_state.cv_cleaned_text = cleaned_text
+                    st.session_state.cv_phones_count = len(phones)
+                    st.session_state.cv_emails_count = len(emails)
+                    st.success(t("cv_cleaned_success", lang))
+                else:
+                    st.warning("الرجاء رفع ملف أولاً" if is_ar else "Please upload a file first")
+            
+            # Display cleaned content and download
+            if 'cv_cleaned_pdf_bytes' in st.session_state:
+                # PDF download - same format as original
+                clean_filename = "cleaned_" + st.session_state.get('cv_file_name', 'cv.pdf')
+                st.download_button(
+                    label="⬇️ " + t("cv_download_btn", lang),
+                    data=st.session_state.cv_cleaned_pdf_bytes,
+                    file_name=clean_filename,
+                    mime="application/pdf",
+                    width='stretch',
+                    key="cv_download_cleaned_pdf"
+                )
+                st.info("ℹ️ " + ("تم حفظ PDF مع الحفاظ على الصور والتنسيق الأصلي. الإيميلات وأرقام الهواتف محذوفة." if is_ar else "PDF saved preserving images and original format. Emails and phone numbers removed."))
+                
+                # Also show text preview
+                st.text_area("Cleaned Text Preview", st.session_state.cv_original_text, height=200, key="cv_cleaned_preview", disabled=True)
+                
+            elif 'cv_cleaned_text' in st.session_state:
+                cleaned_text = st.session_state.cv_cleaned_text
+                st.text_area("Cleaned Content", cleaned_text, height=400, key="cv_cleaned_display")
+                
+                # Stats - emails and phones removed
+                c_stats1, c_stats2 = st.columns(2)
+                with c_stats1:
+                    st.metric(t("cv_phones_removed", lang), st.session_state.get('cv_phones_count', 0))
+                with c_stats2:
+                    st.metric(t("cv_emails_removed", lang), st.session_state.get('cv_emails_count', 0))
+                
+                # Download button - txt fallback
+                base_name = "cleaned_" + st.session_state.get('cv_file_name', 'cv')
+                clean_filename = base_name + ".txt"
+                st.download_button(
+                    label="⬇️ " + t("cv_download_btn", lang),
+                    data=cleaned_text.encode('utf-8'),
+                    file_name=clean_filename,
+                    mime="text/plain",
+                    width='stretch',
+                    key="cv_download_cleaned_txt"
+                )
+                st.info("ℹ️ " + ("تم حفظ النص المنظف كملف نصي." if is_ar else "Cleaned text saved as text file."))
+            elif 'cv_original_text' in st.session_state:
+                st.info(t("cv_no_sensitive", lang))
 
 def render_permissions_content():
     lang = st.session_state.lang
