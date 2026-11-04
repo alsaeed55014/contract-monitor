@@ -4872,7 +4872,6 @@ def update_user_heartbeat(username, user_info=None):
         pass
 
 LOGIN_HISTORY_FILE = os.path.join(BASE_DIR, "login_history.json")
-LOGIN_HISTORY_MAX = 2000
 
 def _login_display_name(username, user_obj=None):
     """Display name for login records (Arabic name preferred)."""
@@ -4902,6 +4901,9 @@ def record_login_event(username, user_obj=None):
             "ts": time.time(),
             "date": now.strftime("%Y-%m-%d"),
             "time": now.strftime("%I:%M %p").replace("AM", "ص").replace("PM", "م"),
+            "logout_ts": None,
+            "logout_date": None,
+            "logout_time": None,
         }
         log = []
         if os.path.exists(LOGIN_HISTORY_FILE):
@@ -4911,7 +4913,35 @@ def record_login_event(username, user_obj=None):
             except:
                 log = []
         log.append(entry)
-        log = log[-LOGIN_HISTORY_MAX:]
+        with open(LOGIN_HISTORY_FILE, "w", encoding="utf-8") as f:
+            json.dump({"log": log}, f, ensure_ascii=False, indent=2)
+    except Exception:
+        pass
+
+def record_logout_event(username):
+    """Records the logout time for the latest open (no logout) session of the given user."""
+    try:
+        if not username:
+            return
+        u_clean = str(username).lower().strip()
+        if not os.path.exists(LOGIN_HISTORY_FILE):
+            return
+        try:
+            with open(LOGIN_HISTORY_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                log = data.get("log", []) if isinstance(data, dict) else []
+        except Exception:
+            return
+        now = get_saudi_time()
+        logout_ts = time.time()
+        # Find the latest entry for this user that has no logout_time yet
+        for entry in reversed(log):
+            if isinstance(entry, dict) and str(entry.get("username", "")).lower().strip() == u_clean:
+                if entry.get("logout_ts") is None:
+                    entry["logout_ts"] = logout_ts
+                    entry["logout_date"] = now.strftime("%Y-%m-%d")
+                    entry["logout_time"] = now.strftime("%I:%M %p").replace("AM", "ص").replace("PM", "م")
+                    break
         with open(LOGIN_HISTORY_FILE, "w", encoding="utf-8") as f:
             json.dump({"log": log}, f, ensure_ascii=False, indent=2)
     except Exception:
@@ -5454,6 +5484,10 @@ def dashboard():
         st.markdown("<div style='margin: 15px 0;'></div>", unsafe_allow_html=True)
         
         if st.button(t("logout", lang), type="primary", width='stretch'):
+            # Record logout time before ending session
+            current_user = st.session_state.get("user", {})
+            if isinstance(current_user, dict) and current_user.get("username"):
+                record_logout_event(current_user.get("username"))
             st.session_state.user = None
             st.html(f"""
             <script>
@@ -6880,8 +6914,10 @@ def render_login_history_content():
             ("اسم المستخدم" if is_ar else "Username"): e.get("username", ""),
             ("الاسم" if is_ar else "Name"): e.get("display_name", ""),
             ("الدور" if is_ar else "Role"): e.get("role", ""),
-            ("التاريخ" if is_ar else "Date"): e.get("date", ""),
-            ("الوقت" if is_ar else "Time"): e.get("time", ""),
+            ("تاريخ الدخول" if is_ar else "Login Date"): e.get("date", ""),
+            ("وقت الدخول" if is_ar else "Login Time"): e.get("time", ""),
+            ("تاريخ الخروج" if is_ar else "Logout Date"): e.get("logout_date") or ("—" if is_ar else "—"),
+            ("وقت الخروج" if is_ar else "Logout Time"): e.get("logout_time") or ("لم يسجل خروج" if is_ar else "Not logged out"),
         } for e in rows])
         st.dataframe(disp, width="content", hide_index=True, column_config=__apply_pinned_columns(disp))
     st.divider()
