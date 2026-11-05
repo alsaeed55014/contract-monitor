@@ -5473,6 +5473,8 @@ def dashboard():
         
         if st.button(t("order_processing", lang), width='stretch', disabled=_wa_lock_nav, key="nav_order_processing"):
             st.session_state.page = "order_processing"
+            st.session_state.op_page_number = 1
+            st.session_state.op_jump_to_latest = True
             st.rerun()
         
         # Special navigation with icons
@@ -7494,6 +7496,13 @@ def render_order_processing_content():
     st.markdown('<div class="programmer-signature-neon">By: Alsaeed Alwazzan</div>', unsafe_allow_html=True)
     st.title(f" {t('order_processing_title', lang)}")
     
+    # Auto-scroll to top when navigating here from the sidebar button
+    if st.session_state.get("op_jump_to_latest", False):
+        st.components.v1.html(
+            "<script>window.parent.document.querySelector('section.main').scrollTo({top: 0, behavior: 'smooth'});</script>",
+            height=0
+        )
+    
     loading_placeholder = show_loading_hourglass()
     start_op_time = time.time()
     
@@ -8261,6 +8270,11 @@ def render_order_processing_content():
     
     if "op_page_number" not in st.session_state:
         st.session_state.op_page_number = 1
+        
+    # Jump to latest (page 1 = newest requests) when triggered by nav button
+    if st.session_state.get("op_jump_to_latest", False):
+        st.session_state.op_page_number = 1
+        st.session_state.op_jump_to_latest = False
         
     # Reset page to 1 if search query changes
     if "op_last_search" not in st.session_state or st.session_state.op_last_search != cust_search_q:
