@@ -8504,70 +8504,80 @@ def render_order_processing_content():
 
                 # Segment Header Helper
                 def render_segment_header(label, count, color="#D4AF37", explainer=None):
-                    st.markdown(f"""<div style="color: {color}; font-weight: 700; margin: 15px 5px 5px 5px; font-family: 'Cairo', sans-serif; direction: rtl; text-align: right;">{label} — {count}</div>""", unsafe_allow_html=True)
+                    st.markdown(f'<div style="color: {color}; font-weight: 700; margin: 15px 5px 5px 5px; font-family: \'Cairo\', sans-serif; direction: rtl; text-align: right;">{label} — {count}</div>', unsafe_allow_html=True)
                     if explainer:
-                        st.markdown(f"""<div style="font-size: 0.85rem; color: #888; margin: -5px 5px 10px 5px; font-family: 'Cairo', sans-serif; direction: rtl; text-align: right;">{explainer}</div>""", unsafe_allow_html=True)
+                        st.markdown(f'<div style="font-size: 0.85rem; color: #888; margin: -5px 5px 10px 5px; font-family: \'Cairo\', sans-serif; direction: rtl; text-align: right;">{explainer}</div>', unsafe_allow_html=True)
+
+                # --- Initialize table visibility states (hidden by default on page load) ---
+                city_vis_key   = f"show_city_table_{idx}"
+                reg_vis_key    = f"show_reg_table_{idx}"
+                other_vis_key  = f"show_other_table_{idx}"
+                if city_vis_key  not in st.session_state: st.session_state[city_vis_key]  = False
+                if reg_vis_key   not in st.session_state: st.session_state[reg_vis_key]   = False
+                if other_vis_key not in st.session_state: st.session_state[other_vis_key] = False
 
                 # Same City Table
                 if city_list:
                     city_df, city_idx_map = build_worker_table(city_list, city_scores)
                     if not city_df.empty:
-                        # Export
-                        c_op_2 = st.columns([4, 1])[1]
-                        with c_op_2:
-                            city_df_export = get_filtered_df_by_nationality(city_df, f"op_city_{idx}")
-                            xl_data_op = create_pasha_whatsapp_excel(city_df_export, lang=lang)
-                            if xl_data_op:
-                                _, xl_df_op = xl_data_op
-                                btn_exp = "💬 " + ("تصدير للواتساب" if lang == 'ar' else "Export to WhatsApp")
-                                render_pasha_export_button(xl_df_op, btn_exp, f"Matched_Workers_City_{idx+1}.xlsx", 
-                                                          f"Matched_Workers_City_{idx+1}", key=f"dl_op_city_{idx}")
-                        
                         loc_val = str(customer_row.get(c_location, ""))
-                        label = f"📍 عمال في نفس المدينة ({loc_val})" if lang == 'ar' else f"📍 Workers in the same city ({loc_val})"
-                        render_segment_header(label, len(city_df), color="#D4AF37")
-                        
-                        col_cfg_city = {}
-                        nat_col_city = None
-                        for col in city_df.columns:
-                            if any(kw in str(col).lower() for kw in ["nationality", "الجنسية"]):
-                                nat_col_city = col
-                                col_cfg_city[f"🚩_{col}"] = st.column_config.ImageColumn(t("country_label", lang), width="small", pinned=True)
-
-                        st.markdown("<br>", unsafe_allow_html=True)
-                        city_df = render_table_translator(city_df, key_prefix=f"op_city_{idx}")
-                        
-                        city_styled = style_df(city_df.drop(columns=["__uid"]))
-                        
-                        df_city_height = min((len(city_df) + 1) * 35 + 40, 500)
-                        event_city = st.dataframe(
-                            city_styled,
-                            width='content', hide_index=True, on_select="rerun",
-                            selection_mode="single-row", column_config=__apply_pinned_columns(city_styled, col_cfg_city),
-                            key=f"op_city_table_{idx}", height=df_city_height
+                        city_label = f"📍 عمال في نفس المدينة ({loc_val})" if lang == 'ar' else f"📍 Workers in the same city ({loc_val})"
+                        city_toggle_lbl = (
+                            (f"🙈 إخفاء الجدول ({len(city_df)})" if st.session_state[city_vis_key] else f"👁️ إظهار الجدول ({len(city_df)})")
+                            if lang == 'ar' else
+                            (f"🙈 Hide table ({len(city_df)})" if st.session_state[city_vis_key] else f"👁️ Show table ({len(city_df)})")
                         )
-                        
-                        if event_city.selection and event_city.selection.get("rows"):
-                            sel_idx = event_city.selection["rows"][0]
-                            if 0 <= sel_idx < len(city_df):
-                                actual_df_idx = city_df.index[sel_idx]
-                                worker_row = city_list[city_idx_map[actual_df_idx]]
-                                worker_uid = city_df.iloc[sel_idx]["__uid"]
-                                render_cv_detail_panel(worker_row, sel_idx, lang, key_prefix=f"op_city_{idx}", worker_uid=worker_uid)
+                        city_hdr_col, city_btn_col = st.columns([6, 2])
+                        with city_hdr_col:
+                            render_segment_header(city_label, len(city_df), color="#D4AF37")
+                        with city_btn_col:
+                            if st.button(city_toggle_lbl, key=f"toggle_city_{idx}", use_container_width=True):
+                                st.session_state[city_vis_key] = not st.session_state[city_vis_key]
+                                st.rerun()
+
+                        if st.session_state[city_vis_key]:
+                            # Export
+                            c_op_2 = st.columns([4, 1])[1]
+                            with c_op_2:
+                                city_df_export = get_filtered_df_by_nationality(city_df, f"op_city_{idx}")
+                                xl_data_op = create_pasha_whatsapp_excel(city_df_export, lang=lang)
+                                if xl_data_op:
+                                    _, xl_df_op = xl_data_op
+                                    btn_exp = "💬 " + ("تصدير للواتساب" if lang == 'ar' else "Export to WhatsApp")
+                                    render_pasha_export_button(xl_df_op, btn_exp, f"Matched_Workers_City_{idx+1}.xlsx",
+                                                              f"Matched_Workers_City_{idx+1}", key=f"dl_op_city_{idx}")
+
+                            col_cfg_city = {}
+                            nat_col_city = None
+                            for col in city_df.columns:
+                                if any(kw in str(col).lower() for kw in ["nationality", "الجنسية"]):
+                                    nat_col_city = col
+                                    col_cfg_city[f"🚩_{col}"] = st.column_config.ImageColumn(t("country_label", lang), width="small", pinned=True)
+
+                            st.markdown("<br>", unsafe_allow_html=True)
+                            city_df = render_table_translator(city_df, key_prefix=f"op_city_{idx}")
+
+                            city_styled = style_df(city_df.drop(columns=["__uid"]))
+
+                            df_city_height = min((len(city_df) + 1) * 35 + 40, 500)
+                            event_city = st.dataframe(
+                                city_styled,
+                                width='content', hide_index=True, on_select="rerun",
+                                selection_mode="single-row", column_config=__apply_pinned_columns(city_styled, col_cfg_city),
+                                key=f"op_city_table_{idx}", height=df_city_height
+                            )
+
+                            if event_city.selection and event_city.selection.get("rows"):
+                                sel_idx = event_city.selection["rows"][0]
+                                if 0 <= sel_idx < len(city_df):
+                                    actual_df_idx = city_df.index[sel_idx]
+                                    worker_row = city_list[city_idx_map[actual_df_idx]]
+                                    worker_uid = city_df.iloc[sel_idx]["__uid"]
+                                    render_cv_detail_panel(worker_row, sel_idx, lang, key_prefix=f"op_city_{idx}", worker_uid=worker_uid)
 
                 if region_list:
                     reg_df, reg_idx_map = build_worker_table(region_list, region_scores)
                     if not reg_df.empty:
-                        c_reg_2 = st.columns([4, 1])[1]
-                        with c_reg_2:
-                            reg_df_export = get_filtered_df_by_nationality(reg_df, f"op_reg_{idx}")
-                            xl_reg = create_pasha_whatsapp_excel(reg_df_export, lang=lang)
-                            if xl_reg:
-                                _, xl_df_reg = xl_reg
-                                btn_exp = "💬 " + ("تصدير للواتساب" if lang == 'ar' else "Export to WhatsApp")
-                                render_pasha_export_button(xl_df_reg, btn_exp, f"Region_Match_{idx+1}.xlsx", 
-                                                          f"Region_Match_{idx+1}", key=f"dl_op_reg_{idx}")
-                        
                         loc_val = str(customer_row.get(c_location, ""))
                         target_region_name = _find_city_region(loc_val) or loc_val
                         if lang != "ar":
@@ -8576,79 +8586,112 @@ def render_order_processing_content():
                                 "الشرقية": "Eastern Province", "الوسطى": "Central Region",
                                 "الجنوبية": "Southern Region"
                             }.get(target_region_name, target_region_name)
-                        label = f"🏘️ عمال في المنطقة ({target_region_name})" if lang == 'ar' else f"🏘️ Workers in the Region ({target_region_name})"
+                        reg_label = f"🏘️ عمال في المنطقة ({target_region_name})" if lang == 'ar' else f"🏘️ Workers in the Region ({target_region_name})"
                         explainer = f"{'هؤلاء العمال في مدن تتبع لنفس المنطقة ولاكن في مدن اخرى' if lang == 'ar' else 'These workers are in other cities within the same region'}"
-                        render_segment_header(label, len(reg_df), color="#D4AF37", explainer=explainer)
-
-                        st.markdown("<br>", unsafe_allow_html=True)
-                        reg_df = render_table_translator(reg_df, key_prefix=f"op_reg_{idx}")
-                        
-                        col_cfg_reg = {}
-                        nat_col_reg = None
-                        for col in reg_df.columns:
-                            if any(kw in str(col).lower() for kw in ["nationality", "الجنسية"]):
-                                nat_col_reg = col
-                                col_cfg_reg[f"🚩_{col}"] = st.column_config.ImageColumn(t("country_label", lang), width="small", pinned=True)
-
-                        reg_styled = style_df(reg_df.drop(columns=["__uid"]))
-                        
-                        df_reg_h = min((len(reg_df) + 1) * 35 + 40, 400)
-                        ev_reg = st.dataframe(
-                            reg_styled,
-                            width='content', hide_index=True, on_select="rerun",
-                            selection_mode="single-row", column_config=__apply_pinned_columns(reg_styled, col_cfg_reg),
-                            key=f"op_reg_table_{idx}", height=df_reg_h
+                        reg_toggle_lbl = (
+                            (f"🙈 إخفاء الجدول ({len(reg_df)})" if st.session_state[reg_vis_key] else f"👁️ إظهار الجدول ({len(reg_df)})")
+                            if lang == 'ar' else
+                            (f"🙈 Hide table ({len(reg_df)})" if st.session_state[reg_vis_key] else f"👁️ Show table ({len(reg_df)})")
                         )
-                        if ev_reg.selection and ev_reg.selection.get("rows"):
-                             sel_idx = ev_reg.selection["rows"][0]
-                             if 0 <= sel_idx < len(reg_df):
-                                 actual_df_idx = reg_df.index[sel_idx]
-                                 w_row = region_list[reg_idx_map[actual_df_idx]]
-                                 w_uid = reg_df.iloc[sel_idx]["__uid"]
-                                 render_cv_detail_panel(w_row, sel_idx, lang, key_prefix=f"op_reg_{idx}", worker_uid=w_uid)
+                        reg_hdr_col, reg_btn_col = st.columns([6, 2])
+                        with reg_hdr_col:
+                            render_segment_header(reg_label, len(reg_df), color="#D4AF37", explainer=explainer)
+                        with reg_btn_col:
+                            if st.button(reg_toggle_lbl, key=f"toggle_reg_{idx}", use_container_width=True):
+                                st.session_state[reg_vis_key] = not st.session_state[reg_vis_key]
+                                st.rerun()
+
+                        if st.session_state[reg_vis_key]:
+                            c_reg_2 = st.columns([4, 1])[1]
+                            with c_reg_2:
+                                reg_df_export = get_filtered_df_by_nationality(reg_df, f"op_reg_{idx}")
+                                xl_reg = create_pasha_whatsapp_excel(reg_df_export, lang=lang)
+                                if xl_reg:
+                                    _, xl_df_reg = xl_reg
+                                    btn_exp = "💬 " + ("تصدير للواتساب" if lang == 'ar' else "Export to WhatsApp")
+                                    render_pasha_export_button(xl_df_reg, btn_exp, f"Region_Match_{idx+1}.xlsx",
+                                                              f"Region_Match_{idx+1}", key=f"dl_op_reg_{idx}")
+
+                            st.markdown("<br>", unsafe_allow_html=True)
+                            reg_df = render_table_translator(reg_df, key_prefix=f"op_reg_{idx}")
+
+                            col_cfg_reg = {}
+                            nat_col_reg = None
+                            for col in reg_df.columns:
+                                if any(kw in str(col).lower() for kw in ["nationality", "الجنسية"]):
+                                    nat_col_reg = col
+                                    col_cfg_reg[f"🚩_{col}"] = st.column_config.ImageColumn(t("country_label", lang), width="small", pinned=True)
+
+                            reg_styled = style_df(reg_df.drop(columns=["__uid"]))
+
+                            df_reg_h = min((len(reg_df) + 1) * 35 + 40, 400)
+                            ev_reg = st.dataframe(
+                                reg_styled,
+                                width='content', hide_index=True, on_select="rerun",
+                                selection_mode="single-row", column_config=__apply_pinned_columns(reg_styled, col_cfg_reg),
+                                key=f"op_reg_table_{idx}", height=df_reg_h
+                            )
+                            if ev_reg.selection and ev_reg.selection.get("rows"):
+                                 sel_idx = ev_reg.selection["rows"][0]
+                                 if 0 <= sel_idx < len(reg_df):
+                                     actual_df_idx = reg_df.index[sel_idx]
+                                     w_row = region_list[reg_idx_map[actual_df_idx]]
+                                     w_uid = reg_df.iloc[sel_idx]["__uid"]
+                                     render_cv_detail_panel(w_row, sel_idx, lang, key_prefix=f"op_reg_{idx}", worker_uid=w_uid)
 
 
                 # Other Cities Table
                 if other_list:
                     other_df, other_idx_map = build_worker_table(other_list, other_scores)
                     if not other_df.empty:
-                        # Export Section
-                        exp_oth_col = st.columns([4, 1])[1]
-                        with exp_oth_col:
-                            other_df_export = get_filtered_df_by_nationality(other_df, f"op_other_{idx}")
-                            xl_oth_data = create_pasha_whatsapp_excel(other_df_export, lang=lang)
-                            if xl_oth_data:
-                                _, xl_oth_df = xl_oth_data
-                                btn_exp_lbl = "💬 " + ("تصدير للواتساب" if lang == 'ar' else "Export to WhatsApp")
-                                render_pasha_export_button(xl_oth_df, btn_exp_lbl, f"Workers_Other_Cities_{idx+1}.xlsx", 
-                                                          f"Other_Cities_Table_{idx+1}", key=f"btn_xl_oth_stable_{idx}")
-
-                        label_other = "🌍 عمال في مدن أخرى (مرتبين حسب القرب)" if lang == 'ar' else f"🌍 Workers in other cities (sorted by proximity)"
-                        render_segment_header(label_other, len(other_df), color="#FFFFFF")
-                        
-                        col_cfg_other = {}
-                        for col in other_df.columns:
-                            if any(kw in str(col).lower() for kw in ["nationality", "الجنسية"]):
-                                col_cfg_other[f"🚩_{col}"] = st.column_config.ImageColumn(t("country_label", lang), width="small", pinned=True)
-
-                        other_df = render_table_translator(other_df, key_prefix=f"op_other_{idx}")
-                        other_styled = style_df(other_df.drop(columns=["__uid"]))
-                        
-                        df_oth_h = min((len(other_df) + 1) * 35 + 40, 400)
-                        ev_oth = st.dataframe(
-                            other_styled, 
-                            width='content', hide_index=True, on_select="rerun",
-                            selection_mode="single-row", column_config=__apply_pinned_columns(other_styled, col_cfg_other),
-                            key=f"op_other_table_{idx}", height=df_oth_h
+                        label_other = "🌍 عمال في مدن أخرى (مرتبين حسب القرب)" if lang == 'ar' else "🌍 Workers in other cities (sorted by proximity)"
+                        other_toggle_lbl = (
+                            (f"🙈 إخفاء الجدول ({len(other_df)})" if st.session_state[other_vis_key] else f"👁️ إظهار الجدول ({len(other_df)})")
+                            if lang == 'ar' else
+                            (f"🙈 Hide table ({len(other_df)})" if st.session_state[other_vis_key] else f"👁️ Show table ({len(other_df)})")
                         )
-                        if ev_oth.selection and ev_oth.selection.get("rows"):
-                             sel_idx = ev_oth.selection["rows"][0]
-                             if 0 <= sel_idx < len(other_df):
-                                 actual_df_idx = other_df.index[sel_idx]
-                                 w_row = other_list[other_idx_map[actual_df_idx]]
-                                 w_uid = other_df.iloc[sel_idx]["__uid"]
-                                 render_cv_detail_panel(w_row, sel_idx, lang, key_prefix=f"op_other_{idx}", worker_uid=w_uid)
+                        other_hdr_col, other_btn_col = st.columns([6, 2])
+                        with other_hdr_col:
+                            render_segment_header(label_other, len(other_df), color="#FFFFFF")
+                        with other_btn_col:
+                            if st.button(other_toggle_lbl, key=f"toggle_other_{idx}", use_container_width=True):
+                                st.session_state[other_vis_key] = not st.session_state[other_vis_key]
+                                st.rerun()
 
+                        if st.session_state[other_vis_key]:
+                            # Export Section
+                            exp_oth_col = st.columns([4, 1])[1]
+                            with exp_oth_col:
+                                other_df_export = get_filtered_df_by_nationality(other_df, f"op_other_{idx}")
+                                xl_oth_data = create_pasha_whatsapp_excel(other_df_export, lang=lang)
+                                if xl_oth_data:
+                                    _, xl_oth_df = xl_oth_data
+                                    btn_exp_lbl = "💬 " + ("تصدير للواتساب" if lang == 'ar' else "Export to WhatsApp")
+                                    render_pasha_export_button(xl_oth_df, btn_exp_lbl, f"Workers_Other_Cities_{idx+1}.xlsx",
+                                                              f"Other_Cities_Table_{idx+1}", key=f"btn_xl_oth_stable_{idx}")
+
+                            col_cfg_other = {}
+                            for col in other_df.columns:
+                                if any(kw in str(col).lower() for kw in ["nationality", "الجنسية"]):
+                                    col_cfg_other[f"🚩_{col}"] = st.column_config.ImageColumn(t("country_label", lang), width="small", pinned=True)
+
+                            other_df = render_table_translator(other_df, key_prefix=f"op_other_{idx}")
+                            other_styled = style_df(other_df.drop(columns=["__uid"]))
+
+                            df_oth_h = min((len(other_df) + 1) * 35 + 40, 400)
+                            ev_oth = st.dataframe(
+                                other_styled,
+                                width='content', hide_index=True, on_select="rerun",
+                                selection_mode="single-row", column_config=__apply_pinned_columns(other_styled, col_cfg_other),
+                                key=f"op_other_table_{idx}", height=df_oth_h
+                            )
+                            if ev_oth.selection and ev_oth.selection.get("rows"):
+                                 sel_idx = ev_oth.selection["rows"][0]
+                                 if 0 <= sel_idx < len(other_df):
+                                     actual_df_idx = other_df.index[sel_idx]
+                                     w_row = other_list[other_idx_map[actual_df_idx]]
+                                     w_uid = other_df.iloc[sel_idx]["__uid"]
+                                     render_cv_detail_panel(w_row, sel_idx, lang, key_prefix=f"op_other_{idx}", worker_uid=w_uid)
 
             # --- Hide Request Button (Admin Only) ---
             if st.session_state.user.get("role") == "admin":
