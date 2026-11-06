@@ -6,6 +6,7 @@ import base64
 import streamlit as st
 from PIL import Image, ImageDraw, ImageFilter, ImageOps
 import pdfplumber
+import numpy as np
 
 try:
     from src.core.i18n import t
@@ -22,6 +23,14 @@ except ImportError:
 
 # Application Base Directory
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+# ── Background Template Keys ─────────────────────────────────────────────────
+BG_KEYS = [
+    'cv_bg_bytes', 'cv_bg_ext', 'cv_bg_name',
+    'cv_bg_header_px', 'cv_bg_footer_px',
+    'cv_bg_left_cm', 'cv_bg_right_cm',
+    'cv_bg_cv_scale', 'cv_bg_cv_align',
+]
 
 # Supported Image Extensions
 IMAGE_EXTS = ["jpg", "jpeg", "png", "webp", "bmp", "tiff", "jfif"]
@@ -50,6 +59,761 @@ LABEL_PATTERNS = [
     r'Phone\s*:', r'Phone', r'Tel\s*:', r'Tel',
     r'Contact\s*:', r'Contact No\s*:',
 ]
+
+
+# ── Background Template Helpers ───────────────────────────────────────────────
+
+def _pdf_page_to_image(pdf_bytes, dpi=150):
+    """Render first page of a PDF to a PIL Image at the given DPI."""
+    doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+    page = doc[0]
+    mat = fitz.Matrix(dpi / 72, dpi / 72)
+    pix = page.get_pixmap(matrix=mat, alpha=False)
+    img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+    doc.close()
+    return img
+
+
+def _detect_header_footer_height(bg_img: Image.Image):
+    """
+    Auto-detect header & footer heights (in pixels) from a letterhead image
+    by scanning for the last 'non-white' row from the top/bottom.
+    Uses a whiteness threshold to find where the design ends.
+    Returns (header_px, footer_px).
+    """
+    arr = np.array(bg_img.convert("RGB"))
+    h, w = arr.shape[:2]
+
+    def row_is_content(row):
+        """True if the row has at least one pixel darker than threshold."""
+        return bool(np.any(row < 220))
+
+    # Scan from top → find last 'content' row in top 35% of page
+    header_px = 0
+    for y in range(int(h * 0.35)):
+        if row_is_content(arr[y]):
+            header_px = y + 1
+
+    # Scan from bottom → find last 'content' row in bottom 25% of page
+    footer_px = 0
+    for y in range(h - 1, int(h * 0.75), -1):
+        if row_is_content(arr[y]):
+            footer_px = (h - y)
+
+    # Add a comfortable safety margin
+    header_px = int(header_px * 1.05) + 10
+    footer_px = int(footer_px * 1.05) + 10
+
+    return max(header_px, 20), max(footer_px, 20)
+
+
+def _detect_horizontal_line_position(bg_img: Image.Image):
+    """
+    Detect the horizontal line below the header in the letterhead.
+    Returns the y-position (pixels) of the line, or None if not found.
+    """
+    import numpy as np
+    arr = np.array(bg_img.convert("RGB"))
+    h, w = arr.shape[:2]
+
+    # Scan top 40% of the page for horizontal lines
+    search_h = int(h * 0.4)
+
+    for y in range(search_h):
+        row = arr[y]
+        # Check if this row has a horizontal line (dark pixels spanning most of width)
+        dark_pixels = np.sum(row < 200, axis=1)
+        if len(dark_pixels) > 0 and np.max(dark_pixels) > w * 0.6:
+            # Found a potential horizontal line
+            # Verify it's continuous (not just scattered pixels)
+            line_pixels = np.where(row < 200)[0]
+            if len(line_pixels) > 0:
+                max_gap = np.max(np.diff(line_pixels)) if len(line_pixels) > 1 else 0
+                if max_gap < 50:  # Maximum gap of 50 pixels
+                    return y + 1  # Return position below the line
+
+    return None
+
+
+def _calculate_content_area(bg_img: Image.Image, header_px, footer_px, line_y=None, left_cm=1.0, right_cm=1.0):
+    """
+    Calculate the optimal content area for placing the CV.
+    If a horizontal line is detected, use it to determine margins.
+    Returns (content_top, content_bottom, content_width, margin_sides_px).
+    """
+    h, w = bg_img.shape[:2]
+
+    # If line is detected, use it as the starting point
+    if line_y is not None:
+        content_top = line_y + int(h * 0.05)  # 5% of page height below the line
+    else:
+        content_top = header_px
+
+    content_bottom = h - footer_px
+
+    # Calculate 5 cm in pixels (assuming 150 DPI, 1 cm ≈ 59 pixels)
+    cm_to_px = 59
+    margin_bottom = 5 * cm_to_px  # 5 cm
+
+    # Adjust content_bottom to leave 5 cm margin before footer
+    content_bottom = min(content_bottom, h - footer_px - margin_bottom)
+
+    # Convert cm to pixels for side margins
+    left_margin_px = int(left_cm * cm_to_px)
+    right_margin_px = int(right_cm * cm_to_px)
+
+    # Content width (full width minus margins)
+    content_width = w - (left_margin_px + right_margin_px)
+
+    return content_top, content_bottom, content_width, left_margin_px
+
+
+def merge_cv_on_background(cv_bytes, bg_bytes, bg_ext,
+                            header_px, footer_px,
+                            cv_is_pdf=False,
+                            left_cm=1.0, right_cm=1.0,
+                            cv_scale=1.0, cv_align='center'):
+    """
+    Overlay a CV (image or PDF page) onto a background letterhead image,
+    respecting header_px and footer_px safe zones.
+
+    cv_scale: multiplier applied to the fitted scale (1.0 = fit to content area,
+              >1.0 = enlarge, <1.0 = shrink). Width is the primary driver.
+    cv_align: horizontal placement of the scaled CV ('left', 'center', 'right').
+
+    Returns: merged_image_bytes (PNG), merged_pdf_bytes
+    """
+    # ── Load background ──────────────────────────────────────────────────────
+    if bg_ext == 'pdf':
+        bg_img = _pdf_page_to_image(bg_bytes, dpi=150)
+    else:
+        bg_img = Image.open(io.BytesIO(bg_bytes)).convert("RGB")
+
+    bg_w, bg_h = bg_img.size
+
+    # ── Load CV page ─────────────────────────────────────────────────────────
+    if cv_is_pdf and FITZ_AVAILABLE:
+        cv_img = _pdf_page_to_image(cv_bytes, dpi=150)
+    else:
+        cv_img = Image.open(io.BytesIO(cv_bytes)).convert("RGBA")
+
+    # ── Define safe content area on the background ───────────────────────────
+    content_top = header_px
+    content_bottom = bg_h - footer_px
+    content_h = content_bottom - content_top
+
+    # Apply side margins from cm to pixels
+    cm_to_px = 59
+    left_margin_px = int(left_cm * cm_to_px)
+    right_margin_px = int(right_cm * cm_to_px)
+    content_w = bg_w - (left_margin_px + right_margin_px)
+
+    if content_h <= 0:
+        content_h = max(bg_h // 2, 100)
+        content_top = header_px
+
+    # ── Scale CV to fit inside safe content area ──────────────────────────────
+    cv_w, cv_h = cv_img.size
+    fit_scale = min(content_w / cv_w, content_h / cv_h)
+    scale = fit_scale * cv_scale
+    new_w = int(cv_w * scale)
+    new_h = int(cv_h * scale)
+
+    # When aligning RIGHT and user asked to enlarge (cv_scale > 1.0),
+    # let the CV expand to fill more of the available width so it is not
+    # left small/narrow on the left side. Cap at content_w so it stays
+    # inside the safe area, but keep the right-edge anchor.
+    if cv_align == 'right' and cv_scale > 1.0 and new_w < content_w:
+        # Try to grow width to fill content area while respecting height
+        max_w_by_height = int(cv_w * (content_h / cv_h))
+        new_w = min(max_w_by_height, content_w)
+        new_h = int(cv_h * (new_w / cv_w))
+
+    # Clamp so the CV never overflows the safe content area horizontally/vertically
+    if new_w > content_w:
+        new_w = content_w
+        new_h = int(cv_h * (new_w / cv_w))
+    if new_h > content_h:
+        new_h = content_h
+        new_w = int(cv_w * (new_h / cv_h))
+
+    cv_scaled = cv_img.resize((new_w, new_h), Image.LANCZOS)
+
+    # Position the CV horizontally according to cv_align.
+    # RIGHT: anchor at right edge of content area (leaves gap on left if smaller).
+    # LEFT:  anchor at left edge.
+    # CENTER: centre in content area.
+    if cv_align == 'right':
+        paste_x = left_margin_px + content_w - new_w
+    elif cv_align == 'left':
+        paste_x = left_margin_px
+    else:  # center
+        paste_x = left_margin_px + (content_w - new_w) // 2
+    paste_y = content_top
+
+    # ── Compose ──────────────────────────────────────────────────────────────
+    merged = bg_img.copy()
+    if cv_scaled.mode == "RGBA":
+        merged.paste(cv_scaled, (paste_x, paste_y), cv_scaled)
+    else:
+        merged.paste(cv_scaled.convert("RGBA"), (paste_x, paste_y))
+
+    # Output as PNG bytes
+    img_out = io.BytesIO()
+    merged.save(img_out, format="PNG")
+    merged_img_bytes = img_out.getvalue()
+
+    # Output as PDF bytes
+    pdf_out = io.BytesIO()
+    merged.convert("RGB").save(pdf_out, format="PDF")
+    merged_pdf_bytes = pdf_out.getvalue()
+
+    return merged_img_bytes, merged_pdf_bytes
+
+
+def _render_background_uploader(is_ar: bool):
+    """
+    Renders the background template upload section.
+    Returns True when a valid background has been stored in session_state.
+    """
+    st.markdown("---")
+    st.subheader("🖼️ " + ("رفع خلفية الورقة المؤسسية" if is_ar else "Upload Letterhead Background"))
+    st.caption(
+        "ارفع ورقة الشركة (PDF أو صورة) لتظهر السيرة الذاتية المنظفة فوقها مع مراعاة الترويسة والذيل." if is_ar else
+        "Upload a company letterhead (PDF or image) to overlay the cleaned CV on it, respecting header & footer."
+    )
+
+    bg_uploader_col, bg_preview_col = st.columns([1, 1])
+
+    with bg_uploader_col:
+        bg_file = st.file_uploader(
+            "📂 " + ("اختر ورقة الخلفية (PDF / صورة)" if is_ar else "Choose letterhead file (PDF / image)"),
+            type=["pdf"] + IMAGE_EXTS,
+            key="cv_bg_uploader",
+            help="PDF أو JPG أو PNG..." if is_ar else "PDF or JPG or PNG..."
+        )
+
+        if bg_file is not None:
+            new_name = bg_file.name
+            if st.session_state.get("cv_bg_name") != new_name:
+                for k in BG_KEYS + ['cv_bg_header_px', 'cv_bg_footer_px', 'cv_merged_img_bytes', 'cv_merged_pdf_bytes', 'cv_extracted_img_bytes', 'cv_extracted_pdf_bytes']:
+                    st.session_state.pop(k, None)
+            if "cv_bg_bytes" not in st.session_state:
+                raw = bg_file.getvalue()
+                ext = new_name.split(".")[-1].lower()
+                st.session_state.cv_bg_bytes = raw
+                st.session_state.cv_bg_ext = ext
+                st.session_state.cv_bg_name = new_name
+
+                # Auto-detect margins
+                try:
+                    if ext == "pdf" and FITZ_AVAILABLE:
+                        bg_pil = _pdf_page_to_image(raw, dpi=72)
+                    else:
+                        bg_pil = Image.open(io.BytesIO(raw)).convert("RGB")
+                    h_px, f_px = _detect_header_footer_height(bg_pil)
+                    # Convert from 72-DPI preview to 150-DPI render coords
+                    scale_factor = 150 / 72 if ext == "pdf" else 1.0
+                    header_val = min(int(h_px * scale_factor), 1000)
+                    footer_val = min(int(f_px * scale_factor), 1000)
+                    st.session_state.cv_bg_header_px = header_val
+                    st.session_state.cv_bg_footer_px = footer_val
+                    # Set default side margins to 1 cm
+                    st.session_state.cv_bg_left_cm = 1.0
+                    st.session_state.cv_bg_right_cm = 1.0
+                except Exception:
+                    st.session_state.cv_bg_header_px = 195
+                    st.session_state.cv_bg_footer_px = 225
+                    st.session_state.cv_bg_left_cm = 1.0
+                    st.session_state.cv_bg_right_cm = 1.0
+
+        # Manual margin controls (shown when a background is loaded)
+        if "cv_bg_bytes" in st.session_state:
+            st.markdown("**⚙️ " + ("ضبط الهوامش" if is_ar else "Adjust margins") + "**")
+
+            # Vertical margins (Header & Footer)
+            m_col1, m_col2 = st.columns(2)
+            with m_col1:
+                header_val = int(st.session_state.get("cv_bg_header_px", 195))
+                header_val = min(header_val, 1000)  # Clamp to max
+                st.session_state.cv_bg_header_px = st.number_input(
+                    "↕️ " + ("الترويسة (بالبكسل)" if is_ar else "Header (px)"),
+                    min_value=0, max_value=1000,
+                    value=header_val,
+                    step=5, key="cv_bg_header_input"
+                )
+            with m_col2:
+                footer_val = int(st.session_state.get("cv_bg_footer_px", 225))
+                footer_val = min(footer_val, 1000)  # Clamp to max
+                st.session_state.cv_bg_footer_px = st.number_input(
+                    "↕️ " + ("الذيل (بالبكسل)" if is_ar else "Footer (px)"),
+                    min_value=0, max_value=1000,
+                    value=footer_val,
+                    step=5, key="cv_bg_footer_input"
+                )
+
+            # Horizontal margins (Left & Right in cm)
+            st.markdown("**" + ("الهوامش الجانبية" if is_ar else "Side margins") + "**")
+            h_col1, h_col2 = st.columns(2)
+            with h_col1:
+                left_cm = st.session_state.get("cv_bg_left_cm", 1.0)
+                st.session_state.cv_bg_left_cm = st.number_input(
+                    "⬅️ " + ("يسار (سم)" if is_ar else "Left (cm)"),
+                    min_value=0.0, max_value=10.0,
+                    value=left_cm,
+                    step=0.1, key="cv_bg_left_cm_input"
+                )
+            with h_col2:
+                right_cm = st.session_state.get("cv_bg_right_cm", 1.0)
+                st.session_state.cv_bg_right_cm = st.number_input(
+                    "➡️ " + ("يمين (سم)" if is_ar else "Right (cm)"),
+                    min_value=0.0, max_value=10.0,
+                    value=right_cm,
+                    step=0.1, key="cv_bg_right_cm_input"
+                )
+            st.caption(
+                "ℹ️ " + ("القيمة الافتراضية لكل من اليمين واليسار: 1 سم" if is_ar else "Default for both Right and Left: 1 cm")
+            )
+
+            # CV display size & alignment on the background
+            st.markdown("**" + ("حجم السيرة الذاتية على الخلفية" if is_ar else "CV display size on background") + "**")
+            s_col1, s_col2 = st.columns(2)
+            with s_col1:
+                cv_scale_val = st.session_state.get("cv_bg_cv_scale", 1.0)
+                st.session_state.cv_bg_cv_scale = st.slider(
+                    "📏 " + ("عرض السيرة (نسبة من عرض الورقة)" if is_ar else "CV width (% of sheet width)"),
+                    min_value=0.5, max_value=2.0,
+                    value=cv_scale_val,
+                    step=0.05,
+                    help="1.00 = تعبئة عرض المنطقة المخصصة. زِد القيمة لتكبير السيرة إذا ظهرت صغيرة." if is_ar else "1.00 = fill the reserved content width. Increase if the CV appears too small/narrow.",
+                    key="cv_bg_cv_scale_input"
+                )
+            with s_col2:
+                cv_align_val = st.session_state.get("cv_bg_cv_align", "center")
+                st.session_state.cv_bg_cv_align = st.selectbox(
+                    "📐 " + ("محاذاة السيرة أفقياً" if is_ar else "CV horizontal alignment"),
+                    options=["center", "right", "left"],
+                    index=["center", "right", "left"].index(cv_align_val) if cv_align_val in ["center", "right", "left"] else 0,
+                    format_func=lambda x: ("وسط" if x == "center" else ("يمين" if x == "right" else "يسار")) if is_ar else ("Center" if x == "center" else ("Right" if x == "right" else "Left")),
+                    key="cv_bg_cv_align_input"
+                )
+
+            # Show auto-detection info
+            st.caption("ℹ️ " + ("سيتم كشف الخط الأفقي تلقائياً وتحديد المنطقة المحجوزة (5 سم قبل الذيل)" if is_ar else "Horizontal line will be auto-detected with 5cm margin before footer"))
+
+            if st.button(
+                "🗑️ " + ("حذف الخلفية" if is_ar else "Remove background"),
+                key="cv_bg_remove_btn"
+            ):
+                for k in BG_KEYS + ['cv_bg_header_px', 'cv_bg_footer_px', 'cv_bg_left_cm', 'cv_bg_right_cm', 'cv_merged_img_bytes', 'cv_merged_pdf_bytes', 'cv_extracted_img_bytes', 'cv_extracted_pdf_bytes']:
+                    st.session_state.pop(k, None)
+                st.rerun()
+
+    with bg_preview_col:
+        if "cv_bg_bytes" in st.session_state:
+            st.caption("🔍 " + ("معاينة الخلفية" if is_ar else "Background preview"))
+            bg_bytes = st.session_state.cv_bg_bytes
+            bg_ext = st.session_state.cv_bg_ext
+            if bg_ext == "pdf" and FITZ_AVAILABLE:
+                preview_img = _pdf_page_to_image(bg_bytes, dpi=72)
+                preview_buf = io.BytesIO()
+                preview_img.save(preview_buf, format="PNG")
+                st.image(preview_buf.getvalue(), use_container_width=True)
+            else:
+                st.image(bg_bytes, use_container_width=True)
+
+            # Show safe-area overlay indicators
+            h_px = st.session_state.get("cv_bg_header_px", 160)
+            f_px = st.session_state.get("cv_bg_footer_px", 80)
+            st.caption(
+                f"📐 " + ("منطقة الترويسة المحجوزة" if is_ar else "Reserved header zone") +
+                f": {h_px}px  |  " +
+                ("الذيل" if is_ar else "Footer") + f": {f_px}px"
+            )
+
+    return "cv_bg_bytes" in st.session_state
+
+
+def _extract_profile_image(img_bytes):
+    """
+    Extract profile picture from CV image.
+    Looks for a square-ish image in the top-left or top-right area.
+    Returns profile image bytes or None.
+    """
+    try:
+        img = Image.open(io.BytesIO(img_bytes)).convert("RGB")
+        w, h = img.size
+
+        # Define search areas (top 40% of page)
+        search_h = int(h * 0.4)
+
+        # Try to find profile-like regions (square-ish, reasonable size)
+        # Search for typical profile photo locations (top-left or top-right quadrant)
+        profile_quadrants = [
+            (0, 0, int(w * 0.3), int(search_h * 0.5)),  # Top-left
+            (int(w * 0.7), 0, w, int(search_h * 0.5)),  # Top-right
+        ]
+
+        for x1, y1, x2, y2 in profile_quadrants:
+            if x2 <= x1 or y2 <= y1:
+                continue
+
+            quadrant = img.crop((x1, y1, x2, y2))
+            if quadrant.size == 0:
+                continue
+
+            # Simple heuristic: check if region has image-like properties
+            # by analyzing color variation
+            pixels = list(quadrant.getdata())
+            if len(pixels) > 0:
+                # Calculate standard deviation of RGB values
+                r_vals = [p[0] for p in pixels]
+                g_vals = [p[1] for p in pixels]
+                b_vals = [p[2] for p in pixels]
+
+                r_std = (sum((x - sum(r_vals)/len(r_vals))**2 for x in r_vals) / len(r_vals))**0.5
+                g_std = (sum((x - sum(g_vals)/len(g_vals))**2 for x in g_vals) / len(g_vals))**0.5
+                b_std = (sum((x - sum(b_vals)/len(b_vals))**2 for x in b_vals) / len(b_vals))**0.5
+
+                avg_std = (r_std + g_std + b_std) / 3
+
+                if avg_std > 30:  # Likely contains an image/photo
+                    # Extract this region as potential profile
+                    profile_img = quadrant.resize((150, 150), Image.LANCZOS)
+
+                    out = io.BytesIO()
+                    profile_img.save(out, format="PNG")
+                    return out.getvalue()
+
+        return None
+    except Exception as e:
+        print(f"Error extracting profile: {e}")
+        return None
+
+
+def _render_text_on_background(text_lines, bg_bytes, bg_ext, header_px, footer_px, profile_img_bytes=None, left_cm=1.0, right_cm=1.0):
+    """
+    Render extracted text lines on background with optional profile image.
+    Returns merged image bytes and PDF bytes.
+    """
+    # Load background
+    if bg_ext == 'pdf':
+        bg_img = _pdf_page_to_image(bg_bytes, dpi=150)
+    else:
+        bg_img = Image.open(io.BytesIO(bg_bytes)).convert("RGB")
+
+    bg_w, bg_h = bg_img.size
+
+    # Detect horizontal line for better content area calculation
+    line_y = _detect_horizontal_line_position(bg_img)
+
+    # Get side margins from session state
+    left_cm_val = st.session_state.get("cv_bg_left_cm", left_cm)
+    right_cm_val = st.session_state.get("cv_bg_right_cm", right_cm)
+
+    # Calculate optimal content area
+    content_top, content_bottom, content_width, margin_sides = _calculate_content_area(
+        bg_img, header_px, footer_px, line_y, left_cm_val, right_cm_val
+    )
+
+    # Create drawing context
+    draw = ImageDraw.Draw(bg_img)
+
+    # Load multiple fonts for different sizes
+    try:
+        from PIL import ImageFont
+        # Try to use common fonts
+        font_paths = [
+            os.path.join(os.environ.get("WINDIR", r"C:\Windows"), "Fonts", "arial.ttf"),
+            os.path.join(os.environ.get("WINDIR", r"C:\Windows"), "Fonts", "tahoma.ttf"),
+            os.path.join(os.environ.get("WINDIR", r"C:\Windows"), "Fonts", "calibri.ttf"),
+        ]
+        font_path = None
+        for fp in font_paths:
+            if os.path.exists(fp):
+                font_path = fp
+                break
+
+        if font_path:
+            title_font = ImageFont.truetype(font_path, 28)
+            header_font = ImageFont.truetype(font_path, 20)
+            body_font = ImageFont.truetype(font_path, 14)
+            small_font = ImageFont.truetype(font_path, 12)
+        else:
+            title_font = ImageFont.load_default()
+            header_font = ImageFont.load_default()
+            body_font = ImageFont.load_default()
+            small_font = ImageFont.load_default()
+    except Exception:
+        title_font = ImageFont.load_default()
+        header_font = ImageFont.load_default()
+        body_font = ImageFont.load_default()
+        small_font = ImageFont.load_default()
+
+    # Draw profile image if available (top-left of content area)
+    if profile_img_bytes:
+        try:
+            profile_img = Image.open(io.BytesIO(profile_img_bytes)).convert("RGBA")
+            profile_img = profile_img.resize((120, 120), Image.LANCZOS)
+            paste_x = margin_sides + 20
+            paste_y = content_top + 20
+            bg_img.paste(profile_img, (paste_x, paste_y), profile_img)
+            # Adjust text start position
+            text_start_x = paste_x + 140
+        except Exception:
+            text_start_x = margin_sides + 20
+    else:
+        text_start_x = margin_sides + 20
+
+    # Draw text lines with better formatting
+    y_pos = content_top + 20
+    line_height = 25
+
+    for line in text_lines:
+        if y_pos + line_height > content_bottom:
+            break
+
+        # Skip empty lines
+        if not line.strip():
+            y_pos += 10
+            continue
+
+        # Determine if this is a header (CAPS or short line)
+        is_header = len(line) < 50 and line.isupper() or any(keyword in line.upper() for keyword in ['OBJECTIVE', 'EXPERIENCE', 'EDUCATION', 'SKILLS', 'CERTIFICATE', 'INFORMATION', 'BACKGROUND'])
+
+        try:
+            # Choose font based on line type
+            if is_header:
+                draw.text((text_start_x, y_pos), line, fill=(0, 0, 0), font=header_font)
+                y_pos += line_height + 5  # Extra space after headers
+            else:
+                draw.text((text_start_x, y_pos), line, fill=(0, 0, 0), font=body_font)
+                y_pos += line_height
+        except Exception:
+            # Fallback for unsupported characters
+            draw.text((text_start_x, y_pos), line, fill=(0, 0, 0), font=body_font)
+            y_pos += line_height
+
+    # Output as PNG bytes
+    img_out = io.BytesIO()
+    bg_img.save(img_out, format="PNG")
+    merged_img_bytes = img_out.getvalue()
+
+    # Output as PDF bytes
+    pdf_out = io.BytesIO()
+    bg_img.convert("RGB").save(pdf_out, format="PDF")
+    merged_pdf_bytes = pdf_out.getvalue()
+
+    return merged_img_bytes, merged_pdf_bytes
+
+
+def _render_merge_section(is_ar: bool):
+    """
+    Renders the 'Merge CV on Background' action button and result display.
+    Should only be called when both a cleaned CV and a background exist.
+    """
+    st.markdown("---")
+    st.subheader("🔗 " + ("دمج السيرة الذاتية مع الخلفية" if is_ar else "Merge CV with Letterhead"))
+
+    if st.button(
+        "🖨️ " + ("دمج وعرض السيرة على ورقة الشركة" if is_ar else "Overlay CV on Company Letterhead"),
+        type="primary", width="stretch", key="cv_merge_btn"
+    ):
+        try:
+            bg_bytes = st.session_state.cv_bg_bytes
+            bg_ext = st.session_state.cv_bg_ext
+            header_px = min(int(st.session_state.get("cv_bg_header_px", 160)), 1000)
+            footer_px = min(int(st.session_state.get("cv_bg_footer_px", 80)), 1000)
+            left_cm = st.session_state.get("cv_bg_left_cm", 1.0)
+            right_cm = st.session_state.get("cv_bg_right_cm", 1.0)
+            cv_scale = st.session_state.get("cv_bg_cv_scale", 1.0)
+            cv_align = st.session_state.get("cv_bg_cv_align", "center")
+
+            # Determine CV source bytes and type
+            if "cv_cleaned_image_bytes" in st.session_state:
+                cv_bytes = st.session_state.cv_cleaned_image_bytes
+                cv_is_pdf = False
+            elif "cv_cleaned_pdf_bytes" in st.session_state:
+                cv_bytes = st.session_state.cv_cleaned_pdf_bytes
+                cv_is_pdf = True
+            else:
+                st.warning("⚠️ " + ("يرجى تنظيف السيرة الذاتية أولاً." if is_ar else "Please clean the CV first."))
+                return
+
+            with st.spinner("⏳ " + ("جارٍ الدمج..." if is_ar else "Merging...")):
+                merged_img_bytes, merged_pdf_bytes = merge_cv_on_background(
+                    cv_bytes, bg_bytes, bg_ext, header_px, footer_px, cv_is_pdf=cv_is_pdf,
+                    left_cm=left_cm, right_cm=right_cm,
+                    cv_scale=cv_scale, cv_align=cv_align
+                )
+                st.session_state.cv_merged_img_bytes = merged_img_bytes
+                st.session_state.cv_merged_pdf_bytes = merged_pdf_bytes
+
+            st.success("✅ " + ("تم الدمج بنجاح!" if is_ar else "Merged successfully!"))
+        except Exception as e:
+            st.error(("خطأ أثناء الدمج: " if is_ar else "Merge error: ") + str(e))
+
+    # Only show download buttons if merged result exists
+    if "cv_merged_img_bytes" in st.session_state:
+        st.image(
+            st.session_state.cv_merged_img_bytes,
+            caption="🖼️ " + ("السيرة الذاتية على الخلفية المؤسسية" if is_ar else "CV on Company Letterhead"),
+            use_container_width=True
+        )
+        dl1, dl2 = st.columns(2)
+        base_name = os.path.splitext(st.session_state.get("cv_file_name", "cv"))[0]
+        with dl1:
+            st.download_button(
+                label="⬇️ " + ("تحميل كصورة PNG" if is_ar else "Download as PNG"),
+                data=st.session_state.cv_merged_img_bytes,
+                file_name=f"letterhead_{base_name}.png",
+                mime="image/png",
+                width="stretch",
+                key="cv_dl_merged_png"
+            )
+        with dl2:
+            st.download_button(
+                label="⬇️ " + ("تحميل كـ PDF" if is_ar else "Download as PDF"),
+                data=st.session_state.cv_merged_pdf_bytes,
+                file_name=f"letterhead_{base_name}.pdf",
+                mime="application/pdf",
+                width="stretch",
+                key="cv_dl_merged_pdf"
+            )
+
+    # New button: Extract text and profile, render on background
+    st.markdown("---")
+    st.subheader("📝 " + ("تفريغ النص والبروفيل على الخلفية" if is_ar else "Extract Text & Profile on Background"))
+    st.caption(
+        "استخراج النص وصورة البروفيل من السيرة الذاتية وعرضها على ورقة الخلفية بدون خلفية السيرة الأصلية." if is_ar else
+        "Extract text and profile picture from CV and display on letterhead without original CV background."
+    )
+
+    if st.button(
+        "✨ " + ("تفريغ الكلمات والصورة على ورقة الخلفية" if is_ar else "Extract Text & Profile on Letterhead"),
+        type="primary", width="stretch", key="cv_extract_render_btn"
+    ):
+        try:
+            if "cv_bg_bytes" not in st.session_state:
+                st.warning("⚠️ " + ("يرجى رفع ورقة الخلفية أولاً." if is_ar else "Please upload background first."))
+                return
+
+            # Get CV bytes
+            if "cv_image_bytes" in st.session_state:
+                cv_bytes = st.session_state.cv_image_bytes
+            elif "cv_pdf_bytes" in st.session_state:
+                cv_bytes = st.session_state.cv_pdf_bytes
+            else:
+                st.warning("⚠️ " + ("يرجى رفع السيرة الذاتية أولاً." if is_ar else "Please upload CV first."))
+                return
+
+            bg_bytes = st.session_state.cv_bg_bytes
+            bg_ext = st.session_state.cv_bg_ext
+            header_px = min(int(st.session_state.get("cv_bg_header_px", 160)), 1000)
+            footer_px = min(int(st.session_state.get("cv_bg_footer_px", 80)), 1000)
+            left_cm = st.session_state.get("cv_bg_left_cm", 1.0)
+            right_cm = st.session_state.get("cv_bg_right_cm", 1.0)
+
+            with st.spinner("⏳ " + ("جارٍ استخراج النص والصورة..." if is_ar else "Extracting text and profile...")):
+                # Extract text using OCR with position info
+                ocr_data = extract_text_and_boxes_from_image(cv_bytes, "cv_img.jpg")
+                words = ocr_data.get('words', [])
+
+                # Sort words by position (top to bottom, left to right)
+                words_sorted = sorted(words, key=lambda w: (w.get('top', 0), w.get('left', 0)))
+
+                # Group words into lines based on y-position
+                lines = []
+                current_line = []
+                current_y = None
+                y_threshold = 15  # Pixels to consider same line
+
+                for word in words_sorted:
+                    text = word.get('text', '').strip()
+                    if not text:
+                        continue
+
+                    word_y = word.get('top', 0)
+                    if current_y is None:
+                        current_y = word_y
+                        current_line = [text]
+                    elif abs(word_y - current_y) < y_threshold:
+                        current_line.append(text)
+                    else:
+                        if current_line:
+                            lines.append(' '.join(current_line))
+                        current_line = [text]
+                        current_y = word_y
+
+                if current_line:
+                    lines.append(' '.join(current_line))
+
+                # Clean text: remove all phone numbers and emails from each line
+                cleaned_lines = []
+                for line in lines:
+                    cleaned_line, _, _, _ = remove_emails_and_phones_from_text(line)
+                    if cleaned_line.strip():
+                        cleaned_lines.append(cleaned_line)
+
+                # Extract profile image
+                profile_img = _extract_profile_image(cv_bytes)
+
+                # Render on background
+                merged_img_bytes, merged_pdf_bytes = _render_text_on_background(
+                    cleaned_lines, bg_bytes, bg_ext, header_px, footer_px, profile_img,
+                    left_cm=left_cm, right_cm=right_cm
+                )
+                st.session_state.cv_extracted_img_bytes = merged_img_bytes
+                st.session_state.cv_extracted_pdf_bytes = merged_pdf_bytes
+
+                # Show stats
+                total_phones = 0
+                total_emails = 0
+                for line in lines:
+                    _, p, e, _ = remove_emails_and_phones_from_text(line)
+                    total_phones += len(p)
+                    total_emails += len(e)
+
+                if total_phones > 0 or total_emails > 0:
+                    stats = []
+                    if total_phones > 0:
+                        stats.append(f"📞 {total_phones} " + ("رقم" if is_ar else "number(s)"))
+                    if total_emails > 0:
+                        stats.append(f"✉️ {total_emails} " + ("إيميل" if is_ar else "email(s)"))
+                    st.info("✅ " + ("تم حذف: " if is_ar else "Removed: ") + " | ".join(stats))
+
+            st.success("✅ " + ("تم الاستخراج والعرض بنجاح!" if is_ar else "Extracted and rendered successfully!"))
+        except Exception as e:
+            st.error(("خطأ أثناء الاستخراج: " if is_ar else "Extraction error: ") + str(e))
+
+    # Only show download buttons if extracted result exists
+    if "cv_extracted_img_bytes" in st.session_state:
+        st.image(
+            st.session_state.cv_extracted_img_bytes,
+            caption="📝 " + ("النص المستخرج على الخلفية" if is_ar else "Extracted Text on Background"),
+            use_container_width=True
+        )
+        dl1, dl2 = st.columns(2)
+        base_name = os.path.splitext(st.session_state.get("cv_file_name", "cv"))[0]
+        with dl1:
+            st.download_button(
+                label="⬇️ " + ("تحميل كصورة PNG" if is_ar else "Download as PNG"),
+                data=st.session_state.cv_extracted_img_bytes,
+                file_name=f"extracted_{base_name}.png",
+                mime="image/png",
+                width="stretch",
+                key="cv_dl_extracted_png"
+            )
+        with dl2:
+            st.download_button(
+                label="⬇️ " + ("تحميل كـ PDF" if is_ar else "Download as PDF"),
+                data=st.session_state.cv_extracted_pdf_bytes,
+                file_name=f"extracted_{base_name}.pdf",
+                mime="application/pdf",
+                width="stretch",
+                key="cv_dl_extracted_pdf"
+            )
+
 
 def _load_image_clean(img_bytes):
     """Load image, correct EXIF orientation, and ensure standard color mode."""
@@ -359,6 +1123,11 @@ def render_cv_privacy_cleaner_content():
     if not FITZ_AVAILABLE:
         st.warning("⚠️ " + ("PyMuPDF (fitz) غير مثبت في هذه البيئة، لذا تنظيف PDF الذي يحافظ على التنسيق غير متوفر. يرجى استخدام تنظيف الصور أو تنظيف النص فقط." if is_ar else "PyMuPDF (fitz) is not installed in this environment."))
 
+    # Background uploader section
+    has_background = _render_background_uploader(is_ar)
+
+    st.divider()
+
     # File uploader supporting PDF and ALL image formats
     uploaded_file = st.file_uploader(
         t("cv_upload_label", lang),
@@ -371,14 +1140,18 @@ def render_cv_privacy_cleaner_content():
         is_pdf = file_ext == "pdf"
         is_image = file_ext in IMAGE_EXTS
 
-        # Clear old session state when a new file is uploaded
+        # Clear old session state when a new CV file is uploaded.
+        # IMPORTANT: do NOT clear anything in BG_KEYS so the uploaded
+        # letterhead background and its margin/scale/align settings are kept.
         if st.session_state.get('cv_last_file_name') != uploaded_file.name:
             for k in [
                 'cv_original_text', 'cv_cleaned_text', 'cv_phones_count', 'cv_emails_count',
                 'cv_labels_count', 'cv_file_ext', 'cv_file_name', 'cv_last_file_name',
                 'cv_pdf_bytes', 'cv_cleaned_pdf_bytes', 'cv_image_bytes',
                 'cv_cleaned_image_bytes', 'cv_image_boxes', 'cv_detected_phones',
-                'cv_detected_emails', 'cv_ocr_done'
+                'cv_detected_emails', 'cv_ocr_done',
+                'cv_merged_img_bytes', 'cv_merged_pdf_bytes',
+                'cv_extracted_img_bytes', 'cv_extracted_pdf_bytes',
             ]:
                 st.session_state.pop(k, None)
 
@@ -456,8 +1229,11 @@ def render_cv_privacy_cleaner_content():
                     'cv_labels_count', 'cv_file_ext', 'cv_file_name', 'cv_last_file_name',
                     'cv_pdf_bytes', 'cv_cleaned_pdf_bytes', 'cv_image_bytes',
                     'cv_cleaned_image_bytes', 'cv_image_boxes', 'cv_detected_phones',
-                    'cv_detected_emails', 'cv_ocr_done'
-                ]:
+                    'cv_detected_emails', 'cv_ocr_done',
+                    'cv_merged_img_bytes', 'cv_merged_pdf_bytes',
+                    'cv_extracted_img_bytes', 'cv_extracted_pdf_bytes',
+                    'cv_bg_header_px', 'cv_bg_footer_px', 'cv_bg_left_cm', 'cv_bg_right_cm',
+                ] + BG_KEYS:
                     st.session_state.pop(k, None)
                 st.rerun()
 
@@ -644,37 +1420,6 @@ def render_cv_privacy_cleaner_content():
                 )
                 st.info("ℹ️ " + ("تم حفظ PDF مع الحفاظ على الصور والتنسيق الأصلي. الإيميلات وأرقام الهواتف محذوفة." if is_ar else "PDF saved preserving images and original format. Emails and phone numbers removed."))
 
-                c_stats1, c_stats2 = st.columns(2)
-                with c_stats1:
-                    st.metric(t("cv_phones_removed", lang), st.session_state.get('cv_phones_count', 0))
-                with c_stats2:
-                    st.metric(t("cv_emails_removed", lang), st.session_state.get('cv_emails_count', 0))
-
-                if st.session_state.get('cv_original_text'):
-                    st.text_area("Cleaned Text Preview", st.session_state.get('cv_cleaned_text', st.session_state.cv_original_text), height=200, key="cv_cleaned_preview", disabled=True)
-
-            elif 'cv_cleaned_text' in st.session_state:
-                cleaned_text = st.session_state.cv_cleaned_text
-                st.text_area("Cleaned Content", cleaned_text, height=400, key="cv_cleaned_display")
-
-                c_stats1, c_stats2, c_stats3 = st.columns(3)
-                with c_stats1:
-                    st.metric(t("cv_phones_removed", lang), st.session_state.get('cv_phones_count', 0))
-                with c_stats2:
-                    st.metric(t("cv_emails_removed", lang), st.session_state.get('cv_emails_count', 0))
-                with c_stats3:
-                    st.metric("التسميات المحذوفة" if is_ar else "Labels removed", st.session_state.get('cv_labels_count', 0))
-
-                base_name = "cleaned_" + st.session_state.get('cv_file_name', 'cv')
-                clean_filename = base_name + ".txt"
-                st.download_button(
-                    label="⬇️ " + t("cv_download_btn", lang),
-                    data=cleaned_text.encode('utf-8'),
-                    file_name=clean_filename,
-                    mime="text/plain",
-                    width='stretch',
-                    key="cv_download_cleaned_txt"
-                )
-                st.info("ℹ️ " + ("تم حفظ النص المنظف كملف نصي." if is_ar else "Cleaned text saved as text file."))
-            elif 'cv_original_text' in st.session_state and not is_image:
-                st.info(t("cv_no_sensitive", lang))
+        # Show merge section if both cleaned CV and background exist
+        if has_background and ('cv_cleaned_image_bytes' in st.session_state or 'cv_cleaned_pdf_bytes' in st.session_state):
+            _render_merge_section(is_ar)
