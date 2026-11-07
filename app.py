@@ -247,17 +247,12 @@ DEVICE_USER_COOKIE = "_rec_saved_user"
 DEVICE_PERSIST_COOKIE = "_rec_saved_persist"
 
 def get_device_saved_credentials() -> Dict[str, Any]:
-    """Read saved login convenience data from client browser cookies or query params.
+    """Read saved login convenience data from client browser cookies.
 
     Cookies carry username, encrypted password, and persist flag.
     All data is stored client-side (this browser only) to survive restarts.
     There is no silent auto-login: the login form is always shown explicitly.
-
-    On Streamlit Cloud HTTPS, st.context.cookies may not reliably see JS-set
-    cookies, so we also check st.query_params which is populated by a JS bridge
-    reading from localStorage.
     """
-    # 1) Try st.context.cookies (works best on localhost / when cookies reach server)
     if hasattr(st, "context") and hasattr(st.context, "cookies"):
         try:
             cookies = st.context.cookies
@@ -271,22 +266,6 @@ def get_device_saved_credentials() -> Dict[str, Any]:
                     return {"u": u, "p": p, "persist": True}
         except Exception:
             pass
-
-    # 2) Fallback: st.query_params (set by JS bridge from localStorage on page load)
-    try:
-        qp = st.query_params
-        if qp.get("_rec_remember") == "1":
-            saved_u = qp.get("_rec_user", "")
-            saved_p = qp.get("_rec_pass", "")
-            if saved_u:
-                return {
-                    "u": urllib.parse.unquote(saved_u),
-                    "p": urllib.parse.unquote(saved_p),
-                    "persist": True,
-                }
-    except Exception:
-        pass
-
     return {"u": "", "p": "", "persist": False}
 
 def create_device_token(username: str, days: int = 30) -> str:
@@ -2397,7 +2376,7 @@ query_params = st.query_params
 if query_params.get('logout') == 'inactive':
     st.session_state.user = None
     st.session_state.force_logout_inactive = False
-    st.components.v1.html(f"""
+    st.html(f"""
     <script>
     (function() {{
         var exp0 = "; max-age=0; path=/;";
@@ -2408,7 +2387,7 @@ if query_params.get('logout') == 'inactive':
         // Do NOT clear _rec_saved_* cookies - preserve user's "Remember Me" preference
     }})();
     </script>
-    """, height=0)
+    """, unsafe_allow_javascript=True)
     st.query_params.clear()
     st.rerun()
 
@@ -2473,7 +2452,7 @@ def render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search", 
                 }}, 300);
             </script>
             """
-        , height=0)
+        , unsafe_allow_javascript=True)
 
     # --- PROFESSIONAL PROFILE CARD (2026 LUXURY) ---
     st.markdown(f"<div id='cv-anchor-{key_prefix}'></div>", unsafe_allow_html=True)
@@ -4229,28 +4208,18 @@ def login_screen():
     # not activated reliably by the renderer.
     
     # First, read localStorage and set a global variable BEFORE rendering
-    st.components.v1.html("""
+    st.html("""
 <script>
-// Bridge: read saved credentials from localStorage and expose to Python via query params
-(function() {
-    try {
-        var savedPersist = localStorage.getItem("_rec_saved_persist");
-        var savedUser = localStorage.getItem("_rec_saved_user");
-        var savedPass = localStorage.getItem("_rec_saved_pass_enc");
-        if (savedPersist === "1" && savedUser) {
-            var url = new URL(window.location.href);
-            url.searchParams.set("_rec_remember", "1");
-            url.searchParams.set("_rec_user", encodeURIComponent(savedUser));
-            if (savedPass) url.searchParams.set("_rec_pass", encodeURIComponent(savedPass));
-            // Replace state without reload; Python reads st.query_params on next run
-            window.history.replaceState(null, "", url.toString());
-        }
-    } catch(e) { console.error("remember bridge error:", e); }
-})();
+window._recruitment_persist_from_storage = false;
+try {
+    var savedPersist = localStorage.getItem("_recruitment_device_persist");
+    window._recruitment_persist_from_storage = (savedPersist === "true");
+    console.log("Persist flag from storage:", window._recruitment_persist_from_storage);
+} catch(e) { console.error("read storage error:", e); }
 </script>
-""", height=0)
+""", unsafe_allow_javascript=True)
     
-    st.components.v1.html("""
+    st.html("""
 <script>
 if ('Notification' in window && Notification.permission === 'default') {
     Notification.requestPermission().then(function(permission) {
@@ -4258,9 +4227,9 @@ if ('Notification' in window && Notification.permission === 'default') {
     });
 }
 </script>
-""", height=0)
+""", unsafe_allow_javascript=True)
 
-    st.components.v1.html("""
+    st.html("""
 <script>
 (function() {
     function setV(input, val) {
@@ -4342,7 +4311,7 @@ if ('Notification' in window && Notification.permission === 'default') {
     setTimeout(fillRemember, 4000);
 })();
 </script>
-""", height=0)
+""", unsafe_allow_javascript=True)
 
     st.html("""
 <script>
@@ -4436,7 +4405,7 @@ if ('Notification' in window && Notification.permission === 'default') {
     } catch (e) {}
 })();
 </script>
-""", height=0)
+""", unsafe_allow_javascript=True)
 
     lang = st.session_state.lang
     
@@ -4525,7 +4494,7 @@ if ('Notification' in window && Notification.permission === 'default') {
                             except Exception:
                                 _enc_p_raw = ""
                             enc_p = urllib.parse.quote(_enc_p_raw)
-                            st.components.v1.html(f"""
+                            st.html(f"""
                             <script>
                             (function() {{
                                 var exp = "; max-age=31536000; path=/; SameSite=Lax";
@@ -4540,9 +4509,9 @@ if ('Notification' in window && Notification.permission === 'default') {
                                 }} catch(e) {{}}
                             }})();
                             </script>
-                            """, height=0)
+                            """, unsafe_allow_javascript=True)
                         else:
-                            st.components.v1.html(f"""
+                            st.html(f"""
                             <script>
                             (function() {{
                                 var exp0 = "; max-age=0; path=/;";
@@ -4557,7 +4526,7 @@ if ('Notification' in window && Notification.permission === 'default') {
                                 }} catch(e) {{}}
                             }})();
                             </script>
-                            """, height=0)
+                            """, unsafe_allow_javascript=True)
 
                         st.rerun()
                     else:
@@ -5239,7 +5208,7 @@ def render_top_banner():
             with cols_notif[1]:
                 btn_perm = "🔔 تفعيل إشعارات المتصفح" if lang == 'ar' else "🔔 Enable Browser Notifications"
                 if st.button(btn_perm, key="btn_req_notif", width='stretch'):
-                    st.components.v1.html("""
+                    st.html("""
 <script>
 if ('Notification' in window) {
     Notification.requestPermission().then(permission => {
@@ -5253,7 +5222,7 @@ if ('Notification' in window) {
     alert('متصفحك لا يدعم الإشعارات. ❌');
 }
 </script>
-""", height=0)
+""", unsafe_allow_javascript=True)
 
         st.markdown(f"""
     <div class="persistent-top-banner">
@@ -5562,7 +5531,7 @@ def dashboard():
             if isinstance(current_user, dict) and current_user.get("username"):
                 record_logout_event(current_user.get("username"))
             st.session_state.user = None
-            st.components.v1.html(f"""
+            st.html(f"""
             <script>
             (function() {{
                 var exp0 = "; max-age=0; path=/;";
@@ -5571,7 +5540,7 @@ def dashboard():
                 // Do NOT clear _rec_saved_* cookies - preserve user's "Remember Me" preference
             }})();
             </script>
-            """, height=0)
+            """, unsafe_allow_javascript=True)
             st.rerun()
         
         # Inject auto-logout script for browser tab/window close
@@ -5595,7 +5564,7 @@ def dashboard():
             
             st.sidebar.markdown("---")
             if st.button("🗑️ " + ("مسح بيانات الدخول المحفوظة" if lang == 'ar' else "Clear Saved Login Data"), width='stretch'):
-                st.components.v1.html("""
+                st.html("""
                 <script>
                 (function() {
                     var exp0 = "; max-age=0; path=/;";
@@ -5610,7 +5579,7 @@ def dashboard():
                     } catch(e) {}
                 })();
                 </script>
-                """, height=0)
+                """, unsafe_allow_javascript=True)
                 st.success("تم مسح بيانات الدخول المحفوظة!" if lang == 'ar' else "Saved login data cleared!")
                 time.sleep(1)
                 st.rerun()
