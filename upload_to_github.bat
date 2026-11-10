@@ -61,6 +61,9 @@ set /p commit_msg="أدخل رسالةcommit (أو اضغط Enter للاستخد
 if "%commit_msg%"=="" set commit_msg="تحديث: تحسين نظام تنظيف السير الذاتية وتتبع الدخول والخروج"
 
 echo.
+echo [معلومات] تنظيف الملفات المؤقتة وجلسات الواتساب من التتبع...
+git rm -r --cached whatsapp_session node_modules legacy_attendance_php archive_legacy 2>nul
+
 echo [معلومات] إضافة الملفات الآمنة إلى منطقة الاستعداد (Staging)...
 git add .
 

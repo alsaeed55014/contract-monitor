@@ -4,6 +4,7 @@ import os
 import sys
 import json
 import hashlib
+import threading
 import time
 from datetime import datetime, timedelta
 from typing import Dict, List, Any, Union
@@ -52,9 +53,15 @@ class AuthManager:
         self.users_file = users_file_path
         self.users = {}
         self.is_bilingual = True # Version marker for session refresh
+        self._cloud_sync_started = False
+        # 1. حمِّن المستخدمين من الملف المحلي أولاً حتى تظهر شاشة الدخول فوراً
         self.load_users()
+        # 2. مزامنة السحابة في خيط خلفي لا يمنع واجهة المستخدم
+        self._start_cloud_sync()
 
     def load_users(self):
+        """تحميل المستخدمين من المخبأ المحلي (users.json) فقط — سريع وبدون شبكة.
+        تتم مزامنة السحابة بشكل منفصل في خيط خلفي عبر _start_cloud_sync()."""
         if os.path.exists(self.users_file):
             try:
                 with open(self.users_file, 'r', encoding='utf-8') as f:
@@ -64,44 +71,6 @@ class AuthManager:
                 # Store error for UI feedback
                 self.load_error = str(e)
                 self.users = {}
-
-        # Silent cloud mirror (background only, no UI): Streamlit Cloud wipes
-        # the local filesystem on sleep/wake (the "Yes, get this app back up!"
-        # button reboots from the repo), so users.json alone would revert and
-        # password changes / new users would be lost. The hidden AppUsers
-        # worksheet is the source of truth across restarts.
-        try:
-            from src.logic.users_cloud import pull_users, push_users
-            cloud = pull_users()
-            if isinstance(cloud, dict) and cloud:
-                local_only = [u for u in self.users if u not in cloud]
-                for uname, cdata in cloud.items():
-                    if uname in self.users and isinstance(self.users[uname], dict):
-                        av = self.users[uname].get("avatar")
-                        self.users[uname].update({k: v for k, v in cdata.items() if k != "avatar"})
-                        if av and not self.users[uname].get("avatar"):
-                            self.users[uname]["avatar"] = av
-                    else:
-                        self.users[uname] = cdata
-                try:
-                    with open(self.users_file, 'w', encoding='utf-8') as f:
-                        json.dump({"users": self.users}, f, ensure_ascii=False, indent=4)
-                except Exception:
-                    pass
-                # Converge: push back any local-only users so nothing is lost
-                if local_only:
-                    try:
-                        push_users(self.users)
-                    except Exception:
-                        pass
-            elif cloud is not None:
-                # Sheet reachable but empty (first run): seed it from local
-                try:
-                    push_users(self.users)
-                except Exception:
-                    pass
-        except Exception:
-            pass
 
         # Ensure Default Admin
         if "admin" not in self.users:
@@ -115,6 +84,48 @@ class AuthManager:
                 "permissions": ["all"]
             }
             self.save_users()
+
+    def _start_cloud_sync(self):
+        """دمج مستخدمي السحابة على خيط خلفي بحيث لا تُحجب الواجهة أبداً."""
+        if self._cloud_sync_started:
+            return
+        self._cloud_sync_started = True
+        t = threading.Thread(target=self._pull_and_merge_cloud, daemon=True, name="auth-cloud-sync")
+        t.start()
+
+    def _pull_and_merge_cloud(self):
+        """جلب المستخدمين من ورقة السحابة ودمجهم في self.users (في الخلفية)."""
+        try:
+            from src.logic.users_cloud import pull_users, push_users
+            cloud = pull_users()
+        except Exception:
+            cloud = None
+        if not isinstance(cloud, dict) or not cloud:
+            return
+        try:
+            local_only = [u for u in self.users if u not in cloud]
+            for uname, cdata in cloud.items():
+                if uname in self.users and isinstance(self.users[uname], dict):
+                    av = self.users[uname].get("avatar")
+                    self.users[uname].update({k: v for k, v in cdata.items() if k != "avatar"})
+                    if av and not self.users[uname].get("avatar"):
+                        self.users[uname]["avatar"] = av
+                else:
+                    self.users[uname] = cdata
+            # Persist merged result locally so it survives cloud-unreachable restarts
+            try:
+                with open(self.users_file, 'w', encoding='utf-8') as f:
+                    json.dump({"users": self.users}, f, ensure_ascii=False, indent=4)
+            except Exception:
+                pass
+            # Converge: push back any local-only users so nothing is lost
+            if local_only:
+                try:
+                    push_users(self.users)
+                except Exception:
+                    pass
+        except Exception:
+            pass
 
     def save_users(self):
         try:
@@ -247,12 +258,30 @@ DEVICE_USER_COOKIE = "_rec_saved_user"
 DEVICE_PERSIST_COOKIE = "_rec_saved_persist"
 
 def get_device_saved_credentials() -> Dict[str, Any]:
-    """Read saved login convenience data from client browser cookies.
+    """Read saved login convenience data from client browser cookies or query params bootstrap.
 
-    Cookies carry username, encrypted password, and persist flag.
+    Works reliably on both localhost and Streamlit Cloud (where Cloudflare strips custom cookies).
     All data is stored client-side (this browser only) to survive restarts.
     There is no silent auto-login: the login form is always shown explicitly.
     """
+    # 1. Try query parameters bootstrap (most reliable across Streamlit Cloud / proxies)
+    try:
+        qp = st.query_params
+        if qp.get("_p") in ["1", "true", "True"]:
+            u_param = qp.get("_u", "")
+            if u_param:
+                u_clean = urllib.parse.unquote(u_param)
+                try:
+                    del qp["_p"]
+                    if "_u" in qp:
+                        del qp["_u"]
+                except Exception:
+                    pass
+                return {"u": u_clean, "p": "", "persist": True}
+    except Exception:
+        pass
+
+    # 2. Try client browser cookies (reliable on localhost)
     if hasattr(st, "context") and hasattr(st.context, "cookies"):
         try:
             cookies = st.context.cookies
@@ -268,14 +297,6 @@ def get_device_saved_credentials() -> Dict[str, Any]:
             pass
     return {"u": "", "p": "", "persist": False}
 
-def create_device_token(username: str, days: int = 30) -> str:
-    """Create a signed client-only authentication token for the specific device."""
-    expires_at = int(time.time()) + (days * 86400)
-    payload = f"{str(username).lower().strip()}:{expires_at}"
-    sig = hmac.new(DEVICE_REMEMBER_SECRET, payload.encode(), hashlib.sha256).hexdigest()
-    raw = f"{payload}:{sig}"
-    return base64.urlsafe_b64encode(raw.encode()).decode()
-
 @st.cache_data(ttl=3600, show_spinner=False)
 def get_base64_image(image_path):
     """Cache base64 encoded images to improve performance."""
@@ -285,6 +306,7 @@ def get_base64_image(image_path):
         return base64.b64encode(img_file.read()).decode()
 
 @st.cache_data(ttl=600, show_spinner=False)
+@st.cache_data(show_spinner=False)
 def get_css(lang='ar'):
     """Generate optimized CSS based on language direction."""
     direction = 'rtl' if lang == 'ar' else 'ltr'
@@ -2376,18 +2398,6 @@ query_params = st.query_params
 if query_params.get('logout') == 'inactive':
     st.session_state.user = None
     st.session_state.force_logout_inactive = False
-    st.html(f"""
-    <script>
-    (function() {{
-        var exp0 = "; max-age=0; path=/;";
-        // Only clear the remember token (current session), NOT cookies
-        document.cookie = "{DEVICE_REMEMBER_COOKIE}=" + exp0;
-        document.cookie = "{DEVICE_USER_COOKIE}=" + exp0;
-        document.cookie = "{DEVICE_PERSIST_COOKIE}=" + exp0;
-        // Do NOT clear _rec_saved_* cookies - preserve user's "Remember Me" preference
-    }})();
-    </script>
-    """, unsafe_allow_javascript=True)
     st.query_params.clear()
     st.rerun()
 
@@ -4203,22 +4213,29 @@ def render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search", 
     else: st.info("لا يتوفر رابط معاينة لهذا العامل.")
 
 def login_screen():
-    # Client-side Device Remember Script (Isolates storage strictly to this specific device/browser)
-    # NOTE: delivered as small sequential blocks — one large script block is
-    # not activated reliably by the renderer.
-    
-    # First, read localStorage and set a global variable BEFORE rendering
+    # 1. Bootstrap script: Synchronizes localStorage saved user & persist flag to Python
+    # This solves the Streamlit Cloud / Cloudflare cookie-stripping problem from its roots!
     st.html("""
 <script>
-window._recruitment_persist_from_storage = false;
-try {
-    var savedPersist = localStorage.getItem("_recruitment_device_persist");
-    window._recruitment_persist_from_storage = (savedPersist === "true");
-    console.log("Persist flag from storage:", window._recruitment_persist_from_storage);
-} catch(e) { console.error("read storage error:", e); }
+(function() {
+    try {
+        var sp = localStorage.getItem("_rec_saved_persist");
+        var su = localStorage.getItem("_rec_saved_user");
+        if (sp === "1" && su) {
+            var url = new URL(window.location.href);
+            var decU = decodeURIComponent(su);
+            if (url.searchParams.get("_u") !== decU || url.searchParams.get("_p") !== "1") {
+                url.searchParams.set("_u", decU);
+                url.searchParams.set("_p", "1");
+                window.location.replace(url.toString());
+            }
+        }
+    } catch(e) {}
+})();
 </script>
 """, unsafe_allow_javascript=True)
-    
+
+    # 2. Browser Notifications permission check
     st.html("""
 <script>
 if ('Notification' in window && Notification.permission === 'default') {
@@ -4229,95 +4246,27 @@ if ('Notification' in window && Notification.permission === 'default') {
 </script>
 """, unsafe_allow_javascript=True)
 
+    # 3. Comprehensive React 18 compatible Autofill and Persistence Engine
     st.html("""
 <script>
 (function() {
-    function setV(input, val) {
-        if (!input) return;
-        var lastVal = input.value;
-        try {
-            var nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
-            if (nativeSetter) { nativeSetter.call(input, val); }
-            else { input.value = val; }
-        } catch (e) { input.value = val; }
-        if (lastVal !== val) {
-            input.dispatchEvent(new Event('input', { bubbles: true }));
-            input.dispatchEvent(new Event('change', { bubbles: true }));
-        }
-    }
     function btoa_utf8(str) {
-        return window.btoa(unescape(encodeURIComponent(str)));
+        try { return window.btoa(unescape(encodeURIComponent(str))); } catch(e) { return window.btoa(str); }
     }
     function atob_utf8(str) {
-        return decodeURIComponent(escape(window.atob(str)));
-    }
-    function getCookie(name) {
-        var value = "; " + document.cookie;
-        var parts = value.split("; " + name + "=");
-        if (parts.length == 2) return parts.pop().split(";").shift();
-        return null;
+        try { return decodeURIComponent(escape(window.atob(str))); } catch(e) { return window.atob(str); }
     }
     function lsGet(name) {
-        try { return window.localStorage.getItem(name); }
-        catch (e) { return null; }
+        try { return window.localStorage.getItem(name); } catch(e) { return null; }
     }
-    function fillRemember() {
+    function lsSet(name, val) {
         try {
-            // localStorage is the primary store (works on both localhost and
-            // Streamlit Cloud HTTPS); cookies are only a fallback because
-            // st.context.cookies does not reliably see JS-set cookies on Cloud.
-            var savedU = lsGet("_rec_saved_user") || getCookie("_rec_saved_user");
-            var savedP = lsGet("_rec_saved_pass_enc") || getCookie("_rec_saved_pass_enc");
-            var savedPersist = lsGet("_rec_saved_persist") || getCookie("_rec_saved_persist");
-            if (savedPersist !== "1" && savedPersist !== "true") return;
-            if (savedU) savedU = decodeURIComponent(savedU);
-            if (savedP) savedP = decodeURIComponent(savedP);
-            var forms = Array.from(document.querySelectorAll('div[data-testid="stForm"]'));
-            if (!forms.length) {
-                var f = document.querySelector('form[data-testid="stForm"]') || document.querySelector('form');
-                if (f) forms = [f];
-            }
-            forms.forEach(function(form) {
-                var inputs = form.querySelectorAll('input');
-                var ui = null, pi = null, ci = null;
-                inputs.forEach(function(input) {
-                    var t = (input.getAttribute('type') || 'text').toLowerCase();
-                    if (t === 'password') { pi = input; }
-                    else if (t === 'checkbox') { ci = input; }
-                    else if (t === 'text' || t === '') { ui = input; }
-                });
-                if (ui && !ui._remFilled && !ui.value && savedU) { setV(ui, savedU); ui._remFilled = true; }
-                if (pi && !pi._remFilled && !pi.value && savedP) {
-                    try {
-                        var decodedP = savedP;
-                        try { decodedP = atob_utf8(savedP); }
-                        catch (e2) { decodedP = savedP; }
-                        setV(pi, decodedP);
-                        pi._remFilled = true;
-                    } catch(e) { console.error("decode error:", e); }
-                }
-                if (ci && !ci._remChecked && !ci.checked) {
-                    ci.checked = true;
-                    ci.dispatchEvent(new Event('input', { bubbles: true }));
-                    ci.dispatchEvent(new Event('change', { bubbles: true }));
-                    ci._remChecked = true;
-                }
-            });
-        } catch (err) { console.error("fill error:", err); }
+            if (val === null || val === undefined) { window.localStorage.removeItem(name); }
+            else { window.localStorage.setItem(name, val); }
+        } catch(e) {}
     }
-    setTimeout(fillRemember, 200);
-    setTimeout(fillRemember, 800);
-    setTimeout(fillRemember, 2000);
-    setTimeout(fillRemember, 4000);
-})();
-</script>
-""", unsafe_allow_javascript=True)
-
-    st.html("""
-<script>
-(function() {
-    function btoa_utf8(str) {
-        return window.btoa(unescape(encodeURIComponent(str)));
+    function lsDel(name) {
+        try { window.localStorage.removeItem(name); } catch(e) {}
     }
     function setCookie(name, value, days) {
         var expires = "";
@@ -4326,83 +4275,122 @@ if ('Notification' in window && Notification.permission === 'default') {
             date.setTime(date.getTime() + (days * 24 * 60 * 60 * 1000));
             expires = "; expires=" + date.toUTCString();
         }
-        // Secure is REQUIRED for persistent cookies on HTTPS (Streamlit Cloud).
-        // localhost is http so the flag is omitted there.
         var secure = (window.location && window.location.protocol === "https:") ? "; Secure" : "";
         document.cookie = name + "=" + (value || "") + expires + "; path=/; SameSite=Lax" + secure;
-    }
-    function lsSet(name, value) {
-        try {
-            if (value === null || value === undefined) { window.localStorage.removeItem(name); }
-            else { window.localStorage.setItem(name, value); }
-        } catch (e) {}
-    }
-    function lsDel(name) {
-        try { window.localStorage.removeItem(name); } catch (e) {}
     }
     function deleteCookie(name) {
         document.cookie = name + '=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT;';
     }
-    function hookRemember() {
+
+    // React 18 value tracker setter for text/password inputs
+    function setReactValue(input, value) {
+        if (!input || input.value === value) return;
+        var lastVal = input.value;
         try {
-            var forms = Array.from(document.querySelectorAll('div[data-testid="stForm"]'));
-            if (!forms.length) {
-                var f = document.querySelector('form[data-testid="stForm"]') || document.querySelector('form');
-                if (f) forms = [f];
+            var nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value');
+            if (nativeSetter && nativeSetter.set) {
+                nativeSetter.set.call(input, value);
+            } else {
+                input.value = value;
             }
+        } catch(e) { input.value = value; }
+
+        if (input._valueTracker) {
+            input._valueTracker.setValue(lastVal);
+        }
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+
+    function doAutofill() {
+        try {
+            var savedPersist = lsGet("_rec_saved_persist");
+            if (savedPersist !== "1") return;
+
+            var savedU = lsGet("_rec_saved_user");
+            var savedP = lsGet("_rec_saved_pass_enc");
+            if (savedU) savedU = decodeURIComponent(savedU);
+
+            var forms = Array.from(document.querySelectorAll('div[data-testid="stForm"], form'));
             forms.forEach(function(form) {
-                var inputs = form.querySelectorAll('input');
+                var inputs = Array.from(form.querySelectorAll('input'));
                 var ui = null, pi = null, ci = null;
-                inputs.forEach(function(input) {
-                    var t = (input.getAttribute('type') || 'text').toLowerCase();
-                    if (t === 'password') { pi = input; }
-                    else if (t === 'checkbox') { ci = input; }
-                    else if (t === 'text' || t === '') { ui = input; }
+                inputs.forEach(function(inp) {
+                    var t = (inp.getAttribute('type') || 'text').toLowerCase();
+                    if (t === 'password') { pi = inp; }
+                    else if (t === 'checkbox') { ci = inp; }
+                    else if (t === 'text' || t === '') { ui = inp; }
                 });
+
+                // Auto-fill Username if empty
+                if (ui && savedU && !ui.value) {
+                    setReactValue(ui, savedU);
+                }
+
+                // Auto-fill Password
+                if (pi && savedP && !pi.value) {
+                    var decP = atob_utf8(savedP);
+                    if (decP) {
+                        setReactValue(pi, decP);
+                    }
+                }
+
+                // Auto-check the remember checkbox
+                if (ci && !ci.checked) {
+                    ci.click();
+                }
+
+                // Hook Submit Button(s)
                 var buttons = form.querySelectorAll('button');
                 buttons.forEach(function(btn) {
-                    if (btn._remHook) return;
-                    btn._remHook = true;
+                    if (btn._remHooked) return;
+                    btn._remHooked = true;
                     btn.addEventListener('click', function() {
-                        var curU = ui ? ui.value : '';
+                        var curU = ui ? ui.value.trim() : '';
                         var curP = pi ? pi.value : '';
                         var curC = ci ? ci.checked : false;
-                        if (curC && curU) {
+
+                        if (curU && curC) {
                             var encU = encodeURIComponent(curU);
-                            setCookie("_rec_saved_user", encU, 365);
-                            setCookie("_rec_saved_persist", "1", 365);
                             lsSet("_rec_saved_user", encU);
                             lsSet("_rec_saved_persist", "1");
+                            setCookie("_rec_saved_user", encU, 365);
+                            setCookie("_rec_saved_persist", "1", 365);
                             if (curP) {
-                                try {
-                                    var encodedP = encodeURIComponent(btoa_utf8(curP));
-                                    setCookie("_rec_saved_pass_enc", encodedP, 365);
-                                    lsSet("_rec_saved_pass_enc", encodedP);
-                                } catch(e) { console.error("encode error:", e); }
-                            } else {
-                                deleteCookie("_rec_saved_pass_enc");
-                                lsDel("_rec_saved_pass_enc");
+                                var encP = btoa_utf8(curP);
+                                lsSet("_rec_saved_pass_enc", encP);
+                                setCookie("_rec_saved_pass_enc", encP, 365);
                             }
-                        } else if (!curC) {
-                            deleteCookie("_rec_saved_user");
-                            deleteCookie("_rec_saved_pass_enc");
-                            deleteCookie("_rec_saved_persist");
+                        } else if (curU && !curC) {
+                            // User explicitly unchecked the box - clear saved data
                             lsDel("_rec_saved_user");
-                            lsDel("_rec_saved_pass_enc");
                             lsDel("_rec_saved_persist");
+                            lsDel("_rec_saved_pass_enc");
+                            deleteCookie("_rec_saved_user");
+                            deleteCookie("_rec_saved_persist");
+                            deleteCookie("_rec_saved_pass_enc");
                         }
                     }, true);
                 });
             });
-        } catch (err) { console.error("hook error:", err); }
+        } catch(err) {
+            console.error("Autofill error:", err);
+        }
     }
-    setTimeout(hookRemember, 200);
-    setTimeout(hookRemember, 800);
-    setTimeout(hookRemember, 2000);
+
+    // Run autofill immediately and on DOM changes
+    doAutofill();
+    setTimeout(doAutofill, 100);
+    setTimeout(doAutofill, 500);
+    setTimeout(doAutofill, 1200);
+    setTimeout(doAutofill, 2500);
+
     try {
-        var remObs = new MutationObserver(function() { hookRemember(); });
-        if (document.body) { remObs.observe(document.body, { childList: true, subtree: true }); }
-    } catch (e) {}
+        var obs = new MutationObserver(function() { doAutofill(); });
+        if (document.body) {
+            obs.observe(document.body, { childList: true, subtree: true });
+        }
+    } catch(e) {}
 })();
 </script>
 """, unsafe_allow_javascript=True)
@@ -4435,11 +4423,11 @@ if ('Notification' in window && Notification.permission === 'default') {
 
         # Username/persist convenience defaults live in Session State only
         # (per-device cookies); the per-device JS fills the password field.
-        if user_key not in st.session_state and saved_u:
+        if (user_key not in st.session_state or not st.session_state.get(user_key)) and saved_u:
             st.session_state[user_key] = saved_u
         
-        # Set persist checkbox state from cookies (localStorage is used by JS for syncing)
-        if persist_key not in st.session_state:
+        # Set persist checkbox state from cookies/storage
+        if persist_key not in st.session_state or not st.session_state.get(persist_key):
             st.session_state[persist_key] = saved_persist
 
         with st.form(f"login_form_{suffix}"):
@@ -4488,45 +4476,7 @@ if ('Notification' in window && Notification.permission === 'default') {
                         # the login form is always shown explicitly.
                         should_persist = st.session_state.get(persist_key, False)
                         if should_persist:
-                            enc_u = urllib.parse.quote(u.strip())
-                            try:
-                                _enc_p_raw = base64.b64encode(p.strip().encode("utf-8")).decode()
-                            except Exception:
-                                _enc_p_raw = ""
-                            enc_p = urllib.parse.quote(_enc_p_raw)
-                            st.html(f"""
-                            <script>
-                            (function() {{
-                                var exp = "; max-age=31536000; path=/; SameSite=Lax";
-                                if (window.location && window.location.protocol === "https:") {{ exp += "; Secure"; }}
-                                document.cookie = "{DEVICE_USER_COOKIE}={enc_u}" + exp;
-                                document.cookie = "{DEVICE_PERSIST_COOKIE}=1" + exp;
-                                document.cookie = "_rec_saved_pass_enc={enc_p}" + exp;
-                                try {{
-                                    window.localStorage.setItem("_rec_saved_user", "{enc_u}");
-                                    window.localStorage.setItem("_rec_saved_persist", "1");
-                                    window.localStorage.setItem("_rec_saved_pass_enc", "{enc_p}");
-                                }} catch(e) {{}}
-                            }})();
-                            </script>
-                            """, unsafe_allow_javascript=True)
-                        else:
-                            st.html(f"""
-                            <script>
-                            (function() {{
-                                var exp0 = "; max-age=0; path=/;";
-                                document.cookie = "{DEVICE_REMEMBER_COOKIE}=" + exp0;
-                                document.cookie = "{DEVICE_USER_COOKIE}=" + exp0;
-                                document.cookie = "{DEVICE_PERSIST_COOKIE}=" + exp0;
-                                document.cookie = "_rec_saved_pass_enc=" + exp0;
-                                try {{
-                                    window.localStorage.removeItem("_rec_saved_user");
-                                    window.localStorage.removeItem("_rec_saved_persist");
-                                    window.localStorage.removeItem("_rec_saved_pass_enc");
-                                }} catch(e) {{}}
-                            }})();
-                            </script>
-                            """, unsafe_allow_javascript=True)
+                            st.session_state["_auth_saved_user"] = u.strip()
 
                         st.rerun()
                     else:
@@ -4692,6 +4642,14 @@ def check_notifications():
         last_worker = saved_worker_count if saved_worker_count is not None else current_worker_count
         last_cust = saved_cust_count if saved_cust_count is not None else current_cust_count
 
+        # Helper to find value by partial header match
+        def get_row_val(r_item, keywords, default="---"):
+            for k, v in r_item.items():
+                k_clean = str(k).lower().strip()
+                if any(kw.lower() in k_clean for kw in keywords):
+                    return v
+            return default
+
         # Check for new workers
         if current_worker_count > last_worker:
             new_count = current_worker_count - last_worker
@@ -4699,21 +4657,13 @@ def check_notifications():
             new_rows = df_workers.tail(new_count)
 
             for _, row in new_rows.iterrows():
-                # Helper to find value by partial header match
-                def get_val(keywords, default="---"):
-                    for k, v in row.items():
-                        k_clean = str(k).lower().strip()
-                        if any(kw.lower() in k_clean for kw in keywords):
-                            return v
-                    return default
-
-                name = str(get_val(["الاسم", "Name", "Full Name", "الاسم الكامل"], '---'))
-                nat = str(get_val(["الجنسية", "Nationality"], '---'))
-                job = str(get_val(["نوع العمل", "الوظيفة", "Job", "Job Type"], '---'))
-                loc = str(get_val(["المدينة", "Location", "City"], '---'))
-                phone = str(get_val(["رقم الجوال", "Phone", "Mobile", "الهاتف"], '---'))
-                age = str(get_val(["العمر", "Age"], '---'))
-                religion = str(get_val(["الديانة", "Religion"], '---'))
+                name = str(get_row_val(row, ["الاسم", "Name", "Full Name", "الاسم الكامل"], '---'))
+                nat = str(get_row_val(row, ["الجنسية", "Nationality"], '---'))
+                job = str(get_row_val(row, ["نوع العمل", "الوظيفة", "Job", "Job Type"], '---'))
+                loc = str(get_row_val(row, ["المدينة", "Location", "City"], '---'))
+                phone = str(get_row_val(row, ["رقم الجوال", "Phone", "Mobile", "الهاتف"], '---'))
+                age = str(get_row_val(row, ["العمر", "Age"], '---'))
+                religion = str(get_row_val(row, ["الديانة", "Religion"], '---'))
 
                 flag = get_flag(nat)
                 
@@ -4749,32 +4699,24 @@ def check_notifications():
             new_rows = df_customers.tail(new_count)
 
             for _, row in new_rows.iterrows():
-                # Helper to find value by partial header match
-                def get_val(keywords, default="---"):
-                    for k, v in row.items():
-                        k_clean = str(k).lower().strip()
-                        if any(kw.lower() in k_clean for kw in keywords):
-                            return v
-                    return default
-
                 # Find company name
-                company = str(get_val(["اسم الشركه", "المؤسسة", "Company", "الشركة", "شركه"], '---'))
+                company = str(get_row_val(row, ["اسم الشركه", "المؤسسة", "Company", "الشركة", "شركه"], '---'))
                 # Find contact person
-                pic = str(get_val(["المسئول", "Contact Person", "Person in charge", "المسؤول"], ''))
+                pic = str(get_row_val(row, ["المسئول", "Contact Person", "Person in charge", "المسؤول"], ''))
                 # Find phone
-                phone = str(get_val(["رقم الجوال", "Phone", "Mobile", "الهاتف", "الجوال"], ''))
+                phone = str(get_row_val(row, ["رقم الجوال", "Phone", "Mobile", "الهاتف", "الجوال"], ''))
                 # Find gender
-                gender_val = str(get_val(["الفئة المطلوبة", "الجنس", "Gender", "الفئة"], '---'))
+                gender_val = str(get_row_val(row, ["الفئة المطلوبة", "الجنس", "Gender", "الفئة"], '---'))
                 # Find nationality
-                nat = str(get_val(["الجنسية المطلوبة", "الجنسية", "Nationality"], '---'))
+                nat = str(get_row_val(row, ["الجنسية المطلوبة", "الجنسية", "Nationality"], '---'))
                 # Find location
-                loc = str(get_val(["موقع العمل", "الموقع", "Location", "المدينة"], '---'))
+                loc = str(get_row_val(row, ["موقع العمل", "الموقع", "Location", "المدينة"], '---'))
                 # Find salary
-                salary = str(get_val(["الراتب", "Salary", "Expected salary"], '---'))
+                salary = str(get_row_val(row, ["الراتب", "Salary", "Expected salary"], '---'))
                 # Find experience
-                exp = str(get_val(["الخبرة", "Experience"], '---'))
+                exp = str(get_row_val(row, ["الخبرة", "Experience"], '---'))
                 # Find contract type
-                contract = str(get_val(["نوع العقد", "Contract Type"], '---'))
+                contract = str(get_row_val(row, ["نوع العقد", "Contract Type"], '---'))
 
                 flag = get_flag(nat)
                 
@@ -5625,8 +5567,6 @@ def dashboard():
         st.rerun()
     elif page in page_handlers:
         page_handlers[page]()
-    # --- 3. Notification Check (Moved to BOTTOM to prevent hanging on login) ---
-    check_notifications()
 
 def __apply_pinned_columns(df_or_style, cfg=None):
     if cfg is None: cfg = {}
@@ -6984,309 +6924,6 @@ def render_login_history_content():
                 st.rerun()
     with c2:
         st.caption("💡 " + (t("keep_history_btn", lang) + " — " + ("تبقى البيانات في السجل كما هي" if is_ar else "data stays in the log as is")))
-
-# CV Privacy Cleaner logic is modularized in src.ui.cv_privacy
-def _legacy_render_cv_privacy_cleaner_content():
-    """CV Privacy Cleaner: Remove email addresses only from CV files.
-    Keeps phone numbers as requested. Preserves original PDF format including images."""
-    import io
-    import re
-    from PIL import Image
-    import pdfplumber
-
-    # PyMuPDF (fitz) is optional: guard the import so this page still loads
-    # on environments (e.g. Streamlit Cloud) where PyMuPDF is not installed.
-    try:
-        import fitz  # PyMuPDF
-        FITZ_AVAILABLE = True
-    except ImportError:
-        fitz = None
-        FITZ_AVAILABLE = False
-
-    lang = st.session_state.lang
-    is_ar = lang == 'ar'
-    
-    st.title("🔒 " + t("cv_privacy_title", lang))
-    st.markdown(t("cv_privacy_desc", lang))
-    st.divider()
-    
-    # --- Email and Phone removal ---
-    EMAIL_PATTERN = r'[a-zA-Z0-9._%+\u200b-]+@[a-zA-Z0-9.\u200b-]+\.[a-zA-Z]{2,}'
-    PHONE_PATTERNS = [
-        # International with country code: +966 56 036 2968 / +966-56-036-2968 / +966.56.036.2968
-        r'\+\d{1,3}[\s\-.\u200b]?\d{2}[\s\-.\u200b]?\d{3}[\s\-.\u200b]?\d{4}',
-        r'\+\d{1,3}[\s\-.\u200b]?\d{3}[\s\-.\u200b]?\d{3}[\s\-.\u200b]?\d{4}',
-        # With parentheses: (+966) 56 036 2968
-        r'\(\+\d{1,3}\)\s?\d{2}[\s\-.\u200b]?\d{3}[\s\-.\u200b]?\d{4}',
-        r'\(\+\d{1,3}\)\s?\d{3}[\s\-.\u200b]?\d{3}[\s\-.\u200b]?\d{4}',
-        # Saudi mobile: 056 036 2968 / 0560362968 / 056-036-2968
-        r'05\d{2}[\s\-.\u200b]?\d{3}[\s\-.\u200b]?\d{3}',
-        r'05\d{8}',
-        # General 10-digit patterns
-        r'\d{3}[\s\-.\u200b]?\d{3}[\s\-.\u200b]?\d{4}',
-        # General spaced format: 56 036 2968
-        r'\d{2}[\s\-.\u200b]?\d{3}[\s\-.\u200b]?\d{4}',
-    ]
-    
-    # Labels to remove along with emails and phones
-    LABEL_PATTERNS = [
-        r'Email\s*:',
-        r'Email',
-        r'Mobile No\s*\.\s*',
-        r'Mobile No\s*',
-        r'Mobile',
-    ]
-    
-    def remove_emails_and_phones_from_text(text):
-        """Remove emails, phone numbers, and their labels from text."""
-        cleaned = text
-        phones_found = []
-        emails_found = []
-        labels_found = []
-        
-        # Remove labels first (e.g. "Email:", "Mobile No.", "Mobile")
-        for pattern in LABEL_PATTERNS:
-            matches = re.findall(pattern, cleaned, flags=re.IGNORECASE)
-            for match in sorted(set(matches), key=len, reverse=True):
-                if match not in labels_found:
-                    labels_found.append(match)
-                cleaned = cleaned.replace(match, "")
-        
-        # Find and remove emails first
-        emails_found = re.findall(EMAIL_PATTERN, cleaned)
-        for email in sorted(set(emails_found), key=len, reverse=True):
-            cleaned = cleaned.replace(email, "[EMAIL REMOVED]")
-        
-        # Find and remove phones (longest matches first to avoid partial matches)
-        all_phones = []
-        for pattern in PHONE_PATTERNS:
-            matches = re.findall(pattern, cleaned)
-            for match in matches:
-                if match not in all_phones:
-                    all_phones.append(match)
-        for phone in sorted(set(all_phones), key=len, reverse=True):
-            if phone not in phones_found:
-                phones_found.append(phone)
-            cleaned = cleaned.replace(phone, "[PHONE REMOVED]")
-        
-        return cleaned, phones_found, emails_found, labels_found
-    
-    def clean_pdf_preserve_format(pdf_bytes):
-        """Remove emails and phone numbers from PDF while preserving images, fonts, layout, and formatting.
-        Returns cleaned PDF bytes."""
-        if not FITZ_AVAILABLE:
-            raise RuntimeError("PyMuPDF (fitz) is not installed in this environment; PDF format-preserving cleaning is unavailable.")
-        fitz_module = fitz
-        doc = fitz_module.open(stream=pdf_bytes, filetype="pdf")
-        total_emails = 0
-        total_phones = 0
-        
-        for page_num in range(len(doc)):
-            page = doc[page_num]
-            
-            # Get all text blocks with their positions
-            text_dict = page.get_text("dict")
-            
-            for block in text_dict["blocks"]:
-                if block["type"] != 0:  # Skip non-text blocks (images, etc.)
-                    continue
-                for line in block["lines"]:
-                    for span in line["spans"]:
-                        span_text = span["text"]
-                        
-                        # Find emails in this span
-                        emails_in_span = re.findall(EMAIL_PATTERN, span_text)
-                        for email in emails_in_span:
-                            instances = page.search_for(email)
-                            for inst in instances:
-                                rect = fitz_module.Rect(inst)
-                                page.add_redact_annot(rect, fill=(1, 1, 1))
-                                total_emails += 1
-                        
-                        # Find phones in this span
-                        phones_in_span = []
-                        for pattern in PHONE_PATTERNS:
-                            phones_in_span.extend(re.findall(pattern, span_text))
-                        for phone in sorted(set(phones_in_span), key=len, reverse=True):
-                            instances = page.search_for(phone)
-                            for inst in instances:
-                                rect = fitz_module.Rect(inst)
-                                page.add_redact_annot(rect, fill=(1, 1, 1))
-                                total_phones += 1
-        
-        # Apply all redactions (this permanently removes the email and phone text)
-        if total_emails > 0 or total_phones > 0:
-            for page_num in range(len(doc)):
-                page = doc[page_num]
-                page.apply_redactions()
-        
-        # Save to memory buffer
-        output = io.BytesIO()
-        doc.save(output, garbage=4, deflate=True)
-        doc.close()
-        output.seek(0)
-        return output.read(), total_emails, total_phones
-    
-    def extract_text_from_pdf(pdf_file):
-        """Extract text from PDF using pdfplumber."""
-        text_parts = []
-        with pdfplumber.open(pdf_file) as pdf:
-            for page in pdf.pages:
-                page_text = page.extract_text()
-                if page_text:
-                    text_parts.append(page_text)
-        return "\n".join(text_parts)
-    
-    def extract_text_from_image(image_file):
-        """Extract text from image using OCR if available."""
-        try:
-            import pytesseract
-            image = Image.open(image_file)
-            text = pytesseract.image_to_string(image)
-            return text
-        except ImportError:
-            return None  # OCR not available
-        except Exception:
-            return None
-    
-    # Info about capabilities
-    st.info("ℹ️ " + ("هذا النموذج يحذف الإيميلات وأرقام الهواتف. يتم الحفاظ على تنسيق PDF الأصلي بما في ذلك الصور والخطوط والجداول." if is_ar else "This cleaner removes emails and phone numbers. Original PDF format is preserved including images, fonts, and tables."))
-    if not FITZ_AVAILABLE:
-        st.warning("⚠️ " + ("PyMuPDF (fitz) غير مثبت في هذه البيئة، لذا تنظيف PDF الذي يحافظ على التنسيق غير متوفر. يرجى استخدام تنظيف النص فقط، أو تثبيت مكتبة PyMuPDF." if is_ar else "PyMuPDF (fitz) is not installed in this environment, so PDF format-preserving cleaning is unavailable. Please use text-only cleaning, or install the PyMuPDF library."))
-    
-    # File uploader
-    uploaded_file = st.file_uploader(
-        t("cv_upload_label", lang),
-        type=["pdf", "jpg", "jpeg", "png"],
-        help=t("cv_upload_help", lang)
-    )
-    
-    if uploaded_file is not None:
-        file_ext = uploaded_file.name.split('.')[-1].lower()
-        
-        # --- CLEAR OLD SESSION STATE WHEN NEW FILE IS UPLOADED ---
-        if 'cv_last_file_name' not in st.session_state:
-            st.session_state.cv_last_file_name = ""
-        if st.session_state.cv_last_file_name != uploaded_file.name:
-            # New file detected - clear all previous cleaned data
-            for key in ['cv_original_text', 'cv_cleaned_text', 'cv_phones_count', 'cv_emails_count', 'cv_labels_count', 'cv_file_ext', 'cv_file_name', 'cv_last_file_name', 'cv_pdf_bytes', 'cv_cleaned_pdf_bytes']:
-                if key in st.session_state:
-                    del st.session_state[key]
-            st.session_state.cv_last_file_name = uploaded_file.name
-            st.session_state.cv_file_ext = file_ext
-            st.session_state.cv_file_name = uploaded_file.name
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.subheader("📄 " + (t("cv_original_text", lang)))
-            original_text = ""
-            
-            if file_ext == "pdf":
-                try:
-                    # Read PDF bytes for preview
-                    pdf_bytes = uploaded_file.read()
-                    uploaded_file.seek(0)  # Reset for later use
-                    original_text = extract_text_from_pdf(io.BytesIO(pdf_bytes))
-                    st.text_area("PDF Content", original_text, height=400, key="cv_original_pdf")
-                    # Store bytes for cleaning
-                    st.session_state.cv_pdf_bytes = pdf_bytes
-                except Exception as e:
-                    st.error(t("cv_error", lang) + ": " + str(e))
-                    original_text = ""
-            elif file_ext in ["jpg", "jpeg", "png"]:
-                image = Image.open(uploaded_file)
-                st.image(image, caption=uploaded_file.name, use_column_width=True)
-                # Try OCR
-                ocr_text = extract_text_from_image(uploaded_file)
-                if ocr_text:
-                    original_text = ocr_text
-                    st.text_area("OCR Text", ocr_text, height=300, key="cv_original_ocr")
-                else:
-                    st.warning("⚠️ " + ("OCR غير متوفر للتنظيف التلقائي للصور. يرجى رفع ملف PDF بدلاً من ذلك." if is_ar else "OCR not available for automatic image cleaning. Please upload a PDF instead."))
-            
-            if original_text:
-                st.session_state.cv_original_text = original_text
-        
-        with col2:
-            st.subheader("✨ " + (t("cv_cleaned_text", lang)))
-            
-            # Clear / Reset button
-            if st.button("🗑️ " + ("مسح البيانات وبدء جديد" if is_ar else "Clear & Start Fresh"), width='stretch', key="cv_clear_btn"):
-                for key in ['cv_original_text', 'cv_cleaned_text', 'cv_phones_count', 'cv_emails_count', 'cv_labels_count', 'cv_file_ext', 'cv_file_name', 'cv_last_file_name', 'cv_pdf_bytes', 'cv_cleaned_pdf_bytes']:
-                    if key in st.session_state:
-                        del st.session_state[key]
-                st.rerun()
-            
-            if st.button(t("cv_clean_btn", lang), type="primary", width='stretch', key="cv_clean_btn"):
-                if file_ext == "pdf" and 'cv_pdf_bytes' in st.session_state:
-                    if not FITZ_AVAILABLE:
-                        st.error("PyMuPDF (fitz) is not installed in this environment, so PDF format-preserving cleaning is unavailable." if not is_ar else "مكتبة PyMuPDF (fitz) غير مثبتة في هذه البيئة، لذا التنظيف الذي يحفظ تنسيق PDF غير متاح.")
-                    else:
-                        # Clean PDF preserving format
-                        try:
-                            cleaned_pdf_bytes, email_count, phone_count = clean_pdf_preserve_format(st.session_state.cv_pdf_bytes)
-                            st.session_state.cv_cleaned_pdf_bytes = cleaned_pdf_bytes
-                            st.session_state.cv_emails_count = email_count
-                            st.session_state.cv_phones_count = phone_count
-                            st.success(t("cv_cleaned_success", lang))
-                        except Exception as e:
-                            st.error("خطأ في تنظيف PDF: " + str(e) if is_ar else "Error cleaning PDF: " + str(e))
-                elif 'cv_original_text' in st.session_state and st.session_state.cv_original_text:
-                    # Fallback for text-only cleaning
-                    cleaned_text, phones, emails, labels = remove_emails_and_phones_from_text(st.session_state.cv_original_text)
-                    st.session_state.cv_cleaned_text = cleaned_text
-                    st.session_state.cv_phones_count = len(phones)
-                    st.session_state.cv_emails_count = len(emails)
-                    st.session_state.cv_labels_count = len(labels)
-                    st.success(t("cv_cleaned_success", lang))
-                else:
-                    st.warning("الرجاء رفع ملف أولاً" if is_ar else "Please upload a file first")
-            
-            # Display cleaned content and download
-            if 'cv_cleaned_pdf_bytes' in st.session_state:
-                # PDF download - same format as original
-                clean_filename = "cleaned_" + st.session_state.get('cv_file_name', 'cv.pdf')
-                st.download_button(
-                    label="⬇️ " + t("cv_download_btn", lang),
-                    data=st.session_state.cv_cleaned_pdf_bytes,
-                    file_name=clean_filename,
-                    mime="application/pdf",
-                    width='stretch',
-                    key="cv_download_cleaned_pdf"
-                )
-                st.info("ℹ️ " + ("تم حفظ PDF مع الحفاظ على الصور والتنسيق الأصلي. الإيميلات وأرقام الهواتف محذوفة." if is_ar else "PDF saved preserving images and original format. Emails and phone numbers removed."))
-                
-                # Also show text preview
-                st.text_area("Cleaned Text Preview", st.session_state.cv_original_text, height=200, key="cv_cleaned_preview", disabled=True)
-                
-            elif 'cv_cleaned_text' in st.session_state:
-                cleaned_text = st.session_state.cv_cleaned_text
-                st.text_area("Cleaned Content", cleaned_text, height=400, key="cv_cleaned_display")
-                
-                # Stats - emails, phones and labels removed
-                c_stats1, c_stats2, c_stats3 = st.columns(3)
-                with c_stats1:
-                    st.metric(t("cv_phones_removed", lang), st.session_state.get('cv_phones_count', 0))
-                with c_stats2:
-                    st.metric(t("cv_emails_removed", lang), st.session_state.get('cv_emails_count', 0))
-                with c_stats3:
-                    st.metric("التسميات المحذوفة" if is_ar else "Labels removed", st.session_state.get('cv_labels_count', 0))
-                
-                # Download button - txt fallback
-                base_name = "cleaned_" + st.session_state.get('cv_file_name', 'cv')
-                clean_filename = base_name + ".txt"
-                st.download_button(
-                    label="⬇️ " + t("cv_download_btn", lang),
-                    data=cleaned_text.encode('utf-8'),
-                    file_name=clean_filename,
-                    mime="text/plain",
-                    width='stretch',
-                    key="cv_download_cleaned_txt"
-                )
-                st.info("ℹ️ " + ("تم حفظ النص المنظف كملف نصي." if is_ar else "Cleaned text saved as text file."))
-            elif 'cv_original_text' in st.session_state:
-                st.info(t("cv_no_sensitive", lang))
 
 def render_permissions_content():
     lang = st.session_state.lang
@@ -9351,4 +8988,3 @@ if not st.session_state.user:
 else:
     with main_container.container():
         dashboard()
-    silent_notification_monitor()

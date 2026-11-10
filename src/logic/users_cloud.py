@@ -38,7 +38,12 @@ def _get_sheet():
     except Exception:
         pass
     url = os.environ.get("USERS_SHEET_URL", url)
-    client = DBClient().client
+    db = DBClient()
+    client = db.client
+    if client is None:
+        # الربط الكسول: إنشاء الاتصال عند أول استخدام فعلي (بعد إزالة connect() من __new__)
+        db.connect()
+        client = db.client
     if client is None:
         raise RuntimeError("Google Sheets client unavailable")
     sh = client.open_by_url(url)

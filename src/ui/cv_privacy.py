@@ -24,11 +24,6 @@ except ImportError:
 # Application Base Directory
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-# Persistent storage directory for CV background (survives app restarts)
-BG_STORAGE_DIR = os.path.join(BASE_DIR, "cv_background_storage")
-BG_STORAGE_FILE = os.path.join(BG_STORAGE_DIR, "background.bin")
-BG_SETTINGS_FILE = os.path.join(BG_STORAGE_DIR, "settings.json")
-
 # ── Background Template Keys ─────────────────────────────────────────────────
 BG_KEYS = [
     'cv_bg_bytes', 'cv_bg_ext', 'cv_bg_name',
@@ -36,68 +31,6 @@ BG_KEYS = [
     'cv_bg_left_cm', 'cv_bg_right_cm',
     'cv_bg_cv_scale', 'cv_bg_cv_align',
 ]
-
-# ── Persistent storage helpers ────────────────────────────────────────────────
-
-def _save_background_to_disk(bg_bytes, bg_ext, bg_name,
-                             header_px, footer_px,
-                             left_cm, right_cm, cv_scale, cv_align):
-    """Save background image and settings to disk for persistence across app restarts."""
-    try:
-        os.makedirs(BG_STORAGE_DIR, exist_ok=True)
-        with open(BG_STORAGE_FILE, "wb") as f:
-            f.write(bg_bytes)
-        settings = {
-            "ext": bg_ext,
-            "name": bg_name,
-            "header_px": int(header_px),
-            "footer_px": int(footer_px),
-            "left_cm": float(left_cm),
-            "right_cm": float(right_cm),
-            "cv_scale": float(cv_scale),
-            "cv_align": cv_align,
-        }
-        with open(BG_SETTINGS_FILE, "w", encoding="utf-8") as f:
-            json.dump(settings, f, ensure_ascii=False, indent=2)
-    except Exception as e:
-        print(f"Error saving background to disk: {e}")
-
-
-def _load_background_from_disk():
-    """Load background image and settings from disk. Returns dict or None."""
-    try:
-        if not os.path.exists(BG_STORAGE_FILE) or not os.path.exists(BG_SETTINGS_FILE):
-            return None
-        with open(BG_STORAGE_FILE, "rb") as f:
-            bg_bytes = f.read()
-        with open(BG_SETTINGS_FILE, "r", encoding="utf-8") as f:
-            settings = json.load(f)
-        return {
-            "bytes": bg_bytes,
-            "ext": settings.get("ext", ""),
-            "name": settings.get("name", ""),
-            "header_px": int(settings.get("header_px", 195)),
-            "footer_px": int(settings.get("footer_px", 225)),
-            "left_cm": float(settings.get("left_cm", 1.0)),
-            "right_cm": float(settings.get("right_cm", 1.0)),
-            "cv_scale": float(settings.get("cv_scale", 1.0)),
-            "cv_align": settings.get("cv_align", "center"),
-        }
-    except Exception as e:
-        print(f"Error loading background from disk: {e}")
-        return None
-
-
-def _delete_background_from_disk():
-    """Delete background files from disk."""
-    try:
-        if os.path.exists(BG_STORAGE_FILE):
-            os.remove(BG_STORAGE_FILE)
-        if os.path.exists(BG_SETTINGS_FILE):
-            os.remove(BG_SETTINGS_FILE)
-    except Exception as e:
-        print(f"Error deleting background from disk: {e}")
-
 
 # Supported Image Extensions
 IMAGE_EXTS = ["jpg", "jpeg", "png", "webp", "bmp", "tiff", "jfif"]
@@ -350,20 +283,6 @@ def _render_background_uploader(is_ar: bool):
         "Upload a company letterhead (PDF or image) to overlay the cleaned CV on it, respecting header & footer."
     )
 
-    # ── Load persisted background from disk if not already in session ──
-    if "cv_bg_bytes" not in st.session_state:
-        persisted = _load_background_from_disk()
-        if persisted is not None:
-            st.session_state.cv_bg_bytes = persisted["bytes"]
-            st.session_state.cv_bg_ext = persisted["ext"]
-            st.session_state.cv_bg_name = persisted["name"]
-            st.session_state.cv_bg_header_px = persisted["header_px"]
-            st.session_state.cv_bg_footer_px = persisted["footer_px"]
-            st.session_state.cv_bg_left_cm = persisted["left_cm"]
-            st.session_state.cv_bg_right_cm = persisted["right_cm"]
-            st.session_state.cv_bg_cv_scale = persisted["cv_scale"]
-            st.session_state.cv_bg_cv_align = persisted["cv_align"]
-
     bg_uploader_col, bg_preview_col = st.columns([1, 1])
 
     with bg_uploader_col:
@@ -407,15 +326,6 @@ def _render_background_uploader(is_ar: bool):
                     st.session_state.cv_bg_footer_px = 225
                     st.session_state.cv_bg_left_cm = 1.0
                     st.session_state.cv_bg_right_cm = 1.0
-
-                # Save to disk for persistence across app restarts
-                _save_background_to_disk(
-                    st.session_state.cv_bg_bytes, st.session_state.cv_bg_ext, st.session_state.cv_bg_name,
-                    st.session_state.cv_bg_header_px, st.session_state.cv_bg_footer_px,
-                    st.session_state.cv_bg_left_cm, st.session_state.cv_bg_right_cm,
-                    st.session_state.get("cv_bg_cv_scale", 1.0),
-                    st.session_state.get("cv_bg_cv_align", "center"),
-                )
 
         # Manual margin controls (shown when a background is loaded)
         if "cv_bg_bytes" in st.session_state:
@@ -488,14 +398,6 @@ def _render_background_uploader(is_ar: bool):
                     key="cv_bg_cv_align_input"
                 )
 
-                # Persist updated settings to disk immediately
-                _save_background_to_disk(
-                    st.session_state.cv_bg_bytes, st.session_state.cv_bg_ext, st.session_state.cv_bg_name,
-                    st.session_state.cv_bg_header_px, st.session_state.cv_bg_footer_px,
-                    st.session_state.cv_bg_left_cm, st.session_state.cv_bg_right_cm,
-                    st.session_state.cv_bg_cv_scale, st.session_state.cv_bg_cv_align,
-                )
-
             # Show auto-detection info
             st.caption("ℹ️ " + ("سيتم كشف الخط الأفقي تلقائياً وتحديد المنطقة المحجوزة (5 سم قبل الذيل)" if is_ar else "Horizontal line will be auto-detected with 5cm margin before footer"))
 
@@ -503,8 +405,6 @@ def _render_background_uploader(is_ar: bool):
                 "🗑️ " + ("حذف الخلفية" if is_ar else "Remove background"),
                 key="cv_bg_remove_btn"
             ):
-                # Delete from disk
-                _delete_background_from_disk()
                 for k in BG_KEYS + ['cv_bg_header_px', 'cv_bg_footer_px', 'cv_bg_left_cm', 'cv_bg_right_cm', 'cv_merged_img_bytes', 'cv_merged_pdf_bytes', 'cv_extracted_img_bytes', 'cv_extracted_pdf_bytes']:
                     st.session_state.pop(k, None)
                 st.rerun()

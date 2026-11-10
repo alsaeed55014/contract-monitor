@@ -19,7 +19,9 @@ class DBClient:
         if cls._instance is None:
             cls._instance = super(DBClient, cls).__new__(cls)
             cls._instance.client = None
-            cls._instance.connect()
+            # لا نربط هنا — الاتصال يتم بشكل كسول (lazy) عند أول استخدام فعلي
+            # عبر fetch_data / delete_row / append_row / update_row، حتى لا
+            # يُحجب ظهور واجهة الدخول بانتظار مصادقة Google Sheets.
         return cls._instance
 
     def connect(self):
