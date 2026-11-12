@@ -46,7 +46,7 @@ TRANSLATIONS = {
     "cv_privacy_title": {"ar": "منظف السيرة الذاتية", "en": "CV Privacy Cleaner"},
     "cv_privacy_desc": {"ar": "ارفع ملف السيرة الذاتية (PDF أو صورة) لحذف أرقام الهواتف والإيميلات منه قبل التحميل", "en": "Upload a CV (PDF or Image) to remove phone numbers and email addresses before downloading"},
     "cv_upload_label": {"ar": "رفع ملف السيرة الذاتية", "en": "Upload CV File"},
-    "cv_upload_help": {"ar": "يدعم ملفات PDF وجميع أنواع الصور (JPG, PNG, JPEG, WEBP, BMP)", "en": "Supports PDF and all image formats (JPG, PNG, JPEG, WEBP, BMP)"},
+    "cv_upload_help": {"ar": "يدعم ملفات PDF وجميع أنواع الصور (JPG, PNG, JPEG, WEBP, BMP) بالإضافة إلى ملفات وورد (DOC, DOCX) التي تُحوَّل إلى PDF", "en": "Supports PDF and all image formats (JPG, PNG, JPEG, WEBP, BMP) plus Word files (DOC, DOCX) which are converted to PDF"},
     "cv_clean_btn": {"ar": "تنظيف الملف وحذف البيانات الحساسة", "en": "Clean File & Remove Sensitive Data"},
     "cv_cleaned_success": {"ar": "تم تنظيف الملف بنجاح! تم حذف أرقام الهواتف والإيميلات", "en": "File cleaned successfully! Phone numbers and email addresses removed"},
     "cv_download_btn": {"ar": "تحميل الملف المنظف", "en": "Download Cleaned File"},
@@ -118,6 +118,9 @@ TRANSLATIONS = {
     "file_type": {"ar": "نوع الملف", "en": "File Type"},
     "no_file_uploaded": {"ar": "لم يتم رفع أي ملف بعد", "en": "No file uploaded yet"},
     "translating_wait": {"ar": "جارٍ الترجمة... يرجى الانتظار", "en": "Translating... Please wait"},
+    "cv_translate_ai_label": {"ar": "ترجمة النص بالذكاء الاصطناعي إلى العربية", "en": "Translate to Arabic (AI)"},
+    "cv_translated_title": {"ar": "النص المترجم إلى العربية (ذكاء اصطناعي)", "en": "Translated Text to Arabic (AI)"},
+    "cv_download_translated": {"ar": "تحميل النص المترجم (.txt)", "en": "Download Translated Text (.txt)"},
 
     # Permissions
     "permissions_title": {"ar": "إدارة الصلاحيات", "en": "Permissions Management"},

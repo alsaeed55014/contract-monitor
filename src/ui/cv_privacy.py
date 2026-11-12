@@ -13,6 +13,423 @@ try:
 except ImportError:
     from core.i18n import t
 
+# python-docx (Word) support — optional, falls back gracefully
+try:
+    from docx import Document as DocxDocument
+    DOCX_AVAILABLE = True
+except ImportError:
+    DocxDocument = None
+    DOCX_AVAILABLE = False
+
+# AI translation (deep-translator / Google Translate) — optional
+try:
+    from deep_translator import GoogleTranslator
+    TRANSLATOR_AVAILABLE = True
+except ImportError:
+    GoogleTranslator = None
+    TRANSLATOR_AVAILABLE = False
+
+# Fallback: googletrans (free, no API key) — optional
+try:
+    from googletrans import Translator as GoogleTransTranslator
+    GOOGLETRANS_AVAILABLE = True
+except ImportError:
+    GoogleTransTranslator = None
+    GOOGLETRANS_AVAILABLE = False
+
+# --- Offline English → Arabic dictionary for CV/resume terms ---
+# Used when online translation services are blocked/unavailable.
+CV_EN_AR_DICT = {
+    # Sections & headers
+    "RESUME": "السيرة الذاتية",
+    "RESUME OF": "السيرة الذاتية لـ",
+    "OF": "لـ",
+    "PROFESSIONAL SUMMARY": "ملخص مهني",
+    "SUMMARY": "ملخص",
+    "CAREER OBJECTIVE": "الهدف الوظيفي",
+    "OBJECTIVE": "الهدف",
+    "SKILLS": "المهارات",
+    "SKILL": "مهارة",
+    "EXPERIENCE": "الخبرة العملية",
+    "WORK EXPERIENCE": "الخبرة العملية",
+    "PROFESSIONAL EXPERIENCE": "الخبرة المهنية",
+    "EMPLOYMENT HISTORY": "تاريخ التوظيف",
+    "EDUCATION": "التعليم",
+    "ACADEMIC BACKGROUND": "الخلفية الأكاديمية",
+    "QUALIFICATIONS": "المؤهلات",
+    "CERTIFICATIONS": "الشهادات",
+    "CERTIFICATES": "الشهادات",
+    "LANGUAGES": "اللغات",
+    "CONTACT": "معلومات الاتصال",
+    "CONTACT INFORMATION": "معلومات الاتصال",
+    "PERSONAL INFORMATION": "المعلومات الشخصية",
+    "REFERENCES": "المراجع",
+    "ACHIEVEMENTS": "الإنجازات",
+    "AWARDS": "الجوائز",
+    "PUBLICATIONS": "المنشورات",
+    "PROJECTS": "المشاريع",
+    "VOLUNTEER EXPERIENCE": "الخبرة التطوعية",
+    "INTERESTS": "الاهتمامات",
+    "HOBBIES": "الهوايات",
+
+    # Common CV words
+    "Name": "الاسم",
+    "Email": "البريد الإلكتروني",
+    "Phone": "الهاتف",
+    "Mobile": "الجوال",
+    "Address": "العنوان",
+    "Location": "الموقع",
+    "City": "المدينة",
+    "Country": "الدولة",
+    "Nationality": "الجنسية",
+    "Date of Birth": "تاريخ الميلاد",
+    "Gender": "النوع",
+    "Marital Status": "الحالة الاجتماعية",
+    "Current Position": "المنصب الحالي",
+    "Current Company": "الشركة الحالية",
+    "Previous Position": "المنصب السابق",
+    "Previous Company": "الشركة السابقة",
+    "Employer": "صاحب العمل",
+    "Job Title": "المسمى الوظيفي",
+    "Position": "المنصب",
+    "Role": "الدور",
+    "Responsibilities": "المسؤوليات",
+    "Duties": "المهام",
+    "Duration": "المدة",
+    "Period": "الفترة",
+    "From": "من",
+    "To": "إلى",
+    "Present": "حتى الآن",
+    "Current": "حالياً",
+    "Previous": "سابقاً",
+    "Company": "الشركة",
+    "Organization": "المنظمة",
+    "Institution": "المؤسسة",
+    "University": "الجامعة",
+    "College": "الكلية",
+    "School": "المدرسة",
+    "Degree": "الشهادة العلمية",
+    "Bachelor": "بكالوريوس",
+    "Master": "ماجستير",
+    "PhD": "دكتوراه",
+    "Diploma": "دبلوم",
+    "Certificate": "شهادة",
+    "Training": "تدريب",
+    "Course": "دورة",
+    "Workshop": "ورشة عمل",
+    "Seminar": "ندوة",
+    "Language": "لغة",
+    "Native": "اللغة الأم",
+    "Fluent": "إجادة تامة",
+    "Intermediate": "متوسط",
+    "Basic": "مبتدئ",
+    "Reading": "قراءة",
+    "Writing": "كتابة",
+    "Speaking": "محادثة",
+    "Listening": "استماع",
+
+    # Common action verbs / phrases
+    "To serve": "لخدمة",
+    "In a responsible position": "في منصب مسؤول",
+    "At an organization": "في منظمة",
+    "And successfully apply": "والتطبيق الناجح لـ",
+    "Acquired interpersonal skills": "المهارات الشخصية المكتسبة",
+    "To enhance": "لتعزيز",
+    "Organizational efficiencies": "الكفاءة التنظيمية",
+    "Produced": "إنتاج",
+    "High-volume": "حجم كبير",
+    "Coffee orders": "طلبات القهوة",
+    "Quickly and accurately": "بسرعة ودقة",
+    "Meeting customer demand": "لتلبية طلب العملاء",
+    "Described": "وصف",
+    "Coffee blends": "خلطات القهوة",
+    "Preparation": "التحضير",
+    "Customers": "العملاء",
+    "Assisting": "مساعدة",
+    "Choices": "الخيارات",
+    "Based on": "اعتماداً على",
+    "Personal tastes": "الأذواق الشخصية",
+    "Educated": "تثقيف",
+    "Coworkers": "زملاء العمل",
+    "About": "حول",
+    "New products": "منتجات جديدة",
+    "Increasing": "زيادة",
+    "Cafe": "مقهى",
+    "Sales": "مبيعات",
+    "Checked in": "تسجيل الوصول",
+    "During meals": "أثناء الوجبات",
+    "Orders were received": "تم استلام الطلبات",
+    "Barista": "باريستا",
+    "Waiter": "نادل",
+    "At": "في",
+    "Hotel": "فندق",
+    "Course Form": "نموذج الدورة",
+    "Sep": "سبتمبر",
+    "Dec": "ديسمبر",
+    "Hotel Management": "إدارة الفنادق",
+
+    # Additional common CV/resume terms to improve offline translation quality
+    "Tertiary": "التعليم العالي",
+    "Secondary": "الثانوي",
+    "School": "المدرسة",
+    "College": "الكلية",
+    "University": "الجامعة",
+    "Board": "المجلس",
+    "GPA": "المعدل التراكمي",
+    "Passing Year": "سنة التخرج",
+    "Institute": "المعهد",
+    "Humanities": "الآداب",
+    "Produced": "أنتج",
+    "quickly": "بسرعة",
+    "accurately": "بدقة",
+    "meet": "لتلبية",
+    "demand": "طلب",
+    "Described": "وصف",
+    "blends": "خلطات",
+    "assisting": "مساعدة",
+    "choices": "الخيارات",
+    "based": "اعتماداً على",
+    "personal": "شخصية",
+    "tastes": "الأذواق",
+    "Educated": "أثقف",
+    "coworkers": "زملاء العمل",
+    "products": "منتجات",
+    "increasing": "زيادة",
+    "sales": "مبيعات",
+    "Checked": "فحص",
+    "during": "أثناء",
+    "received": "تم استلام",
+    "correctly": "بشكل صحيح",
+    "expectations": "التوقعات",
+    "Welcomed": "رحب",
+    "warmth": "دفء",
+    "enthusiasm": "حماس",
+    "recommending": "يوصي بـ",
+    "beverage": "مشروبات",
+    "snack": "وجبات خفيفة",
+    "options": "خيارات",
+    "preferences": "التفضيلات",
+    "Strength": "نقاط القوة",
+    "Excellent": "ممتاز",
+    "written": "كتابة",
+    "oral": "شفهي",
+    "communication": "تواصل",
+    "skills": "المهارات",
+    "Bengali": "البنغالية",
+    "English": "الإنجليزية",
+    "language": "اللغة",
+    "Strong": "قوي",
+    "computer": "الكمبيوتر",
+    "applications": "التطبيقات",
+    "proficiency": "إتقان",
+    "Arabic": "العربية",
+    "Self-Appraisal": "التقييم الذاتي",
+    "Energetic": "نشيط",
+    "Self-motivated": "متحمس ذاتياً",
+    "Ambitious": "طموح",
+    "Co-operative": "تعاوني",
+    "Honest": "صادق",
+    "Punctual": "منتظم في المواعيد",
+    "Quick": "سريع",
+    "learner": "متعلم",
+    "Like": "يحب",
+    "challenge": "تحدي",
+    "Personal": "شخصي",
+    "Details": "التفاصيل",
+    "Father's": "الوالد",
+    "Date": "التاريخ",
+    "Birth": "الميلاد",
+    "Religion": "الدين",
+    "Islam": "الإسلام",
+    "Marital": "الحالة الاجتماعية",
+    "Status": "الحالة",
+    "Unmarried": "غير متزوج",
+    "Blood": "فصيلة الدم",
+    "Group": "المجموعة",
+    "Nationality": "الجنسية",
+    "Bangladeshi": "بنغلاديشي",
+    "Gender": "النوع",
+    "Male": "ذكر",
+    "Iqama": "الإقامة",
+    "Transferable": "قابلة للنقل",
+    "Skill": "المهارة",
+    "Word": "وورد",
+    "Excel": "إكسل",
+    "Driving": "القيادة",
+    "License": "الرخصة",
+    "Available": "متوفر",
+    "Declaration": "إقرار",
+    "Authenticity": "الأصالة",
+    "declare": "أعلن",
+    "information": "معلومات",
+    "true": "صحيح",
+    "knowledge": "علم",
+    "required": "مطلوب",
+    "applicable": "قابل للتطبيق",
+    "document": "وثيقة",
+    "supported": "مدعوم",
+    "appropriate": "مناسب",
+    "authentic": "أصلي",
+    "certificate": "شهادة",
+    "papers": "وثائق",
+    "Signature": "توقيع",
+}
+
+def translate_offline_en_to_ar(text):
+    """
+    Translate English CV text to Arabic using an offline dictionary.
+    Replaces whole phrases first (longest match), then individual words.
+    Preserves line structure.
+    Returns (translated_text, success_flag).
+    success is True if at least one replacement was made.
+    """
+    if not text or not text.strip():
+        return text, False
+
+    result = text
+    replaced = False
+
+    # Sort phrases by length descending to replace longest first
+    sorted_phrases = sorted(CV_EN_AR_DICT.keys(), key=len, reverse=True)
+
+    for line in result.split("\n"):
+        orig_line = line
+        new_line = line
+        for phrase in sorted_phrases:
+            # Case-insensitive replace
+            pattern = re.compile(re.escape(phrase), re.IGNORECASE)
+            new_line, n = pattern.subn(CV_EN_AR_DICT[phrase], new_line)
+            if n > 0:
+                replaced = True
+        # If line changed, update
+        if new_line != orig_line:
+            result = result.replace(orig_line, new_line)
+
+    return result, replaced
+
+
+# Regex detecting Arabic-script characters (used to preserve Arabic parts
+# in mixed Arabic+English CV text during translation).
+_ARABIC_CHAR_RE = re.compile(r'[\u0600-\u06FF]')
+
+
+def _has_arabic(text):
+    """Return True if text contains any Arabic-script character."""
+    return bool(text) and bool(_ARABIC_CHAR_RE.search(text))
+
+
+def _translate_mixed_text_to_arabic(text, translator):
+    """
+    Translate a text line that may contain a mix of Arabic and English (common
+    after OCR of CVs). Arabic-script runs are preserved as-is; only the
+    English/Latin runs are translated to Arabic. This prevents Google Translate's
+    auto-detect from garbling mixed-language lines (e.g. "expectفيions",
+    "cus到mer pالمراجع").
+    """
+    parts = []
+    current = ""
+    current_ar = None
+    for ch in text:
+        ch_ar = bool(_ARABIC_CHAR_RE.match(ch))
+        if current_ar is None:
+            current_ar = ch_ar
+            current = ch
+        elif ch.isspace():
+            # Whitespace joins the current run regardless of script.
+            current += ch
+        elif ch_ar == current_ar:
+            current += ch
+        else:
+            parts.append((current, current_ar))
+            current = ch
+            current_ar = ch_ar
+    if current:
+        parts.append((current, current_ar))
+
+    out = []
+    for part, is_ar in parts:
+        if is_ar or not part.strip():
+            out.append(part)
+        else:
+            try:
+                tr = translator.translate(part)
+                out.append(tr if tr else part)
+            except Exception:
+                out.append(part)
+    return "".join(out)
+
+
+def translate_text_to_arabic_ai(text):
+    """
+    Translate text to Arabic using AI (online services) with offline dictionary fallback.
+    Returns a dict: {'text': translated_text_or_original, 'success': True/False}
+
+    Strategy:
+      1. Online deep-translator (Google), source='en' -> target='ar'.
+         Mixed Arabic+English lines are handled by translating only the
+         English runs and preserving the Arabic runs as-is.
+      2. Fallback: googletrans (if installed).
+      3. Offline fallback: CV_EN_AR_DICT phrase/word replacement.
+      4. All failed -> return original text so the user can edit manually.
+    """
+    if not text or not text.strip():
+        return {'text': '', 'success': False}
+
+    # Try online deep-translator first
+    if TRANSLATOR_AVAILABLE:
+        try:
+            translator = GoogleTranslator(source='en', target='ar')
+            chunks = [c for c in text.split("\n") if c.strip()]
+            translated_chunks = []
+            for chunk in chunks:
+                try:
+                    if _has_arabic(chunk):
+                        translated_chunks.append(
+                            _translate_mixed_text_to_arabic(chunk, translator)
+                        )
+                    else:
+                        translated_chunks.append(translator.translate(chunk))
+                except Exception:
+                    translated_chunks.append(chunk)
+            result = "\n".join(translated_chunks)
+            if result.strip() != text.strip():
+                return {'text': result, 'success': True}
+        except Exception:
+            pass
+
+    # Fallback: googletrans
+    if GOOGLETRANS_AVAILABLE:
+        try:
+            gt = GoogleTransTranslator()
+            result = gt.translate(text, src='en', dest='ar').text
+            if result and result.strip() != text.strip():
+                return {'text': result, 'success': True}
+        except Exception:
+            pass
+
+    # Offline fallback — dictionary translation
+    offline_text, replaced = translate_offline_en_to_ar(text)
+    print(f"[DEBUG] offline replaced={replaced}", flush=True)
+    if replaced:
+        # Quality gate: if the offline result is still mostly English,
+        # treat as unsuccessful so the user gets the manual-edit warning
+        # and can fix the mixed output themselves.
+        ar_chars = len(re.findall(r'[\u0600-\u06FF]', offline_text))
+        en_chars = len(re.findall(r'[a-zA-Z]', offline_text))
+        total = ar_chars + en_chars
+        en_ratio = (en_chars / total) if total else 1.0
+        if en_ratio > 0.40:
+            # Too much English left — translation is incomplete/mixed.
+            return {'text': offline_text, 'success': False}
+        return {'text': offline_text, 'success': True}
+
+    # All failed — return original so user can edit manually
+    return {'text': text, 'success': False}
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.units import cm
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
+from reportlab.lib.styles import getSampleStyleSheet
+
 # PyMuPDF (fitz) is optional: guard the import
 try:
     import fitz  # PyMuPDF
@@ -34,6 +451,9 @@ BG_KEYS = [
 
 # Supported Image Extensions
 IMAGE_EXTS = ["jpg", "jpeg", "png", "webp", "bmp", "tiff", "jfif"]
+
+# Supported Word Document Extensions (.doc binary and .docx Office Open XML)
+DOC_EXTS = ["doc", "docx"]
 
 # --- Patterns for Sensitive Data Detection ---
 EMAIL_PATTERN = r'[a-zA-Z0-9._%+\u200b-]+@[a-zA-Z0-9.\u200b-]+\.[a-zA-Z]{2,}'
@@ -681,6 +1101,111 @@ def _render_merge_section(is_ar: bool):
                 key="cv_dl_merged_pdf"
             )
 
+        # AI Translation to Arabic — for merged CV cleaned text
+        if st.session_state.get('cv_cleaned_text'):
+            st.markdown("---")
+            tr_col1, tr_col2 = st.columns([1, 1])
+            with tr_col1:
+                if st.button(
+                    "🤖 " + ("ترجمة النص بالذكاء الاصطناعي إلى العربية" if is_ar else "Translate to Arabic (AI)"),
+                    key="cv_translate_ai_btn_merged",
+                    width='stretch',
+                ):
+                    with st.spinner("جارٍ الترجمة..." if is_ar else "Translating..."):
+                        result = translate_text_to_arabic_ai(st.session_state.cv_cleaned_text)
+                        st.session_state.cv_translated_text = result['text']
+                        st.session_state.cv_translated_success = result['success']
+                        if result['success']:
+                            st.success("تمت الترجمة!" if is_ar else "Translation complete!")
+                        else:
+                            st.warning("⚠️ " + ("تعذر الترجمة تلقائياً. يمكنك تعديل النص أدناه يدوياً." if is_ar else "Automatic translation failed. You can edit the text below manually."))
+            with tr_col2:
+                if st.session_state.get('cv_translated_text'):
+                    st.download_button(
+                        label="⬇️ " + ("تحميل النص المترجم (.txt)" if is_ar else "Download Translated Text (.txt)"),
+                        data=st.session_state.cv_translated_text.encode('utf-8'),
+                        file_name=f"translated_{base_name}.txt",
+                        mime="text/plain",
+                        width='stretch',
+                        key="cv_dl_translated_txt_merged"
+                    )
+
+            # Display translated (or editable) text
+            if st.session_state.get('cv_translated_text'):
+                st.markdown("---")
+                st.subheader("🌐 " + ("النص المترجم إلى العربية (ذكاء اصطناعي)" if is_ar else "Translated Text to Arabic (AI)"))
+                st.text_area(
+                    "Translated Text",
+                    st.session_state.cv_translated_text,
+                    height=200,
+                    key="cv_translated_txt_prev_merged",
+                )
+                st.caption("ℹ️ " + ("يمكنك تعديل النص يدوياً إذا لم تنجح الترجمة الآلية" if is_ar else "You can edit the text manually if automatic translation fails"))
+
+                # Merge translated Arabic text on background
+                st.markdown("---")
+                st.subheader("🔗 " + ("دمج النص المترجم على الخلفية" if is_ar else "Merge Translated Text on Background"))
+                st.caption(
+                    "رسم النص المترجم بالعربية على ورقة الخلفية بدلاً من الصورة الأصلية." if is_ar else
+                    "Render the translated Arabic text on the letterhead background instead of the original image."
+                )
+                st.warning(
+                    "⚠️ " + ("ملاحظة: النص العربي يُرسم باستخدام الخطوط المتوفرة في النظام، وقد تظهر الحروف منفصلة (ليس خطأ في الترجمة)." if is_ar else
+                    "Note: Arabic text is rendered with system fonts and letters may appear separated — this is a display limitation, not a translation error.")
+                )
+                if st.button(
+                    "🖨️ " + ("دمج وعرض النص المترجم على ورقة الشركة" if is_ar else "Overlay Translated Text on Company Letterhead"),
+                    type="secondary", width='stretch', key="cv_merge_translated_btn_merged",
+                ):
+                    if "cv_bg_bytes" not in st.session_state:
+                        st.warning("⚠️ " + ("يرجى رفع ورقة الخلفية أولاً." if is_ar else "Please upload background first."))
+                    else:
+                        translated_lines = [l for l in st.session_state.cv_translated_text.split("\n")]
+                        bg_bytes = st.session_state.cv_bg_bytes
+                        bg_ext = st.session_state.cv_bg_ext
+                        header_px = min(int(st.session_state.get("cv_bg_header_px", 160)), 1000)
+                        footer_px = min(int(st.session_state.get("cv_bg_footer_px", 80)), 1000)
+                        left_cm = st.session_state.get("cv_bg_left_cm", 1.0)
+                        right_cm = st.session_state.get("cv_bg_right_cm", 1.0)
+                        try:
+                            with st.spinner("جارٍ رسم النص المترجم على الخلفية..." if is_ar else "Rendering translated text on background..."):
+                                t_img, t_pdf = _render_text_on_background(
+                                    translated_lines, bg_bytes, bg_ext, header_px, footer_px,
+                                    left_cm=left_cm, right_cm=right_cm
+                                )
+                                st.session_state.cv_translated_merged_img_bytes = t_img
+                                st.session_state.cv_translated_merged_pdf_bytes = t_pdf
+                            st.success("✅ " + ("تم دمج النص المترجم على الخلفية!" if is_ar else "Translated text merged on background!"))
+                        except Exception as e:
+                            st.error(("خطأ أثناء الدمج: " if is_ar else "Merge error: ") + str(e))
+
+                if st.session_state.get('cv_translated_merged_img_bytes'):
+                    st.image(
+                        st.session_state.cv_translated_merged_img_bytes,
+                        caption="📄 " + ("النص المترجم على الخلفية" if is_ar else "Translated Text on Background"),
+                        use_container_width=True
+                    )
+                    dl1, dl2 = st.columns(2)
+                    base_name = os.path.splitext(st.session_state.get("cv_file_name", "cv"))[0]
+                    with dl1:
+                        st.download_button(
+                            label="⬇️ " + ("تحميل كصورة PNG" if is_ar else "Download as PNG"),
+                            data=st.session_state.cv_translated_merged_img_bytes,
+                            file_name=f"translated_merged_{base_name}.png",
+                            mime="image/png",
+                            width='stretch',
+                            key="cv_dl_translated_merged_png"
+                        )
+                    with dl2:
+                        st.download_button(
+                            label="⬇️ " + ("تحميل كـ PDF" if is_ar else "Download as PDF"),
+                            data=st.session_state.cv_translated_merged_pdf_bytes,
+                            file_name=f"translated_merged_{base_name}.pdf",
+                            mime="application/pdf",
+                            width='stretch',
+                            key="cv_dl_translated_merged_pdf"
+                        )
+
     # New button: Extract text and profile, render on background
     st.markdown("---")
     st.subheader("📝 " + ("تفريغ النص والبروفيل على الخلفية" if is_ar else "Extract Text & Profile on Background"))
@@ -814,6 +1339,47 @@ def _render_merge_section(is_ar: bool):
                 key="cv_dl_extracted_pdf"
             )
 
+        # AI Translation to Arabic — for extracted CV cleaned text
+        if st.session_state.get('cv_cleaned_text'):
+            st.markdown("---")
+            tr_col1, tr_col2 = st.columns([1, 1])
+            with tr_col1:
+                if st.button(
+                    "🤖 " + ("ترجمة النص بالذكاء الاصطناعي إلى العربية" if is_ar else "Translate to Arabic (AI)"),
+                    key="cv_translate_ai_btn_extracted",
+                    width='stretch',
+                ):
+                    with st.spinner("جارٍ الترجمة..." if is_ar else "Translating..."):
+                        result = translate_text_to_arabic_ai(st.session_state.cv_cleaned_text)
+                        st.session_state.cv_translated_text = result['text']
+                        st.session_state.cv_translated_success = result['success']
+                        if result['success']:
+                            st.success("تمت الترجمة!" if is_ar else "Translation complete!")
+                        else:
+                            st.warning("⚠️ " + ("تعذر الترجمة تلقائياً. يمكنك تعديل النص أدناه يدوياً." if is_ar else "Automatic translation failed. You can edit the text below manually."))
+                with tr_col2:
+                    if st.session_state.get('cv_translated_text'):
+                        st.download_button(
+                            label="⬇️ " + ("تحميل النص المترجم (.txt)" if is_ar else "Download Translated Text (.txt)"),
+                            data=st.session_state.cv_translated_text.encode('utf-8'),
+                            file_name=f"translated_{base_name}.txt",
+                            mime="text/plain",
+                            width='stretch',
+                            key="cv_dl_translated_txt_extracted"
+                        )
+
+                # Display translated (or editable) text
+                if st.session_state.get('cv_translated_text'):
+                    st.markdown("---")
+                    st.subheader("🌐 " + ("النص المترجم إلى العربية (ذكاء اصطناعي)" if is_ar else "Translated Text to Arabic (AI)"))
+                    st.text_area(
+                        "Translated Text",
+                        st.session_state.cv_translated_text,
+                        height=200,
+                        key="cv_translated_txt_prev_extracted",
+                    )
+                    st.caption("ℹ️ " + ("يمكنك تعديل النص يدوياً إذا لم تنجح الترجمة الآلية" if is_ar else "You can edit the text manually if automatic translation fails"))
+
 
 def _load_image_clean(img_bytes):
     """Load image, correct EXIF orientation, and ensure standard color mode."""
@@ -941,6 +1507,150 @@ def extract_text_from_pdf(pdf_file):
             if page_text:
                 text_parts.append(page_text)
     return "\n".join(text_parts)
+
+
+# --- Word (.doc / .docx) → Text / PDF helpers ---
+
+def _docx_to_text(docx_bytes):
+    """Extract all text from a .docx file using python-docx (paragraphs + tables)."""
+    if not DOCX_AVAILABLE:
+        return ""
+    try:
+        doc = DocxDocument(io.BytesIO(docx_bytes))
+        parts = []
+        for para in doc.paragraphs:
+            if para.text.strip():
+                parts.append(para.text)
+        for table in doc.tables:
+            for row in table.rows:
+                cells = [cell.text.strip() for cell in row.cells if cell.text.strip()]
+                if cells:
+                    parts.append(" | ".join(cells))
+        return "\n".join(parts)
+    except Exception:
+        return ""
+
+
+def _extract_images_from_docx(docx_bytes):
+    """
+    Extract embedded images from a .docx file (which is a ZIP package).
+    Returns a list of (image_name, PIL.Image) sorted by size descending.
+    """
+    images = []
+    try:
+        import zipfile
+        with zipfile.ZipFile(io.BytesIO(docx_bytes)) as z:
+            media_names = [n for n in z.namelist()
+                           if n.lower().startswith("word/media/")]
+            for name in media_names:
+                try:
+                    data = z.read(name)
+                    img = Image.open(io.BytesIO(data))
+                    img = ImageOps.exif_transpose(img)
+                    if img.mode not in ('RGB', 'RGBA'):
+                        img = img.convert('RGB')
+                    images.append((name, img))
+                except Exception:
+                    continue
+    except Exception:
+        pass
+    # Sort by size (largest first) — profile photos are usually prominent
+    images.sort(key=lambda item: item[1].size[0] * item[1].size[1], reverse=True)
+    return images
+
+
+def _is_doc_binary(data):
+    """Quick check whether bytes look like a legacy .doc (OLE Compound File) header."""
+    return data[:8] == b'\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1'
+
+
+def text_to_pdf_bytes(text, title="CV", profile_img=None):
+    """
+    Render plain text into a clean A4 PDF using reportlab.
+    If profile_img (PIL Image) is provided, place it at the top-left as a profile photo.
+    """
+    try:
+        buffer = io.BytesIO()
+        styles = getSampleStyleSheet()
+        style = styles["Normal"]
+        style.fontName = "Helvetica"
+        style.fontSize = 11
+        style.leading = 16
+        doc = SimpleDocTemplate(
+            buffer, pagesize=A4,
+            leftMargin=2 * cm, rightMargin=2 * cm,
+            topMargin=2 * cm, bottomMargin=2 * cm,
+            title=title,
+        )
+        story = []
+
+        # Place profile photo at top-left if available
+        if profile_img is not None:
+            from reportlab.platypus import Image as RLImage
+            from reportlab.lib.utils import ImageReader
+            img_buf = io.BytesIO()
+            profile_img.convert('RGB').save(img_buf, format='PNG')
+            img_buf.seek(0)
+            rl_img = RLImage(img_buf, width=4 * cm, height=4 * cm)
+            story.append(rl_img)
+            story.append(Spacer(1, 10))
+
+        for line in text.split("\n"):
+            if line.strip():
+                story.append(Paragraph(line, style))
+            story.append(Spacer(1, 6))
+        doc.build(story)
+        buffer.seek(0)
+        return buffer.read()
+    except Exception:
+        return b""
+
+
+def doc_to_pdf(file_bytes, filename="cv.doc"):
+    """
+    Convert a Word file (.doc or .docx) to PDF bytes.
+    - .docx: text extracted via python-docx, embedded images (incl. profile photo)
+      are extracted from the docx ZIP and inserted into the PDF so they survive
+      cleaning & merge onto the company letterhead.
+    - .doc (legacy binary): requires LibreOffice/antiword which are not
+      available in this environment — returns empty bytes and a flag so the UI
+      can show a helpful message asking the user to re-save as .docx.
+    Returns (pdf_bytes, extracted_text, is_convertible).
+    """
+    name_lower = filename.lower()
+
+    if name_lower.endswith(".docx"):
+        if not DOCX_AVAILABLE:
+            return b"", "", False
+        text = _docx_to_text(file_bytes)
+        # Extract embedded images (profile photo etc.) from the docx package
+        images = _extract_images_from_docx(file_bytes)
+        profile_img = images[0][1] if images else None
+        if not text or not text.strip():
+            # No text but has image — still build a PDF with the image
+            pdf_bytes = text_to_pdf_bytes("", title=os.path.splitext(filename)[0],
+                                          profile_img=profile_img)
+            return pdf_bytes, text, True
+        pdf_bytes = text_to_pdf_bytes(text, title=os.path.splitext(filename)[0],
+                                      profile_img=profile_img)
+        return pdf_bytes, text, True
+
+    if name_lower.endswith(".doc"):
+        # Legacy binary .doc — python-docx cannot read it.
+        if _is_doc_binary(file_bytes):
+            return b"", "", False  # not convertible without LibreOffice
+        # Not a real .doc binary; try treating as docx anyway
+        text = _docx_to_text(file_bytes)
+        images = _extract_images_from_docx(file_bytes)
+        profile_img = images[0][1] if images else None
+        if text and text.strip():
+            pdf_bytes = text_to_pdf_bytes(text, title=os.path.splitext(filename)[0],
+                                          profile_img=profile_img)
+            return pdf_bytes, text, True
+        return b"", "", False
+
+    return b"", "", False
+
 
 # --- Multi-Tier Image OCR Extraction ---
 
@@ -1143,7 +1853,7 @@ def render_cv_privacy_cleaner_content():
     st.markdown(t("cv_privacy_desc", lang))
     st.divider()
 
-    st.info("ℹ️ " + ("هذا القسم يدعم تنظيف ملفات PDF وجميع أنواع الصور (JPG, PNG, JPEG, WEBP, BMP). يتم حذف أرقام الهواتف والإيميلات مع الحفاظ على التنسيق الأصلي والتصميم بالكامل." if is_ar else "This tool supports PDF files and all image formats (JPG, PNG, JPEG, WEBP, BMP). Phone numbers and email addresses are cleanly removed while preserving original format and design."))
+    st.info("ℹ️ " + ("هذا القسم يدعم تنظيف ملفات PDF وجميع أنواع الصور (JPG, PNG, JPEG, WEBP, BMP) بالإضافة إلى ملفات وورد (DOCX) التي يتم تحويلها إلى PDF. يتم حذف أرقام الهواتف والإيميلات مع الحفاظ على التنسيق الأصلي والتصميم بالكامل، ويمكن عرض السيرة على ورقة الشركة (الخلفية المؤسسية)." if is_ar else "This tool supports PDF files and all image formats (JPG, PNG, JPEG, WEBP, BMP) plus Word files (DOCX) which are converted to PDF. Phone numbers and email addresses are cleanly removed while preserving original format and design, and the CV can be displayed on the company letterhead background."))
     if not FITZ_AVAILABLE:
         st.warning("⚠️ " + ("PyMuPDF (fitz) غير مثبت في هذه البيئة، لذا تنظيف PDF الذي يحافظ على التنسيق غير متوفر. يرجى استخدام تنظيف الصور أو تنظيف النص فقط." if is_ar else "PyMuPDF (fitz) is not installed in this environment."))
 
@@ -1155,14 +1865,15 @@ def render_cv_privacy_cleaner_content():
     # File uploader supporting PDF and ALL image formats
     uploaded_file = st.file_uploader(
         t("cv_upload_label", lang),
-        type=["pdf"] + IMAGE_EXTS,
+        type=["pdf"] + IMAGE_EXTS + DOC_EXTS,
         help=t("cv_upload_help", lang)
     )
 
     if uploaded_file is not None:
         file_ext = uploaded_file.name.split('.')[-1].lower() if '.' in uploaded_file.name else ''
-        is_pdf = file_ext == "pdf"
+        is_pdf = file_ext == "pdf" or ('cv_pdf_bytes' in st.session_state and file_ext in DOC_EXTS)
         is_image = file_ext in IMAGE_EXTS
+        is_doc = file_ext in DOC_EXTS
 
         # Clear old session state when a new CV file is uploaded.
         # IMPORTANT: do NOT clear anything in BG_KEYS so the uploaded
@@ -1176,6 +1887,7 @@ def render_cv_privacy_cleaner_content():
                 'cv_detected_emails', 'cv_ocr_done',
                 'cv_merged_img_bytes', 'cv_merged_pdf_bytes',
                 'cv_extracted_img_bytes', 'cv_extracted_pdf_bytes',
+                'cv_translated_text',
             ]:
                 st.session_state.pop(k, None)
 
@@ -1184,7 +1896,27 @@ def render_cv_privacy_cleaner_content():
             st.session_state.cv_file_name = uploaded_file.name
 
         raw_bytes = uploaded_file.getvalue()
-        if is_pdf:
+
+        # Convert Word (.doc / .docx) to PDF so it can be cleaned & merged like a normal CV PDF
+        if is_doc and DOCX_AVAILABLE and 'cv_pdf_bytes' not in st.session_state:
+            with st.spinner("جاري تحويل ملف وورد إلى PDF..." if is_ar else "Converting Word file to PDF..."):
+                conv_pdf_bytes, conv_text, convertible = doc_to_pdf(raw_bytes, uploaded_file.name)
+                if convertible and conv_pdf_bytes:
+                    st.session_state.cv_pdf_bytes = conv_pdf_bytes
+                    st.session_state.cv_original_text = conv_text
+                    is_pdf = True  # treat as PDF for the cleaning & merge flow below
+                else:
+                    if uploaded_file.name.lower().endswith(".doc"):
+                        st.error(
+                            "ملفات وورد القديمة (.doc) تتطلب تحويلها إلى صيغة .docx أولاً لوجود برنامج LibreOffice غير متوفر في هذا السيرفر. "
+                            "يرجى فتح الملف في وورد وحفظه كملف Word (.docx) ثم إعادة رفعه." if is_ar else
+                            "Legacy Word (.doc) files require saving as .docx first (LibreOffice is not available on this server). "
+                            "Please open the file in Word and save it as Word (.docx), then re-upload."
+                        )
+                    else:
+                        st.error("فشل تحويل ملف وورد إلى PDF" if is_ar else "Failed to convert Word file to PDF")
+
+        if is_pdf and 'cv_pdf_bytes' not in st.session_state:
             st.session_state.cv_pdf_bytes = raw_bytes
         elif is_image:
             st.session_state.cv_image_bytes = raw_bytes
@@ -1256,6 +1988,7 @@ def render_cv_privacy_cleaner_content():
                     'cv_detected_emails', 'cv_ocr_done',
                     'cv_merged_img_bytes', 'cv_merged_pdf_bytes',
                     'cv_extracted_img_bytes', 'cv_extracted_pdf_bytes',
+                    'cv_translated_text',
                     'cv_bg_header_px', 'cv_bg_footer_px', 'cv_bg_left_cm', 'cv_bg_right_cm',
                 ] + BG_KEYS:
                     st.session_state.pop(k, None)
@@ -1432,6 +2165,46 @@ def render_cv_privacy_cleaner_content():
                             key="cv_dl_clean_txt_from_img"
                         )
 
+                    # AI Translation to Arabic (smart, not literal)
+                    if st.session_state.get('cv_cleaned_text'):
+                        tr_col1, tr_col2 = st.columns([1, 1])
+                        with tr_col1:
+                            if st.button(
+                                "🤖 " + t("cv_translate_ai_label", lang),
+                                key="cv_translate_ai_btn",
+                                width='stretch',
+                            ):
+                                with st.spinner(t("translating_wait", lang)):
+                                    result = translate_text_to_arabic_ai(st.session_state.cv_cleaned_text)
+                                    st.session_state.cv_translated_text = result['text']
+                                    st.session_state.cv_translated_success = result['success']
+                                    if result['success']:
+                                        st.success(t("translation_complete", lang))
+                                    else:
+                                        st.warning("⚠️ " + ("تعذر الترجمة تلقائياً. يمكنك تعديل النص أدناه يدوياً." if is_ar else "Automatic translation failed. You can edit the text below manually."))
+                        with tr_col2:
+                            if st.session_state.get('cv_translated_text'):
+                                st.download_button(
+                                    label="⬇️ " + t("cv_download_translated", lang),
+                                    data=st.session_state.cv_translated_text.encode('utf-8'),
+                                    file_name=f"translated_{base_raw}.txt",
+                                    mime="text/plain",
+                                    width='stretch',
+                                    key="cv_dl_translated_txt"
+                                )
+
+                        # Display translated (or editable) text
+                        if st.session_state.get('cv_translated_text'):
+                            st.markdown("---")
+                            st.subheader("🌐 " + t("cv_translated_title", lang))
+                            st.text_area(
+                                "Translated Text",
+                                st.session_state.cv_translated_text,
+                                height=200,
+                                key="cv_translated_txt_prev",
+                            )
+                            st.caption("ℹ️ " + ("يمكنك تعديل النص يدوياً إذا لم تنجح الترجمة الآلية" if is_ar else "You can edit the text manually if automatic translation fails"))
+
             elif 'cv_cleaned_pdf_bytes' in st.session_state and is_pdf:
                 clean_filename = "cleaned_" + st.session_state.get('cv_file_name', 'cv.pdf')
                 st.download_button(
@@ -1443,6 +2216,49 @@ def render_cv_privacy_cleaner_content():
                     key="cv_download_cleaned_pdf"
                 )
                 st.info("ℹ️ " + ("تم حفظ PDF مع الحفاظ على الصور والتنسيق الأصلي. الإيميلات وأرقام الهواتف محذوفة." if is_ar else "PDF saved preserving images and original format. Emails and phone numbers removed."))
+
+                base_raw = os.path.splitext(st.session_state.get('cv_file_name', 'cv.pdf'))[0]
+
+                # AI Translation to Arabic (smart, not literal) — for PDF cleaned text
+                if st.session_state.get('cv_cleaned_text'):
+                    st.markdown("---")
+                    tr_col1, tr_col2 = st.columns([1, 1])
+                    with tr_col1:
+                        if st.button(
+                            "🤖 " + t("cv_translate_ai_label", lang),
+                            key="cv_translate_ai_btn_pdf",
+                            width='stretch',
+                        ):
+                            with st.spinner(t("translating_wait", lang)):
+                                result = translate_text_to_arabic_ai(st.session_state.cv_cleaned_text)
+                                st.session_state.cv_translated_text = result['text']
+                                st.session_state.cv_translated_success = result['success']
+                                if result['success']:
+                                    st.success(t("translation_complete", lang))
+                                else:
+                                    st.warning("⚠️ " + ("تعذر الترجمة تلقائياً. يمكنك تعديل النص أدناه يدوياً." if is_ar else "Automatic translation failed. You can edit the text below manually."))
+                    with tr_col2:
+                        if st.session_state.get('cv_translated_text'):
+                            st.download_button(
+                                label="⬇️ " + t("cv_download_translated", lang),
+                                data=st.session_state.cv_translated_text.encode('utf-8'),
+                                file_name=f"translated_{base_raw}.txt",
+                                mime="text/plain",
+                                width='stretch',
+                                key="cv_dl_translated_txt_pdf"
+                            )
+
+                    # Display translated (or editable) text
+                    if st.session_state.get('cv_translated_text'):
+                        st.markdown("---")
+                        st.subheader("🌐 " + t("cv_translated_title", lang))
+                        st.text_area(
+                            "Translated Text",
+                            st.session_state.cv_translated_text,
+                            height=200,
+                            key="cv_translated_txt_prev_pdf",
+                        )
+                        st.caption("ℹ️ " + ("يمكنك تعديل النص يدوياً إذا لم تنجح الترجمة الآلية" if is_ar else "You can edit the text manually if automatic translation fails"))
 
         # Show merge section if both cleaned CV and background exist
         if has_background and ('cv_cleaned_image_bytes' in st.session_state or 'cv_cleaned_pdf_bytes' in st.session_state):
