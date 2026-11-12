@@ -16,3 +16,4 @@ undetected-chromedriver
 setuptools
 PyMuPDF
 pytesseract
+reportlab
