@@ -18,3 +18,5 @@ PyMuPDF
 pytesseract
 reportlab
 python-docx
+arabic-reshaper
+python-bidi

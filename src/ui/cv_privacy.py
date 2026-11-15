@@ -8,6 +8,16 @@ from PIL import Image, ImageDraw, ImageFilter, ImageOps
 import pdfplumber
 import numpy as np
 
+# reportlab is optional: used to render cleaned text into a clean PDF.
+try:
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.units import cm
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
+    from reportlab.lib.styles import getSampleStyleSheet
+    REPORTLAB_AVAILABLE = True
+except ImportError:
+    REPORTLAB_AVAILABLE = False
+
 try:
     from src.core.i18n import t
 except ImportError:
@@ -237,6 +247,375 @@ CV_EN_AR_DICT = {
     "Personal": "شخصي",
     "Details": "التفاصيل",
     "Father's": "الوالد",
+
+    # Additional words from the user's CV
+    "Service Crew": "طاقم الخدمة",
+    "Damak": "داماك",
+    "Nepal": "نيبال",
+    "Permanent Address": "العنوان الدائم",
+    "Type": "النوع",
+    "Male": "ذكر",
+    "Married": "متزوج",
+    "Hindi": "الهندية",
+    "Nepali": "النيبالية",
+    "Height": "الطول",
+    "Bachelor": "بكالوريوس",
+    "Passed": "ناجح",
+    "Computer": "الكمبيوتر",
+    "Barista": "باريستا",
+    "Hygienic": "النظافة الشخصية",
+    "Certified": "معتمد",
+    "Store": "المتجر",
+    "Learning": "التعلم",
+    "Food": "الطعام",
+    "Safety": "السلامة",
+    "Team player": "فريق عمل",
+    "Fast": "سريع",
+    "decision making": "اتخاذ القرار",
+    "Good": "جيد",
+    "communication": "التواصل",
+    "Able": "قادر",
+    "to": "على",
+    "work": "العمل",
+    "in": "في",
+    "any": "أي",
+    "pressure": "ضغط",
+    "situation": "موقف",
+    "lead": "قيادة",
+    "the": "الـ",
+    "group": "المجموعة",
+    "for": "لـ",
+    "good": "جيد",
+    "results": "النتائج",
+    "Supervisor": "مشرف",
+    "Caribou Coffee": "كاريبو كوفي",
+    "Tasks": "المهام",
+    "and": "و",
+    "Responsibilities": "المسؤوليات",
+    "Welcomes": "يرحب",
+    "by": "بواسطة",
+    "determining": "تحديد",
+    "their": "خاصتهم",
+    "coffee": "القهوة",
+    "interests": "الاهتمامات",
+    "needs": "الاحتياجات",
+    "Promotes": "يروج",
+    "consumption": "الاستهلاك",
+    "educating": "تثقيف",
+    "selling": "بيع",
+    "grinding": "طحن",
+    "brewing": "تحضير",
+    "equipment": "المعدات",
+    "accessories": "الإكسسوارات",
+    "supplies": "المستلزمات",
+    "preparing": "تحضير",
+    "serving": "تقديم",
+    "variety": "مجموعة متنوعة",
+    "of": "من",
+    "drinks": "المشروبات",
+    "along": "مع",
+    "pastries": "المخبوزات",
+    "cookies": "البسكويت",
+    "menu": "القائمة",
+    "answering": "الإجابة",
+    "questions": "الأسئلة",
+    "Sells": "يبيع",
+    "differences": "الاختلافات",
+    "beans": "الحبوب",
+    "machines": "الآلات",
+    "demonstrating": "إظهار",
+    "how": "كيف",
+    "operates": "يعمل",
+    "follows": "يتبع",
+    "prescribed": "الموصوفة",
+    "recipes": "الوصفات",
+    "techniques": "التقنيات",
+    "such": "مثل",
+    "as": "مثل",
+    "espresso": "إسبريسو",
+    "lungo": "لونغو",
+    "caffe": "كافيه",
+    "latte": "لاتيه",
+    "cappuccino": "كابتشينو",
+    "Generates": "يولد",
+    "revenues": "الإيرادات",
+    "attracting": "جذب",
+    "new": "جديد",
+    "defining": "تحديد",
+    "expanded": "الموسعة",
+    "services": "الخدمات",
+    "products": "المنتجات",
+    "Maintains": "يحافظ",
+    "inventories": "المخزونات",
+    "replenishing": "إعادة تعبئة",
+    "bean": "حبة",
+    "supply": "الإمداد",
+    "stocking": "تخزين",
+    "maintaining": "الحفاظ",
+    "Keeps": "يحافظ",
+    "operating": "التشغيل",
+    "instructions": "التعليمات",
+    "troubleshooting": "استكشاف الأخطاء",
+    "breakdowns": "الأعطال",
+    "performing": "أداء",
+    "preventive": "الوقائي",
+    "maintenance": "الصيانة",
+    "calling": "طلب",
+    "repairs": "الإصلاحات",
+    "safe": "آمن",
+    "healthy": "صحي",
+    "environment": "البيئة",
+    "organization": "المنظمة",
+    "standards": "المعايير",
+    "sanitation": "النظافة",
+    "regulations": "اللوائح",
+    "Improves": "يحسن",
+    "quality": "الجودة",
+    "studying": "دراسة",
+    "evaluating": "تقييم",
+    "re-designing": "إعادة تصميم",
+    "processes": "العمليات",
+    "implementing": "تنفيذ",
+    "changes": "التغييرات",
+    "improving": "تحسين",
+    "appearance": "المظهر",
+    "store": "المتجر",
+    "bar": "البار",
+    "Updates": "يحدث",
+    "job": "الوظيفة",
+    "knowledge": "المعرفة",
+    "participating": "المشاركة",
+    "educational": "التعليمية",
+    "opportunities": "الفرص",
+    "reading": "قراءة",
+    "retail": "تجزئة",
+    "trade": "تجارة",
+    "food service": "خدمة الطعام",
+    "publications": "المنشورات",
+    "networks": "الشبكات",
+    "Enhances": "يعزز",
+    "shop": "المتجر",
+    "reputation": "السمعة",
+    "accepting": "قبول",
+    "ownership": "المسؤولية",
+    "accomplishing": "إنجاز",
+    "different": "مختلف",
+    "requests": "الطلبات",
+    "exploring": "استكشاف",
+    "add": "إضافة",
+    "value": "قيمة",
+    "accomplishments": "الإنجازات",
+    "Waiter": "نادل",
+    "prepare": "تحضير",
+    "all": "جميع",
+    "Food": "الطعام",
+    "beverages": "المشروبات",
+    "mise-en-place": "الإعداد المسبق",
+    "prior": "قبل",
+    "service": "الخدمة",
+    "provide": "توفير",
+    "warm": "دافئ",
+    "welcome": "ترحيب",
+    "fond": "مودة",
+    "farewell": "وداع",
+    "guests": "الضيوف",
+    "Greet": "تحية",
+    "according": "وفقاً",
+    "ensure": "ضمان",
+    "superior": "متميز",
+    "Anticipate": "توقع",
+    "guest": "الضيف",
+    "ascertain": "تأكد",
+    "satisfaction": "الرضا",
+    "respond": "استجابة",
+    "urgently": "بسرعة",
+    "appropriately": "بشكل مناسب",
+    "concerns": "المخاوف",
+    "Possess": "امتلاك",
+    "knowledge": "المعرفة",
+    "different": "مختلف",
+    "kind": "نوع",
+    "silverware": "الأدوات الفضية",
+    "maintaining": "الحفاظ",
+    "type": "نوع",
+    "E.P.N.S": "النيكل المطلية بالكهرباء",
+    "Electro": "كهربائي",
+    "Plated": "مطلية",
+    "Nickel": "النيكل",
+    "Silver": "فضي",
+    "used": "مستخدم",
+    "restaurant": "المطعم",
+    "Set": "ضبط",
+    "up": "فوق",
+    "table": "الطاولة",
+    "plan": "الخطة",
+    "cover": "الغطاء",
+    "layout": "التخطيط",
+    "defined": "محدد",
+    "management": "الإدارة",
+    "Make": "جعل",
+    "sure": "تأكد",
+    "assigned": "محدد",
+    "completed": "مكتمل",
+    "Attend": "حضور",
+    "briefings": "الإحاطات",
+    "each": "كل",
+    "meal": "الوجبة",
+    "period": "الفترة",
+    "Know": "معرفة",
+    "Specials": "العروض الخاصة",
+    "day": "اليوم",
+    "Offer": "عرض",
+    "Wine": "النبيذ",
+    "List": "القائمة",
+    "attend": "الاهتمام",
+    "napkins": "المناديل",
+    "Take": "أخذ",
+    "orders": "الطلبات",
+    "Serve": "تقديم",
+    "check": "فحص",
+    "clear": "مسح",
+    "station": "المحطة",
+    "during": "أثناء",
+    "after": "بعد",
+    "If": "إذا",
+    "required": "مطلوب",
+    "assist": "مساعدة",
+    "bringing": "جلب",
+    "from": "من",
+    "kitchen": "المطبخ",
+    "ensuring": "ضمان",
+    "accuracy": "الدقة",
+    "timeliness": "السرعة",
+    "Handle": "معالجة",
+    "complaints": "الشكاوى",
+    "professional": "مهني",
+    "manner": "طريقة",
+    "soiled": "متسخ",
+    "operating": "التشغيل",
+    "designated": "المحدد",
+    "wash-up": "غسيل",
+    "storage": "التخزين",
+    "area": "المنطقة",
+    "generate": "إنشاء",
+    "final": "النهائي",
+    "bill": "الفاتورة",
+    "POS": "نقاط البيع",
+    "system": "النظام",
+    "offer": "عرض",
+    "settlement": "التسوية",
+    "re-set": "إعادة ضبط",
+    "tables": "الطاولات",
+    "according": "وفقاً",
+    "instructions": "التعليمات",
+    "clean": "تنظيف",
+    "linen": "الكتان",
+    "Report": "تقرير",
+    "theft": "السرقة",
+    "damages": "الأضرار",
+    "Manager": "المدير",
+    "Assistant": "مساعد",
+    "completion": "الإكمال",
+    "shift": "الوردية",
+    "Help": "مساعدة",
+    "other": "أخرى",
+    "areas": "المناطق",
+    "such": "مثل",
+    "answering": "الإجابة",
+    "completing": "إكمال",
+    "financial": "المالي",
+    "transactions": "المعاملات",
+    "Print": "طباعة",
+    "closing": "الإغلاق",
+    "report": "تقرير",
+    "drop": "إيداع",
+    "cash": "نقد",
+    "with": "مع",
+    "front": "الواجهة",
+    "office": "المكتب",
+    "accounts": "الحسابات",
+    "department": "القسم",
+    "Tally": "مطابقة",
+    "Credit": "ائتمان",
+    "Card": "بطاقة",
+    "settlements": "التسويات",
+    "batch": "دفعة",
+    "EDC": "الجهاز الإلكتروني",
+    "machine": "الآلة",
+    "Close": "إغلاق",
+    "terminal": "المحطة",
+    "report": "تقرير",
+    "duty": "الواجب",
+    "regularly": "بشكل منتظم",
+    "on": "في",
+    "time": "الوقت",
+    "wearing": "ارتداء",
+    "correct": "صحيح",
+    "uniform": "الزي",
+    "name": "الاسم",
+    "badge": "الشارة",
+    "at": "في",
+    "times": "الأوقات",
+    "have": "امتلاك",
+    "complete": "كامل",
+    "understanding": "الفهم",
+    "operating": "التشغيل",
+    "policies": "السياسات",
+    "procedures": "الإجراءات",
+    "Must": "يجب",
+    "participate": "المشاركة",
+    "staff": "الموظفين",
+    "maintain": "الحفاظ",
+    "high": "عالي",
+    "standard": "المعيار",
+    "relationship": "العلاقة",
+    "colleagues": "الزملاء",
+    "chairs": "الكراسي",
+    "china": "الخزف",
+    "glass": "الزجاج",
+    "silver": "الفضة",
+    "items": "العناصر",
+    "smaller": "أصغر",
+    "toast": "الخبز المحمص",
+    "soup": "الشوربة",
+    "carry": "حمل",
+    "carry out": "تنفيذ",
+    "reasonable": "معقول",
+    "assigned": "محدد",
+    "Declaration": "إقرار",
+    "I": "أنا",
+    "take": "أخذ",
+    "with": "مع",
+    "great": "عظيم",
+    "sense": "إحساس",
+    "responsibility": "المسؤولية",
+    "enjoy": "استمتع",
+    "the": "الـ",
+    "challenge": "التحدي",
+    "new": "جديد",
+    "situations": "المواقف",
+    "expect": "توقع",
+    "make": "جعل",
+    "positive": "إيجابي",
+    "contribution": "مساهمة",
+    "your": "لك",
+    "acquire": "اكتساب",
+    "that": "أن",
+    "above": "أعلاه",
+    "are": "هي",
+    "correct": "صحيح",
+    "best": "الأفضل",
+    "my": "لي",
+    "shall": "سوف",
+    "most": "الأكثر",
+    "obliged": "ملزم",
+    "submit": "تقديم",
+    "supporting": "الداعم",
+    "documents": "الوثائق",
+    "when": "عندما",
+    "required": "مطلوب",
+    "do": "يفعل",
+    "so": "لذلك",
     "Date": "التاريخ",
     "Birth": "الميلاد",
     "Religion": "الدين",
@@ -273,12 +652,97 @@ CV_EN_AR_DICT = {
     "certificate": "شهادة",
     "papers": "وثائق",
     "Signature": "توقيع",
+
+    # English connectors/prepositions that appear in mixed translations
+    " and ": " و",
+    " And ": " و",
+    " AND ": " و",
+    " with ": " مع ",
+    " With ": " مع ",
+    " to ": " إلى ",
+    " To ": " إلى ",
+    " in ": " في ",
+    " In ": " في ",
+    " by ": " بواسطة ",
+    " By ": " بواسطة ",
+    " for ": " لـ ",
+    " For ": " لـ ",
+    " of ": " من ",
+    " Of ": " من ",
+    " the ": " الـ",
+    " The ": " الـ",
+    " check ": " فحص ",
+    " Check ": " فحص ",
+    " take ": " أخذ ",
+    " Take ": " أخذ ",
+    " all ": " جميع ",
+    " All ": " جميع ",
+    " here ": " هنا ",
+    " Here ": " هنا ",
+    " that ": " بأن ",
+    " this ": " هذا ",
+    " is ": " هو ",
+    " are ": " هم ",
+    " do ": " ",
+    " by ": " بواسطة ",
+    " if ": " إذا ",
+    " If ": " إذا ",
+    " where ": " حيث ",
+    " Where ": " حيث ",
+    " can ": " يمكن ",
+    " my ": " ",
+    " met ": " استوفى ",
+    "Ho Management": "إدارة الفنادق",
+    "Ho": "فندق",
+    "cusإلىmer": "العميل",
+    "expectفيions": "توقعات",
+    "guests'": "توقعات الضيوف",
+    "guests": "الضيوف",
+    "Fفيher": "والد",
+    "Higher Secondary Certificate": "شهادة الثانوية العليا",
+    "Higher Secondary": "الثانوي العالي",
+    "Secondary School Certificate": "شهادة المدرسة الثانوية",
+    "Secondary School": "المدرسة الثانوية",
+    "H.S.C": "شهادة الثانوية العليا",
+    "S.S.C": "شهادة المدرسة الثانوية",
+    "And College": "والكلية",
+    "and College": "والكلية",
+    "High School": "المدرسة الثانوية",
+    "MS Word": "مايكروسوفت وورد",
+    "MS Excel": "مايكروسوفت إكسل",
+    "MS": "مايكروسوفت",
+    "KSA": "المملكة العربية السعودية",
+    "IN KSA": "في المملكة العربية السعودية",
+    "Riyadh": "الرياض",
+    "RIYADH": "الرياض",
+    "By Birth": "بالميلاد",
+    "accuray": "بدقة",
+    "accuracy": "بدقة",
+
+    # Leftover connectors / special cases
+    "Educational Qualifications": "المؤهلات التعليمية",
+    "Educational": "التعليمي",
+    "educational": "التعليمي",
+    "met guests": "استوفى توقعات الضيوف",
+    "met guest": "استوفى توقعات الضيف",
+    "customer preferences": "تفضيلات العميل",
+    "customer": "العميل",
+    "guests'": "الضيوف",
+    "High School And College": "المدرسة الثانوية والكلية",
+    "High School": "المدرسة الثانوية",
+    "Ffather": "الوالد",
+    "Father": "الوالد",
+    "father": "الوالد",
+    "can be": "يمكن أن يكون",
+    "here by": "هنا",
+    "I do": "أُقر بأن",
 }
 
 def translate_offline_en_to_ar(text):
     """
     Translate English CV text to Arabic using an offline dictionary.
     Replaces whole phrases first (longest match), then individual words.
+    Works on mixed Arabic+English text: only English parts get translated.
     Preserves line structure.
     Returns (translated_text, success_flag).
     success is True if at least one replacement was made.
@@ -292,20 +756,25 @@ def translate_offline_en_to_ar(text):
     # Sort phrases by length descending to replace longest first
     sorted_phrases = sorted(CV_EN_AR_DICT.keys(), key=len, reverse=True)
 
+    result_lines = []
     for line in result.split("\n"):
         orig_line = line
         new_line = line
         for phrase in sorted_phrases:
-            # Case-insensitive replace
-            pattern = re.compile(re.escape(phrase), re.IGNORECASE)
+            # Case-insensitive replace — use word boundaries for short words
+            # to avoid replacing partial words
+            phrase_stripped = phrase.strip()
+            if len(phrase_stripped) <= 3 and phrase_stripped.isalpha():
+                # Short words: only replace if surrounded by non-alpha (word boundary)
+                pattern = re.compile(r'(?<![a-zA-Z])' + re.escape(phrase) + r'(?![a-zA-Z])', re.IGNORECASE)
+            else:
+                pattern = re.compile(re.escape(phrase), re.IGNORECASE)
             new_line, n = pattern.subn(CV_EN_AR_DICT[phrase], new_line)
             if n > 0:
                 replaced = True
-        # If line changed, update
-        if new_line != orig_line:
-            result = result.replace(orig_line, new_line)
+        result_lines.append(new_line)
 
-    return result, replaced
+    return "\n".join(result_lines), replaced
 
 
 # Regex detecting Arabic-script characters (used to preserve Arabic parts
@@ -365,33 +834,38 @@ def translate_text_to_arabic_ai(text):
     Returns a dict: {'text': translated_text_or_original, 'success': True/False}
 
     Strategy:
-      1. Online deep-translator (Google), source='en' -> target='ar'.
+      1. Online deep-translator (Google), source='auto' -> target='ar'.
          Mixed Arabic+English lines are handled by translating only the
          English runs and preserving the Arabic runs as-is.
       2. Fallback: googletrans (if installed).
-      3. Offline fallback: CV_EN_AR_DICT phrase/word replacement.
-      4. All failed -> return original text so the user can edit manually.
+      3. Offline fallback: CV_EN_AR_DICT phrase/word replacement (enhanced).
+      4. All failed -> return offline result regardless so user can edit manually.
     """
     if not text or not text.strip():
         return {'text': '', 'success': False}
 
-    # Try online deep-translator first
+    # Try online deep-translator first (source='auto' handles mixed/non-English text better)
     if TRANSLATOR_AVAILABLE:
         try:
-            translator = GoogleTranslator(source='en', target='ar')
-            chunks = [c for c in text.split("\n") if c.strip()]
-            translated_chunks = []
-            for chunk in chunks:
+            translator = GoogleTranslator(source='auto', target='ar')
+            lines = text.split("\n")
+            translated_lines = []
+            for line in lines:
+                if not line.strip():
+                    translated_lines.append(line)
+                    continue
                 try:
-                    if _has_arabic(chunk):
-                        translated_chunks.append(
-                            _translate_mixed_text_to_arabic(chunk, translator)
+                    if _has_arabic(line):
+                        # Mixed line: translate only English parts, preserve Arabic
+                        translated_lines.append(
+                            _translate_mixed_text_to_arabic(line, translator)
                         )
                     else:
-                        translated_chunks.append(translator.translate(chunk))
+                        tr = translator.translate(line)
+                        translated_lines.append(tr if tr else line)
                 except Exception:
-                    translated_chunks.append(chunk)
-            result = "\n".join(translated_chunks)
+                    translated_lines.append(line)
+            result = "\n".join(translated_lines)
             if result.strip() != text.strip():
                 return {'text': result, 'success': True}
         except Exception:
@@ -401,29 +875,27 @@ def translate_text_to_arabic_ai(text):
     if GOOGLETRANS_AVAILABLE:
         try:
             gt = GoogleTransTranslator()
-            result = gt.translate(text, src='en', dest='ar').text
+            result = gt.translate(text, src='auto', dest='ar').text
             if result and result.strip() != text.strip():
                 return {'text': result, 'success': True}
         except Exception:
             pass
 
-    # Offline fallback — dictionary translation
+    # Offline fallback — enhanced dictionary translation
     offline_text, replaced = translate_offline_en_to_ar(text)
     print(f"[DEBUG] offline replaced={replaced}", flush=True)
+    # Always return the offline result (even if partial) — better than nothing
     if replaced:
-        # Quality gate: if the offline result is still mostly English,
-        # treat as unsuccessful so the user gets the manual-edit warning
-        # and can fix the mixed output themselves.
         ar_chars = len(re.findall(r'[\u0600-\u06FF]', offline_text))
         en_chars = len(re.findall(r'[a-zA-Z]', offline_text))
         total = ar_chars + en_chars
         en_ratio = (en_chars / total) if total else 1.0
         if en_ratio > 0.40:
-            # Too much English left — translation is incomplete/mixed.
+            # Partial translation — return it but mark as not fully successful
             return {'text': offline_text, 'success': False}
         return {'text': offline_text, 'success': True}
 
-    # All failed — return original so user can edit manually
+    # All translation methods failed — return original so user can edit manually
     return {'text': text, 'success': False}
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import cm
@@ -561,7 +1033,8 @@ def _calculate_content_area(bg_img: Image.Image, header_px, footer_px, line_y=No
     If a horizontal line is detected, use it to determine margins.
     Returns (content_top, content_bottom, content_width, margin_sides_px).
     """
-    h, w = bg_img.shape[:2]
+    arr = np.array(bg_img.convert("RGB"))
+    h, w = arr.shape[:2]
 
     # If line is detected, use it as the starting point
     if line_y is not None:
@@ -596,12 +1069,13 @@ def merge_cv_on_background(cv_bytes, bg_bytes, bg_ext,
     """
     Overlay a CV (image or PDF page) onto a background letterhead image,
     respecting header_px and footer_px safe zones.
+    For multi-page PDFs, creates multiple merged pages.
 
     cv_scale: multiplier applied to the fitted scale (1.0 = fit to content area,
               >1.0 = enlarge, <1.0 = shrink). Width is the primary driver.
     cv_align: horizontal placement of the scaled CV ('left', 'center', 'right').
 
-    Returns: merged_image_bytes (PNG), merged_pdf_bytes
+    Returns: merged_image_bytes (PNG - first page only), merged_pdf_bytes (all pages)
     """
     # ── Load background ──────────────────────────────────────────────────────
     if bg_ext == 'pdf':
@@ -611,11 +1085,20 @@ def merge_cv_on_background(cv_bytes, bg_bytes, bg_ext,
 
     bg_w, bg_h = bg_img.size
 
-    # ── Load CV page ─────────────────────────────────────────────────────────
+    # ── Load CV page(s) ─────────────────────────────────────────────────────────
     if cv_is_pdf and FITZ_AVAILABLE:
-        cv_img = _pdf_page_to_image(cv_bytes, dpi=150)
+        doc = fitz.open(stream=cv_bytes, filetype="pdf")
+        cv_pages = []
+        for page_num in range(len(doc)):
+            page = doc[page_num]
+            mat = fitz.Matrix(150 / 72, 150 / 72)
+            pix = page.get_pixmap(matrix=mat, alpha=False)
+            cv_page_img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+            cv_pages.append(cv_page_img)
+        doc.close()
     else:
         cv_img = Image.open(io.BytesIO(cv_bytes)).convert("RGBA")
+        cv_pages = [cv_img]
 
     # ── Define safe content area on the background ───────────────────────────
     content_top = header_px
@@ -632,60 +1115,112 @@ def merge_cv_on_background(cv_bytes, bg_bytes, bg_ext,
         content_h = max(bg_h // 2, 100)
         content_top = header_px
 
-    # ── Scale CV to fit inside safe content area ──────────────────────────────
-    cv_w, cv_h = cv_img.size
-    fit_scale = min(content_w / cv_w, content_h / cv_h)
-    scale = fit_scale * cv_scale
-    new_w = int(cv_w * scale)
-    new_h = int(cv_h * scale)
+    # ── Process each CV page ───────────────────────────────────────────────────────
+    merged_pages = []
+    for page_idx, cv_img in enumerate(cv_pages):
+        cv_w, cv_h = cv_img.size
 
-    # When aligning RIGHT and user asked to enlarge (cv_scale > 1.0),
-    # let the CV expand to fill more of the available width so it is not
-    # left small/narrow on the left side. Cap at content_w so it stays
-    # inside the safe area, but keep the right-edge anchor.
-    if cv_align == 'right' and cv_scale > 1.0 and new_w < content_w:
-        # Try to grow width to fill content area while respecting height
-        max_w_by_height = int(cv_w * (content_h / cv_h))
-        new_w = min(max_w_by_height, content_w)
-        new_h = int(cv_h * (new_w / cv_w))
+        # ── Scale CV to fit inside safe content area ──────────────────────────────
+        fit_scale = min(content_w / cv_w, content_h / cv_h)
+        scale = fit_scale * cv_scale
+        new_w = int(cv_w * scale)
+        new_h = int(cv_h * scale)
 
-    # Clamp so the CV never overflows the safe content area horizontally/vertically
-    if new_w > content_w:
-        new_w = content_w
-        new_h = int(cv_h * (new_w / cv_w))
-    if new_h > content_h:
-        new_h = content_h
-        new_w = int(cv_w * (new_h / cv_h))
+        # When aligning RIGHT and user asked to enlarge (cv_scale > 1.0),
+        # let the CV expand to fill more of the available width so it is not
+        # left small/narrow on the left side. Cap at content_w so it stays
+        # inside the safe area, but keep the right-edge anchor.
+        if cv_align == 'right' and cv_scale > 1.0 and new_w < content_w:
+            # Try to grow width to fill content area while respecting height
+            max_w_by_height = int(cv_w * (content_h / cv_h))
+            new_w = min(max_w_by_height, content_w)
+            new_h = int(cv_h * (new_w / cv_w))
 
-    cv_scaled = cv_img.resize((new_w, new_h), Image.LANCZOS)
+        # Clamp so the CV never overflows the safe content area horizontally/vertically
+        if new_w > content_w:
+            new_w = content_w
+            new_h = int(cv_h * (new_w / cv_w))
+        if new_h > content_h:
+            new_h = content_h
+            new_w = int(cv_w * (new_h / cv_h))
 
-    # Position the CV horizontally according to cv_align.
-    # RIGHT: anchor at right edge of content area (leaves gap on left if smaller).
-    # LEFT:  anchor at left edge.
-    # CENTER: centre in content area.
-    if cv_align == 'right':
-        paste_x = left_margin_px + content_w - new_w
-    elif cv_align == 'left':
-        paste_x = left_margin_px
-    else:  # center
-        paste_x = left_margin_px + (content_w - new_w) // 2
-    paste_y = content_top
+        cv_scaled = cv_img.resize((new_w, new_h), Image.LANCZOS)
 
-    # ── Compose ──────────────────────────────────────────────────────────────
-    merged = bg_img.copy()
-    if cv_scaled.mode == "RGBA":
-        merged.paste(cv_scaled, (paste_x, paste_y), cv_scaled)
-    else:
-        merged.paste(cv_scaled.convert("RGBA"), (paste_x, paste_y))
+        # Position the CV horizontally according to cv_align.
+        # RIGHT: anchor at right edge of content area (leaves gap on left if smaller).
+        # LEFT: anchor at left edge.
+        # CENTER: centre in content area.
+        if cv_align == 'right':
+            paste_x = left_margin_px + content_w - new_w
+        elif cv_align == 'left':
+            paste_x = left_margin_px
+        else:  # center
+            paste_x = left_margin_px + (content_w - new_w) // 2
+        paste_y = content_top
 
-    # Output as PNG bytes
+        # ── Compose this page ──────────────────────────────────────────────────────
+        merged = bg_img.copy()
+        if cv_scaled.mode == "RGBA":
+            merged.paste(cv_scaled, (paste_x, paste_y), cv_scaled)
+        else:
+            merged.paste(cv_scaled.convert("RGBA"), (paste_x, paste_y))
+
+        # ── Add page number at bottom ───────────────────────────────────────────
+        from PIL import ImageDraw, ImageFont
+        draw = ImageDraw.Draw(merged)
+        page_num_text = f"Page {page_idx + 1} of {len(cv_pages)}"
+
+        # Try to use a system font, fallback to default
+        try:
+            windir = os.environ.get("WINDIR", r"C:\Windows")
+            font_paths = [
+                os.path.join(windir, "Fonts", "arial.ttf"),
+                os.path.join(windir, "Fonts", "arialbd.ttf"),
+                os.path.join(windir, "Fonts", "tahoma.ttf"),
+            ]
+            font = None
+            for fp in font_paths:
+                if os.path.exists(fp):
+                    font = ImageFont.truetype(fp, 16)
+                    break
+            if font is None:
+                font = ImageFont.load_default()
+        except:
+            font = ImageFont.load_default()
+
+        # Calculate text position (right-aligned at bottom, above footer)
+        text_bbox = draw.textbbox((0, 0), page_num_text, font=font)
+        text_width = text_bbox[2] - text_bbox[0]
+        text_x = bg_w - text_width - 20  # 20px from right edge
+        text_y = bg_h - footer_px - 30  # 30px above footer
+
+        # Draw text with shadow for better visibility
+        draw.text((text_x + 1, text_y + 1), page_num_text, font=font, fill=(200, 200, 200))
+        draw.text((text_x, text_y), page_num_text, font=font, fill=(100, 100, 100))
+
+        merged_pages.append(merged)
+
+    # ── Output: First page as PNG, all pages as PDF ─────────────────────────────
     img_out = io.BytesIO()
-    merged.save(img_out, format="PNG")
+    merged_pages[0].save(img_out, format="PNG")
     merged_img_bytes = img_out.getvalue()
 
-    # Output as PDF bytes
+    # Convert all pages to PDF using fitz (PyMuPDF)
     pdf_out = io.BytesIO()
-    merged.convert("RGB").save(pdf_out, format="PDF")
+    if FITZ_AVAILABLE:
+        doc = fitz.open()
+        for page_img in merged_pages:
+            # Convert PIL image to PDF page
+            img_bytes = io.BytesIO()
+            page_img.convert("RGB").save(img_bytes, format="PNG")
+            img_bytes.seek(0)
+            page = doc.new_page(width=page_img.width, height=page_img.height)
+            page.insert_image(fitz.Rect(0, 0, page_img.width, page_img.height), stream=img_bytes.read())
+        doc.save(pdf_out)
+        doc.close()
+    else:
+        # Fallback: save first page only as PDF
+        merged_pages[0].convert("RGB").save(pdf_out, format="PDF")
     merged_pdf_bytes = pdf_out.getvalue()
 
     return merged_img_bytes, merged_pdf_bytes
@@ -857,53 +1392,88 @@ def _render_background_uploader(is_ar: bool):
 def _extract_profile_image(img_bytes):
     """
     Extract profile picture from CV image.
-    Looks for a square-ish image in the top-left or top-right area.
+    Scans the top area of the page for any non-white rectangular region that could be a profile photo.
     Returns profile image bytes or None.
     """
     try:
         img = Image.open(io.BytesIO(img_bytes)).convert("RGB")
         w, h = img.size
 
-        # Define search areas (top 40% of page)
-        search_h = int(h * 0.4)
+        # Focus on top 50% of the page where profile photos usually appear
+        top_h = int(h * 0.50)
 
-        # Try to find profile-like regions (square-ish, reasonable size)
-        # Search for typical profile photo locations (top-left or top-right quadrant)
-        profile_quadrants = [
-            (0, 0, int(w * 0.3), int(search_h * 0.5)),  # Top-left
-            (int(w * 0.7), 0, w, int(search_h * 0.5)),  # Top-right
-        ]
+        # Strategy 1: Grid scan — divide top area into cells and look for non-white cells
+        grid_w = max(1, w // 10)
+        grid_h = max(1, top_h // 8)
 
-        for x1, y1, x2, y2 in profile_quadrants:
-            if x2 <= x1 or y2 <= y1:
-                continue
+        best_region = None
+        best_score = 0
 
-            quadrant = img.crop((x1, y1, x2, y2))
-            if quadrant.size == 0:
-                continue
+        for gx in range(0, w, grid_w):
+            for gy in range(0, top_h, grid_h):
+                x2 = min(w, gx + grid_w)
+                y2 = min(top_h, gy + grid_h)
+                cell = img.crop((gx, gy, x2, y2))
+                cw, ch = cell.size
+                if cw * ch < 100:
+                    continue
 
-            # Simple heuristic: check if region has image-like properties
-            # by analyzing color variation
-            pixels = list(quadrant.getdata())
-            if len(pixels) > 0:
-                # Calculate standard deviation of RGB values
-                r_vals = [p[0] for p in pixels]
-                g_vals = [p[1] for p in pixels]
-                b_vals = [p[2] for p in pixels]
+                pixels = list(cell.getdata())
+                if not pixels:
+                    continue
 
-                r_std = (sum((x - sum(r_vals)/len(r_vals))**2 for x in r_vals) / len(r_vals))**0.5
-                g_std = (sum((x - sum(g_vals)/len(g_vals))**2 for x in g_vals) / len(g_vals))**0.5
-                b_std = (sum((x - sum(b_vals)/len(b_vals))**2 for x in b_vals) / len(b_vals))**0.5
+                # Count non-white pixels (any channel < 245)
+                non_white = sum(1 for p in pixels if p[0] < 245 or p[1] < 245 or p[2] < 245)
+                non_white_ratio = non_white / len(pixels)
 
-                avg_std = (r_std + g_std + b_std) / 3
+                # A profile photo cell will have a meaningful amount of non-white content
+                # but not be entirely filled (that would be a text block)
+                if 0.15 < non_white_ratio < 0.95:
+                    score = non_white_ratio * (cw * ch)
+                    if score > best_score:
+                        best_score = score
+                        best_region = (gx, gy, x2, y2)
 
-                if avg_std > 30:  # Likely contains an image/photo
-                    # Extract this region as potential profile
-                    profile_img = quadrant.resize((150, 150), Image.LANCZOS)
+        if best_region and best_score > 2000:
+            x1, y1, x2, y2 = best_region
+            # Expand region slightly to capture full photo
+            pad = max(10, (x2 - x1) // 4)
+            sx1 = max(0, x1 - pad)
+            sy1 = max(0, y1 - pad)
+            sx2 = min(w, x2 + pad)
+            sy2 = min(top_h, y2 + pad)
+            profile_img = img.crop((sx1, sy1, sx2, sy2))
 
-                    out = io.BytesIO()
-                    profile_img.save(out, format="PNG")
-                    return out.getvalue()
+            cw, ch = profile_img.size
+            if cw < 40 or ch < 40:
+                # Too small to be a useful profile photo
+                pass
+            else:
+                # Resize keeping original aspect ratio (no square crop)
+                target_w = 150
+                target_h = int(ch * target_w / cw)
+                profile_img = profile_img.resize((target_w, target_h), Image.LANCZOS)
+
+                out = io.BytesIO()
+                profile_img.save(out, format="PNG")
+                return out.getvalue()
+
+        # Strategy 2: Fallback — crop top-right corner (profile photo usually on right side)
+        fallback = img.crop((int(w * 0.70), 0, w, min(top_h, int(top_h * 0.70))))
+        fw, fh = fallback.size
+        if fw >= 40 and fh >= 40:
+            # Check if there's any meaningful content (not pure white)
+            pixels = list(fallback.getdata())
+            non_white = sum(1 for p in pixels if p[0] < 245 or p[1] < 245 or p[2] < 245)
+            if non_white > len(pixels) * 0.10:
+                # Resize keeping original aspect ratio
+                target_w = 150
+                target_h = int(fh * target_w / fw)
+                fallback = fallback.resize((target_w, target_h), Image.LANCZOS)
+
+                out = io.BytesIO()
+                fallback.save(out, format="PNG")
+                return out.getvalue()
 
         return None
     except Exception as e:
@@ -957,7 +1527,7 @@ def _render_text_on_background(text_lines, bg_bytes, bg_ext, header_px, footer_p
         if font_path:
             title_font = ImageFont.truetype(font_path, 28)
             header_font = ImageFont.truetype(font_path, 20)
-            body_font = ImageFont.truetype(font_path, 14)
+            body_font = ImageFont.truetype(font_path, 18)
             small_font = ImageFont.truetype(font_path, 12)
         else:
             title_font = ImageFont.load_default()
@@ -970,24 +1540,74 @@ def _render_text_on_background(text_lines, bg_bytes, bg_ext, header_px, footer_p
         body_font = ImageFont.load_default()
         small_font = ImageFont.load_default()
 
-    # Draw profile image if available (top-left of content area)
+    # Arabic reshaper + Bidi for proper Arabic text rendering
+    try:
+        import arabic_reshaper as _ar
+        from bidi.algorithm import get_display as _bidi_display
+        def _shape_arabic(line):
+            return _bidi_display(_ar.reshape(line))
+        _HAS_ARABIC = True
+    except Exception:
+        _HAS_ARABIC = False
+        def _shape_arabic(line):
+            return line
+
+    # Draw profile image if available (top-left of content area, like original CV)
     if profile_img_bytes:
         try:
             profile_img = Image.open(io.BytesIO(profile_img_bytes)).convert("RGBA")
-            profile_img = profile_img.resize((120, 120), Image.LANCZOS)
-            paste_x = margin_sides + 20
+            # Keep profile_img at its extracted size (already resized in _extract_profile_image)
+            profile_w, profile_h = profile_img.size
+            paste_x = margin_sides + 20  # Align to left side
             paste_y = content_top + 20
             bg_img.paste(profile_img, (paste_x, paste_y), profile_img)
-            # Adjust text start position
-            text_start_x = paste_x + 140
+            # Text starts to the right of profile image
+            text_start_x = paste_x + profile_w + 20
         except Exception:
             text_start_x = margin_sides + 20
     else:
         text_start_x = margin_sides + 20
 
+    # Reserve horizontal space for profile image on left side (so wrapped text doesn't overlap)
+    profile_w_reserved = 0
+    if profile_img_bytes:
+        try:
+            _pi = Image.open(io.BytesIO(profile_img_bytes)).convert("RGBA")
+            profile_w_reserved = _pi.size[0] + 20
+        except Exception:
+            pass
+
+    # Helper: wrap a single line to fit within available width
+    def _wrap_line(line, font, max_width):
+        """Split line into sub-lines that fit within max_width pixels."""
+        words = line.split(' ')
+        if not words:
+            return ['']
+        lines = []
+        current = words[0]
+        for w in words[1:]:
+            test = current + ' ' + w
+            try:
+                bbox = draw.textbbox((0, 0), test, font=font)
+                tw = bbox[2] - bbox[0]
+            except Exception:
+                tw = len(test) * 10
+            if tw <= max_width:
+                current = test
+            else:
+                lines.append(current)
+                current = w
+        lines.append(current)
+        return lines
+
     # Draw text lines with better formatting
     y_pos = content_top + 20
     line_height = 25
+
+    # Available horizontal space for text
+    text_area_left = margin_sides + 20 + profile_w_reserved
+    text_area_right = bg_w - margin_sides - 20
+    max_text_width = text_area_right - text_area_left
 
     for line in text_lines:
         if y_pos + line_height > content_bottom:
@@ -1001,30 +1621,251 @@ def _render_text_on_background(text_lines, bg_bytes, bg_ext, header_px, footer_p
         # Determine if this is a header (CAPS or short line)
         is_header = len(line) < 50 and line.isupper() or any(keyword in line.upper() for keyword in ['OBJECTIVE', 'EXPERIENCE', 'EDUCATION', 'SKILLS', 'CERTIFICATE', 'INFORMATION', 'BACKGROUND'])
 
-        try:
-            # Choose font based on line type
-            if is_header:
-                draw.text((text_start_x, y_pos), line, fill=(0, 0, 0), font=header_font)
-                y_pos += line_height + 5  # Extra space after headers
-            else:
-                draw.text((text_start_x, y_pos), line, fill=(0, 0, 0), font=body_font)
+        # Wrap long lines so they don't overflow the page
+        if is_header:
+            font = header_font
+        else:
+            font = body_font
+
+        wrapped_lines = _wrap_line(line, font, max_text_width)
+
+        for sub_line in wrapped_lines:
+            if y_pos + line_height > content_bottom:
+                break
+
+            try:
+                # Shape Arabic text and align within margins
+                if _HAS_ARABIC and _has_arabic(sub_line):
+                    display_line = _shape_arabic(sub_line)
+                    bbox = draw.textbbox((0, 0), display_line, font=font)
+                    text_w = bbox[2] - bbox[0]
+                    # Right-align Arabic within content area, respecting right margin
+                    text_x = max(text_area_left, text_area_right - text_w)
+                else:
+                    display_line = sub_line
+                    text_x = text_area_left
+
+                draw.text((text_x, y_pos), display_line, fill=(0, 0, 0), font=font)
+
+                if is_header:
+                    y_pos += line_height + 5  # Extra space after headers
+                else:
+                    y_pos += line_height
+            except Exception:
+                # Fallback for unsupported characters
+                draw.text((text_area_left, y_pos), sub_line, fill=(0, 0, 0), font=body_font)
                 y_pos += line_height
-        except Exception:
-            # Fallback for unsupported characters
-            draw.text((text_start_x, y_pos), line, fill=(0, 0, 0), font=body_font)
-            y_pos += line_height
 
     # Output as PNG bytes
     img_out = io.BytesIO()
     bg_img.save(img_out, format="PNG")
     merged_img_bytes = img_out.getvalue()
 
-    # Output as PDF bytes
+    # Output as PDF bytes using fitz (PyMuPDF) for proper PDF generation
     pdf_out = io.BytesIO()
-    bg_img.convert("RGB").save(pdf_out, format="PDF")
+    if FITZ_AVAILABLE:
+        doc = fitz.open()
+        # Convert PIL image to PDF page
+        img_bytes = io.BytesIO()
+        bg_img.convert("RGB").save(img_bytes, format="PNG")
+        img_bytes.seek(0)
+        page = doc.new_page(width=bg_img.width, height=bg_img.height)
+        page.insert_image(fitz.Rect(0, 0, bg_img.width, bg_img.height), stream=img_bytes.read())
+        doc.save(pdf_out)
+        doc.close()
+    else:
+        # Fallback: save as PDF using PIL
+        bg_img.convert("RGB").save(pdf_out, format="PDF")
     merged_pdf_bytes = pdf_out.getvalue()
 
     return merged_img_bytes, merged_pdf_bytes
+
+
+def _arabic_text_to_image_bytes(text, width=1240, bg_color=(255, 255, 255), text_color=(0, 0, 0)):
+    """
+    Render Arabic text into a white PNG image bytes using PIL.
+    Tries to use an Arabic-capable font (e.g. Arabic Typesetting, Amiri, Noto).
+    Falls back to reportlab PDF→image if available.
+    Returns PNG bytes or None on failure.
+    """
+    from PIL import ImageFont, Image as PILImage, ImageDraw as PILDraw
+    import os, io as _io
+
+    # Try to find an Arabic-capable font on Windows
+    arabic_font_candidates = [
+        os.path.join(os.environ.get("WINDIR", r"C:\Windows"), "Fonts", "arabtype.ttf"),   # Arabic Typesetting
+        os.path.join(os.environ.get("WINDIR", r"C:\Windows"), "Fonts", "times.ttf"),
+        os.path.join(os.environ.get("WINDIR", r"C:\Windows"), "Fonts", "tahoma.ttf"),
+        os.path.join(os.environ.get("WINDIR", r"C:\Windows"), "Fonts", "arial.ttf"),
+        os.path.join(os.environ.get("WINDIR", r"C:\Windows"), "Fonts", "calibri.ttf"),
+        os.path.join(os.environ.get("WINDIR", r"C:\Windows"), "Fonts", "segoeui.ttf"),
+    ]
+    font_path = None
+    for fp in arabic_font_candidates:
+        if os.path.exists(fp):
+            font_path = fp
+            break
+
+    # Try arabic-reshaper + bidi for proper Arabic shaping
+    try:
+        import arabic_reshaper
+        from bidi.algorithm import get_display
+        def shape_arabic(line):
+            reshaped = arabic_reshaper.reshape(line)
+            return get_display(reshaped)
+        has_reshaper = True
+    except ImportError:
+        has_reshaper = False
+        def shape_arabic(line):
+            return line
+
+    lines = text.split("\n")
+    font_size = 18
+    line_height = 30
+    padding = 40
+
+    if font_path:
+        try:
+            font = ImageFont.truetype(font_path, font_size)
+            small_font = ImageFont.truetype(font_path, font_size - 4)
+        except Exception:
+            font = ImageFont.load_default()
+            small_font = font
+    else:
+        font = ImageFont.load_default()
+        small_font = font
+
+    # Calculate image height needed
+    img_height = max(padding * 2 + len(lines) * line_height, 400)
+
+    img = PILImage.new("RGB", (width, img_height), bg_color)
+    draw = PILDraw.Draw(img)
+
+    y = padding
+    for line in lines:
+        if y + line_height > img_height:
+            break
+        if not line.strip():
+            y += int(line_height * 0.5)
+            continue
+
+        display_line = shape_arabic(line) if has_reshaper else line
+
+        # Measure text width to right-align Arabic
+        try:
+            bbox = draw.textbbox((0, 0), display_line, font=font)
+            text_w = bbox[2] - bbox[0]
+        except Exception:
+            text_w = len(display_line) * 10
+
+        # Right-align Arabic text
+        x = max(padding, width - text_w - padding)
+        try:
+            draw.text((x, y), display_line, fill=text_color, font=font)
+        except Exception:
+            try:
+                draw.text((x, y), line, fill=text_color, font=font)
+            except Exception:
+                pass
+        y += line_height
+
+    out = _io.BytesIO()
+    img.save(out, format="PNG")
+    return out.getvalue()
+
+
+def _arabic_text_to_pdf_reportlab(text):
+    """
+    Render Arabic text to PDF bytes using reportlab with proper RTL support.
+    Returns PDF bytes or None on failure.
+    """
+    if not REPORTLAB_AVAILABLE:
+        return None
+    try:
+        from reportlab.lib.pagesizes import A4
+        from reportlab.lib.units import cm
+        from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
+        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+        from reportlab.lib.enums import TA_RIGHT, TA_CENTER
+        from reportlab.pdfbase import pdfmetrics
+        from reportlab.pdfbase.ttfonts import TTFont
+        import os, io as _io
+
+        # Try to register an Arabic font
+        arabic_font_candidates = [
+            (os.path.join(os.environ.get("WINDIR", r"C:\Windows"), "Fonts", "arabtype.ttf"), "ArabicTypesetting"),
+            (os.path.join(os.environ.get("WINDIR", r"C:\Windows"), "Fonts", "tahoma.ttf"), "Tahoma"),
+            (os.path.join(os.environ.get("WINDIR", r"C:\Windows"), "Fonts", "arial.ttf"), "Arial"),
+        ]
+        arabic_font_name = "Helvetica"
+        for fp, fname in arabic_font_candidates:
+            if os.path.exists(fp):
+                try:
+                    pdfmetrics.registerFont(TTFont(fname, fp))
+                    arabic_font_name = fname
+                    break
+                except Exception:
+                    continue
+
+        # Apply arabic-reshaper + bidi
+        try:
+            import arabic_reshaper
+            from bidi.algorithm import get_display
+            def shape_line(ln):
+                reshaped = arabic_reshaper.reshape(ln)
+                return get_display(reshaped)
+            has_reshaper = True
+        except ImportError:
+            has_reshaper = False
+            def shape_line(ln):
+                return ln
+
+        buffer = _io.BytesIO()
+        style_ar = ParagraphStyle(
+            'Arabic',
+            fontName=arabic_font_name,
+            fontSize=13,
+            leading=22,
+            alignment=TA_RIGHT,
+            wordWrap='RTL',
+            spaceAfter=4,
+        )
+        style_title = ParagraphStyle(
+            'ArabicTitle',
+            fontName=arabic_font_name,
+            fontSize=16,
+            leading=26,
+            alignment=TA_CENTER,
+            spaceAfter=8,
+            spaceBefore=4,
+        )
+
+        doc = SimpleDocTemplate(
+            buffer, pagesize=A4,
+            leftMargin=2 * cm, rightMargin=2 * cm,
+            topMargin=2 * cm, bottomMargin=2 * cm,
+        )
+        story = []
+        lines = text.split("\n")
+        for i, line in enumerate(lines):
+            if not line.strip():
+                story.append(Spacer(1, 6))
+                continue
+            shaped = shape_line(line) if has_reshaper else line
+            # Escape HTML special chars for reportlab
+            shaped = shaped.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+            # Use title style for first few lines (name/title)
+            st_to_use = style_title if i < 3 else style_ar
+            try:
+                story.append(Paragraph(shaped, st_to_use))
+            except Exception:
+                story.append(Spacer(1, 8))
+        doc.build(story)
+        buffer.seek(0)
+        return buffer.read()
+    except Exception as e:
+        print(f"[DEBUG] _arabic_text_to_pdf_reportlab error: {e}", flush=True)
+        return None
 
 
 def _render_merge_section(is_ar: bool):
@@ -1146,12 +1987,8 @@ def _render_merge_section(is_ar: bool):
                 st.markdown("---")
                 st.subheader("🔗 " + ("دمج النص المترجم على الخلفية" if is_ar else "Merge Translated Text on Background"))
                 st.caption(
-                    "رسم النص المترجم بالعربية على ورقة الخلفية بدلاً من الصورة الأصلية." if is_ar else
-                    "Render the translated Arabic text on the letterhead background instead of the original image."
-                )
-                st.warning(
-                    "⚠️ " + ("ملاحظة: النص العربي يُرسم باستخدام الخطوط المتوفرة في النظام، وقد تظهر الحروف منفصلة (ليس خطأ في الترجمة)." if is_ar else
-                    "Note: Arabic text is rendered with system fonts and letters may appear separated — this is a display limitation, not a translation error.")
+                    "يتم إنشاء PDF بالعربية ودمجه مع ورقة الخلفية — النص يظهر بشكل صحيح باللغة العربية." if is_ar else
+                    "A proper Arabic PDF is created and merged with the letterhead — Arabic text renders correctly."
                 )
                 if st.button(
                     "🖨️ " + ("دمج وعرض النص المترجم على ورقة الشركة" if is_ar else "Overlay Translated Text on Company Letterhead"),
@@ -1160,22 +1997,51 @@ def _render_merge_section(is_ar: bool):
                     if "cv_bg_bytes" not in st.session_state:
                         st.warning("⚠️ " + ("يرجى رفع ورقة الخلفية أولاً." if is_ar else "Please upload background first."))
                     else:
-                        translated_lines = [l for l in st.session_state.cv_translated_text.split("\n")]
+                        translated_text = st.session_state.cv_translated_text
                         bg_bytes = st.session_state.cv_bg_bytes
                         bg_ext = st.session_state.cv_bg_ext
                         header_px = min(int(st.session_state.get("cv_bg_header_px", 160)), 1000)
                         footer_px = min(int(st.session_state.get("cv_bg_footer_px", 80)), 1000)
                         left_cm = st.session_state.get("cv_bg_left_cm", 1.0)
                         right_cm = st.session_state.get("cv_bg_right_cm", 1.0)
+                        cv_scale = st.session_state.get("cv_bg_cv_scale", 1.0)
+                        cv_align = st.session_state.get("cv_bg_cv_align", "center")
                         try:
-                            with st.spinner("جارٍ رسم النص المترجم على الخلفية..." if is_ar else "Rendering translated text on background..."):
-                                t_img, t_pdf = _render_text_on_background(
-                                    translated_lines, bg_bytes, bg_ext, header_px, footer_px,
-                                    left_cm=left_cm, right_cm=right_cm
-                                )
+                            with st.spinner("جارٍ إنشاء PDF العربي ودمجه على الخلفية..." if is_ar else "Creating Arabic PDF and merging on background..."):
+                                # Step 1: Try to create a proper Arabic PDF using reportlab
+                                ar_pdf_bytes = _arabic_text_to_pdf_reportlab(translated_text)
+
+                                if ar_pdf_bytes and FITZ_AVAILABLE:
+                                    # Step 2: Merge the Arabic PDF onto the background
+                                    t_img, t_pdf = merge_cv_on_background(
+                                        ar_pdf_bytes, bg_bytes, bg_ext, header_px, footer_px,
+                                        cv_is_pdf=True,
+                                        left_cm=left_cm, right_cm=right_cm,
+                                        cv_scale=cv_scale, cv_align=cv_align
+                                    )
+                                else:
+                                    # Fallback: render Arabic text as image then merge
+                                    ar_img_bytes = _arabic_text_to_image_bytes(translated_text)
+                                    if ar_img_bytes:
+                                        t_img, t_pdf = merge_cv_on_background(
+                                            ar_img_bytes, bg_bytes, bg_ext, header_px, footer_px,
+                                            cv_is_pdf=False,
+                                            left_cm=left_cm, right_cm=right_cm,
+                                            cv_scale=cv_scale, cv_align=cv_align
+                                        )
+                                    else:
+                                        # Last resort: draw text directly on background
+                                        translated_lines = translated_text.split("\n")
+                                        # Extract profile image from cleaned CV if available
+                                        _cv_bytes = st.session_state.get("cv_cleaned_image_bytes") or st.session_state.get("cv_cleaned_pdf_bytes")
+                                        _profile_img = _extract_profile_image(_cv_bytes) if _cv_bytes else None
+                                        t_img, t_pdf = _render_text_on_background(
+                                            translated_lines, bg_bytes, bg_ext, header_px, footer_px, _profile_img,
+                                            left_cm=left_cm, right_cm=right_cm
+                                        )
                                 st.session_state.cv_translated_merged_img_bytes = t_img
                                 st.session_state.cv_translated_merged_pdf_bytes = t_pdf
-                            st.success("✅ " + ("تم دمج النص المترجم على الخلفية!" if is_ar else "Translated text merged on background!"))
+                            st.success("✅ " + ("تم دمج النص المترجم على الخلفية بنجاح!" if is_ar else "Translated text merged on background!"))
                         except Exception as e:
                             st.error(("خطأ أثناء الدمج: " if is_ar else "Merge error: ") + str(e))
 
@@ -1214,6 +2080,24 @@ def _render_merge_section(is_ar: bool):
         "Extract text and profile picture from CV and display on letterhead without original CV background."
     )
 
+    # Manual text editor option
+    with st.expander("✏️ " + ("أو اكتب/الصق النص يدوياً" if is_ar else "Or type/paste text manually"), expanded=False):
+        manual_text = st.text_area(
+            ("النص المخصص" if is_ar else "Custom text"),
+            height=300,
+            key="cv_manual_text_input",
+            placeholder=("اكتب أو الصق النص هنا ليظهر على الخلفية..." if is_ar else "Type or paste text here to appear on background...")
+        )
+        if st.button(
+            "📋 " + ("استخدام النص اليدوي" if is_ar else "Use Manual Text"),
+            key="cv_use_manual_text_btn"
+        ):
+            if manual_text.strip():
+                st.session_state.cv_manual_text = manual_text
+                st.success("✅ " + ("تم حفظ النص اليدوي!" if is_ar else "Manual text saved!"))
+            else:
+                st.warning("⚠️ " + ("الرجاء إدخال نص!" if is_ar else "Please enter text!"))
+
     if st.button(
         "✨ " + ("تفريغ الكلمات والصورة على ورقة الخلفية" if is_ar else "Extract Text & Profile on Letterhead"),
         type="primary", width="stretch", key="cv_extract_render_btn"
@@ -1240,48 +2124,74 @@ def _render_merge_section(is_ar: bool):
             right_cm = st.session_state.get("cv_bg_right_cm", 1.0)
 
             with st.spinner("⏳ " + ("جارٍ استخراج النص والصورة..." if is_ar else "Extracting text and profile...")):
-                # Extract text using OCR with position info
-                ocr_data = extract_text_and_boxes_from_image(cv_bytes, "cv_img.jpg")
-                words = ocr_data.get('words', [])
+                # Check if manual text is provided
+                if st.session_state.get('cv_manual_text'):
+                    # Use manual text
+                    manual_text = st.session_state.cv_manual_text
+                    cleaned_lines = manual_text.split('\n')
+                    # Clean each line
+                    final_lines = []
+                    for line in cleaned_lines:
+                        cleaned_line, _, _, _ = remove_emails_and_phones_from_text(line)
+                        if cleaned_line.strip():
+                            final_lines.append(cleaned_line)
+                    cleaned_lines = final_lines
+                    cv_bytes_for_ocr = cv_bytes  # For profile extraction
+                else:
+                    # Extract from CV
+                    # Convert PDF to image if needed for OCR
+                    cv_bytes_for_ocr = cv_bytes
+                    if "cv_pdf_bytes" in st.session_state and FITZ_AVAILABLE:
+                        doc = fitz.open(stream=cv_bytes, filetype="pdf")
+                        mat = fitz.Matrix(150 / 72, 150 / 72)
+                        pix = doc[0].get_pixmap(matrix=mat, alpha=False)
+                        # Convert pixmap to PIL Image then to bytes
+                        img_data = pix.tobytes("png")
+                        cv_bytes_for_ocr = img_data
+                        doc.close()
 
-                # Sort words by position (top to bottom, left to right)
-                words_sorted = sorted(words, key=lambda w: (w.get('top', 0), w.get('left', 0)))
+                    # Extract text using OCR with position info
+                    ocr_data = extract_text_and_boxes_from_image(cv_bytes_for_ocr, "cv_img.jpg")
+                    words = ocr_data.get('words', [])
 
-                # Group words into lines based on y-position
-                lines = []
-                current_line = []
-                current_y = None
-                y_threshold = 15  # Pixels to consider same line
+                    # Sort words by position (top to bottom, left to right)
+                    words_sorted = sorted(words, key=lambda w: (w.get('top', 0), w.get('left', 0)))
 
-                for word in words_sorted:
-                    text = word.get('text', '').strip()
-                    if not text:
-                        continue
+                    # Group words into lines based on y-position
+                    lines = []
+                    current_line = []
+                    current_y = None
+                    y_threshold = 15  # Pixels to consider same line
 
-                    word_y = word.get('top', 0)
-                    if current_y is None:
-                        current_y = word_y
-                        current_line = [text]
-                    elif abs(word_y - current_y) < y_threshold:
-                        current_line.append(text)
-                    else:
-                        if current_line:
-                            lines.append(' '.join(current_line))
-                        current_line = [text]
-                        current_y = word_y
+                    for word in words_sorted:
+                        text = word.get('text', '').strip()
+                        if not text:
+                            continue
 
-                if current_line:
-                    lines.append(' '.join(current_line))
+                        word_y = word.get('top', 0)
+                        if current_y is None:
+                            current_y = word_y
+                            current_line = [text]
+                        elif abs(word_y - current_y) < y_threshold:
+                            current_line.append(text)
+                        else:
+                            if current_line:
+                                lines.append(' '.join(current_line))
+                            current_line = [text]
+                            current_y = word_y
 
-                # Clean text: remove all phone numbers and emails from each line
-                cleaned_lines = []
-                for line in lines:
-                    cleaned_line, _, _, _ = remove_emails_and_phones_from_text(line)
-                    if cleaned_line.strip():
-                        cleaned_lines.append(cleaned_line)
+                    if current_line:
+                        lines.append(' '.join(current_line))
 
-                # Extract profile image
-                profile_img = _extract_profile_image(cv_bytes)
+                    # Clean text: remove all phone numbers and emails from each line
+                    cleaned_lines = []
+                    for line in lines:
+                        cleaned_line, _, _, _ = remove_emails_and_phones_from_text(line)
+                        if cleaned_line.strip():
+                            cleaned_lines.append(cleaned_line)
+
+                # Extract profile image (use converted image if PDF)
+                profile_img = _extract_profile_image(cv_bytes_for_ocr)
 
                 # Render on background
                 merged_img_bytes, merged_pdf_bytes = _render_text_on_background(
@@ -1294,7 +2204,9 @@ def _render_merge_section(is_ar: bool):
                 # Show stats
                 total_phones = 0
                 total_emails = 0
-                for line in lines:
+                # Use original lines for stats (before cleaning)
+                source_lines = st.session_state.get('cv_manual_text', '').split('\n') if st.session_state.get('cv_manual_text') else lines
+                for line in source_lines:
                     _, p, e, _ = remove_emails_and_phones_from_text(line)
                     total_phones += len(p)
                     total_emails += len(e)
@@ -1407,12 +2319,12 @@ def remove_emails_and_phones_from_text(text):
                 labels_found.append(match)
             cleaned = cleaned.replace(match, "")
 
-    # Find and remove emails
+    # Find and remove emails (replace with empty string so nothing remains visible)
     emails_found = re.findall(EMAIL_PATTERN, cleaned)
     for email in sorted(set(emails_found), key=len, reverse=True):
-        cleaned = cleaned.replace(email, "[EMAIL REMOVED]")
+        cleaned = cleaned.replace(email, "")
 
-    # Find and remove phones (longest matches first)
+    # Find and remove phones (longest matches first) — replace with empty string
     all_phones = []
     for pattern in PHONE_PATTERNS:
         matches = re.findall(pattern, cleaned)
@@ -1422,7 +2334,11 @@ def remove_emails_and_phones_from_text(text):
     for phone in sorted(set(all_phones), key=len, reverse=True):
         if phone not in phones_found:
             phones_found.append(phone)
-        cleaned = cleaned.replace(phone, "[PHONE REMOVED]")
+        cleaned = cleaned.replace(phone, "")
+
+    # Collapse leftover multiple spaces / separators caused by removals
+    cleaned = re.sub(r'\s*[|•·/,\-]\s*', ' ', cleaned)  # remove leftover separators
+    cleaned = re.sub(r'\s{2,}', ' ', cleaned).strip()     # collapse multiple spaces
 
     return cleaned, phones_found, emails_found, labels_found
 
@@ -1928,9 +2844,22 @@ def render_cv_privacy_cleaner_content():
 
             if is_pdf:
                 try:
-                    if 'cv_original_text' not in st.session_state:
+                    # Always try to extract text if not present or if empty
+                    if 'cv_original_text' not in st.session_state or not st.session_state.get('cv_original_text', '').strip():
                         pdf_text = extract_text_from_pdf(io.BytesIO(raw_bytes))
                         st.session_state.cv_original_text = pdf_text
+                        # Fallback: if pdfplumber returns empty, try fitz (PyMuPDF)
+                        if not pdf_text.strip() and FITZ_AVAILABLE:
+                            try:
+                                doc = fitz.open(stream=raw_bytes, filetype="pdf")
+                                fitz_text = ""
+                                for page in doc:
+                                    fitz_text += page.get_text()
+                                doc.close()
+                                if fitz_text.strip():
+                                    st.session_state.cv_original_text = fitz_text
+                            except:
+                                pass
                     st.text_area("PDF Content", st.session_state.get('cv_original_text', ''), height=400, key="cv_original_pdf")
                 except Exception as e:
                     st.error(t("cv_error", lang) + ": " + str(e))
@@ -2005,6 +2934,23 @@ def render_cv_privacy_cleaner_content():
                             st.session_state.cv_cleaned_pdf_bytes = cleaned_pdf_bytes
                             st.session_state.cv_emails_count = email_count
                             st.session_state.cv_phones_count = phone_count
+
+                            # Try to extract text if not already present
+                            if not st.session_state.get('cv_original_text', '').strip():
+                                pdf_text = extract_text_from_pdf(io.BytesIO(st.session_state.cv_pdf_bytes))
+                                if not pdf_text.strip() and FITZ_AVAILABLE:
+                                    try:
+                                        doc = fitz.open(stream=st.session_state.cv_pdf_bytes, filetype="pdf")
+                                        fitz_text = ""
+                                        for page in doc:
+                                            fitz_text += page.get_text()
+                                        doc.close()
+                                        if fitz_text.strip():
+                                            pdf_text = fitz_text
+                                    except:
+                                        pass
+                                st.session_state.cv_original_text = pdf_text
+
                             if st.session_state.get('cv_original_text'):
                                 c_txt, _, _, l_found = remove_emails_and_phones_from_text(st.session_state.cv_original_text)
                                 st.session_state.cv_cleaned_text = c_txt
@@ -2218,6 +3164,19 @@ def render_cv_privacy_cleaner_content():
                 st.info("ℹ️ " + ("تم حفظ PDF مع الحفاظ على الصور والتنسيق الأصلي. الإيميلات وأرقام الهواتف محذوفة." if is_ar else "PDF saved preserving images and original format. Emails and phone numbers removed."))
 
                 base_raw = os.path.splitext(st.session_state.get('cv_file_name', 'cv.pdf'))[0]
+
+                # Show cleaned text if available
+                if st.session_state.get('cv_cleaned_text'):
+                    with st.expander("📄 " + ("النص بعد التنظيف" if is_ar else "Cleaned Text Preview")):
+                        st.text_area("Cleaned Text", st.session_state.cv_cleaned_text, height=200, key="cv_clean_txt_prev_pdf", disabled=True)
+                        st.download_button(
+                            label="⬇️ " + ("تحميل النص المنظف (.txt)" if is_ar else "Download Text (.txt)"),
+                            data=st.session_state.cv_cleaned_text.encode('utf-8'),
+                            file_name=f"cleaned_{base_raw}.txt",
+                            mime="text/plain",
+                            width='stretch',
+                            key="cv_dl_clean_txt_from_pdf"
+                        )
 
                 # AI Translation to Arabic (smart, not literal) — for PDF cleaned text
                 if st.session_state.get('cv_cleaned_text'):
