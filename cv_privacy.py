@@ -1540,8 +1540,6 @@ def _render_text_on_background(text_lines, bg_bytes, bg_ext, header_px, footer_p
             font_paths.extend([
                 os.path.join(fonts_dir, "NotoSansArabic-Regular.ttf"),
                 os.path.join(fonts_dir, "NotoSansArabic-Bold.ttf"),
-                os.path.join(fonts_dir, "Amiri-Regular.ttf"),
-                os.path.join(fonts_dir, "Amiri-Bold.ttf"),
                 os.path.join(fonts_dir, "DejaVuSans.ttf"),
             ])
 
@@ -1591,7 +1589,8 @@ def _render_text_on_background(text_lines, bg_bytes, bg_ext, header_px, footer_p
         def _shape_arabic(line):
             return _bidi_display(_ar.reshape(line))
         _HAS_ARABIC = True
-    except Exception:
+    except Exception as e:
+        print(f"[DEBUG] Arabic libraries not available: {e}")
         _HAS_ARABIC = False
         def _shape_arabic(line):
             return line
@@ -1689,6 +1688,16 @@ def _render_text_on_background(text_lines, bg_bytes, bg_ext, header_px, footer_p
                     display_line = sub_line
                     text_x = text_area_left
 
+                # For Arabic text, try RTL rendering
+                if _has_arabic(sub_line):
+                    try:
+                        # Right-align Arabic text
+                        bbox = draw.textbbox((0, 0), display_line, font=font)
+                        text_w = bbox[2] - bbox[0]
+                        text_x = text_area_right - text_w
+                    except:
+                        text_x = text_area_left
+
                 draw.text((text_x, y_pos), display_line, fill=(0, 0, 0), font=font)
 
                 if is_header:
@@ -1700,10 +1709,76 @@ def _render_text_on_background(text_lines, bg_bytes, bg_ext, header_px, footer_p
                 draw.text((text_area_left, y_pos), sub_line, fill=(0, 0, 0), font=body_font)
                 y_pos += line_height
 
-    # Output as PNG bytes
+    # Output as PNG bytes using reportlab for better Arabic support
     img_out = io.BytesIO()
-    bg_img.save(img_out, format="PNG")
-    merged_img_bytes = img_out.getvalue()
+    if REPORTLAB_AVAILABLE:
+        try:
+            # Use reportlab to render the image with proper Arabic support
+            from reportlab.lib.utils import ImageReader
+            from reportlab.pdfgen import canvas
+            from reportlab.lib.pagesizes import letter
+            from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+            from reportlab.platypus import Paragraph
+            from reportlab.lib.enums import TA_RIGHT, TA_LEFT
+            from reportlab.pdfbase import pdfmetrics
+            from reportlab.pdfbase.ttfonts import TTFont
+            
+            # Register Arabic font if available
+            if font_path and font_path.endswith('.ttf'):
+                try:
+                    pdfmetrics.registerFont(TTFont('ArabicFont', font_path))
+                    font_name = 'ArabicFont'
+                except:
+                    font_name = 'Helvetica'
+            else:
+                font_name = 'Helvetica'
+            
+            # Create PDF with Arabic text
+            pdf_buffer = io.BytesIO()
+            c = canvas.Canvas(pdf_buffer, pagesize=(bg_w, bg_h))
+            
+            # Draw background image
+            img_reader = ImageReader(io.BytesIO(bg_img.convert("RGB").tobytes()))
+            c.drawImage(img_reader, 0, 0, width=bg_w, height=bg_h, mask='auto')
+            
+            # Draw text lines with Arabic support
+            from reportlab.pdfbase.pdfmetrics import stringWidth
+            from reportlab.lib.enums import TA_RIGHT
+            
+            c.setFont(font_name, 12)
+            c.setFillColorRGB(0, 0, 0)
+            
+            y_pos = content_top + 20
+            line_height = 25
+            
+            for line in text_lines:
+                if y_pos + line_height > content_bottom:
+                    break
+                
+                if not line.strip():
+                    y_pos += 10
+                    continue
+                
+                # Check if Arabic and use right alignment
+                if _has_arabic(line):
+                    c.drawRightString(text_area_right, y_pos, line, font_name, 12)
+                else:
+                    c.drawString(text_area_left, y_pos, line, font_name, 12)
+                
+                y_pos += line_height
+            
+            c.save()
+            merged_img_bytes = pdf_buffer.getvalue()
+        except Exception as e:
+            print(f"[DEBUG] Reportlab rendering failed: {e}")
+            # Fallback to PIL
+            img_out = io.BytesIO()
+            bg_img.save(img_out, format="PNG")
+            merged_img_bytes = img_out.getvalue()
+    else:
+        img_out = io.BytesIO()
+        bg_img.save(img_out, format="PNG")
+        merged_img_bytes = img_out.getvalue()
 
     # Output as PDF bytes using fitz (PyMuPDF) for proper PDF generation
     pdf_out = io.BytesIO()
