@@ -3935,6 +3935,121 @@ def render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search", 
                 _img.save(_buf, format='PNG', optimize=True)
                 return _buf.getvalue()
 
+            def _build_worker_pdf_bytes():
+                """Build a real A4 PDF (Arabic-safe via reportlab) with the worker's registered data."""
+                try:
+                    from reportlab.lib.pagesizes import A4
+                    from reportlab.lib.units import cm
+                    from reportlab.lib import colors
+                    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+                    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+                    from reportlab.lib.enums import TA_RIGHT, TA_LEFT, TA_CENTER
+                    from reportlab.pdfbase import pdfmetrics
+                    from reportlab.pdfbase.ttfonts import TTFont
+                    import arabic_reshaper
+                    from bidi.algorithm import get_display
+                    import os, io as _io
+
+                    def shape(ln):
+                        if ln is None:
+                            return ""
+                        try:
+                            return get_display(arabic_reshaper.reshape(str(ln)))
+                        except Exception:
+                            return str(ln)
+
+                    def esc(s):
+                        s = str(s)
+                        s = s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+                        return s
+
+                    # Register an Arabic-capable font (prefer bundled fonts, then system fonts)
+                    _font = "Helvetica"
+                    _font_bold = "Helvetica-Bold"
+                    _font_candidates = [
+                        (os.path.join("fonts", "NotoSansArabic-Regular.ttf"), "NotoSansArabic"),
+                        (os.path.join("fonts", "NotoSansArabic-Bold.ttf"), "NotoSansArabic-Bold"),
+                        (os.path.join("fonts", "Amiri-Regular.ttf"), "Amiri"),
+                        (os.path.join("fonts", "DejaVuSans.ttf"), "DejaVuSans"),
+                    ]
+                    for _fp, _name in _font_candidates:
+                        if os.path.exists(_fp):
+                            try:
+                                pdfmetrics.registerFont(TTFont(_name, _fp))
+                                _font = _name
+                                _font_bold = _name
+                                break
+                            except Exception:
+                                continue
+
+                    def pdf_style(size=11, align=None, bold=False, leading=None):
+                        if align is None:
+                            align = TA_RIGHT if is_ar else TA_LEFT
+                        return ParagraphStyle(
+                            'pdf',
+                            fontName=(_font_bold if bold else _font),
+                            fontSize=size,
+                            leading=leading or (size * 1.45),
+                            alignment=align,
+                            spaceAfter=5,
+                            wordWrap='RTL' if is_ar else 'LTR',
+                        )
+
+                    buffer = _io.BytesIO()
+                    doc = SimpleDocTemplate(
+                        buffer, pagesize=A4,
+                        leftMargin=1.8 * cm, rightMargin=1.8 * cm,
+                        topMargin=1.6 * cm, bottomMargin=1.6 * cm,
+                        title=str(worker_name),
+                        author="Alsaeed Alwazzan",
+                    )
+                    story = []
+                    story.append(Paragraph(shape('البيانات الكاملة المسجلة للعامل' if is_ar else 'Complete Registered Worker Data'), pdf_style(15, TA_CENTER, bold=True, leading=22)))
+                    story.append(Paragraph(shape('👤 ' + (worker_name or 'Worker')), pdf_style(13, TA_CENTER, bold=True, leading=20)))
+                    story.append(Spacer(1, 6))
+                    story.append(Paragraph(
+                        shape(f"{'إجمالي الحقول' if is_ar else 'Total'}: {total_fields_count}  |  {'المسجلة' if is_ar else 'Filled'}: {filled_count}  |  📅 {_now_str}"),
+                        pdf_style(9, TA_CENTER, leading=14)))
+                    story.append(Spacer(1, 10))
+
+                    for _sec_key, _sec_title in sections_def:
+                        _sec_items = [item for item in visible_fields if classify_field(item) == _sec_key]
+                        if not _sec_items:
+                            continue
+                        story.append(Paragraph(shape(_sec_title), pdf_style(11.5, TA_RIGHT if is_ar else TA_LEFT, bold=True, leading=17)))
+                        _rows = [[shape('المField' if is_ar else 'Field'), shape('القيمة' if is_ar else 'Value')]]
+                        for _it in _sec_items:
+                            _rows.append([shape(_it['label']), shape(_fmt_print_val(_it))])
+                        _tbl = Table(_rows, colWidths=[4.4 * cm, 11.2 * cm])
+                        _tbl.setStyle(TableStyle([
+                            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#111111')),
+                            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+                            ('FONTNAME', (0, 0), (-1, 0), _font_bold),
+                            ('FONTSIZE', (0, 0), (-1, -1), 9.5),
+                            ('FONTNAME', (0, 1), (-1, -1), _font),
+                            ('ALIGN', (0, 0), (-1, -1), 'RIGHT' if is_ar else 'LEFT'),
+                            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                            ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#999999')),
+                            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f2f2f2')]),
+                            ('TOPPADDING', (0, 0), (-1, -1), 4),
+                            ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+                            ('LEFTPADDING', (0, 0), (-1, -1), 6),
+                            ('RIGHTPADDING', (0, 0), (-1, -1), 6),
+                        ]))
+                        story.append(_tbl)
+                        story.append(Spacer(1, 10))
+
+                    story.append(Spacer(1, 14))
+                    story.append(Paragraph(
+                        shape('تم الاستخراج من قاعدة بيانات النظام بدقة كاملة' if is_ar else 'Extracted from system database with complete fidelity.'),
+                        pdf_style(8, TA_CENTER, leading=12)))
+                    doc.build(story)
+                    buffer.seek(0)
+                    return buffer.read()
+                except Exception as _e:
+                    print(f"[DEBUG] _build_worker_pdf_bytes error: {_e}", flush=True)
+                    return None
+
             _png_state_key = f'worker_png_{key_prefix}_{worker_id}'
             if st.button('📸 ' + ('حفظ كصورة PNG (تعمل على الواتساب ✅)' if is_ar else 'Save as PNG image (WhatsApp-ready ✅)'), key=f'mkpng_{key_prefix}_{worker_id}', width='stretch'):
                 with st.spinner('⏳ ' + ('جاري تجهيز الصورة...' if is_ar else 'Rendering image...')):
@@ -3946,14 +4061,35 @@ def render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search", 
             _png_data = st.session_state.get(_png_state_key)
             if _png_data:
                 st.image(_png_data, caption=('معاينة الصورة — جاهزة للرفع على الواتساب ✅' if is_ar else 'Preview — ready for WhatsApp ✅'))
-                st.download_button(
-                    '⬇️ ' + ('تحميل الصورة PNG' if is_ar else 'Download PNG image'),
-                    data=_png_data,
-                    file_name=f'{_safe_name}.png',
-                    mime='image/png',
-                    key=f'dlpng_{key_prefix}_{worker_id}',
-                    width='stretch'
-                )
+                dl_png, dl_pdf = st.columns(2)
+                with dl_png:
+                    st.download_button(
+                        '⬇️ ' + ('تحميل الصورة PNG' if is_ar else 'Download PNG image'),
+                        data=_png_data,
+                        file_name=f'{_safe_name}.png',
+                        mime='image/png',
+                        key=f'dlpng_{key_prefix}_{worker_id}',
+                        width='stretch'
+                    )
+                with dl_pdf:
+                    _pdf_state_key = f'worker_pdf_{key_prefix}_{worker_id}'
+                    if st.button('📄 ' + ('إنشاء وتحميل PDF' if is_ar else 'Create & Download PDF'), key=f'mkpdf_{key_prefix}_{worker_id}', width='stretch'):
+                        with st.spinner('⏳ ' + ('جاري تجهيز ملف PDF...' if is_ar else 'Rendering PDF...')):
+                            try:
+                                st.session_state[_pdf_state_key] = _build_worker_pdf_bytes()
+                            except Exception as _pxe:
+                                st.session_state[_pdf_state_key] = None
+                                st.error('❌ ' + str(_pxe))
+                    _pdf_data = st.session_state.get(_pdf_state_key)
+                    if _pdf_data:
+                        st.download_button(
+                            '⬇️ ' + ('تحميل PDF' if is_ar else 'Download PDF'),
+                            data=_pdf_data,
+                            file_name=f'{_safe_name}.pdf',
+                            mime='application/pdf',
+                            key=f'dlpdf_{key_prefix}_{worker_id}',
+                            width='stretch'
+                        )
             st.download_button(
                 "⬇️ " + ("تحميل نسخة الطباعة (HTML)" if is_ar else "Download printable (HTML)"),
                 data=_standalone_html.encode('utf-8'),
