@@ -118,9 +118,6 @@ TRANSLATIONS = {
     "file_type": {"ar": "نوع الملف", "en": "File Type"},
     "no_file_uploaded": {"ar": "لم يتم رفع أي ملف بعد", "en": "No file uploaded yet"},
     "translating_wait": {"ar": "جارٍ الترجمة... يرجى الانتظار", "en": "Translating... Please wait"},
-    "cv_translate_ai_label": {"ar": "ترجمة النص بالذكاء الاصطناعي إلى العربية", "en": "Translate to Arabic (AI)"},
-    "cv_translated_title": {"ar": "النص المترجم إلى العربية (ذكاء اصطناعي)", "en": "Translated Text to Arabic (AI)"},
-    "cv_download_translated": {"ar": "تحميل النص المترجم (.txt)", "en": "Download Translated Text (.txt)"},
 
     # Permissions
     "permissions_title": {"ar": "إدارة الصلاحيات", "en": "Permissions Management"},
