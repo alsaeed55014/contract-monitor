@@ -3627,13 +3627,27 @@ def render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search", 
                         
                         # Nationality Flag
                         _flag_path = None
-                        if any(k in str(_it2['label']).lower() for k in ['nationality', 'الجنسية']):
+                        _is_nat = any(k in str(_it2['label']).lower() for k in ['nationality', 'الجنسية'])
+                        if _is_nat:
                              try:
                                 _nc = _get_nationality_code(_it2['value'])
                                 if _nc:
                                     _flag_res = _rq.get(f'https://flagcdn.com/w160/{str(_nc).lower()}.png', timeout=5)
                                     _flag_path = _io.BytesIO(_flag_res.content)
                              except: pass
+
+                        # Gender Badge
+                        _is_gen = any(k in str(_it2['label']).lower() for k in ['gender', 'الجنس', 'جنس'])
+                        _gen_color = None
+                        _gen_text = ''
+                        if _is_gen:
+                            _lv = str(_vv).lower()
+                            if any(w in _lv for w in ['female', 'أنثى', 'انثى', 'اناث', 'أناث', 'امرأة', 'امراة']) or _lv in ['f', 'أنثى', 'انثى']:
+                                _gen_color = Color(0.925, 0.251, 0.478) # Pink
+                                _gen_text = 'أنثى' if is_ar else 'Female'
+                            elif any(w in _lv for w in ['male', 'ذكر', 'رجل']) or _lv in ['m', 'ذكر']:
+                                _gen_color = Color(0.125, 0.588, 0.953) # Blue
+                                _gen_text = 'ذكر' if is_ar else 'Male'
 
                         c.setFillColor(Color(0, 0, 0))
                         c.rect(_M, _y - 30, _CW, 30, fill=0, stroke=1)
@@ -3642,10 +3656,20 @@ def render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search", 
                         c.setFont('ArabicRegular', 26)
                         
                         _x_vv = _M + _TXTPAD
+                        # Draw Flag first
                         if _flag_path:
                             c.drawImage(ImageReader(_flag_path), _x_vv, _y - 28, width=40, height=25)
                             _x_vv += 50
-                            
+                        # Draw Gender Badge
+                        if _gen_color:
+                            c.setFillColor(_gen_color)
+                            c.roundRect(_x_vv, _y - 28, 100, 26, radius=13, fill=1, stroke=0)
+                            c.setFillColor(Color(1, 1, 1))
+                            c.setFont('ArabicBold', 18)
+                            c.drawCentredString(_x_vv + 50, _y - 22, _sh(_gen_text))
+                            _x_vv += 110
+                        # Draw Value text
+                        c.setFillColor(Color(0, 0, 0))
                         c.drawRightString(_x_vv, _y - 22, _sh(_vv))
                         _y -= 36
 
