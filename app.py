@@ -3718,12 +3718,11 @@ def render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search", 
 
                 def _row_h(_en, _textw):
                     _comb, _lab, _labw, _vlines = _plan(_en, _textw)
-                    if _comb:
-                        _n = len(_vlines)
-                    else:
-                        _n = len(_vlines) + 1
-                    return max(56, _n * _LH + _VPAD * 2)
-
+                    # Use a safer calculation for height: 
+                    # Number of lines * LH + some padding
+                    _lines_count = len(_vlines) + (1 if not _comb else 0)
+                    _h = max(_lines_count * _LH + _VPAD * 2, 56)
+                    return _h
                 _layout, _i = [], 0
                 while _i < len(_rows):
                     _e = _rows[_i]
@@ -3812,16 +3811,16 @@ def render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search", 
                         if _comb:
                             c.setFont(_T_VAL, _S_VAL)
                             c.drawRightString(_ix - _labw, _cy + 4, _sh(_vlines[0]))
-                            _vy = _cy - _LH + 4
+                            _vy = _cy + _LH + 4
                             for _ln in _vlines[1:]:
                                 c.drawRightString(_ix, _vy, _sh(_ln))
-                                _vy -= _LH
+                                _vy += _LH
                         else:
-                            _vy = _cy - _LH + 4
+                            _vy = _cy + _LH + 4
                             for _ln in _vlines:
                                 c.setFont(_T_VAL, _S_VAL)
                                 c.drawRightString(_ix, _vy, _sh(_ln))
-                                _vy -= _LH
+                                _vy += _LH
                     else:
                         if _en['gen'] in ('M', 'F'):
                             _col = Color(0.129, 0.588, 0.953) if _en['gen'] == 'M' else Color(0.925, 0.251, 0.478)
@@ -3846,16 +3845,16 @@ def render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search", 
                         if _comb:
                             c.setFont(_T_VAL, _S_VAL)
                             c.drawString(_x0 + _labw, _cy + 4, _sh(_vlines[0]))
-                            _vy = _cy - _LH + 4
+                            _vy = _cy + _LH + 4
                             for _ln in _vlines[1:]:
                                 c.drawString(_x0, _vy, _sh(_ln))
-                                _vy -= _LH
+                                _vy += _LH
                         else:
-                            _vy = _cy - _LH + 4
+                            _vy = _cy + _LH + 4
                             for _ln in _vlines:
                                 c.setFont(_T_VAL, _S_VAL)
                                 c.drawString(_x0, _vy, _sh(_ln))
-                                _vy -= _LH
+                                _vy += _LH
 
                 for _e in _layout:
                     if _e['t'] == 'sec':
