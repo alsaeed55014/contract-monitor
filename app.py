@@ -3791,7 +3791,7 @@ def render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search", 
                     if _rtl:
                         if _en['gen'] in ('M', 'F'):
                             _col = Color(0.129, 0.588, 0.953) if _en['gen'] == 'M' else Color(0.925, 0.251, 0.478)
-                            _g = '\u062\u0630\u0643\u0631' if _en['gen'] == 'M' else '\u0623\u0646\u062b\u0649'
+                            _g = '\u0630\u0643\u0631' if _en['gen'] == 'M' else '\u0623\u0646\u062b\u0649'
                             c.setFillColor(_col)
                             c.roundRect(_ix - 100, _cy + 2, 100, 28, 14, stroke=0, fill=1)
                             c.setFillColor(Color(1, 1, 1))
