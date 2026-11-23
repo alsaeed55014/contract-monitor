@@ -15,13 +15,11 @@ st_logs.txt
 st_output.txt
 
 # Project Specific & Secrets (DO NOT UPLOAD TO GITHUB)
+whatsapp_session/
 .whatsapp_session/
 src/.persist_login.json
 whatsapp_history.json
 whatsapp_history_*.json
-whatsapp_history_admin.json
-whatsapp_history_maya.json
-whatsapp_history_samar.json
 login_history.json
 online_users.json
 credentials.json
@@ -41,21 +39,30 @@ data/*.csv
 !data/candidates_sample.xlsx
 ignored_rows.json
 state.json
+legacy_attendance_php/
+attendance_system/
+archive_legacy/
 
-# Temporary files
+# Temporary files & output dumps
 barista_*.txt
 section_*.txt
 tail*.txt
 run_*.txt
 filter_*.txt
 between_*.txt
+experience_*.txt
+check_*.txt
+temp_*.txt
 
 # OS
 .DS_Store
 Thumbs.db
+nul
 
-# IDE
+# IDE & Dependencies
 .vscode/
 .idea/
 *.swp
 *.swo
+node_modules/
+package-lock.json

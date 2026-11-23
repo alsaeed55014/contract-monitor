@@ -1,33 +1,39 @@
 # WhatsApp Automation & Contract Monitor (2026 Edition)
 
-This is a premium WhatsApp automation and candidate matching system built with Streamlit and Selenium.
+نظام متكامل لإدارة ومراقبة العقود، مطابقة المرشحين، وأتمتة رسائل الواتساب، بالإضافة إلى منظف خصوصية السير الذاتية (CV Privacy Cleaner) وسجل حضور وجلسات المستخدمين.
 
-## 🚀 Local Deployment (Windows)
+## 🚀 التشغيل المحلي (Local Deployment - Windows)
 
-1. **Install Dependencies**:
+1. **تثبيت المتطلبات**:
    ```bash
    pip install -r requirements.txt
    ```
 
-2. **Run the App**:
+2. **تشغيل التطبيق**:
    ```bash
    streamlit run app.py
    ```
+   أو تشغيل ملف البداية:
+   ```bash
+   python main.py
+   ```
 
-## ☁️ Cloud Deployment (GitHub/Streamlit Cloud)
+## ☁️ النشر السحابي (Streamlit Cloud)
 
-1. **Push to GitHub**:
-   - The `.gitignore` file will ensure your private WhatsApp sessions and login credentials are not uploaded.
-   - The `requirements.txt` and `packages.txt` files are included for automatic environment setup on Streamlit Cloud.
+1. **الرفع على GitHub**:
+   - ملف `.gitignore` يضمن عدم رفع ملفات الجلسات الحساسة وبيانات الدخول.
+   - ملفات `requirements.txt` و `packages.txt` مجهزة للإعداد التلقائي على Streamlit Cloud (بما في ذلك متصفح Chrome ومحرك Tesseract OCR).
 
-2. **Streamlit Cloud Setup**:
-   - Connect your repository to [Streamlit Cloud](https://share.streamlit.io/).
-   - The system will automatically detect and install Chrome via `packages.txt`.
+2. **إعداد Streamlit Cloud**:
+   - اربط المستودع على [Streamlit Cloud](https://share.streamlit.io/).
+   - التطبيق يكتشف البيئة ويعمل تلقائياً.
 
-## 🛡️ Anti-Ban Security Features
-- **Dynamic User-Agents**: Mimics different browsers.
-- **Human-Like Interaction**: Random delays, mouse movements, and typing simulations.
-- **Session Persistence**: Keeps you logged in safely across restarts (when using a persistent disk).
+## 🛡️ الميزات الرئيسية
+- **لوحة متابعة العقود**: تنبيهات ذكية للعقود المنتهية والمتبقية وإحصاءات دقيقة.
+- **محرك البحث الذكي ومطابقة المرشحين**: خوارزمية مطابقة جغرافية ومهنية متقدمة للمرشحين.
+- **منظف خصوصية السير الذاتية (CV Privacy Cleaner)**: إزالة الهواتف والإيميلات من ملفات PDF والصور مع دعم القوالب وخلفيات الهوية.
+- **سجل الحضور والجلسات**: تسجيل أوقات الدخول والخروج مع الكشف التلقائي عند إغلاق المتصفح (Beacon API).
+- **أتمتة الواتساب**: إرسال آمن متوافق مع معايير مكافحة الحظر (Anti-Ban Limits) وفواصل زمنية ذكية.
 
 ---
-*Developed for Alsaeed Alwazzan*
+*برمجة: السعيد الوزان*

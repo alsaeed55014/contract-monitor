@@ -303,7 +303,11 @@ class SmartSearchEngine:
                     results = results.sort_values(by='__geo_tier', ascending=True)
                     self.last_debug['matched_count'] = len(results)
 
-        # 2. Apply Filters
+        # 2. Apply Filters (AND logic)
+        # All enabled filters are applied sequentially, each narrowing the results.
+        # This means a row must satisfy EVERY enabled filter to appear in the output.
+        # Example: age 16-35 AND domestic_worker AND no_huroob AND sponsor_transfer
+        #          → only workers matching ALL four conditions are returned.
         if filters:
             # Helper to parse dates
             def parse_dt(val):
@@ -457,19 +461,60 @@ class SmartSearchEngine:
                     results = results[results[trans_col].astype(str).str.contains(search_term, case=False, na=False)]
 
             # New: Filter by Domestic Worker (Iqama Profession)
+            # Restricted to ONLY "Domestic/House Maid" or "DH" in the profession column.
+            # No cities (Riyadh, Jeddah, etc.) and no non-domestic jobs allowed in that column.
             if filters.get('domestic_worker'):
                 prof_col = find_col(["What is the occupation listed on your Iqama", "المهنة في الإقامة", "Iqama Profession", "Occupation"])
                 if prof_col:
-                    # Keywords provided by user for Domestic Workers
+                    # Only specific domestic-worker / house-maid / DH terms.
                     keywords = [
-                        "house maid", "domestichelper", "domestic helper", "domestic workers", "dh", 
-                        "housemaid", "domestic worker", "home cleaner", "household worker", "maid", 
-                        "housekeeper", "home attendant", "home helper", "residential cleaner", 
-                        "private cleaner", "household assistant", "cleaning worker", "babysitter", 
-                        "personal maid", "dw", "hm"
+                        "dh", "housemaid", "house maid", "house-maid",
+                        "domestic worker", "domestic workers", "domestichelper", "domestic helper",
+                        "personal maid", "dw"
                     ]
-                    pattern = "|".join([re.escape(k) for k in keywords])
-                    results = results[results[prof_col].astype(str).str.contains(pattern, case=False, na=False, regex=True)]
+                    include_pattern = "|".join([re.escape(k) for k in keywords])
+                    matched = results[results[prof_col].astype(str).str.contains(include_pattern, case=False, na=False, regex=True)]
+
+                    # STRICT: Exclude rows where the PROFESSION COLUMN itself contains
+                    # city names or non-domestic job terms. This prevents "Riyadh", "Jeddah",
+                    # "SPA", "cashier", "waiter", "barista" etc. from appearing in results.
+                    profession_exclusion_terms = [
+                        # Saudi cities — must not appear in profession column
+                        "riyadh", "jeddah", "dammam", "makkah", "madinah", "taif", "tabuk",
+                        "hufuf", "khobar", "jubail", "yanbu", "najran", "abha", "khamis",
+                        "qatif", "buraidah", "hail", "sakaka", "arar", "jazan",
+                        # Non-domestic job terms — must not appear in profession column
+                        "spa", "massage", "cashier", "waiter", "barista", "cleaner",
+                        "cleaning", "office", "establishment", "facility"
+                    ]
+                    profession_exclusion_pattern = "|".join([re.escape(k) for k in profession_exclusion_terms])
+
+                    def _profession_is_clean(val):
+                        try:
+                            return not bool(re.search(profession_exclusion_pattern, str(val), re.IGNORECASE))
+                        except Exception:
+                            return True
+
+                    prof_clean_mask = matched[prof_col].apply(_profession_is_clean)
+                    results = matched[prof_clean_mask]
+
+                    # Extra safety: exclude any row where ANY column contains non-domestic job terms
+                    job_exclusion_terms = ["spa", "massage", "cashier", "waiter", "barista"]
+                    job_exclusion_pattern = "|".join([re.escape(k) for k in job_exclusion_terms])
+
+                    def _row_has_job_exclusion(row):
+                        for c in row.index:
+                            if str(c).startswith('__'):
+                                continue
+                            try:
+                                if re.search(job_exclusion_pattern, str(row[c]), re.IGNORECASE):
+                                    return True
+                            except Exception:
+                                continue
+                        return False
+
+                    job_exclusion_mask = matched.apply(_row_has_job_exclusion, axis=1)
+                    results = matched[~job_exclusion_mask]
 
             # ── New: Filter by Ready to Work Immediately (Yes/No) ──
             if filters.get('ready_to_work') in ('Yes', 'No'):

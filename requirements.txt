@@ -14,3 +14,8 @@ deep-translator
 pdfplumber
 undetected-chromedriver
 setuptools
+PyMuPDF
+pytesseract
+arabic-reshaper
+python-bidi
+reportlab

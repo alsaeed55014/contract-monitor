@@ -4,6 +4,7 @@ import os
 import sys
 import json
 import hashlib
+import threading
 import time
 from datetime import datetime, timedelta
 from typing import Dict, List, Any, Union
@@ -52,9 +53,15 @@ class AuthManager:
         self.users_file = users_file_path
         self.users = {}
         self.is_bilingual = True # Version marker for session refresh
+        self._cloud_sync_started = False
+        # 1. حمِّن المستخدمين من الملف المحلي أولاً حتى تظهر شاشة الدخول فوراً
         self.load_users()
+        # 2. مزامنة السحابة في خيط خلفي لا يمنع واجهة المستخدم
+        self._start_cloud_sync()
 
     def load_users(self):
+        """تحميل المستخدمين من المخبأ المحلي (users.json) فقط — سريع وبدون شبكة.
+        تتم مزامنة السحابة بشكل منفصل في خيط خلفي عبر _start_cloud_sync()."""
         if os.path.exists(self.users_file):
             try:
                 with open(self.users_file, 'r', encoding='utf-8') as f:
@@ -64,44 +71,6 @@ class AuthManager:
                 # Store error for UI feedback
                 self.load_error = str(e)
                 self.users = {}
-
-        # Silent cloud mirror (background only, no UI): Streamlit Cloud wipes
-        # the local filesystem on sleep/wake (the "Yes, get this app back up!"
-        # button reboots from the repo), so users.json alone would revert and
-        # password changes / new users would be lost. The hidden AppUsers
-        # worksheet is the source of truth across restarts.
-        try:
-            from src.logic.users_cloud import pull_users, push_users
-            cloud = pull_users()
-            if isinstance(cloud, dict) and cloud:
-                local_only = [u for u in self.users if u not in cloud]
-                for uname, cdata in cloud.items():
-                    if uname in self.users and isinstance(self.users[uname], dict):
-                        av = self.users[uname].get("avatar")
-                        self.users[uname].update({k: v for k, v in cdata.items() if k != "avatar"})
-                        if av and not self.users[uname].get("avatar"):
-                            self.users[uname]["avatar"] = av
-                    else:
-                        self.users[uname] = cdata
-                try:
-                    with open(self.users_file, 'w', encoding='utf-8') as f:
-                        json.dump({"users": self.users}, f, ensure_ascii=False, indent=4)
-                except Exception:
-                    pass
-                # Converge: push back any local-only users so nothing is lost
-                if local_only:
-                    try:
-                        push_users(self.users)
-                    except Exception:
-                        pass
-            elif cloud is not None:
-                # Sheet reachable but empty (first run): seed it from local
-                try:
-                    push_users(self.users)
-                except Exception:
-                    pass
-        except Exception:
-            pass
 
         # Ensure Default Admin
         if "admin" not in self.users:
@@ -115,6 +84,48 @@ class AuthManager:
                 "permissions": ["all"]
             }
             self.save_users()
+
+    def _start_cloud_sync(self):
+        """دمج مستخدمي السحابة على خيط خلفي بحيث لا تُحجب الواجهة أبداً."""
+        if self._cloud_sync_started:
+            return
+        self._cloud_sync_started = True
+        t = threading.Thread(target=self._pull_and_merge_cloud, daemon=True, name="auth-cloud-sync")
+        t.start()
+
+    def _pull_and_merge_cloud(self):
+        """جلب المستخدمين من ورقة السحابة ودمجهم في self.users (في الخلفية)."""
+        try:
+            from src.logic.users_cloud import pull_users, push_users
+            cloud = pull_users()
+        except Exception:
+            cloud = None
+        if not isinstance(cloud, dict) or not cloud:
+            return
+        try:
+            local_only = [u for u in self.users if u not in cloud]
+            for uname, cdata in cloud.items():
+                if uname in self.users and isinstance(self.users[uname], dict):
+                    av = self.users[uname].get("avatar")
+                    self.users[uname].update({k: v for k, v in cdata.items() if k != "avatar"})
+                    if av and not self.users[uname].get("avatar"):
+                        self.users[uname]["avatar"] = av
+                else:
+                    self.users[uname] = cdata
+            # Persist merged result locally so it survives cloud-unreachable restarts
+            try:
+                with open(self.users_file, 'w', encoding='utf-8') as f:
+                    json.dump({"users": self.users}, f, ensure_ascii=False, indent=4)
+            except Exception:
+                pass
+            # Converge: push back any local-only users so nothing is lost
+            if local_only:
+                try:
+                    push_users(self.users)
+                except Exception:
+                    pass
+        except Exception:
+            pass
 
     def save_users(self):
         try:
@@ -247,12 +258,30 @@ DEVICE_USER_COOKIE = "_rec_saved_user"
 DEVICE_PERSIST_COOKIE = "_rec_saved_persist"
 
 def get_device_saved_credentials() -> Dict[str, Any]:
-    """Read saved login convenience data from client browser cookies.
+    """Read saved login convenience data from client browser cookies or query params bootstrap.
 
-    Cookies carry username, encrypted password, and persist flag.
+    Works reliably on both localhost and Streamlit Cloud (where Cloudflare strips custom cookies).
     All data is stored client-side (this browser only) to survive restarts.
     There is no silent auto-login: the login form is always shown explicitly.
     """
+    # 1. Try query parameters bootstrap (most reliable across Streamlit Cloud / proxies)
+    try:
+        qp = st.query_params
+        if qp.get("_p") in ["1", "true", "True"]:
+            u_param = qp.get("_u", "")
+            if u_param:
+                u_clean = urllib.parse.unquote(u_param)
+                try:
+                    del qp["_p"]
+                    if "_u" in qp:
+                        del qp["_u"]
+                except Exception:
+                    pass
+                return {"u": u_clean, "p": "", "persist": True}
+    except Exception:
+        pass
+
+    # 2. Try client browser cookies (reliable on localhost)
     if hasattr(st, "context") and hasattr(st.context, "cookies"):
         try:
             cookies = st.context.cookies
@@ -268,14 +297,6 @@ def get_device_saved_credentials() -> Dict[str, Any]:
             pass
     return {"u": "", "p": "", "persist": False}
 
-def create_device_token(username: str, days: int = 30) -> str:
-    """Create a signed client-only authentication token for the specific device."""
-    expires_at = int(time.time()) + (days * 86400)
-    payload = f"{str(username).lower().strip()}:{expires_at}"
-    sig = hmac.new(DEVICE_REMEMBER_SECRET, payload.encode(), hashlib.sha256).hexdigest()
-    raw = f"{payload}:{sig}"
-    return base64.urlsafe_b64encode(raw.encode()).decode()
-
 @st.cache_data(ttl=3600, show_spinner=False)
 def get_base64_image(image_path):
     """Cache base64 encoded images to improve performance."""
@@ -285,6 +306,7 @@ def get_base64_image(image_path):
         return base64.b64encode(img_file.read()).decode()
 
 @st.cache_data(ttl=600, show_spinner=False)
+@st.cache_data(show_spinner=False)
 def get_css(lang='ar'):
     """Generate optimized CSS based on language direction."""
     direction = 'rtl' if lang == 'ar' else 'ltr'
@@ -2311,6 +2333,7 @@ try:
     from src.config import USERS_FILE, ASSETS_DIR
     from src.core.i18n import t, t_col, t_val
     from src.ui.whatsapp_ui import render_whatsapp_page
+    from src.ui.cv_privacy import render_cv_privacy_cleaner_content
 except ImportError as e:
     # Diagnostic: Check if 'src' exists
     import os
@@ -2375,18 +2398,6 @@ query_params = st.query_params
 if query_params.get('logout') == 'inactive':
     st.session_state.user = None
     st.session_state.force_logout_inactive = False
-    st.html(f"""
-    <script>
-    (function() {{
-        var exp0 = "; max-age=0; path=/;";
-        // Only clear the remember token (current session), NOT cookies
-        document.cookie = "{DEVICE_REMEMBER_COOKIE}=" + exp0;
-        document.cookie = "{DEVICE_USER_COOKIE}=" + exp0;
-        document.cookie = "{DEVICE_PERSIST_COOKIE}=" + exp0;
-        // Do NOT clear _rec_saved_* cookies - preserve user's "Remember Me" preference
-    }})();
-    </script>
-    """, unsafe_allow_javascript=True)
     st.query_params.clear()
     st.rerun()
 
@@ -3548,379 +3559,86 @@ def render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search", 
             )
             st.components.v1.html(_comp_html, height=900, scrolling=True)
 
-            # ── Server-side PNG image (valid file, WhatsApp-safe) ──
+            # ── Server-side PNG image (ReportLab + PyMuPDF for Arabic support) ──
             def _build_worker_png_bytes():
-                from PIL import Image as _PILImage, ImageDraw as _PILDraw, ImageFont as _PILFont
                 import io as _io
                 import os as _os
+                import fitz  # PyMuPDF
+                from reportlab.pdfgen import canvas
+                from reportlab.pdfbase import pdfmetrics
+                from reportlab.pdfbase.ttfonts import TTFont
+                from reportlab.lib.colors import Color
+                import arabic_reshaper as _ar_resh
+                from bidi.algorithm import get_display as _bidi_disp
                 import re as _rx2
+
+                _ar_rx = _rx2.compile(r'[؀-ۿ]')
+
+                _proj_font = os.path.join(os.path.dirname(__file__), 'fonts')
+                _ar = os.path.join(_proj_font, 'NotoSansArabic-Regular.ttf')
+                _ar_b = os.path.join(_proj_font, 'NotoSansArabic-Bold.ttf')
+
                 try:
-                    import arabic_reshaper as _ar_resh
-                    from bidi.algorithm import get_display as _bidi_disp
-                    _has_resh = True
+                    pdfmetrics.registerFont(TTFont('ArabicRegular', _ar))
+                    pdfmetrics.registerFont(TTFont('ArabicBold', _ar_b))
                 except Exception:
-                    _has_resh = False
-                try:
-                    import requests as _rq
-                    _has_rq = True
-                except Exception:
-                    _has_rq = False
-
-                _ar_rx = _rx2.compile(r'[\u0600-\u06FF]')
-                _emoji_rx = _rx2.compile('[\U0001F000-\U0001FAFF\u2600-\u27BF\u2B00-\u2BFF\uFE0F\u200D]')
-
-                def _pick(_paths, _size):
-                    for _p in _paths:
-                        if _p and _os.path.exists(_p):
-                            try:
-                                return _PILFont.truetype(_p, _size)
-                            except Exception:
-                                continue
-                    return _PILFont.load_default()
-
-                _winf = 'C:/Windows/Fonts/'
-                _dj = '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'
-                _dj_b = '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf'
-                _f_title = _pick([_winf + 'arialbd.ttf', _dj_b], 36)
-                _f_name = _pick([_winf + 'arialbd.ttf', _dj_b], 32)
-                _f_meta = _pick([_winf + 'arial.ttf', _dj], 23)
-                _f_sec = _pick([_winf + 'arialbd.ttf', _dj_b], 27)
-                _f_lab = _pick([_winf + 'arialbd.ttf', _dj_b], 25)
-                _f_val = _pick([_winf + 'arial.ttf', _dj], 26)
-                _f_prog = _pick([_winf + 'arial.ttf', _dj], 22)
-                _f_script = _pick([_winf + 'segoesc.ttf', _winf + 'segoescb.ttf'], 60)
-
-                def _clean(_t):
-                    return _emoji_rx.sub('', str(_t))
+                    pass
 
                 def _sh(_t):
-                    _t = _clean(_t)
-                    if _has_resh and _ar_rx.search(_t):
+                    _t = str(_t)
+                    if _ar_rx.search(_t):
                         try:
                             return _bidi_disp(_ar_resh.reshape(_t))
                         except Exception:
                             return _t
                     return _t
 
-                _rtl = bool(is_ar)
                 _W = 1440
                 _M = 40
                 _CW = _W - 2 * _M
-                _tmp = _PILImage.new('RGB', (10, 10), 'white')
-                _md = _PILDraw.Draw(_tmp)
-
-                def _tw(_t, _font):
-                    try:
-                        return _md.textlength(_sh(_t), font=_font)
-                    except Exception:
-                        return len(str(_t)) * 14
-
-                def _wrap(_t, _font, _maxw):
-                    _words = str(_t).split()
-                    _lines, _cur = [], ''
-                    for _w in _words:
-                        if _tw(_w, _font) > _maxw and len(_w) > 1:
-                            if _cur:
-                                _lines.append(_cur)
-                                _cur = ''
-                            _part = ''
-                            for _ch in _w:
-                                if _tw(_part + _ch, _font) <= _maxw:
-                                    _part += _ch
-                                else:
-                                    _lines.append(_part)
-                                    _part = _ch
-                            _cur = _part
-                            continue
-                        _cand = (_cur + ' ' + _w).strip()
-                        if _tw(_cand, _font) <= _maxw or not _cur:
-                            _cur = _cand
-                        else:
-                            _lines.append(_cur)
-                            _cur = _w
-                    if _cur:
-                        _lines.append(_cur)
-                    return _lines or ['']
-
-                def _is_nat(_itm):
-                    _c = f"{_itm['orig_label']} {_itm['label']}".lower()
-                    return any(k in _c for k in ['nationality', 'الجنسية', 'جنسية'])
-
-                def _is_gen(_itm):
-                    _c = f"{_itm['orig_label']} {_itm['label']}".lower()
-                    return (any(k in _c for k in ['gender', 'النوع', 'sex'])
-                            or _c.strip() in ['الجنس', 'جنس', 'gender']
-                            or ('الجنس' in _c and 'الجنسية' not in _c and 'جنسية' not in _c))
-
-                def _gen_kind(_v):
-                    _l = str(_v).lower().strip()
-                    if any(w in _l for w in ['female', 'أنثى', 'انثى', 'اناث', 'أناث', 'امرأة', 'امراة']) or _l in ['f', 'أنثى', 'انثى']:
-                        return 'F'
-                    if any(w in _l for w in ['male', 'ذكر', 'رجل']) or _l in ['m', 'ذكر']:
-                        return 'M'
-                    return ''
-
-                def _flag_img(_code):
-                    _ck = f'_flagpng_{str(_code).lower()}'
-                    if _ck in st.session_state and st.session_state[_ck] is not None:
-                        return st.session_state[_ck]
-                    _data = None
-                    if _has_rq:
-                        try:
-                            _r = _rq.get(f'https://flagcdn.com/w160/{str(_code).lower()}.png', timeout=10)
-                            if _r.status_code == 200 and _r.content:
-                                from PIL import Image as _P2
-                                _fim = _P2.open(_io.BytesIO(_r.content)).convert('RGB')
-                                _fim.thumbnail((144, 108))
-                                _data = _fim
-                        except Exception:
-                            _data = None
-                    st.session_state[_ck] = _data
-                    return _data
+                _TXTPAD = 16
 
                 _title_txt = 'البيانات الكاملة المسجلة للعامل' if is_ar else 'Complete Registered Worker Data'
                 _meta_txt = f"{'إجمالي الحقول' if is_ar else 'Total'}: {total_fields_count} | {'المسجلة' if is_ar else 'Filled'}: {filled_count} | {_now_str}"
-                _t_lines = _wrap(_title_txt, _f_title, _CW - 80)
-                _n_lines = _wrap(str(worker_name), _f_name, _CW - 80)
-                _m_lines = _wrap(_meta_txt, _f_meta, _CW - 80)
 
-                _LH = 34
-                _VPAD = 8
-                _CELLGAP = 12
-                _CELLW = (_CW - _CELLGAP) // 2
-                _TXTPAD = 16
+                _pdf_buf = _io.BytesIO()
+                c = canvas.Canvas(_pdf_buf, pagesize=(_W, 2000))
+                c.setFillColor(Color(0, 0, 0))
 
-                def _entry_text(_it2):
-                    if _it2['is_empty']:
-                        return ('غير مسجل' if is_ar else 'Not recorded')
-                    _vv = str(_it2['value'])
-                    if is_ar:
-                        try:
-                            _vv = t_val(_vv, 'ar', _it2['orig_label'])
-                        except Exception:
-                            pass
-                    return _vv
+                c.setFont('ArabicBold', 36)
+                c.drawCentredString(_W // 2, 1900, _sh(_title_txt))
+                c.setFont('ArabicRegular', 23)
+                c.setFillColor(Color(0.31, 0.31, 0.31))
+                c.drawCentredString(_W // 2, 1850, _sh(_meta_txt))
 
-                def _norm_lab(_label):
-                    _s = str(_label).strip()
-                    _s = _s.rstrip(':：').rstrip()
-                    return _s + ':'
-
-                def _cell_plan(_label, _vtext, _kind, _textw, _reserve):
-                    _avail = _textw - _reserve
-                    if _avail < 120:
-                        _avail = 120
-                    _lab_txt = _norm_lab(_label)
-                    _lab_lines = _wrap(_lab_txt + '  ', _f_lab, _avail)
-                    if not _lab_lines:
-                        _lab_lines = [_lab_txt]
-                    _vlines = _wrap(_vtext, _f_val, _avail)
-                    if not _vlines:
-                        _vlines = ['']
-                    _labw = _tw(_lab_lines[0], _f_lab)
-                    _comb = (len(_lab_lines) == 1 and len(_vlines) >= 1
-                             and (_labw + _tw(_vlines[0], _f_val) <= _avail))
-                    if _comb:
-                        _n = len(_lab_lines) + len(_vlines) - 1
-                    else:
-                        _n = len(_lab_lines) + len(_vlines)
-                    return (_comb, _labw, _lab_lines, _vlines, _n)
-
-                def _cell_h(_label, _vtext, _kind, _textw, _reserve):
-                    _h = _cell_plan(_label, _vtext, _kind, _textw, _reserve)[4] * _LH + _VPAD * 2
-                    return max(_h, 56)
-
-                _flat = []
+                _y = 1780
                 for _sk2, _stitle2 in sections_def:
                     _items2 = [it for it in visible_fields if classify_field(it) == _sk2]
                     if not _items2:
                         continue
-                    _flat.append({'t': 'sec', 'lines': _wrap(f'{_stitle2} ({len(_items2)})', _f_sec, _CW - 60)})
+                    c.setFillColor(Color(0, 0, 0))
+                    c.rect(_M, _y - 40, _CW, 46, fill=1, stroke=0)
+                    c.setFillColor(Color(1, 1, 1))
+                    c.setFont('ArabicBold', 27)
+                    c.drawCentredString(_W // 2, _y - 23, _sh(f"{_stitle2} ({len(_items2)})"))
+                    _y -= 52
                     for _it2 in _items2:
-                        _kind2, _g2, _flag2 = 'text', '', None
-                        _vtext2 = _entry_text(_it2)
-                        if not _it2['is_empty']:
-                            if _is_nat(_it2):
-                                try:
-                                    _nc2 = _get_nationality_code(_it2['value'])
-                                except Exception:
-                                    _nc2 = None
-                                if _nc2:
-                                    _nc2 = str(_nc2).strip().lower()
-                                    try:
-                                        _vtext2 = get_country_display_name(_nc2, 'ar' if is_ar else 'en') or _vtext2
-                                    except Exception:
-                                        pass
-                                    _flag2 = _flag_img(_nc2)
-                            elif _is_gen(_it2):
-                                _g2 = _gen_kind(_vtext2)
-                                if _g2:
-                                    _kind2 = 'gender'
-                        _flat.append({'t': 'row', 'label': str(_it2['label']), 'vtext': _vtext2,
-                                      'kind': _kind2, 'g': _g2, 'flag': _flag2, 'empty': bool(_it2['is_empty'])})
+                        _vv = str(_it2['value']) if not _it2['is_empty'] else ('غير مسجل' if is_ar else 'Not recorded')
+                        c.setFillColor(Color(0, 0, 0))
+                        c.rect(_M, _y - 30, _CW, 30, fill=0, stroke=1)
+                        c.setFont('ArabicBold', 25)
+                        c.drawRightString(_W - _M - _TXTPAD, _y - 22, _sh(f"{_it2['label']}:"))
+                        c.setFont('ArabicRegular', 26)
+                        c.drawRightString(_M + _TXTPAD + 200, _y - 22, _sh(_vv))
+                        _y -= 36
 
-                _TEXTW_CELL = _CELLW - _TXTPAD * 2
-                _TEXTW_FULL = _CW - _TXTPAD * 2
+                c.showPage()
+                c.save()
 
-                def _res_of(_en):
-                    if _en['kind'] == 'gender' and _en['g'] in ('M', 'F'):
-                        return 140
-                    if _en['flag'] is not None:
-                        return 100
-                    return 0
-
-                _layout = []
-                _i = 0
-                while _i < len(_flat):
-                    _en = _flat[_i]
-                    if _en['t'] == 'sec':
-                        _layout.append(_en)
-                        _i += 1
-                        continue
-                    if _i + 1 < len(_flat) and _flat[_i + 1]['t'] == 'row':
-                        _en2 = _flat[_i + 1]
-                        _h1 = _cell_h(_en['label'], _en['vtext'], _en['kind'], _TEXTW_CELL, _res_of(_en))
-                        _h2 = _cell_h(_en2['label'], _en2['vtext'], _en2['kind'], _TEXTW_CELL, _res_of(_en2))
-                        _layout.append({'t': 'pair', 'a': _en, 'b': _en2, 'h': max(_h1, _h2)})
-                        _i += 2
-                    else:
-                        _layout.append({'t': 'single', 'a': _en,
-                                        'h': _cell_h(_en['label'], _en['vtext'], _en['kind'], _TEXTW_FULL, _res_of(_en))})
-                        _i += 1
-
-                _head_h = len(_t_lines) * 44 + len(_n_lines) * 40 + len(_m_lines) * 28 + 60
-                _H = 32 + _head_h + 16
-                for _e in _layout:
-                    _H += (52 if _e['t'] == 'sec' else _e['h']) + 6
-                _H += 22 + 30 + 72 + 36
-
-                _img = _PILImage.new('RGB', (_W, _H), 'white')
-                _dr = _PILDraw.Draw(_img)
-                _y = 32
-                _dr.rounded_rectangle([_M - 12, _y, _W - _M + 12, _y + _head_h], radius=18, outline='black', width=4)
-                _y += 28
-                for _ln in _t_lines:
-                    _dr.text((_W // 2, _y), _sh(_ln), font=_f_title, fill='black', anchor='ma')
-                    _y += 44
-                _y += 2
-                for _ln in _n_lines:
-                    _dr.text((_W // 2, _y), _sh(_ln), font=_f_name, fill='black', anchor='ma')
-                    _y += 40
-                _y += 4
-                for _ln in _m_lines:
-                    _dr.text((_W // 2, _y), _sh(_ln), font=_f_meta, fill=(80, 80, 80), anchor='ma')
-                    _y += 28
-                _y += 26 + 16
-
-                def _draw_cell(_en, _cx0, _cx1, _rh, _yy):
-                    _textw = (_cx1 - _cx0) - _TXTPAD * 2
-                    _res = 140 if (_en['kind'] == 'gender' and _en['g'] in ('M', 'F')) else (100 if _en['flag'] is not None else 0)
-                    _comb, _labw, _lab_lines, _vlines, _n = _cell_plan(_en['label'], _en['vtext'], _en['kind'], _textw, _res)
-                    _ty = _yy + max(0, (_rh - _n * _LH)) // 2
-                    _vfill = (130, 130, 130) if _en.get('empty') else 'black'
-                    if _rtl:
-                        _xe = _cx1 - _TXTPAD
-                        if _en['kind'] == 'gender' and _en['g'] in ('M', 'F'):
-                            _bcol = (33, 150, 243) if _en['g'] == 'M' else (236, 64, 122)
-                            _btxt = 'ذكر' if _en['g'] == 'M' else 'أنثى'
-                            _by = _ty + (_LH - 40) // 2
-                            _dr.rounded_rectangle([_xe - 120, _by, _xe, _by + 40], radius=20, fill=_bcol)
-                            _dr.text((_xe - 60, _by + 20), _sh(_btxt), font=_f_lab, fill='white', anchor='mm')
-                            _xe -= 132
-                        elif _en['flag'] is not None:
-                            try:
-                                _fim2 = _en['flag']
-                                _fw, _fh = _fim2.size
-                                _sc = min(64 / _fw, 46 / _fh)
-                                _fim2 = _fim2.resize((max(1, int(_fw * _sc)), max(1, int(_fh * _sc))))
-                                _fw2, _fh2 = _fim2.size
-                                _img.paste(_fim2, (_xe - _fw2, _ty + (_LH - _fh2) // 2))
-                                _xe -= _fw2 + 12
-                            except Exception:
-                                pass
-                        if _comb:
-                            _dr.text((_xe, _ty), _sh(_lab_lines[0]), font=_f_lab, fill='black', anchor='ra')
-                            _dr.text((_xe - _labw, _ty), _sh(_vlines[0]), font=_f_val, fill=_vfill, anchor='ra')
-                            _vy = _ty + _LH
-                            for _ln in _vlines[1:]:
-                                _dr.text((_xe, _vy), _sh(_ln), font=_f_val, fill=_vfill, anchor='ra')
-                                _vy += _LH
-                        else:
-                            _vy = _ty
-                            for _ln in _lab_lines:
-                                _dr.text((_xe, _vy), _sh(_ln), font=_f_lab, fill='black', anchor='ra')
-                                _vy += _LH
-                            for _ln in _vlines:
-                                _dr.text((_xe, _vy), _sh(_ln), font=_f_val, fill=_vfill, anchor='ra')
-                                _vy += _LH
-                    else:
-                        _xs = _cx0 + _TXTPAD
-                        if _en['kind'] == 'gender' and _en['g'] in ('M', 'F'):
-                            _bcol = (33, 150, 243) if _en['g'] == 'M' else (236, 64, 122)
-                            _btxt = 'ذكر' if _en['g'] == 'M' else 'أنثى'
-                            _by = _ty + (_LH - 40) // 2
-                            _dr.rounded_rectangle([_xs, _by, _xs + 120, _by + 40], radius=20, fill=_bcol)
-                            _dr.text((_xs + 60, _by + 20), _sh(_btxt), font=_f_lab, fill='white', anchor='mm')
-                            _xs += 132
-                        elif _en['flag'] is not None:
-                            try:
-                                _fim2 = _en['flag']
-                                _fw, _fh = _fim2.size
-                                _sc = min(64 / _fw, 46 / _fh)
-                                _fim2 = _fim2.resize((max(1, int(_fw * _sc)), max(1, int(_fh * _sc))))
-                                _fw2, _fh2 = _fim2.size
-                                _img.paste(_fim2, (_xs, _ty + (_LH - _fh2) // 2))
-                                _xs += _fw2 + 12
-                            except Exception:
-                                pass
-                        if _comb:
-                            _dr.text((_xs, _ty), _sh(_lab_lines[0]), font=_f_lab, fill='black', anchor='la')
-                            _dr.text((_xs + _labw, _ty), _sh(_vlines[0]), font=_f_val, fill=_vfill, anchor='la')
-                            _vy = _ty + _LH
-                            for _ln in _vlines[1:]:
-                                _dr.text((_xs, _vy), _sh(_ln), font=_f_val, fill=_vfill, anchor='la')
-                                _vy += _LH
-                        else:
-                            _vy = _ty
-                            for _ln in _lab_lines:
-                                _dr.text((_xs, _vy), _sh(_ln), font=_f_lab, fill='black', anchor='la')
-                                _vy += _LH
-                            for _ln in _vlines:
-                                _dr.text((_xs, _vy), _sh(_ln), font=_f_val, fill=_vfill, anchor='la')
-                                _vy += _LH
-
-                for _e in _layout:
-                    if _e['t'] == 'sec':
-                        _dr.rounded_rectangle([_M, _y, _W - _M, _y + 46], radius=10, fill='black')
-                        _sy = _y + 23 - (len(_e['lines']) * 34) // 2
-                        for _ln in _e['lines']:
-                            _dr.text((_W // 2, _sy), _sh(_ln), font=_f_sec, fill='white', anchor='ma')
-                            _sy += 34
-                        _y += 46 + 6
-                        continue
-                    _rh = _e['h']
-                    _dr.rectangle([_M, _y, _W - _M, _y + _rh], outline='black', width=2)
-                    if _e['t'] == 'pair':
-                        _mid = _M + _CELLW + _CELLGAP // 2
-                        _dr.line([_mid, _y, _mid, _y + _rh], fill=(130, 130, 130), width=2)
-                        if _rtl:
-                            _draw_cell(_e['a'], _mid + _CELLGAP // 2, _W - _M, _rh, _y)
-                            _draw_cell(_e['b'], _M, _mid - _CELLGAP // 2, _rh, _y)
-                        else:
-                            _draw_cell(_e['a'], _M, _mid - _CELLGAP // 2, _rh, _y)
-                            _draw_cell(_e['b'], _mid + _CELLGAP // 2, _W - _M, _rh, _y)
-                    else:
-                        _draw_cell(_e['a'], _M, _W - _M, _rh, _y)
-                    _y += _rh + 6
-
-                _y += 14
-                _dr.line([_M + 60, _y, _W - _M - 60, _y], fill=(160, 160, 160), width=2)
-                _y += 10
-                _dr.text((_W // 2, _y), 'PROGRAMMING  •  PROG.', font=_f_prog, fill=(154, 124, 30), anchor='ma')
-                _y += 30
-                _dr.text((_W // 2, _y), 'Alsaeed Alwazzan', font=_f_script, fill=(138, 101, 8), anchor='ma')
-
-                _buf = _io.BytesIO()
+                pdf_data = _pdf_buf.getvalue()
+                doc = fitz.open("pdf", pdf_data)
+                pix = doc.load_page(0).get_pixmap(dpi=150)
+                return pix.tobytes("png")
                 _img.save(_buf, format='PNG', optimize=True)
                 return _buf.getvalue()
 
@@ -3935,14 +3653,25 @@ def render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search", 
             _png_data = st.session_state.get(_png_state_key)
             if _png_data:
                 st.image(_png_data, caption=('معاينة الصورة — جاهزة للرفع على الواتساب ✅' if is_ar else 'Preview — ready for WhatsApp ✅'))
-                st.download_button(
-                    '⬇️ ' + ('تحميل الصورة PNG' if is_ar else 'Download PNG image'),
-                    data=_png_data,
-                    file_name=f'{_safe_name}.png',
-                    mime='image/png',
-                    key=f'dlpng_{key_prefix}_{worker_id}',
-                    width='stretch'
-                )
+                dl_png, dl_pdf = st.columns(2)
+                with dl_png:
+                    st.download_button(
+                        '⬇️ ' + ('تحميل الصورة PNG' if is_ar else 'Download PNG image'),
+                        data=_png_data,
+                        file_name=f'{_safe_name}.png',
+                        mime='image/png',
+                        key=f'dlpng_{key_prefix}_{worker_id}',
+                        width='stretch'
+                    )
+                with dl_pdf:
+                    st.download_button(
+                        '⬇️ ' + ('تحميل PDF (عربي صحيح ✅)' if is_ar else 'Download PDF (Arabic correct ✅)'),
+                        data=_standalone_html.encode('utf-8'),
+                        file_name=f"{_safe_name}.html",
+                        mime="text/html",
+                        key=f"dl_pdf_{key_prefix}_{worker_id}",
+                        width='stretch'
+                    )
             st.download_button(
                 "⬇️ " + ("تحميل نسخة الطباعة (HTML)" if is_ar else "Download printable (HTML)"),
                 data=_standalone_html.encode('utf-8'),
@@ -4202,22 +3931,29 @@ def render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search", 
     else: st.info("لا يتوفر رابط معاينة لهذا العامل.")
 
 def login_screen():
-    # Client-side Device Remember Script (Isolates storage strictly to this specific device/browser)
-    # NOTE: delivered as small sequential blocks — one large script block is
-    # not activated reliably by the renderer.
-    
-    # First, read localStorage and set a global variable BEFORE rendering
+    # 1. Bootstrap script: Synchronizes localStorage saved user & persist flag to Python
+    # This solves the Streamlit Cloud / Cloudflare cookie-stripping problem from its roots!
     st.html("""
 <script>
-window._recruitment_persist_from_storage = false;
-try {
-    var savedPersist = localStorage.getItem("_recruitment_device_persist");
-    window._recruitment_persist_from_storage = (savedPersist === "true");
-    console.log("Persist flag from storage:", window._recruitment_persist_from_storage);
-} catch(e) { console.error("read storage error:", e); }
+(function() {
+    try {
+        var sp = localStorage.getItem("_rec_saved_persist");
+        var su = localStorage.getItem("_rec_saved_user");
+        if (sp === "1" && su) {
+            var url = new URL(window.location.href);
+            var decU = decodeURIComponent(su);
+            if (url.searchParams.get("_u") !== decU || url.searchParams.get("_p") !== "1") {
+                url.searchParams.set("_u", decU);
+                url.searchParams.set("_p", "1");
+                window.location.replace(url.toString());
+            }
+        }
+    } catch(e) {}
+})();
 </script>
 """, unsafe_allow_javascript=True)
-    
+
+    # 2. Browser Notifications permission check
     st.html("""
 <script>
 if ('Notification' in window && Notification.permission === 'default') {
@@ -4228,95 +3964,27 @@ if ('Notification' in window && Notification.permission === 'default') {
 </script>
 """, unsafe_allow_javascript=True)
 
+    # 3. Comprehensive React 18 compatible Autofill and Persistence Engine
     st.html("""
 <script>
 (function() {
-    function setV(input, val) {
-        if (!input) return;
-        var lastVal = input.value;
-        try {
-            var nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
-            if (nativeSetter) { nativeSetter.call(input, val); }
-            else { input.value = val; }
-        } catch (e) { input.value = val; }
-        if (lastVal !== val) {
-            input.dispatchEvent(new Event('input', { bubbles: true }));
-            input.dispatchEvent(new Event('change', { bubbles: true }));
-        }
-    }
     function btoa_utf8(str) {
-        return window.btoa(unescape(encodeURIComponent(str)));
+        try { return window.btoa(unescape(encodeURIComponent(str))); } catch(e) { return window.btoa(str); }
     }
     function atob_utf8(str) {
-        return decodeURIComponent(escape(window.atob(str)));
-    }
-    function getCookie(name) {
-        var value = "; " + document.cookie;
-        var parts = value.split("; " + name + "=");
-        if (parts.length == 2) return parts.pop().split(";").shift();
-        return null;
+        try { return decodeURIComponent(escape(window.atob(str))); } catch(e) { return window.atob(str); }
     }
     function lsGet(name) {
-        try { return window.localStorage.getItem(name); }
-        catch (e) { return null; }
+        try { return window.localStorage.getItem(name); } catch(e) { return null; }
     }
-    function fillRemember() {
+    function lsSet(name, val) {
         try {
-            // localStorage is the primary store (works on both localhost and
-            // Streamlit Cloud HTTPS); cookies are only a fallback because
-            // st.context.cookies does not reliably see JS-set cookies on Cloud.
-            var savedU = lsGet("_rec_saved_user") || getCookie("_rec_saved_user");
-            var savedP = lsGet("_rec_saved_pass_enc") || getCookie("_rec_saved_pass_enc");
-            var savedPersist = lsGet("_rec_saved_persist") || getCookie("_rec_saved_persist");
-            if (savedPersist !== "1" && savedPersist !== "true") return;
-            if (savedU) savedU = decodeURIComponent(savedU);
-            if (savedP) savedP = decodeURIComponent(savedP);
-            var forms = Array.from(document.querySelectorAll('div[data-testid="stForm"]'));
-            if (!forms.length) {
-                var f = document.querySelector('form[data-testid="stForm"]') || document.querySelector('form');
-                if (f) forms = [f];
-            }
-            forms.forEach(function(form) {
-                var inputs = form.querySelectorAll('input');
-                var ui = null, pi = null, ci = null;
-                inputs.forEach(function(input) {
-                    var t = (input.getAttribute('type') || 'text').toLowerCase();
-                    if (t === 'password') { pi = input; }
-                    else if (t === 'checkbox') { ci = input; }
-                    else if (t === 'text' || t === '') { ui = input; }
-                });
-                if (ui && !ui._remFilled && !ui.value && savedU) { setV(ui, savedU); ui._remFilled = true; }
-                if (pi && !pi._remFilled && !pi.value && savedP) {
-                    try {
-                        var decodedP = savedP;
-                        try { decodedP = atob_utf8(savedP); }
-                        catch (e2) { decodedP = savedP; }
-                        setV(pi, decodedP);
-                        pi._remFilled = true;
-                    } catch(e) { console.error("decode error:", e); }
-                }
-                if (ci && !ci._remChecked && !ci.checked) {
-                    ci.checked = true;
-                    ci.dispatchEvent(new Event('input', { bubbles: true }));
-                    ci.dispatchEvent(new Event('change', { bubbles: true }));
-                    ci._remChecked = true;
-                }
-            });
-        } catch (err) { console.error("fill error:", err); }
+            if (val === null || val === undefined) { window.localStorage.removeItem(name); }
+            else { window.localStorage.setItem(name, val); }
+        } catch(e) {}
     }
-    setTimeout(fillRemember, 200);
-    setTimeout(fillRemember, 800);
-    setTimeout(fillRemember, 2000);
-    setTimeout(fillRemember, 4000);
-})();
-</script>
-""", unsafe_allow_javascript=True)
-
-    st.html("""
-<script>
-(function() {
-    function btoa_utf8(str) {
-        return window.btoa(unescape(encodeURIComponent(str)));
+    function lsDel(name) {
+        try { window.localStorage.removeItem(name); } catch(e) {}
     }
     function setCookie(name, value, days) {
         var expires = "";
@@ -4325,83 +3993,122 @@ if ('Notification' in window && Notification.permission === 'default') {
             date.setTime(date.getTime() + (days * 24 * 60 * 60 * 1000));
             expires = "; expires=" + date.toUTCString();
         }
-        // Secure is REQUIRED for persistent cookies on HTTPS (Streamlit Cloud).
-        // localhost is http so the flag is omitted there.
         var secure = (window.location && window.location.protocol === "https:") ? "; Secure" : "";
         document.cookie = name + "=" + (value || "") + expires + "; path=/; SameSite=Lax" + secure;
-    }
-    function lsSet(name, value) {
-        try {
-            if (value === null || value === undefined) { window.localStorage.removeItem(name); }
-            else { window.localStorage.setItem(name, value); }
-        } catch (e) {}
-    }
-    function lsDel(name) {
-        try { window.localStorage.removeItem(name); } catch (e) {}
     }
     function deleteCookie(name) {
         document.cookie = name + '=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT;';
     }
-    function hookRemember() {
+
+    // React 18 value tracker setter for text/password inputs
+    function setReactValue(input, value) {
+        if (!input || input.value === value) return;
+        var lastVal = input.value;
         try {
-            var forms = Array.from(document.querySelectorAll('div[data-testid="stForm"]'));
-            if (!forms.length) {
-                var f = document.querySelector('form[data-testid="stForm"]') || document.querySelector('form');
-                if (f) forms = [f];
+            var nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value');
+            if (nativeSetter && nativeSetter.set) {
+                nativeSetter.set.call(input, value);
+            } else {
+                input.value = value;
             }
+        } catch(e) { input.value = value; }
+
+        if (input._valueTracker) {
+            input._valueTracker.setValue(lastVal);
+        }
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+
+    function doAutofill() {
+        try {
+            var savedPersist = lsGet("_rec_saved_persist");
+            if (savedPersist !== "1") return;
+
+            var savedU = lsGet("_rec_saved_user");
+            var savedP = lsGet("_rec_saved_pass_enc");
+            if (savedU) savedU = decodeURIComponent(savedU);
+
+            var forms = Array.from(document.querySelectorAll('div[data-testid="stForm"], form'));
             forms.forEach(function(form) {
-                var inputs = form.querySelectorAll('input');
+                var inputs = Array.from(form.querySelectorAll('input'));
                 var ui = null, pi = null, ci = null;
-                inputs.forEach(function(input) {
-                    var t = (input.getAttribute('type') || 'text').toLowerCase();
-                    if (t === 'password') { pi = input; }
-                    else if (t === 'checkbox') { ci = input; }
-                    else if (t === 'text' || t === '') { ui = input; }
+                inputs.forEach(function(inp) {
+                    var t = (inp.getAttribute('type') || 'text').toLowerCase();
+                    if (t === 'password') { pi = inp; }
+                    else if (t === 'checkbox') { ci = inp; }
+                    else if (t === 'text' || t === '') { ui = inp; }
                 });
+
+                // Auto-fill Username if empty
+                if (ui && savedU && !ui.value) {
+                    setReactValue(ui, savedU);
+                }
+
+                // Auto-fill Password
+                if (pi && savedP && !pi.value) {
+                    var decP = atob_utf8(savedP);
+                    if (decP) {
+                        setReactValue(pi, decP);
+                    }
+                }
+
+                // Auto-check the remember checkbox
+                if (ci && !ci.checked) {
+                    ci.click();
+                }
+
+                // Hook Submit Button(s)
                 var buttons = form.querySelectorAll('button');
                 buttons.forEach(function(btn) {
-                    if (btn._remHook) return;
-                    btn._remHook = true;
+                    if (btn._remHooked) return;
+                    btn._remHooked = true;
                     btn.addEventListener('click', function() {
-                        var curU = ui ? ui.value : '';
+                        var curU = ui ? ui.value.trim() : '';
                         var curP = pi ? pi.value : '';
                         var curC = ci ? ci.checked : false;
-                        if (curC && curU) {
+
+                        if (curU && curC) {
                             var encU = encodeURIComponent(curU);
-                            setCookie("_rec_saved_user", encU, 365);
-                            setCookie("_rec_saved_persist", "1", 365);
                             lsSet("_rec_saved_user", encU);
                             lsSet("_rec_saved_persist", "1");
+                            setCookie("_rec_saved_user", encU, 365);
+                            setCookie("_rec_saved_persist", "1", 365);
                             if (curP) {
-                                try {
-                                    var encodedP = encodeURIComponent(btoa_utf8(curP));
-                                    setCookie("_rec_saved_pass_enc", encodedP, 365);
-                                    lsSet("_rec_saved_pass_enc", encodedP);
-                                } catch(e) { console.error("encode error:", e); }
-                            } else {
-                                deleteCookie("_rec_saved_pass_enc");
-                                lsDel("_rec_saved_pass_enc");
+                                var encP = btoa_utf8(curP);
+                                lsSet("_rec_saved_pass_enc", encP);
+                                setCookie("_rec_saved_pass_enc", encP, 365);
                             }
-                        } else if (!curC) {
-                            deleteCookie("_rec_saved_user");
-                            deleteCookie("_rec_saved_pass_enc");
-                            deleteCookie("_rec_saved_persist");
+                        } else if (curU && !curC) {
+                            // User explicitly unchecked the box - clear saved data
                             lsDel("_rec_saved_user");
-                            lsDel("_rec_saved_pass_enc");
                             lsDel("_rec_saved_persist");
+                            lsDel("_rec_saved_pass_enc");
+                            deleteCookie("_rec_saved_user");
+                            deleteCookie("_rec_saved_persist");
+                            deleteCookie("_rec_saved_pass_enc");
                         }
                     }, true);
                 });
             });
-        } catch (err) { console.error("hook error:", err); }
+        } catch(err) {
+            console.error("Autofill error:", err);
+        }
     }
-    setTimeout(hookRemember, 200);
-    setTimeout(hookRemember, 800);
-    setTimeout(hookRemember, 2000);
+
+    // Run autofill immediately and on DOM changes
+    doAutofill();
+    setTimeout(doAutofill, 100);
+    setTimeout(doAutofill, 500);
+    setTimeout(doAutofill, 1200);
+    setTimeout(doAutofill, 2500);
+
     try {
-        var remObs = new MutationObserver(function() { hookRemember(); });
-        if (document.body) { remObs.observe(document.body, { childList: true, subtree: true }); }
-    } catch (e) {}
+        var obs = new MutationObserver(function() { doAutofill(); });
+        if (document.body) {
+            obs.observe(document.body, { childList: true, subtree: true });
+        }
+    } catch(e) {}
 })();
 </script>
 """, unsafe_allow_javascript=True)
@@ -4434,11 +4141,11 @@ if ('Notification' in window && Notification.permission === 'default') {
 
         # Username/persist convenience defaults live in Session State only
         # (per-device cookies); the per-device JS fills the password field.
-        if user_key not in st.session_state and saved_u:
+        if (user_key not in st.session_state or not st.session_state.get(user_key)) and saved_u:
             st.session_state[user_key] = saved_u
         
-        # Set persist checkbox state from cookies (localStorage is used by JS for syncing)
-        if persist_key not in st.session_state:
+        # Set persist checkbox state from cookies/storage
+        if persist_key not in st.session_state or not st.session_state.get(persist_key):
             st.session_state[persist_key] = saved_persist
 
         with st.form(f"login_form_{suffix}"):
@@ -4487,45 +4194,7 @@ if ('Notification' in window && Notification.permission === 'default') {
                         # the login form is always shown explicitly.
                         should_persist = st.session_state.get(persist_key, False)
                         if should_persist:
-                            enc_u = urllib.parse.quote(u.strip())
-                            try:
-                                _enc_p_raw = base64.b64encode(p.strip().encode("utf-8")).decode()
-                            except Exception:
-                                _enc_p_raw = ""
-                            enc_p = urllib.parse.quote(_enc_p_raw)
-                            st.html(f"""
-                            <script>
-                            (function() {{
-                                var exp = "; max-age=31536000; path=/; SameSite=Lax";
-                                if (window.location && window.location.protocol === "https:") {{ exp += "; Secure"; }}
-                                document.cookie = "{DEVICE_USER_COOKIE}={enc_u}" + exp;
-                                document.cookie = "{DEVICE_PERSIST_COOKIE}=1" + exp;
-                                document.cookie = "_rec_saved_pass_enc={enc_p}" + exp;
-                                try {{
-                                    window.localStorage.setItem("_rec_saved_user", "{enc_u}");
-                                    window.localStorage.setItem("_rec_saved_persist", "1");
-                                    window.localStorage.setItem("_rec_saved_pass_enc", "{enc_p}");
-                                }} catch(e) {{}}
-                            }})();
-                            </script>
-                            """, unsafe_allow_javascript=True)
-                        else:
-                            st.html(f"""
-                            <script>
-                            (function() {{
-                                var exp0 = "; max-age=0; path=/;";
-                                document.cookie = "{DEVICE_REMEMBER_COOKIE}=" + exp0;
-                                document.cookie = "{DEVICE_USER_COOKIE}=" + exp0;
-                                document.cookie = "{DEVICE_PERSIST_COOKIE}=" + exp0;
-                                document.cookie = "_rec_saved_pass_enc=" + exp0;
-                                try {{
-                                    window.localStorage.removeItem("_rec_saved_user");
-                                    window.localStorage.removeItem("_rec_saved_persist");
-                                    window.localStorage.removeItem("_rec_saved_pass_enc");
-                                }} catch(e) {{}}
-                            }})();
-                            </script>
-                            """, unsafe_allow_javascript=True)
+                            st.session_state["_auth_saved_user"] = u.strip()
 
                         st.rerun()
                     else:
@@ -4691,6 +4360,14 @@ def check_notifications():
         last_worker = saved_worker_count if saved_worker_count is not None else current_worker_count
         last_cust = saved_cust_count if saved_cust_count is not None else current_cust_count
 
+        # Helper to find value by partial header match
+        def get_row_val(r_item, keywords, default="---"):
+            for k, v in r_item.items():
+                k_clean = str(k).lower().strip()
+                if any(kw.lower() in k_clean for kw in keywords):
+                    return v
+            return default
+
         # Check for new workers
         if current_worker_count > last_worker:
             new_count = current_worker_count - last_worker
@@ -4698,21 +4375,13 @@ def check_notifications():
             new_rows = df_workers.tail(new_count)
 
             for _, row in new_rows.iterrows():
-                # Helper to find value by partial header match
-                def get_val(keywords, default="---"):
-                    for k, v in row.items():
-                        k_clean = str(k).lower().strip()
-                        if any(kw.lower() in k_clean for kw in keywords):
-                            return v
-                    return default
-
-                name = str(get_val(["الاسم", "Name", "Full Name", "الاسم الكامل"], '---'))
-                nat = str(get_val(["الجنسية", "Nationality"], '---'))
-                job = str(get_val(["نوع العمل", "الوظيفة", "Job", "Job Type"], '---'))
-                loc = str(get_val(["المدينة", "Location", "City"], '---'))
-                phone = str(get_val(["رقم الجوال", "Phone", "Mobile", "الهاتف"], '---'))
-                age = str(get_val(["العمر", "Age"], '---'))
-                religion = str(get_val(["الديانة", "Religion"], '---'))
+                name = str(get_row_val(row, ["الاسم", "Name", "Full Name", "الاسم الكامل"], '---'))
+                nat = str(get_row_val(row, ["الجنسية", "Nationality"], '---'))
+                job = str(get_row_val(row, ["نوع العمل", "الوظيفة", "Job", "Job Type"], '---'))
+                loc = str(get_row_val(row, ["المدينة", "Location", "City"], '---'))
+                phone = str(get_row_val(row, ["رقم الجوال", "Phone", "Mobile", "الهاتف"], '---'))
+                age = str(get_row_val(row, ["العمر", "Age"], '---'))
+                religion = str(get_row_val(row, ["الديانة", "Religion"], '---'))
 
                 flag = get_flag(nat)
                 
@@ -4748,32 +4417,24 @@ def check_notifications():
             new_rows = df_customers.tail(new_count)
 
             for _, row in new_rows.iterrows():
-                # Helper to find value by partial header match
-                def get_val(keywords, default="---"):
-                    for k, v in row.items():
-                        k_clean = str(k).lower().strip()
-                        if any(kw.lower() in k_clean for kw in keywords):
-                            return v
-                    return default
-
                 # Find company name
-                company = str(get_val(["اسم الشركه", "المؤسسة", "Company", "الشركة", "شركه"], '---'))
+                company = str(get_row_val(row, ["اسم الشركه", "المؤسسة", "Company", "الشركة", "شركه"], '---'))
                 # Find contact person
-                pic = str(get_val(["المسئول", "Contact Person", "Person in charge", "المسؤول"], ''))
+                pic = str(get_row_val(row, ["المسئول", "Contact Person", "Person in charge", "المسؤول"], ''))
                 # Find phone
-                phone = str(get_val(["رقم الجوال", "Phone", "Mobile", "الهاتف", "الجوال"], ''))
+                phone = str(get_row_val(row, ["رقم الجوال", "Phone", "Mobile", "الهاتف", "الجوال"], ''))
                 # Find gender
-                gender_val = str(get_val(["الفئة المطلوبة", "الجنس", "Gender", "الفئة"], '---'))
+                gender_val = str(get_row_val(row, ["الفئة المطلوبة", "الجنس", "Gender", "الفئة"], '---'))
                 # Find nationality
-                nat = str(get_val(["الجنسية المطلوبة", "الجنسية", "Nationality"], '---'))
+                nat = str(get_row_val(row, ["الجنسية المطلوبة", "الجنسية", "Nationality"], '---'))
                 # Find location
-                loc = str(get_val(["موقع العمل", "الموقع", "Location", "المدينة"], '---'))
+                loc = str(get_row_val(row, ["موقع العمل", "الموقع", "Location", "المدينة"], '---'))
                 # Find salary
-                salary = str(get_val(["الراتب", "Salary", "Expected salary"], '---'))
+                salary = str(get_row_val(row, ["الراتب", "Salary", "Expected salary"], '---'))
                 # Find experience
-                exp = str(get_val(["الخبرة", "Experience"], '---'))
+                exp = str(get_row_val(row, ["الخبرة", "Experience"], '---'))
                 # Find contract type
-                contract = str(get_val(["نوع العقد", "Contract Type"], '---'))
+                contract = str(get_row_val(row, ["نوع العقد", "Contract Type"], '---'))
 
                 flag = get_flag(nat)
                 
@@ -5472,6 +5133,8 @@ def dashboard():
         
         if st.button(t("order_processing", lang), width='stretch', disabled=_wa_lock_nav, key="nav_order_processing"):
             st.session_state.page = "order_processing"
+            st.session_state.op_page_number = 1
+            st.session_state.op_jump_to_latest = True
             st.rerun()
         
         # Special navigation with icons
@@ -5622,8 +5285,6 @@ def dashboard():
         st.rerun()
     elif page in page_handlers:
         page_handlers[page]()
-    # --- 3. Notification Check (Moved to BOTTOM to prevent hanging on login) ---
-    check_notifications()
 
 def __apply_pinned_columns(df_or_style, cfg=None):
     if cfg is None: cfg = {}
@@ -5877,16 +5538,16 @@ def render_dashboard_content():
             if lang == 'ar':
                 if global_status == 'expired':
                     r['حالة العقد'] = f"❌ منتهي (منذ {abs(days)} يوم)"
-                elif global_status in ['urgent', 'warning']:
-                    r['حالة العقد'] = f"⚠️ عاجل (متبقى {days} يوم)"
+                elif 0 <= days <= 7:
+                    r['حالة العقد'] = "⚠️ عاجل (ينتهي اليوم)" if days == 0 else f"⚠️ عاجل (متبقي {days} يوم)"
                 else: # active
-                    r['حالة العقد'] = f"✅ ساري (متبقى {days} يوم)"
+                    r['حالة العقد'] = f"✅ ساري (متبقي {days} يوم)" if days != 9999 else "✅ ساري"
             else:
-                r['Contract Status'] = f"{status['label_en']} ({abs(days)} Days)"
+                r['Contract Status'] = ("Urgent (Expires Today)" if days == 0 else f"Urgent ({days} Days Left)") if 0 <= days <= 7 else (f"Expired {abs(days)} days ago" if days < 0 else (f"Active ({days} Days)" if days != 9999 else "Active"))
 
-            if global_status == 'urgent' or global_status == 'warning': stats['urgent'].append(r)
+            if 0 <= days <= 7: stats['urgent'].append(r)
             elif global_status == 'expired': stats['expired'].append(r)
-            elif global_status == 'active': stats['active'].append(r)
+            elif global_status in ['active', 'warning']: stats['active'].append(r)
         except Exception:
             continue
 
@@ -6020,9 +5681,9 @@ def render_dashboard_content():
     if selected_transfer_key: dash_filters['transfer_count'] = selected_transfer_key
     # --- New advanced filters: Ready to Work / Iqama Valid / Experience ---
     if sel_ready and sel_ready != t("filter_option_all", lang):
-        dash_filters['ready_to_work'] = 'Yes' if 'Yes' in sel_ready else 'No'
+        dash_filters['ready_to_work'] = 'Yes' if sel_ready == t("filter_option_yes", lang) else 'No'
     if sel_iqama and sel_iqama != t("filter_option_all", lang):
-        dash_filters['iqama_valid'] = 'Yes' if 'Yes' in sel_iqama else 'No'
+        dash_filters['iqama_valid'] = 'Yes' if sel_iqama == t("filter_option_yes", lang) else 'No'
     # Experience: parse custom condition like "< 1", "> 5", "= 3", "<= 2", ">= 10", or just "5"
     if sel_exp and sel_exp.strip() and sel_exp.strip() != t("filter_option_all", lang):
         _exp_text = sel_exp.strip()
@@ -6358,9 +6019,9 @@ def render_search_content():
     
     # --- New advanced filters: Ready to Work / Iqama Valid / Experience ---
     if sel_ready and sel_ready != t("filter_option_all", lang):
-        filters['ready_to_work'] = 'Yes' if 'Yes' in sel_ready else 'No'
+        filters['ready_to_work'] = 'Yes' if sel_ready == t("filter_option_yes", lang) else 'No'
     if sel_iqama and sel_iqama != t("filter_option_all", lang):
-        filters['iqama_valid'] = 'Yes' if 'Yes' in sel_iqama else 'No'
+        filters['iqama_valid'] = 'Yes' if sel_iqama == t("filter_option_yes", lang) else 'No'
     if sel_exp and sel_exp.strip() and sel_exp.strip() != t("filter_option_all", lang):
         _exp_text = sel_exp.strip()
         _exp_m = re.match(r'\s*(<=|>=|<|>|=)\s*(\d+)', _exp_text)
@@ -6434,12 +6095,12 @@ def render_search_content():
                     if lang == 'ar':
                         if gs == 'expired':
                             status_list.append(f"❌ منتهي (منذ {abs(ds)} يوم)")
-                        elif gs in ['urgent', 'warning']:
-                            status_list.append(f"⚠️ عاجل (متبقى {ds} يوم)")
+                        elif 0 <= ds <= 7:
+                            status_list.append("⚠️ عاجل (ينتهي اليوم)" if ds == 0 else f"⚠️ عاجل (متبقي {ds} يوم)")
                         else:
-                            status_list.append(f"✅ ساري (متبقى {ds} يوم)")
+                            status_list.append(f"✅ ساري (متبقي {ds} يوم)" if ds != 9999 else "✅ ساري")
                     else:
-                        status_list.append(f"{s['label_en']} ({abs(ds)} Days)")
+                        status_list.append(("Urgent (Expires Today)" if ds == 0 else f"Urgent ({ds} Days Left)") if 0 <= ds <= 7 else (f"Expired {abs(ds)} days ago" if ds < 0 else (f"Active ({ds} Days)" if ds != 9999 else "Active")))
                 
                 status_key = 'حالة العقد' if lang == 'ar' else 'Contract Status'
                 res[status_key] = status_list
@@ -6982,272 +6643,6 @@ def render_login_history_content():
     with c2:
         st.caption("💡 " + (t("keep_history_btn", lang) + " — " + ("تبقى البيانات في السجل كما هي" if is_ar else "data stays in the log as is")))
 
-def render_cv_privacy_cleaner_content():
-    """CV Privacy Cleaner: Remove email addresses only from CV files.
-    Keeps phone numbers as requested. Preserves original PDF format including images."""
-    import io
-    import re
-    import fitz  # PyMuPDF
-    from PIL import Image
-    import pdfplumber
-
-    lang = st.session_state.lang
-    is_ar = lang == 'ar'
-    
-    st.title("🔒 " + t("cv_privacy_title", lang))
-    st.markdown(t("cv_privacy_desc", lang))
-    st.divider()
-    
-    # --- Email and Phone removal ---
-    EMAIL_PATTERN = r'[a-zA-Z0-9._%+\u200b-]+@[a-zA-Z0-9.\u200b-]+\.[a-zA-Z]{2,}'
-    PHONE_PATTERNS = [
-        # International with country code: +966 56 036 2968 / +966-56-036-2968 / +966.56.036.2968
-        r'\+\d{1,3}[\s\-.\u200b]?\d{2}[\s\-.\u200b]?\d{3}[\s\-.\u200b]?\d{4}',
-        r'\+\d{1,3}[\s\-.\u200b]?\d{3}[\s\-.\u200b]?\d{3}[\s\-.\u200b]?\d{4}',
-        # With parentheses: (+966) 56 036 2968
-        r'\(\+\d{1,3}\)\s?\d{2}[\s\-.\u200b]?\d{3}[\s\-.\u200b]?\d{4}',
-        r'\(\+\d{1,3}\)\s?\d{3}[\s\-.\u200b]?\d{3}[\s\-.\u200b]?\d{4}',
-        # Saudi mobile: 056 036 2968 / 0560362968 / 056-036-2968
-        r'05\d{2}[\s\-.\u200b]?\d{3}[\s\-.\u200b]?\d{3}',
-        r'05\d{8}',
-        # General 10-digit patterns
-        r'\d{3}[\s\-.\u200b]?\d{3}[\s\-.\u200b]?\d{4}',
-        # General spaced format: 56 036 2968
-        r'\d{2}[\s\-.\u200b]?\d{3}[\s\-.\u200b]?\d{4}',
-    ]
-    
-    def remove_emails_and_phones_from_text(text):
-        """Remove both email addresses and phone numbers from text."""
-        cleaned = text
-        phones_found = []
-        emails_found = []
-        
-        # Find and remove emails first
-        emails_found = re.findall(EMAIL_PATTERN, cleaned)
-        for email in sorted(set(emails_found), key=len, reverse=True):
-            cleaned = cleaned.replace(email, "[EMAIL REMOVED]")
-        
-        # Find and remove phones (longest matches first to avoid partial matches)
-        all_phones = []
-        for pattern in PHONE_PATTERNS:
-            matches = re.findall(pattern, cleaned)
-            for match in matches:
-                if match not in all_phones:
-                    all_phones.append(match)
-        for phone in sorted(set(all_phones), key=len, reverse=True):
-            if phone not in phones_found:
-                phones_found.append(phone)
-            cleaned = cleaned.replace(phone, "[PHONE REMOVED]")
-        
-        return cleaned, phones_found, emails_found
-    
-    def clean_pdf_preserve_format(pdf_bytes):
-        """Remove emails and phone numbers from PDF while preserving images, fonts, layout, and formatting.
-        Returns cleaned PDF bytes."""
-        import fitz as fitz_module
-        doc = fitz_module.open(stream=pdf_bytes, filetype="pdf")
-        total_emails = 0
-        total_phones = 0
-        
-        for page_num in range(len(doc)):
-            page = doc[page_num]
-            
-            # Get all text blocks with their positions
-            text_dict = page.get_text("dict")
-            
-            for block in text_dict["blocks"]:
-                if block["type"] != 0:  # Skip non-text blocks (images, etc.)
-                    continue
-                for line in block["lines"]:
-                    for span in line["spans"]:
-                        span_text = span["text"]
-                        
-                        # Find emails in this span
-                        emails_in_span = re.findall(EMAIL_PATTERN, span_text)
-                        for email in emails_in_span:
-                            instances = page.search_for(email)
-                            for inst in instances:
-                                rect = fitz_module.Rect(inst)
-                                page.add_redact_annot(rect, fill=(1, 1, 1))
-                                total_emails += 1
-                        
-                        # Find phones in this span
-                        phones_in_span = []
-                        for pattern in PHONE_PATTERNS:
-                            phones_in_span.extend(re.findall(pattern, span_text))
-                        for phone in sorted(set(phones_in_span), key=len, reverse=True):
-                            instances = page.search_for(phone)
-                            for inst in instances:
-                                rect = fitz_module.Rect(inst)
-                                page.add_redact_annot(rect, fill=(1, 1, 1))
-                                total_phones += 1
-        
-        # Apply all redactions (this permanently removes the email and phone text)
-        if total_emails > 0 or total_phones > 0:
-            for page_num in range(len(doc)):
-                page = doc[page_num]
-                page.apply_redactions()
-        
-        # Save to memory buffer
-        output = io.BytesIO()
-        doc.save(output, garbage=4, deflate=True)
-        doc.close()
-        output.seek(0)
-        return output.read(), total_emails, total_phones
-    
-    def extract_text_from_pdf(pdf_file):
-        """Extract text from PDF using pdfplumber."""
-        text_parts = []
-        with pdfplumber.open(pdf_file) as pdf:
-            for page in pdf.pages:
-                page_text = page.extract_text()
-                if page_text:
-                    text_parts.append(page_text)
-        return "\n".join(text_parts)
-    
-    def extract_text_from_image(image_file):
-        """Extract text from image using OCR if available."""
-        try:
-            import pytesseract
-            image = Image.open(image_file)
-            text = pytesseract.image_to_string(image)
-            return text
-        except ImportError:
-            return None  # OCR not available
-        except Exception:
-            return None
-    
-    # Info about capabilities
-    st.info("ℹ️ " + ("هذا النموذج يحذف الإيميلات وأرقام الهواتف. يتم الحفاظ على تنسيق PDF الأصلي بما في ذلك الصور والخطوط والجداول." if is_ar else "This cleaner removes emails and phone numbers. Original PDF format is preserved including images, fonts, and tables."))
-    
-    # File uploader
-    uploaded_file = st.file_uploader(
-        t("cv_upload_label", lang),
-        type=["pdf", "jpg", "jpeg", "png"],
-        help=t("cv_upload_help", lang)
-    )
-    
-    if uploaded_file is not None:
-        file_ext = uploaded_file.name.split('.')[-1].lower()
-        
-        # --- CLEAR OLD SESSION STATE WHEN NEW FILE IS UPLOADED ---
-        if 'cv_last_file_name' not in st.session_state:
-            st.session_state.cv_last_file_name = ""
-        if st.session_state.cv_last_file_name != uploaded_file.name:
-            # New file detected - clear all previous cleaned data
-            for key in ['cv_original_text', 'cv_cleaned_text', 'cv_phones_count', 'cv_emails_count', 'cv_file_ext', 'cv_file_name', 'cv_last_file_name', 'cv_pdf_bytes', 'cv_cleaned_pdf_bytes']:
-                if key in st.session_state:
-                    del st.session_state[key]
-            st.session_state.cv_last_file_name = uploaded_file.name
-            st.session_state.cv_file_ext = file_ext
-            st.session_state.cv_file_name = uploaded_file.name
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.subheader("📄 " + (t("cv_original_text", lang)))
-            original_text = ""
-            
-            if file_ext == "pdf":
-                try:
-                    # Read PDF bytes for preview
-                    pdf_bytes = uploaded_file.read()
-                    uploaded_file.seek(0)  # Reset for later use
-                    original_text = extract_text_from_pdf(io.BytesIO(pdf_bytes))
-                    st.text_area("PDF Content", original_text, height=400, key="cv_original_pdf")
-                    # Store bytes for cleaning
-                    st.session_state.cv_pdf_bytes = pdf_bytes
-                except Exception as e:
-                    st.error(t("cv_error", lang) + ": " + str(e))
-                    original_text = ""
-            elif file_ext in ["jpg", "jpeg", "png"]:
-                image = Image.open(uploaded_file)
-                st.image(image, caption=uploaded_file.name, use_column_width=True)
-                # Try OCR
-                ocr_text = extract_text_from_image(uploaded_file)
-                if ocr_text:
-                    original_text = ocr_text
-                    st.text_area("OCR Text", ocr_text, height=300, key="cv_original_ocr")
-                else:
-                    st.warning("⚠️ " + ("OCR غير متوفر للتنظيف التلقائي للصور. يرجى رفع ملف PDF بدلاً من ذلك." if is_ar else "OCR not available for automatic image cleaning. Please upload a PDF instead."))
-            
-            if original_text:
-                st.session_state.cv_original_text = original_text
-        
-        with col2:
-            st.subheader("✨ " + (t("cv_cleaned_text", lang)))
-            
-            # Clear / Reset button
-            if st.button("🗑️ " + ("مسح البيانات وبدء جديد" if is_ar else "Clear & Start Fresh"), width='stretch', key="cv_clear_btn"):
-                for key in ['cv_original_text', 'cv_cleaned_text', 'cv_phones_count', 'cv_emails_count', 'cv_file_ext', 'cv_file_name', 'cv_last_file_name', 'cv_pdf_bytes', 'cv_cleaned_pdf_bytes']:
-                    if key in st.session_state:
-                        del st.session_state[key]
-                st.rerun()
-            
-            if st.button(t("cv_clean_btn", lang), type="primary", width='stretch', key="cv_clean_btn"):
-                if file_ext == "pdf" and 'cv_pdf_bytes' in st.session_state:
-                    # Clean PDF preserving format
-                    try:
-                        cleaned_pdf_bytes, email_count, phone_count = clean_pdf_preserve_format(st.session_state.cv_pdf_bytes)
-                        st.session_state.cv_cleaned_pdf_bytes = cleaned_pdf_bytes
-                        st.session_state.cv_emails_count = email_count
-                        st.session_state.cv_phones_count = phone_count
-                        st.success(t("cv_cleaned_success", lang))
-                    except Exception as e:
-                        st.error("خطأ في تنظيف PDF: " + str(e) if is_ar else "Error cleaning PDF: " + str(e))
-                elif 'cv_original_text' in st.session_state and st.session_state.cv_original_text:
-                    # Fallback for text-only cleaning
-                    cleaned_text, phones, emails = remove_emails_and_phones_from_text(st.session_state.cv_original_text)
-                    st.session_state.cv_cleaned_text = cleaned_text
-                    st.session_state.cv_phones_count = len(phones)
-                    st.session_state.cv_emails_count = len(emails)
-                    st.success(t("cv_cleaned_success", lang))
-                else:
-                    st.warning("الرجاء رفع ملف أولاً" if is_ar else "Please upload a file first")
-            
-            # Display cleaned content and download
-            if 'cv_cleaned_pdf_bytes' in st.session_state:
-                # PDF download - same format as original
-                clean_filename = "cleaned_" + st.session_state.get('cv_file_name', 'cv.pdf')
-                st.download_button(
-                    label="⬇️ " + t("cv_download_btn", lang),
-                    data=st.session_state.cv_cleaned_pdf_bytes,
-                    file_name=clean_filename,
-                    mime="application/pdf",
-                    width='stretch',
-                    key="cv_download_cleaned_pdf"
-                )
-                st.info("ℹ️ " + ("تم حفظ PDF مع الحفاظ على الصور والتنسيق الأصلي. الإيميلات وأرقام الهواتف محذوفة." if is_ar else "PDF saved preserving images and original format. Emails and phone numbers removed."))
-                
-                # Also show text preview
-                st.text_area("Cleaned Text Preview", st.session_state.cv_original_text, height=200, key="cv_cleaned_preview", disabled=True)
-                
-            elif 'cv_cleaned_text' in st.session_state:
-                cleaned_text = st.session_state.cv_cleaned_text
-                st.text_area("Cleaned Content", cleaned_text, height=400, key="cv_cleaned_display")
-                
-                # Stats - emails and phones removed
-                c_stats1, c_stats2 = st.columns(2)
-                with c_stats1:
-                    st.metric(t("cv_phones_removed", lang), st.session_state.get('cv_phones_count', 0))
-                with c_stats2:
-                    st.metric(t("cv_emails_removed", lang), st.session_state.get('cv_emails_count', 0))
-                
-                # Download button - txt fallback
-                base_name = "cleaned_" + st.session_state.get('cv_file_name', 'cv')
-                clean_filename = base_name + ".txt"
-                st.download_button(
-                    label="⬇️ " + t("cv_download_btn", lang),
-                    data=cleaned_text.encode('utf-8'),
-                    file_name=clean_filename,
-                    mime="text/plain",
-                    width='stretch',
-                    key="cv_download_cleaned_txt"
-                )
-                st.info("ℹ️ " + ("تم حفظ النص المنظف كملف نصي." if is_ar else "Cleaned text saved as text file."))
-            elif 'cv_original_text' in st.session_state:
-                st.info(t("cv_no_sensitive", lang))
-
 def render_permissions_content():
     lang = st.session_state.lang
     st.title(f" {t('permissions_title', lang)}")
@@ -7456,6 +6851,13 @@ def render_order_processing_content():
     st.markdown('<div class="programmer-signature-neon">By: Alsaeed Alwazzan</div>', unsafe_allow_html=True)
     st.title(f" {t('order_processing_title', lang)}")
     
+    # Auto-scroll to top when navigating here from the sidebar button
+    if st.session_state.get("op_jump_to_latest", False):
+        st.components.v1.html(
+            "<script>window.parent.document.querySelector('section.main').scrollTo({top: 0, behavior: 'smooth'});</script>",
+            height=0
+        )
+    
     loading_placeholder = show_loading_hourglass()
     start_op_time = time.time()
     
@@ -7579,8 +6981,8 @@ def render_order_processing_content():
             'transfer_count': trans_count if trans_count != "" else None,
             
             # --- New advanced filters: Ready to Work / Iqama Valid / Experience ---
-            'ready_to_work': 'Yes' if (op_sel_ready and 'Yes' in op_sel_ready) else ('No' if op_sel_ready and op_sel_ready != t("filter_option_all", lang) else None),
-            'iqama_valid': 'Yes' if (op_sel_iqama and 'Yes' in op_sel_iqama) else ('No' if op_sel_iqama and op_sel_iqama != t("filter_option_all", lang) else None),
+            'ready_to_work': 'Yes' if (op_sel_ready and op_sel_ready == t("filter_option_yes", lang)) else ('No' if op_sel_ready and op_sel_ready != t("filter_option_all", lang) else None),
+            'iqama_valid': 'Yes' if (op_sel_iqama and op_sel_iqama == t("filter_option_yes", lang)) else ('No' if op_sel_iqama and op_sel_iqama != t("filter_option_all", lang) else None),
         }
         
         # Parse experience condition for order processing
@@ -8224,6 +7626,11 @@ def render_order_processing_content():
     if "op_page_number" not in st.session_state:
         st.session_state.op_page_number = 1
         
+    # Jump to latest (page 1 = newest requests) when triggered by nav button
+    if st.session_state.get("op_jump_to_latest", False):
+        st.session_state.op_page_number = 1
+        st.session_state.op_jump_to_latest = False
+        
     # Reset page to 1 if search query changes
     if "op_last_search" not in st.session_state or st.session_state.op_last_search != cust_search_q:
         st.session_state.op_page_number = 1
@@ -8466,70 +7873,80 @@ def render_order_processing_content():
 
                 # Segment Header Helper
                 def render_segment_header(label, count, color="#D4AF37", explainer=None):
-                    st.markdown(f"""<div style="color: {color}; font-weight: 700; margin: 15px 5px 5px 5px; font-family: 'Cairo', sans-serif; direction: rtl; text-align: right;">{label} — {count}</div>""", unsafe_allow_html=True)
+                    st.markdown(f'<div style="color: {color}; font-weight: 700; margin: 15px 5px 5px 5px; font-family: \'Cairo\', sans-serif; direction: rtl; text-align: right;">{label} — {count}</div>', unsafe_allow_html=True)
                     if explainer:
-                        st.markdown(f"""<div style="font-size: 0.85rem; color: #888; margin: -5px 5px 10px 5px; font-family: 'Cairo', sans-serif; direction: rtl; text-align: right;">{explainer}</div>""", unsafe_allow_html=True)
+                        st.markdown(f'<div style="font-size: 0.85rem; color: #888; margin: -5px 5px 10px 5px; font-family: \'Cairo\', sans-serif; direction: rtl; text-align: right;">{explainer}</div>', unsafe_allow_html=True)
+
+                # --- Initialize table visibility states (hidden by default on page load) ---
+                city_vis_key   = f"show_city_table_{idx}"
+                reg_vis_key    = f"show_reg_table_{idx}"
+                other_vis_key  = f"show_other_table_{idx}"
+                if city_vis_key  not in st.session_state: st.session_state[city_vis_key]  = False
+                if reg_vis_key   not in st.session_state: st.session_state[reg_vis_key]   = False
+                if other_vis_key not in st.session_state: st.session_state[other_vis_key] = False
 
                 # Same City Table
                 if city_list:
                     city_df, city_idx_map = build_worker_table(city_list, city_scores)
                     if not city_df.empty:
-                        # Export
-                        c_op_2 = st.columns([4, 1])[1]
-                        with c_op_2:
-                            city_df_export = get_filtered_df_by_nationality(city_df, f"op_city_{idx}")
-                            xl_data_op = create_pasha_whatsapp_excel(city_df_export, lang=lang)
-                            if xl_data_op:
-                                _, xl_df_op = xl_data_op
-                                btn_exp = "💬 " + ("تصدير للواتساب" if lang == 'ar' else "Export to WhatsApp")
-                                render_pasha_export_button(xl_df_op, btn_exp, f"Matched_Workers_City_{idx+1}.xlsx", 
-                                                          f"Matched_Workers_City_{idx+1}", key=f"dl_op_city_{idx}")
-                        
                         loc_val = str(customer_row.get(c_location, ""))
-                        label = f"📍 عمال في نفس المدينة ({loc_val})" if lang == 'ar' else f"📍 Workers in the same city ({loc_val})"
-                        render_segment_header(label, len(city_df), color="#D4AF37")
-                        
-                        col_cfg_city = {}
-                        nat_col_city = None
-                        for col in city_df.columns:
-                            if any(kw in str(col).lower() for kw in ["nationality", "الجنسية"]):
-                                nat_col_city = col
-                                col_cfg_city[f"🚩_{col}"] = st.column_config.ImageColumn(t("country_label", lang), width="small", pinned=True)
-
-                        st.markdown("<br>", unsafe_allow_html=True)
-                        city_df = render_table_translator(city_df, key_prefix=f"op_city_{idx}")
-                        
-                        city_styled = style_df(city_df.drop(columns=["__uid"]))
-                        
-                        df_city_height = min((len(city_df) + 1) * 35 + 40, 500)
-                        event_city = st.dataframe(
-                            city_styled,
-                            width='content', hide_index=True, on_select="rerun",
-                            selection_mode="single-row", column_config=__apply_pinned_columns(city_styled, col_cfg_city),
-                            key=f"op_city_table_{idx}", height=df_city_height
+                        city_label = f"📍 عمال في نفس المدينة ({loc_val})" if lang == 'ar' else f"📍 Workers in the same city ({loc_val})"
+                        city_toggle_lbl = (
+                            (f"🙈 إخفاء الجدول ({len(city_df)})" if st.session_state[city_vis_key] else f"👁️ إظهار الجدول ({len(city_df)})")
+                            if lang == 'ar' else
+                            (f"🙈 Hide table ({len(city_df)})" if st.session_state[city_vis_key] else f"👁️ Show table ({len(city_df)})")
                         )
-                        
-                        if event_city.selection and event_city.selection.get("rows"):
-                            sel_idx = event_city.selection["rows"][0]
-                            if 0 <= sel_idx < len(city_df):
-                                actual_df_idx = city_df.index[sel_idx]
-                                worker_row = city_list[city_idx_map[actual_df_idx]]
-                                worker_uid = city_df.iloc[sel_idx]["__uid"]
-                                render_cv_detail_panel(worker_row, sel_idx, lang, key_prefix=f"op_city_{idx}", worker_uid=worker_uid)
+                        city_hdr_col, city_btn_col = st.columns([6, 2])
+                        with city_hdr_col:
+                            render_segment_header(city_label, len(city_df), color="#D4AF37")
+                        with city_btn_col:
+                            if st.button(city_toggle_lbl, key=f"toggle_city_{idx}", use_container_width=True):
+                                st.session_state[city_vis_key] = not st.session_state[city_vis_key]
+                                st.rerun()
+
+                        if st.session_state[city_vis_key]:
+                            # Export
+                            c_op_2 = st.columns([4, 1])[1]
+                            with c_op_2:
+                                city_df_export = get_filtered_df_by_nationality(city_df, f"op_city_{idx}")
+                                xl_data_op = create_pasha_whatsapp_excel(city_df_export, lang=lang)
+                                if xl_data_op:
+                                    _, xl_df_op = xl_data_op
+                                    btn_exp = "💬 " + ("تصدير للواتساب" if lang == 'ar' else "Export to WhatsApp")
+                                    render_pasha_export_button(xl_df_op, btn_exp, f"Matched_Workers_City_{idx+1}.xlsx",
+                                                              f"Matched_Workers_City_{idx+1}", key=f"dl_op_city_{idx}")
+
+                            col_cfg_city = {}
+                            nat_col_city = None
+                            for col in city_df.columns:
+                                if any(kw in str(col).lower() for kw in ["nationality", "الجنسية"]):
+                                    nat_col_city = col
+                                    col_cfg_city[f"🚩_{col}"] = st.column_config.ImageColumn(t("country_label", lang), width="small", pinned=True)
+
+                            st.markdown("<br>", unsafe_allow_html=True)
+                            city_df = render_table_translator(city_df, key_prefix=f"op_city_{idx}")
+
+                            city_styled = style_df(city_df.drop(columns=["__uid"]))
+
+                            df_city_height = min((len(city_df) + 1) * 35 + 40, 500)
+                            event_city = st.dataframe(
+                                city_styled,
+                                width='content', hide_index=True, on_select="rerun",
+                                selection_mode="single-row", column_config=__apply_pinned_columns(city_styled, col_cfg_city),
+                                key=f"op_city_table_{idx}", height=df_city_height
+                            )
+
+                            if event_city.selection and event_city.selection.get("rows"):
+                                sel_idx = event_city.selection["rows"][0]
+                                if 0 <= sel_idx < len(city_df):
+                                    actual_df_idx = city_df.index[sel_idx]
+                                    worker_row = city_list[city_idx_map[actual_df_idx]]
+                                    worker_uid = city_df.iloc[sel_idx]["__uid"]
+                                    render_cv_detail_panel(worker_row, sel_idx, lang, key_prefix=f"op_city_{idx}", worker_uid=worker_uid)
 
                 if region_list:
                     reg_df, reg_idx_map = build_worker_table(region_list, region_scores)
                     if not reg_df.empty:
-                        c_reg_2 = st.columns([4, 1])[1]
-                        with c_reg_2:
-                            reg_df_export = get_filtered_df_by_nationality(reg_df, f"op_reg_{idx}")
-                            xl_reg = create_pasha_whatsapp_excel(reg_df_export, lang=lang)
-                            if xl_reg:
-                                _, xl_df_reg = xl_reg
-                                btn_exp = "💬 " + ("تصدير للواتساب" if lang == 'ar' else "Export to WhatsApp")
-                                render_pasha_export_button(xl_df_reg, btn_exp, f"Region_Match_{idx+1}.xlsx", 
-                                                          f"Region_Match_{idx+1}", key=f"dl_op_reg_{idx}")
-                        
                         loc_val = str(customer_row.get(c_location, ""))
                         target_region_name = _find_city_region(loc_val) or loc_val
                         if lang != "ar":
@@ -8538,79 +7955,112 @@ def render_order_processing_content():
                                 "الشرقية": "Eastern Province", "الوسطى": "Central Region",
                                 "الجنوبية": "Southern Region"
                             }.get(target_region_name, target_region_name)
-                        label = f"🏘️ عمال في المنطقة ({target_region_name})" if lang == 'ar' else f"🏘️ Workers in the Region ({target_region_name})"
+                        reg_label = f"🏘️ عمال في المنطقة ({target_region_name})" if lang == 'ar' else f"🏘️ Workers in the Region ({target_region_name})"
                         explainer = f"{'هؤلاء العمال في مدن تتبع لنفس المنطقة ولاكن في مدن اخرى' if lang == 'ar' else 'These workers are in other cities within the same region'}"
-                        render_segment_header(label, len(reg_df), color="#D4AF37", explainer=explainer)
-
-                        st.markdown("<br>", unsafe_allow_html=True)
-                        reg_df = render_table_translator(reg_df, key_prefix=f"op_reg_{idx}")
-                        
-                        col_cfg_reg = {}
-                        nat_col_reg = None
-                        for col in reg_df.columns:
-                            if any(kw in str(col).lower() for kw in ["nationality", "الجنسية"]):
-                                nat_col_reg = col
-                                col_cfg_reg[f"🚩_{col}"] = st.column_config.ImageColumn(t("country_label", lang), width="small", pinned=True)
-
-                        reg_styled = style_df(reg_df.drop(columns=["__uid"]))
-                        
-                        df_reg_h = min((len(reg_df) + 1) * 35 + 40, 400)
-                        ev_reg = st.dataframe(
-                            reg_styled,
-                            width='content', hide_index=True, on_select="rerun",
-                            selection_mode="single-row", column_config=__apply_pinned_columns(reg_styled, col_cfg_reg),
-                            key=f"op_reg_table_{idx}", height=df_reg_h
+                        reg_toggle_lbl = (
+                            (f"🙈 إخفاء الجدول ({len(reg_df)})" if st.session_state[reg_vis_key] else f"👁️ إظهار الجدول ({len(reg_df)})")
+                            if lang == 'ar' else
+                            (f"🙈 Hide table ({len(reg_df)})" if st.session_state[reg_vis_key] else f"👁️ Show table ({len(reg_df)})")
                         )
-                        if ev_reg.selection and ev_reg.selection.get("rows"):
-                             sel_idx = ev_reg.selection["rows"][0]
-                             if 0 <= sel_idx < len(reg_df):
-                                 actual_df_idx = reg_df.index[sel_idx]
-                                 w_row = region_list[reg_idx_map[actual_df_idx]]
-                                 w_uid = reg_df.iloc[sel_idx]["__uid"]
-                                 render_cv_detail_panel(w_row, sel_idx, lang, key_prefix=f"op_reg_{idx}", worker_uid=w_uid)
+                        reg_hdr_col, reg_btn_col = st.columns([6, 2])
+                        with reg_hdr_col:
+                            render_segment_header(reg_label, len(reg_df), color="#D4AF37", explainer=explainer)
+                        with reg_btn_col:
+                            if st.button(reg_toggle_lbl, key=f"toggle_reg_{idx}", use_container_width=True):
+                                st.session_state[reg_vis_key] = not st.session_state[reg_vis_key]
+                                st.rerun()
+
+                        if st.session_state[reg_vis_key]:
+                            c_reg_2 = st.columns([4, 1])[1]
+                            with c_reg_2:
+                                reg_df_export = get_filtered_df_by_nationality(reg_df, f"op_reg_{idx}")
+                                xl_reg = create_pasha_whatsapp_excel(reg_df_export, lang=lang)
+                                if xl_reg:
+                                    _, xl_df_reg = xl_reg
+                                    btn_exp = "💬 " + ("تصدير للواتساب" if lang == 'ar' else "Export to WhatsApp")
+                                    render_pasha_export_button(xl_df_reg, btn_exp, f"Region_Match_{idx+1}.xlsx",
+                                                              f"Region_Match_{idx+1}", key=f"dl_op_reg_{idx}")
+
+                            st.markdown("<br>", unsafe_allow_html=True)
+                            reg_df = render_table_translator(reg_df, key_prefix=f"op_reg_{idx}")
+
+                            col_cfg_reg = {}
+                            nat_col_reg = None
+                            for col in reg_df.columns:
+                                if any(kw in str(col).lower() for kw in ["nationality", "الجنسية"]):
+                                    nat_col_reg = col
+                                    col_cfg_reg[f"🚩_{col}"] = st.column_config.ImageColumn(t("country_label", lang), width="small", pinned=True)
+
+                            reg_styled = style_df(reg_df.drop(columns=["__uid"]))
+
+                            df_reg_h = min((len(reg_df) + 1) * 35 + 40, 400)
+                            ev_reg = st.dataframe(
+                                reg_styled,
+                                width='content', hide_index=True, on_select="rerun",
+                                selection_mode="single-row", column_config=__apply_pinned_columns(reg_styled, col_cfg_reg),
+                                key=f"op_reg_table_{idx}", height=df_reg_h
+                            )
+                            if ev_reg.selection and ev_reg.selection.get("rows"):
+                                 sel_idx = ev_reg.selection["rows"][0]
+                                 if 0 <= sel_idx < len(reg_df):
+                                     actual_df_idx = reg_df.index[sel_idx]
+                                     w_row = region_list[reg_idx_map[actual_df_idx]]
+                                     w_uid = reg_df.iloc[sel_idx]["__uid"]
+                                     render_cv_detail_panel(w_row, sel_idx, lang, key_prefix=f"op_reg_{idx}", worker_uid=w_uid)
 
 
                 # Other Cities Table
                 if other_list:
                     other_df, other_idx_map = build_worker_table(other_list, other_scores)
                     if not other_df.empty:
-                        # Export Section
-                        exp_oth_col = st.columns([4, 1])[1]
-                        with exp_oth_col:
-                            other_df_export = get_filtered_df_by_nationality(other_df, f"op_other_{idx}")
-                            xl_oth_data = create_pasha_whatsapp_excel(other_df_export, lang=lang)
-                            if xl_oth_data:
-                                _, xl_oth_df = xl_oth_data
-                                btn_exp_lbl = "💬 " + ("تصدير للواتساب" if lang == 'ar' else "Export to WhatsApp")
-                                render_pasha_export_button(xl_oth_df, btn_exp_lbl, f"Workers_Other_Cities_{idx+1}.xlsx", 
-                                                          f"Other_Cities_Table_{idx+1}", key=f"btn_xl_oth_stable_{idx}")
-
-                        label_other = "🌍 عمال في مدن أخرى (مرتبين حسب القرب)" if lang == 'ar' else f"🌍 Workers in other cities (sorted by proximity)"
-                        render_segment_header(label_other, len(other_df), color="#FFFFFF")
-                        
-                        col_cfg_other = {}
-                        for col in other_df.columns:
-                            if any(kw in str(col).lower() for kw in ["nationality", "الجنسية"]):
-                                col_cfg_other[f"🚩_{col}"] = st.column_config.ImageColumn(t("country_label", lang), width="small", pinned=True)
-
-                        other_df = render_table_translator(other_df, key_prefix=f"op_other_{idx}")
-                        other_styled = style_df(other_df.drop(columns=["__uid"]))
-                        
-                        df_oth_h = min((len(other_df) + 1) * 35 + 40, 400)
-                        ev_oth = st.dataframe(
-                            other_styled, 
-                            width='content', hide_index=True, on_select="rerun",
-                            selection_mode="single-row", column_config=__apply_pinned_columns(other_styled, col_cfg_other),
-                            key=f"op_other_table_{idx}", height=df_oth_h
+                        label_other = "🌍 عمال في مدن أخرى (مرتبين حسب القرب)" if lang == 'ar' else "🌍 Workers in other cities (sorted by proximity)"
+                        other_toggle_lbl = (
+                            (f"🙈 إخفاء الجدول ({len(other_df)})" if st.session_state[other_vis_key] else f"👁️ إظهار الجدول ({len(other_df)})")
+                            if lang == 'ar' else
+                            (f"🙈 Hide table ({len(other_df)})" if st.session_state[other_vis_key] else f"👁️ Show table ({len(other_df)})")
                         )
-                        if ev_oth.selection and ev_oth.selection.get("rows"):
-                             sel_idx = ev_oth.selection["rows"][0]
-                             if 0 <= sel_idx < len(other_df):
-                                 actual_df_idx = other_df.index[sel_idx]
-                                 w_row = other_list[other_idx_map[actual_df_idx]]
-                                 w_uid = other_df.iloc[sel_idx]["__uid"]
-                                 render_cv_detail_panel(w_row, sel_idx, lang, key_prefix=f"op_other_{idx}", worker_uid=w_uid)
+                        other_hdr_col, other_btn_col = st.columns([6, 2])
+                        with other_hdr_col:
+                            render_segment_header(label_other, len(other_df), color="#FFFFFF")
+                        with other_btn_col:
+                            if st.button(other_toggle_lbl, key=f"toggle_other_{idx}", use_container_width=True):
+                                st.session_state[other_vis_key] = not st.session_state[other_vis_key]
+                                st.rerun()
 
+                        if st.session_state[other_vis_key]:
+                            # Export Section
+                            exp_oth_col = st.columns([4, 1])[1]
+                            with exp_oth_col:
+                                other_df_export = get_filtered_df_by_nationality(other_df, f"op_other_{idx}")
+                                xl_oth_data = create_pasha_whatsapp_excel(other_df_export, lang=lang)
+                                if xl_oth_data:
+                                    _, xl_oth_df = xl_oth_data
+                                    btn_exp_lbl = "💬 " + ("تصدير للواتساب" if lang == 'ar' else "Export to WhatsApp")
+                                    render_pasha_export_button(xl_oth_df, btn_exp_lbl, f"Workers_Other_Cities_{idx+1}.xlsx",
+                                                              f"Other_Cities_Table_{idx+1}", key=f"btn_xl_oth_stable_{idx}")
+
+                            col_cfg_other = {}
+                            for col in other_df.columns:
+                                if any(kw in str(col).lower() for kw in ["nationality", "الجنسية"]):
+                                    col_cfg_other[f"🚩_{col}"] = st.column_config.ImageColumn(t("country_label", lang), width="small", pinned=True)
+
+                            other_df = render_table_translator(other_df, key_prefix=f"op_other_{idx}")
+                            other_styled = style_df(other_df.drop(columns=["__uid"]))
+
+                            df_oth_h = min((len(other_df) + 1) * 35 + 40, 400)
+                            ev_oth = st.dataframe(
+                                other_styled,
+                                width='content', hide_index=True, on_select="rerun",
+                                selection_mode="single-row", column_config=__apply_pinned_columns(other_styled, col_cfg_other),
+                                key=f"op_other_table_{idx}", height=df_oth_h
+                            )
+                            if ev_oth.selection and ev_oth.selection.get("rows"):
+                                 sel_idx = ev_oth.selection["rows"][0]
+                                 if 0 <= sel_idx < len(other_df):
+                                     actual_df_idx = other_df.index[sel_idx]
+                                     w_row = other_list[other_idx_map[actual_df_idx]]
+                                     w_uid = other_df.iloc[sel_idx]["__uid"]
+                                     render_cv_detail_panel(w_row, sel_idx, lang, key_prefix=f"op_other_{idx}", worker_uid=w_uid)
 
             # --- Hide Request Button (Admin Only) ---
             if st.session_state.user.get("role") == "admin":
@@ -9256,4 +8706,3 @@ if not st.session_state.user:
 else:
     with main_container.container():
         dashboard()
-    silent_notification_monitor()
