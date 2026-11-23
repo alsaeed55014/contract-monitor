@@ -3568,12 +3568,13 @@ def render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search", 
                 from reportlab.pdfbase import pdfmetrics
                 from reportlab.pdfbase.ttfonts import TTFont
                 from reportlab.lib.colors import Color
+                from reportlab.lib.utils import ImageReader
                 import arabic_reshaper as _ar_resh
                 from bidi.algorithm import get_display as _bidi_disp
                 import re as _rx2
+                import requests as _rq
 
                 _ar_rx = _rx2.compile(r'[؀-ۿ]')
-
                 _proj_font = os.path.join(os.path.dirname(__file__), 'fonts')
                 _ar = os.path.join(_proj_font, 'NotoSansArabic-Regular.ttf')
                 _ar_b = os.path.join(_proj_font, 'NotoSansArabic-Bold.ttf')
@@ -3614,8 +3615,7 @@ def render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search", 
                 _y = 1780
                 for _sk2, _stitle2 in sections_def:
                     _items2 = [it for it in visible_fields if classify_field(it) == _sk2]
-                    if not _items2:
-                        continue
+                    if not _items2: continue
                     c.setFillColor(Color(0, 0, 0))
                     c.rect(_M, _y - 40, _CW, 46, fill=1, stroke=0)
                     c.setFillColor(Color(1, 1, 1))
@@ -3624,12 +3624,29 @@ def render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search", 
                     _y -= 52
                     for _it2 in _items2:
                         _vv = str(_it2['value']) if not _it2['is_empty'] else ('غير مسجل' if is_ar else 'Not recorded')
+                        
+                        # Nationality Flag
+                        _flag_path = None
+                        if any(k in str(_it2['label']).lower() for k in ['nationality', 'الجنسية']):
+                             try:
+                                _nc = _get_nationality_code(_it2['value'])
+                                if _nc:
+                                    _flag_res = _rq.get(f'https://flagcdn.com/w160/{str(_nc).lower()}.png', timeout=5)
+                                    _flag_path = _io.BytesIO(_flag_res.content)
+                             except: pass
+
                         c.setFillColor(Color(0, 0, 0))
                         c.rect(_M, _y - 30, _CW, 30, fill=0, stroke=1)
                         c.setFont('ArabicBold', 25)
                         c.drawRightString(_W - _M - _TXTPAD, _y - 22, _sh(f"{_it2['label']}:"))
                         c.setFont('ArabicRegular', 26)
-                        c.drawRightString(_M + _TXTPAD + 200, _y - 22, _sh(_vv))
+                        
+                        _x_vv = _M + _TXTPAD
+                        if _flag_path:
+                            c.drawImage(ImageReader(_flag_path), _x_vv, _y - 28, width=40, height=25)
+                            _x_vv += 50
+                            
+                        c.drawRightString(_x_vv, _y - 22, _sh(_vv))
                         _y -= 36
 
                 c.showPage()
