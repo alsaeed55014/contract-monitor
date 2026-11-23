@@ -3742,8 +3742,9 @@ def render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search", 
                         _i += 1
 
                 _title = '\u0627\u0644\u0628\u064a\u0627\u0646\u0627\u062a \u0627\u0644\u0643\u0627\u0645\u0644\u0629 \u0627\u0644\u0645\u0633\u062c\u0644\u0629 \u0644\u0644\u0639\u0627\u0645\u0644' if is_ar else 'Complete Registered Worker Data'
-                _meta = (f"{'\u0625\u062c\u0645\u0627\u0644\u064a \u0627\u0644\u062d\u0642\u0648\u0644' if is_ar else 'Total'}: {total_fields_count} | "
-                         f"{'\u0627\u0644\u0645\u0633\u062c\u0644\u0629' if is_ar else 'Filled'}: {filled_count} | {_now_str}")
+                _total_label = '\u0625\u062c\u0645\u0627\u0644\u064a \u0627\u0644\u062d\u0642\u0648\u0644' if is_ar else 'Total'
+                _filled_label = '\u0627\u0644\u0645\u0633\u062c\u0644\u0629' if is_ar else 'Filled'
+                _meta = f"{_total_label}: {total_fields_count} | {_filled_label}: {filled_count} | {_now_str}"
                 _t_lines = _wrap(_title, _f_bold, 34, _CW - 90)
                 _n_lines = _wrap(str(worker_name), _f_bold, 30, _CW - 90)
                 _m_lines = _wrap(_meta, _f_reg, 21, _CW - 90)
