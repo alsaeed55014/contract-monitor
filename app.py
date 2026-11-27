@@ -3589,8 +3589,12 @@ def render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search", 
                     _f_reg, _f_bold = 'ArabicRegular', 'ArabicBold'
                 except Exception:
                     _f_reg, _f_bold = 'Helvetica', 'Helvetica-Bold'
-                _lat = os.path.join(os.environ.get('WINDIR', r'C:\Windows'), 'Fonts', 'arial.ttf')
-                _lat_b = os.path.join(os.environ.get('WINDIR', r'C:\Windows'), 'Fonts', 'arialbd.ttf')
+                _lat = os.path.join(_proj, 'arial.ttf')
+                _lat_b = os.path.join(_proj, 'arialbd.ttf')
+                if not (os.path.exists(_lat) and os.path.exists(_lat_b)):
+                    _win_dir = os.environ.get('WINDIR', r'C:\Windows')
+                    _lat = os.path.join(_win_dir, 'Fonts', 'arial.ttf')
+                    _lat_b = os.path.join(_win_dir, 'Fonts', 'arialbd.ttf')
                 try:
                     pdfmetrics.registerFont(TTFont('LatinRegular', _lat))
                     pdfmetrics.registerFont(TTFont('LatinBold', _lat_b))
@@ -3718,7 +3722,10 @@ def render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search", 
                 def _plan(_en, _textw):
                     _avail = max(120, _textw - _reserve(_en))
                     _lab = _sh(str(_en['label']).rstrip(':\uff1a').strip() + ':')
-                    _labw = pdfmetrics.stringWidth(_lab, _T_LAB, _S_LAB)
+                    try:
+                        _labw = pdfmetrics.stringWidth(_lab, _T_LAB, _S_LAB)
+                    except Exception:
+                        _labw = _sw(_lab, _T_LAB, _S_LAB)
                     _vlines = _wrap(_en['val'], _T_VAL, _S_VAL, _avail)
                     if _labw + _sw(_vlines[0], _T_VAL, _S_VAL) <= _avail:
                         return (True, _lab, _labw, _vlines)
@@ -3752,9 +3759,9 @@ def render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search", 
                 _total_label = '\u0625\u062c\u0645\u0627\u0644\u064a \u0627\u0644\u062d\u0642\u0648\u0644' if is_ar else 'Total'
                 _filled_label = '\u0627\u0644\u0645\u0633\u062c\u0644\u0629' if is_ar else 'Filled'
                 _meta = f"{_total_label}: {total_fields_count} | {_filled_label}: {filled_count} | {_now_str}"
-                _t_lines = _wrap(_title, (_l_bold if not _rtl else _f_bold), 34, _CW - 90)
-                _n_lines = _wrap(str(worker_name), (_l_bold if not _rtl else _f_bold), 30, _CW - 90)
-                _m_lines = _wrap(_meta, (_l_reg if not _rtl else _f_reg), 21, _CW - 90)
+                _t_lines = _wrap(_title, (_f_bold if _rtl else _l_bold), 34, _CW - 90)
+                _n_lines = _wrap(str(worker_name), (_f_bold if _rtl else _l_bold), 30, _CW - 90)
+                _m_lines = _wrap(_meta, (_f_reg if _rtl else _l_reg), 21, _CW - 90)
 
                 _head_h = len(_t_lines) * 44 + len(_n_lines) * 40 + len(_m_lines) * 26 + 52
                 _H = 30 + _head_h + 22
@@ -3772,16 +3779,16 @@ def render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search", 
                 _ty = _y - 34
                 c.setFillColor(Color(0, 0, 0))
                 for _ln in _t_lines:
-                    c.setFont(_l_bold if _rtl else _f_bold, 34)
+                    c.setFont(_f_bold if _rtl else _l_bold, 34)
                     c.drawCentredString(_W // 2, _ty, _sh(_ln))
                     _ty -= 44
                 for _ln in _n_lines:
-                    c.setFont(_l_bold if _rtl else _f_bold, 30)
+                    c.setFont(_f_bold if _rtl else _l_bold, 30)
                     c.drawCentredString(_W // 2, _ty, _sh(_ln))
                     _ty -= 40
                 c.setFillColor(Color(0.36, 0.36, 0.36))
                 for _ln in _m_lines:
-                    c.setFont(_l_reg if _rtl else _f_reg, 21)
+                    c.setFont(_f_reg if _rtl else _l_reg, 21)
                     c.drawCentredString(_W // 2, _ty, _sh(_ln))
                     _ty -= 26
 
@@ -3802,7 +3809,7 @@ def render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search", 
                             c.setFillColor(_col)
                             c.roundRect(_ix - 100, _cy + 2, 100, 28, 14, stroke=0, fill=1)
                             c.setFillColor(Color(1, 1, 1))
-                            c.setFont(_l_bold, 18)
+                            c.setFont(_f_bold, 18)
                             c.drawCentredString(_ix - 50, _cy + 10, _sh(_g))
                             _ix -= 112
                         elif _en['flag'] is not None:
@@ -3869,7 +3876,7 @@ def render_cv_detail_panel(worker_row, selected_idx, lang, key_prefix="search", 
                         c.setFillColor(Color(0, 0, 0))
                         c.roundRect(_M, _y - 44, _CW, 44, 9, stroke=0, fill=1)
                         c.setFillColor(Color(1, 1, 1))
-                        c.setFont(_l_bold if not _rtl else _f_bold, 25)
+                        c.setFont(_f_bold if _rtl else _l_bold, 25)
                         c.drawCentredString(_W // 2, _y - 34, _sh(f"{_e['title']} ({_e['n']})"))
                         _y -= 54
                         continue
