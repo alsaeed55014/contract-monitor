@@ -817,6 +817,23 @@ MANUAL_TRANSLATION_MAP = {
 }
 
 
+def _translate_online_gtx(text: str) -> str:
+    """Translate English text to Arabic using Google Translate gtx endpoint with retry and timeout."""
+    import urllib.request
+    import urllib.parse
+    try:
+        url = 'https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=ar&dt=t&q=' + urllib.parse.quote(text)
+        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'})
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            data = json.loads(resp.read().decode('utf-8'))
+            res = ''.join([p[0] for p in data[0] if p and p[0]])
+            if res and res.strip():
+                return res.strip()
+    except Exception:
+        pass
+    return ""
+
+
 def translate_sentence_to_arabic(text: str) -> str:
     """Translate an English sentence or phrase into natural Arabic without leaving raw English words."""
     clean = text.strip()
@@ -828,17 +845,23 @@ def translate_sentence_to_arabic(text: str) -> str:
     if clean_lower in MANUAL_TRANSLATION_MAP:
         return MANUAL_TRANSLATION_MAP[clean_lower]
 
-    # Online Google Translator if available
     has_latin = any('a' <= c.lower() <= 'z' for c in clean)
-    if has_latin and TRANSLATOR_AVAILABLE:
-        try:
-            trans = GoogleTranslator(source='auto', target='ar').translate(clean)
-            if trans and trans.strip():
-                return trans.strip()
-        except Exception:
-            pass
+    if has_latin:
+        # 1. Try Google Translate gtx direct API
+        gtx_res = _translate_online_gtx(clean)
+        if gtx_res:
+            return gtx_res
 
-    # Fallback: Term-by-term and phrase replacement using manual dictionary
+        # 2. Try deep_translator GoogleTranslator
+        if TRANSLATOR_AVAILABLE:
+            try:
+                trans = GoogleTranslator(source='auto', target='ar').translate(clean)
+                if trans and trans.strip():
+                    return trans.strip()
+            except Exception:
+                pass
+
+    # 3. Fallback: Term-by-term and phrase replacement using manual dictionary
     processed = clean
     for eng_term in sorted(MANUAL_TRANSLATION_MAP.keys(), key=len, reverse=True):
         ar_term = MANUAL_TRANSLATION_MAP[eng_term]
@@ -846,10 +869,17 @@ def translate_sentence_to_arabic(text: str) -> str:
         processed = pattern.sub(ar_term, processed)
 
     # Clean residual punctuation or dangling English words
-    processed = re.sub(r'\b(and|with|in|of|for|to|the|at|by)\b', '', processed, flags=re.IGNORECASE)
+    processed = re.sub(r'\b(and|with|in|of|for|to|the|at|by|from|yrs|yr|years|year)\b', '', processed, flags=re.IGNORECASE)
     processed = re.sub(r'\s{2,}', ' ', processed).strip()
 
     return processed
+
+
+def translate_or_format_to_arabic(lines: list) -> list:
+    """Helper to translate list of strings to Arabic."""
+    if not lines:
+        return []
+    return [translate_sentence_to_arabic(l) for l in lines if str(l).strip()]
 
 
 def parse_and_structure_cv(raw_lines):
@@ -904,29 +934,34 @@ def parse_and_structure_cv(raw_lines):
 
     cur_sec = None
 
+    def is_section_header(line_str):
+        words = line_str.strip().split()
+        if len(words) > 4:
+            return None
+        s_clean = line_str.strip().lower().rstrip('.:;,-_')
+        if s_clean in ['profile summary', 'summary', 'profile', 'professional summary', 'objective', 'about me', 'النبذة', 'الملخص']:
+            return 'summary'
+        if s_clean in ['work experience', 'experience', 'employment history', 'work history', 'professional experience', 'الخبرات', 'سجل العمل']:
+            return 'experience'
+        if s_clean in ['core skills', 'skills', 'technical skills', 'key skills', 'competencies', 'المهارات', 'القدرات']:
+            return 'skills'
+        if s_clean in ['education', 'academic background', 'educational level', 'qualifications', 'academic qualifications', 'high school', 'المؤهلات', 'التعليم']:
+            return 'education'
+        if s_clean in ['information', 'personal information', 'personal details', 'personal data', 'البيانات الشخصية']:
+            return 'info'
+        return None
+
     for line in cleaned:
         s = line.strip()
         if not s or s == cand_name:
             continue
 
-        s_low = s.lower().rstrip('.:;,')
+        sec_type = is_section_header(s)
+        if sec_type:
+            cur_sec = sec_type
+            continue
 
-        # Detect section switches
-        if any(kw in s_low for kw in ['profile summary', 'summary', 'objective']):
-            cur_sec = 'summary'
-            continue
-        elif any(kw in s_low for kw in ['work experience', 'experience', 'employment history']):
-            cur_sec = 'experience'
-            continue
-        elif any(kw in s_low for kw in ['core skills', 'technical skills', 'skills']):
-            cur_sec = 'skills'
-            continue
-        elif any(kw in s_low for kw in ['education', 'academic qualifications', 'high school']):
-            cur_sec = 'education'
-            continue
-        elif any(kw in s_low for kw in ['information', 'personal details', 'personal information']):
-            cur_sec = 'info'
-            continue
+        s_low = s.lower().rstrip('.:;,')
 
         # Info lines become badge items
         if cur_sec == 'info' or any(k in s_low for k in ['date of birth', 'dob', 'marital status', 'nationality', 'languages:']):
@@ -956,13 +991,20 @@ def parse_and_structure_cv(raw_lines):
             is_curr_header = s.isupper() or s.endswith(':') or 'Duties' in s
             is_curr_bullet = s.startswith(('•', '-', '*', '–', '—'))
 
-            if not is_prev_header and not is_curr_header and not is_curr_bullet and len(prev) < 95 and not prev.endswith(('.', '!', '?', ':')):
+            if not is_prev_header and not is_curr_header and not is_curr_bullet and len(prev) < 400 and not prev.endswith(('.', '!', '?', ':')):
                 merged[-1] = prev + ' ' + s
             else:
                 merged.append(s)
         return merged
 
-    summary_merged = merge_fragments(summary_lines)
+    def merge_summary(b_lines):
+        if not b_lines:
+            return []
+        joined = ' '.join(b_lines)
+        sents = [s.strip() for s in re.split(r'(?<=[.!?])\s+', joined) if s.strip()]
+        return sents if sents else merge_fragments(b_lines)
+
+    summary_merged = merge_summary(summary_lines)
     exp_merged = merge_fragments(experience_lines)
     skills_merged = skills_lines
     edu_merged = merge_fragments(education_lines)
@@ -1002,15 +1044,32 @@ def parse_and_structure_cv(raw_lines):
 
     # Format badges
     clean_badges = []
-    clean_badges.append("الجنسية: الفلبين")
-    clean_badges.append("تاريخ الميلاد: 27 سبتمبر 1993")
-    clean_badges.append("الحالة: عزباء")
-    clean_badges.append("اللغات: الفلبينية، الإنجليزية")
+    if badge_items:
+        clean_badges = badge_items[:4]
+    else:
+        # Default placeholder if no specific personal info was listed
+        clean_badges.append("الحالة: جاهز للعمل")
+        clean_badges.append("اللغات: الإنجليزية")
     badge_str = "  |  ".join(clean_badges)
 
-    # Candidate Name in Arabic + English
-    display_name = f"كارين روز ل. بالما ({cand_name})" if "karen" in cand_name.lower() else cand_name
-    display_title = "المسمى الوظيفي: عاملة منزلية / طاقم خدمات وضمان جودة"
+    # Candidate Name: Keep strictly as extracted in English per user request (no alteration)
+    display_name = cand_name.strip() if cand_name else "APPLICANT"
+
+    # Dynamic Job Title detection based on content
+    display_title = ""
+    summary_and_exp_text = " ".join(summary_lines + experience_lines).lower()
+    if any(k in summary_and_exp_text for k in ['barista', 'tea boy', 'coffee', 'cafe', 'قهوة', 'باريستا']):
+        display_title = "المسمى الوظيفي: باريستا / صانع قهوة ومشروبات / خدمات ضيافة"
+    elif any(k in summary_and_exp_text for k in ['domestic helper', 'housemaid', 'housekeeper', 'cleaning', 'عاملة منزلية']):
+        display_title = "المسمى الوظيفي: عاملة منزلية / خدمات ونظافة"
+    elif any(k in summary_and_exp_text for k in ['driver', 'سائق']):
+        display_title = "المسمى الوظيفي: سائق خاص / خدمات نقل"
+    elif any(k in summary_and_exp_text for k in ['caregiver', 'nurse', 'رعاية']):
+        display_title = "المسمى الوظيفي: مقدم رعاية / رعاية صحية ومنزلية"
+    elif any(k in summary_and_exp_text for k in ['cook', 'chef', 'طباخ']):
+        display_title = "المسمى الوظيفي: طاهي / خدمات طهي ومطبخ"
+    else:
+        display_title = "المسمى الوظيفي: سيرة ذاتية مهنية / طاقم خدمات"
 
     return display_name, display_title, badge_str, doc_sections
 
@@ -1316,15 +1375,12 @@ def _render_merge_section(is_ar: bool):
                     if cl.strip():
                         cleaned_lines.append(cl)
 
-                # 3. Format and translate to Arabic
-                arabic_lines = translate_or_format_to_arabic(cleaned_lines)
-
-                # 4. Extract candidate profile photo (from PDF objects or image crop)
+                # 3. Extract candidate profile photo (from PDF objects or image crop)
                 profile_img = _extract_profile_image(cv_bytes, is_pdf=cv_is_pdf)
 
-                # 5. Render onto letterhead background (photo on LEFT, formatted Arabic on RIGHT)
+                # 4. Render onto letterhead background (photo on LEFT, formatted Arabic on RIGHT)
                 merged_img_bytes, merged_pdf_bytes = _render_text_on_background(
-                    arabic_lines, bg_bytes, bg_ext, header_px, footer_px, profile_img,
+                    cleaned_lines, bg_bytes, bg_ext, header_px, footer_px, profile_img,
                     left_cm=left_cm, right_cm=right_cm
                 )
                 st.session_state.cv_extracted_img_bytes = merged_img_bytes
